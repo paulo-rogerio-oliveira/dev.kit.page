@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Propriedades COMUNS a todos os projetos da API — as mesmas convenções do git.kit:
+    nullable, usings implícitos, AVISO É ERRO e a documentação XML gerada (é ela que faz o
+    compilador verificar os <see cref="..."/>).
+
+    NoWarn, item por item (a mesma decisão do git.kit):
+      CS1591  documentação ausente em membro público — comenta-se o que tem motivo a explicar.
+      CS1573  parâmetro sem <param>.
+      CS1712  parâmetro de tipo genérico sem <typeparam>.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1712</NoWarn>
+  </PropertyGroup>
+
+</Project>

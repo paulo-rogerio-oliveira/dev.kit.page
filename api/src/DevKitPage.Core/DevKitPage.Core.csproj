@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- O domínio: entidades, opções, regras puras e as interfaces dos serviços. Sem EF, sem ASP.NET. -->
+  <ItemGroup>
+    <ProjectReference Include="..\DevKitPage.Contracts\DevKitPage.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

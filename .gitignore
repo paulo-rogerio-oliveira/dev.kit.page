@@ -1,0 +1,25 @@
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+*.trx
+
+# Bases SQLite locais (a API cria a sua na primeira subida)
+*.db
+*.db-shm
+*.db-wal
+
+# Node / Vite / Playwright
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.vite/
+*.tsbuildinfo
+
+# Segredos locais
+.env
+.env.local
+appsettings.*.local.json

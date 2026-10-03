@@ -1,0 +1,95 @@
+# CI do dev.kit.page: a cada push e PR, build e testes da API (.NET) e da web (React), os resultados
+# publicados no PR (aba Checks) e como artefato, e o cenário ponta a ponta (Playwright) por cima dos dois.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  api:
+    name: API (.NET)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: api/global.json
+      - run: dotnet restore DevKitPage.slnx
+      - run: dotnet build DevKitPage.slnx --no-restore -c Release
+      - run: dotnet test DevKitPage.slnx --no-build -c Release --logger trx --results-directory TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-api
+          path: api/TestResults
+      - uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Testes da API
+          path: api/TestResults/*.trx
+          reporter: dotnet-trx
+
+  web:
+    name: Web (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-web
+          path: web/test-results
+      - uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Testes da web
+          path: web/test-results/vitest-junit.xml
+          reporter: jest-junit
+
+  e2e:
+    name: Ponta a ponta (Playwright)
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: api/global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultados-e2e
+          path: |
+            web/playwright-report
+            web/test-results

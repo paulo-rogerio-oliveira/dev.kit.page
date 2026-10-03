@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O CONTRATO da API, versionado: o que o dev.kit (repositório git.kit) envia e o que a web lê.
+    Não referencia nada — é dado, e é o projeto que um cliente .NET (ou o gerador do cliente
+    tipado) consome sem trazer a API junto.
+  -->
+
+</Project>

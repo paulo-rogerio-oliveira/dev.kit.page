@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DevKitPage.Contracts/DevKitPage.Contracts.csproj" />
+    <Project Path="src/DevKitPage.Core/DevKitPage.Core.csproj" />
+    <Project Path="src/DevKitPage.Infrastructure/DevKitPage.Infrastructure.csproj" />
+    <Project Path="src/DevKitPage.Api/DevKitPage.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DevKitPage.Core.Tests/DevKitPage.Core.Tests.csproj" />
+    <Project Path="tests/DevKitPage.Infrastructure.Tests/DevKitPage.Infrastructure.Tests.csproj" />
+    <Project Path="tests/DevKitPage.Api.Tests/DevKitPage.Api.Tests.csproj" />
+  </Folder>
+</Solution>

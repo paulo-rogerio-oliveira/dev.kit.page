@@ -1,0 +1,33 @@
+<Project>
+
+  <!--
+    Versionamento CENTRAL de pacotes, como no git.kit: a versão de cada pacote é declarada uma
+    vez aqui, e o PackageReference dos .csproj não carrega Version (um Version deixado lá é erro
+    de restore, NU1008). Os pacotes da Microsoft ficam no MESMO patch (10.0.12): os anteriores
+    traziam dependências com vulnerabilidade conhecida (NU1903, que aqui é erro).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <MicrosoftPatch>10.0.12</MicrosoftPatch>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Base: SQLite embarcada agora; o provider do Azure SQL já vem, trocado por configuração. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPatch)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftPatch)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftPatch)" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftPatch)" />
+    <!-- O nativo do SQLite: a 3.x, como no git.kit — o 2.1.11 que o EF traz tem vulnerabilidade conhecida. -->
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.0" />
+    <!-- Autenticação: nada feito à mão — o JWT Bearer (o PasswordHasher do Identity vem com o framework do ASP.NET Core). -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftPatch)" />
+    <!-- O documento OpenAPI, de onde o cliente tipado da web pode ser gerado. -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPatch)" />
+    <!-- Testes: unidade e integração (WebApplicationFactory). -->
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(MicrosoftPatch)" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

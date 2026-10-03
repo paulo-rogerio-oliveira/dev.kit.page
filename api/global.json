@@ -1,0 +1,8 @@
+{
+  "$comment": "Fixa a banda do SDK (a mesma convenção do git.kit): rollForward latestFeature aceita um SDK 10.0.x mais novo, nunca outro major/minor.",
+  "sdk": {
+    "version": "10.0.203",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}
