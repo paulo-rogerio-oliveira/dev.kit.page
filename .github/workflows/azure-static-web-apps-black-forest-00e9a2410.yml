@@ -22,6 +22,11 @@ jobs:
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
+        # As VITE_* são lidas no build (as variáveis do portal não chegam a elas). A URL da API vem da
+        # variável do repositório (Settings → Secrets and variables → Actions → Variables).
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SITE_URL: https://black-forest-00e9a2410.4.azurestaticapps.net
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLACK_FOREST_00E9A2410 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
@@ -30,7 +35,7 @@ jobs:
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
           app_location: "./web" # App source code path
           api_location: "" # Api source code path - optional
-          output_location: "build" # Built app content directory - optional
+          output_location: "dist" # Built app content directory - optional (o Vite gera em dist)
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
