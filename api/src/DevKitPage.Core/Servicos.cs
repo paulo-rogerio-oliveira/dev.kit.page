@@ -56,3 +56,23 @@ public interface IExpurgoDeEventos
     /// <summary>Apaga os eventos anteriores ao corte e devolve quantos.</summary>
     Task<int> ExpurgarAsync(CancellationToken ct);
 }
+
+/// <summary>Os pedidos de demonstração: a gravação pública e a leitura/exclusão do dashboard.</summary>
+public interface IPedidosDeDemonstracao
+{
+    /// <summary>Grava o pedido JÁ validado (<see cref="ValidadorDeDemonstracao"/>).</summary>
+    Task<PedidoDeDemonstracaoCriadoV1> RegistrarAsync(PedidoDeDemonstracaoV1 pedido, CancellationToken ct);
+
+    /// <summary>Os pedidos do mais novo para o mais antigo.</summary>
+    Task<Pagina<DemonstracaoResumo>> ListarAsync(int pagina, int tamanho, CancellationToken ct);
+
+    /// <summary>Exclui o pedido (eliminação a pedido do titular). Falso quando ele não existe.</summary>
+    Task<bool> ExcluirAsync(long id, CancellationToken ct);
+}
+
+/// <summary>O expurgo dos pedidos de demonstração além da retenção (LGPD).</summary>
+public interface IExpurgoDePedidos
+{
+    /// <summary>Apaga os pedidos anteriores ao corte e devolve quantos.</summary>
+    Task<int> ExpurgarAsync(CancellationToken ct);
+}

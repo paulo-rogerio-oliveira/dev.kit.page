@@ -1,6 +1,8 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import type { LoginResponse, MaquinaResumo, Pagina, EventoDoLog, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import type {
+  DemonstracaoResumo, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
+} from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
 export const API = 'http://api.test';
@@ -43,6 +45,16 @@ export const eventos: Pagina<EventoDoLog> = {
   total: 1, numeroDaPagina: 1, tamanho: 20,
 };
 
+export const demonstracao: DemonstracaoResumo = {
+  id: 7, nome: 'Ana Souza', email: 'ana@empresa.com.br', empresa: 'Empresa X', mensagem: 'Quero ver o fluxo com avaliadores.',
+  recebidoEm: '2026-10-03T10:00:00Z', consentimentoEm: '2026-10-03T10:00:00Z',
+};
+
+export const demonstracoes: Pagina<DemonstracaoResumo> = { itens: [demonstracao], total: 1, numeroDaPagina: 1, tamanho: 10 };
+
+/** Os pedidos de demonstração que chegaram ao POST público. */
+export const pedidosRecebidos: PedidoDeDemonstracao[] = [];
+
 /** As requisições que chegaram ao servidor de mentira (para conferir os filtros). */
 export const requisicoes: URL[] = [];
 
@@ -61,6 +73,12 @@ export const handlersPadrao = [
   }),
   http.get(`${API}/api/dashboard/qualidade`, () => HttpResponse.json(qualidade)),
   http.get(`${API}/api/dashboard/eventos`, () => HttpResponse.json(eventos)),
+  http.post(`${API}/api/demonstracoes`, async ({ request }) => {
+    pedidosRecebidos.push((await request.json()) as PedidoDeDemonstracao);
+    return HttpResponse.json({ id: 8, recebidoEm: '2026-10-03T10:00:00Z' }, { status: 201 });
+  }),
+  http.get(`${API}/api/dashboard/demonstracoes`, () => HttpResponse.json(demonstracoes)),
+  http.delete(`${API}/api/dashboard/demonstracoes/:id`, () => new HttpResponse(null, { status: 204 })),
 ];
 
 export const servidor = setupServer(...handlersPadrao);

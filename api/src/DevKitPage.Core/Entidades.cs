@@ -61,6 +61,25 @@ public sealed class EventoDeUso
 }
 
 /// <summary>
+/// Um pedido de demonstração vindo do formulário da landing. Guardado por
+/// <see cref="OpcoesDeDemonstracao.RetencaoDias"/> e depois expurgado (LGPD); lido e excluído só
+/// pelo usuário autenticado do dashboard.
+/// </summary>
+public sealed class PedidoDeDemonstracao
+{
+    public long Id { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Empresa { get; set; } = string.Empty;
+    public string Mensagem { get; set; } = string.Empty;
+
+    /// <summary>Quando o visitante deu o consentimento — o mesmo instante do envio.</summary>
+    public DateTime ConsentimentoEmUtc { get; set; }
+
+    public DateTime RecebidoEmUtc { get; set; }
+}
+
+/// <summary>
 /// O total CONSOLIDADO de um tipo (e recorte) por máquina e dia. Atualizado na ingestão, junto com
 /// o evento bruto, e nunca tocado pelo expurgo: é por isso que o histórico do dashboard sobrevive à
 /// retenção dos eventos.

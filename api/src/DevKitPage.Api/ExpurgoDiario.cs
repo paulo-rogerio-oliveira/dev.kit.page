@@ -3,9 +3,10 @@ using DevKitPage.Core;
 namespace DevKitPage.Api;
 
 /// <summary>
-/// O expurgo diário dos eventos brutos além da retenção (<c>Telemetria:RetencaoDias</c>). Os totais
-/// diários já foram consolidados na ingestão, então o histórico do dashboard não muda. Uma falha vai
-/// para o log e a próxima volta tenta de novo.
+/// O expurgo diário do que passou da retenção: os eventos brutos (<c>Telemetria:RetencaoDias</c>) e
+/// os pedidos de demonstração (<c>Demonstracoes:RetencaoDias</c>, LGPD). Os totais diários já foram
+/// consolidados na ingestão, então o histórico do dashboard não muda. Cada expurgo tem o seu
+/// tratamento: uma falha vai para o log, não impede o outro, e a próxima volta tenta de novo.
 /// </summary>
 public sealed class ExpurgoDiario(IServiceScopeFactory escopos, ILogger<ExpurgoDiario> log) : BackgroundService
 {
@@ -20,22 +21,30 @@ public sealed class ExpurgoDiario(IServiceScopeFactory escopos, ILogger<ExpurgoD
             using var relogio = new PeriodicTimer(TimeSpan.FromHours(24));
             do
             {
-                try
-                {
-                    using var escopo = escopos.CreateScope();
-                    var apagados = await escopo.ServiceProvider.GetRequiredService<IExpurgoDeEventos>().ExpurgarAsync(stoppingToken);
-                    log.LogInformation("Expurgo: {Apagados} evento(s) além da retenção removido(s).", apagados);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    log.LogError(ex, "Expurgo dos eventos falhou; tenta de novo na próxima volta.");
-                }
+                await ExpurgarAsync<IExpurgoDeEventos>("evento(s)", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
+                await ExpurgarAsync<IExpurgoDePedidos>("pedido(s) de demonstração", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
             }
             while (await relogio.WaitForNextTickAsync(stoppingToken));
         }
         catch (OperationCanceledException)
         {
             // A API está parando.
+        }
+    }
+
+    /// <summary>Uma volta de um expurgo, num escopo próprio (um DbContext novo).</summary>
+    public async Task ExpurgarAsync<TExpurgo>(string oQue, Func<TExpurgo, CancellationToken, Task<int>> expurgar, CancellationToken ct)
+        where TExpurgo : notnull
+    {
+        try
+        {
+            using var escopo = escopos.CreateScope();
+            var apagados = await expurgar(escopo.ServiceProvider.GetRequiredService<TExpurgo>(), ct);
+            log.LogInformation("Expurgo: {Apagados} {OQue} além da retenção removido(s).", apagados, oQue);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Expurgo de {OQue} falhou; tenta de novo na próxima volta.", oQue);
         }
     }
 }

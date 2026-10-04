@@ -23,6 +23,7 @@ public static class Composicao
         servicos.Configure<OpcoesDeTelemetria>(configuracao.GetSection(OpcoesDeTelemetria.Secao));
         servicos.Configure<OpcoesDoBanco>(configuracao.GetSection(OpcoesDoBanco.Secao));
         servicos.Configure<OpcoesDaSemente>(configuracao.GetSection(OpcoesDaSemente.Secao));
+        servicos.Configure<OpcoesDeDemonstracao>(configuracao.GetSection(OpcoesDeDemonstracao.Secao));
 
         // Lidos na criação do contexto, e não aqui: a configuração final (variáveis de ambiente, Key
         // Vault, a dos testes) só está completa depois do Build do host.
@@ -44,6 +45,8 @@ public static class Composicao
         servicos.AddScoped<IIngestaoDeTelemetria, IngestaoDeTelemetria>();
         servicos.AddScoped<IConsultasDoPainel, ConsultasDoPainel>();
         servicos.AddScoped<IExpurgoDeEventos, ExpurgoDeEventos>();
+        servicos.AddScoped<IPedidosDeDemonstracao, PedidosDeDemonstracao>();
+        servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
         servicos.AddScoped<InicializadorDaBase>();
         return servicos;
     }
@@ -67,7 +70,8 @@ public sealed class InicializadorDaBase(
         else
         {
             // As migrations versionadas são as do SQLite (a base embarcada). Num provider trocado por
-            // configuração (Azure SQL), o esquema nasce do modelo — ver docs/arquitetura.md.
+            // configuração (Azure SQL), o esquema nasce do modelo — ver docs/arquitetura.md. Numa base
+            // que JÁ existe o EnsureCreated não cria tabela nova: ela vem dos scripts de api/scripts/sqlserver.
             await db.Database.EnsureCreatedAsync(ct);
         }
 

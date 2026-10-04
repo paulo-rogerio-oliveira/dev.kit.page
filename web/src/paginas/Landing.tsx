@@ -1,95 +1,114 @@
 import { Link } from 'react-router-dom';
+import { Cta } from '../componentes/Cta';
+import { FormularioDeDemonstracao } from '../componentes/FormularioDeDemonstracao';
+import { Midia } from '../componentes/Midia';
+import { Secao } from '../componentes/Secao';
+import { BENEFICIOS, HERO, INTEGRACOES, PASSOS, PERGUNTAS, RECURSOS, SECOES, SEGURANCA } from '../conteudo/landing';
 
-/** Um recurso do dev.kit: o texto vem do README e do manual do git.kit; a imagem, das capturas do --screenshots. */
-interface Recurso {
-  id: string;
-  titulo: string;
-  texto: string;
-  captura?: string;
-}
+/** As seções que aparecem no menu do topo (o início e o fechamento ficam de fora). */
+const NO_MENU = SECOES.filter((s) => s.id !== 'inicio' && s.id !== 'comecar' && s.id !== 'contato');
 
-export const RECURSOS: Recurso[] = [
-  {
-    id: 'agente',
-    titulo: 'O agente sobre a sua task',
-    texto:
-      'Escolha a US ou o Bug da iteração (ou uma tarefa avulsa), marque os repositórios e descreva o que precisa ser feito. O dev.kit clona cada repositório lado a lado, cria o branch, grava as regras, as skills e o conhecimento comum na pasta da task e roda a CLI do agente — claude, kiro, kimi ou glm — turno a turno, até o commit, o push e a Pull Request.',
-    captura: '/capturas/tela-agente.png',
-  },
-  {
-    id: 'fluxos',
-    titulo: 'Fluxos com avaliadores e objetivo',
-    texto:
-      'Encadeie agentes num fluxo: um planeja, outro implementa e um avaliador dá nota ao trabalho. O objetivo só é aceito com a nota mínima de cada avaliador, dada depois da última alteração — e o fluxo segue sozinho para a aprovação.',
-    captura: '/capturas/tela-atividades.png',
-  },
-  {
-    id: 'replicacao',
-    titulo: 'Cherry-pick e replicação de branch',
-    texto:
-      'Replique commits entre branches numa cópia temporária, sem trocar o branch do seu projeto: por cherry-pick ou por integração de diff. Conflito que o git não resolve abre o TortoiseGitMerge arquivo por arquivo.',
-    captura: '/capturas/tela-cherry-pick.png',
-  },
-  {
-    id: 'agendamento',
-    titulo: 'Agendamento sem ninguém na frente da tela',
-    texto:
-      'Agende uma task por cron: o serviço do Windows roda o mesmo pipeline às três da manhã, com as permissões do agente liberadas e os comandos pedidos executados automaticamente.',
-    captura: '/capturas/tela-agendamentos.png',
-  },
-  {
-    id: 'depurador',
-    titulo: 'Depurador sem tela',
-    texto:
-      'O agente colhe evidência antes de teorizar: roda o alvo sob o depurador do dev.kit, para no ponto combinado e devolve a pilha e os valores de cada quadro — ou você depura na aba Depuração, com os mesmos pontos de parada.',
-  },
-  {
-    id: 'devcli',
-    titulo: 'devcli: o dev.kit nas mãos do agente',
-    texto:
-      'O lado do board voltado ao agente: consulta e altera work items, comenta, anexa, planeja as tasks, lança as horas e mede o próprio uso. Usa o mesmo banco e as mesmas credenciais do app — o agente nunca vê o token — e o que grava simula por padrão.',
-    captura: '/capturas/tela-principal.png',
-  },
-  {
-    id: 'board',
-    titulo: 'Board e horas',
-    texto:
-      'Os work items da iteração em cartões, o plano técnico, os repositórios e o branch da task num lugar só — e as horas do dia lançadas nos itens trabalhados, rateadas pelos turnos do agente.',
-    captura: '/capturas/tela-user-stories.png',
-  },
-];
-
-/** A landing pública: os recursos do dev.kit e o caminho para o login. */
+/**
+ * A landing pública — a página de venda do dev.kit, na ordem do critério 1 da US #283 (a lista
+ * SECOES): hero com a mídia em movimento → benefícios → como funciona → recursos → integrações →
+ * segurança → contato (o pedido de demonstração) → FAQ → CTA final. O texto e as mídias vêm de
+ * conteudo/landing.ts; o login e o dashboard continuam pelo link "Entrar".
+ */
 export function Landing() {
   return (
-    <div className="pagina">
+    <div className="pagina landing">
+      <a className="pular" href="#conteudo">Pular para o conteúdo</a>
       <header className="topo">
-        <span className="marca">dev<span className="marca-ponto">.</span>kit</span>
-        <nav>
-          <a href="#recursos">Recursos</a>
+        <a className="marca" href="#inicio">dev<span className="marca-ponto">.</span>kit</a>
+        <nav aria-label="Seções">
+          <ul className="menu">
+            {NO_MENU.map((s) => <li key={s.id}><a href={`#${s.id}`}>{s.rotulo}</a></li>)}
+          </ul>
+          <Cta para="#contato" variante="secundario">Pedir demonstração</Cta>
           <Link className="botao botao-primario" to="/login">Entrar</Link>
         </nav>
       </header>
 
-      <section className="hero">
-        <h1>O agente de IA trabalhando sobre a sua task</h1>
-        <p>
-          O dev.kit põe um agente para trabalhar nas tasks do Azure DevOps: clona os repositórios do work item,
-          escreve as regras e as skills na pasta da task e leva o resultado até o commit, o push e a Pull Request.
-        </p>
-        <Link className="botao botao-primario" to="/login">Acessar o dashboard de uso</Link>
-      </section>
-
-      <main id="recursos" className="recursos">
-        {RECURSOS.map((recurso) => (
-          <section key={recurso.id} className="recurso" aria-labelledby={`recurso-${recurso.id}`}>
-            <div>
-              <h2 id={`recurso-${recurso.id}`}>{recurso.titulo}</h2>
-              <p>{recurso.texto}</p>
+      <main id="conteudo">
+        <section id="inicio" className="hero" aria-labelledby="titulo-inicio">
+          <div className="hero-texto">
+            <h1 id="titulo-inicio">{HERO.titulo}</h1>
+            <p>{HERO.texto}</p>
+            <div className="ctas">
+              <Cta para="#contato">Quero uma demonstração</Cta>
+              <Cta para="#como-funciona" variante="secundario">Ver como funciona</Cta>
             </div>
-            {recurso.captura && <img src={recurso.captura} alt={`Tela do dev.kit: ${recurso.titulo}`} loading="lazy" />}
-          </section>
-        ))}
+          </div>
+          <Midia midia={HERO.midia} className="hero-midia" />
+        </section>
+
+        <Secao id="beneficios" titulo="Por que o dev.kit" subtitulo="O trabalho repetitivo da task com o agente; as decisões com o time.">
+          <ul className="grade-cartoes">
+            {BENEFICIOS.map((b) => (
+              <li key={b.titulo} className="cartao"><h3>{b.titulo}</h3><p>{b.texto}</p></li>
+            ))}
+          </ul>
+        </Secao>
+
+        <Secao id="como-funciona" titulo="Como funciona" subtitulo="Do work item à Pull Request, em quatro passos.">
+          <ol className="passos">
+            {PASSOS.map((p) => (
+              <li key={p.titulo} className="cartao"><h3>{p.titulo}</h3><p>{p.texto}</p></li>
+            ))}
+          </ol>
+        </Secao>
+
+        <Secao id="recursos" titulo="Recursos" subtitulo="O dev.kit em funcionamento — cada recurso com a sua demonstração.">
+          <div className="recursos">
+            {RECURSOS.map((recurso) => (
+              <article key={recurso.id} className="recurso" aria-labelledby={`recurso-${recurso.id}`}>
+                <div>
+                  <h3 id={`recurso-${recurso.id}`}>{recurso.titulo}</h3>
+                  <p>{recurso.texto}</p>
+                </div>
+                <Midia midia={recurso.midia} />
+              </article>
+            ))}
+          </div>
+        </Secao>
+
+        <Secao id="integracoes" titulo="Integrações" subtitulo="Com as ferramentas que o time já usa.">
+          <ul className="grade-cartoes integracoes">
+            {INTEGRACOES.map((i) => (
+              <li key={i.nome} className="cartao"><h3>{i.nome}</h3><p>{i.texto}</p></li>
+            ))}
+          </ul>
+        </Secao>
+
+        <Secao id="seguranca" titulo="Segurança e privacidade" subtitulo="O agente trabalha com o que o time permite, e nada além.">
+          <ul className="grade-cartoes">
+            {SEGURANCA.map((s) => (
+              <li key={s.titulo} className="cartao"><h3>{s.titulo}</h3><p>{s.texto}</p></li>
+            ))}
+          </ul>
+        </Secao>
+
+        <Secao id="contato" titulo="Quero uma demonstração" subtitulo="Conte quem você é e o que quer ver: mostramos o dev.kit sobre um work item como os seus.">
+          <FormularioDeDemonstracao />
+        </Secao>
+
+        <Secao id="faq" titulo="Perguntas frequentes">
+          <div className="faq">
+            {PERGUNTAS.map((p) => (
+              <details key={p.pergunta}>
+                <summary>{p.pergunta}</summary>
+                <p>{p.resposta}</p>
+              </details>
+            ))}
+          </div>
+        </Secao>
+
+        <Secao id="comecar" titulo="Ponha um agente na sua próxima task" className="cta-final">
+          <div className="ctas">
+            <Cta para="#contato">Quero uma demonstração</Cta>
+            <Cta para="/login" variante="secundario">Entrar no dashboard</Cta>
+          </div>
+        </Secao>
       </main>
 
       <footer className="rodape">

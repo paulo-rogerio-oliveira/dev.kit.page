@@ -6,3 +6,9 @@
 
 *.png binary
 *.ico binary
+# As mídias da landing (web/public/midia): o text=auto não pode tocar nelas.
+*.mp4 binary
+*.webm binary
+*.gif binary
+*.jpg binary
+*.webp binary

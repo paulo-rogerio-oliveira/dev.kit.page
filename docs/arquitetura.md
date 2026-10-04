@@ -4,7 +4,8 @@
 
 ```
 dev.kit (git.kit)  ──lote v1, X-Machine-Key──▶  API (ASP.NET Core)  ◀──JWT──  web (React)
-   TelemetrySyncService                          │                              landing · login · dashboard
+   TelemetrySyncService                          │   ▲                          landing · login · dashboard
+                                                 │   └── POST /api/demonstracoes (anônimo, limite por IP) ── formulário da landing
                                                  ▼
                                        SQLite embarcada (ou Azure SQL)
 ```
@@ -13,10 +14,65 @@ A API é uma solução .NET 10 em camadas, cada uma com a sua suíte de teste es
 
 | Projeto | Papel | Referencia |
 |---|---|---|
-| `DevKitPage.Contracts` | O CONTRATO versionado (v1): o lote, o registro e os DTOs do dashboard. É dado, não referencia nada. | — |
-| `DevKitPage.Core` | Entidades, opções e as regras puras: validação do lote, qualidade (divisor zero = nulo), chave da máquina, política de senha, período; as interfaces dos serviços. | Contracts |
-| `DevKitPage.Infrastructure` | EF Core (SQLite / SQL Server), a ingestão, as consultas agregadas, o expurgo, a semente do admin. | Core |
-| `DevKitPage.Api` | Os endpoints, as duas autenticações, o expurgo diário, CORS, `/health`, OpenAPI. | Infrastructure, Contracts |
+| `DevKitPage.Contracts` | O CONTRATO versionado (v1): o lote, o registro, os DTOs do dashboard e o pedido de demonstração. É dado, não referencia nada. | — |
+| `DevKitPage.Core` | Entidades, opções e as regras puras: validação do lote e do pedido de demonstração, qualidade (divisor zero = nulo), chave da máquina, política de senha, período; as interfaces dos serviços. | Contracts |
+| `DevKitPage.Infrastructure` | EF Core (SQLite / SQL Server), a ingestão, as consultas agregadas, os pedidos de demonstração, os expurgos, a semente do admin. | Core |
+| `DevKitPage.Api` | Os endpoints, as duas autenticações, o limite de taxa do formulário (atrás do proxy), o expurgo diário, CORS, `/health`, OpenAPI. | Infrastructure, Contracts |
+
+O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada* abaixo).
+
+## A landing (US #283)
+
+A landing é a página de venda: hero com a proposta e o vídeo do fluxo → benefícios → como funciona
+→ recursos (um vídeo cada) → integrações → segurança → contato (pedido de demonstração) → FAQ → CTA
+final. A ordem é a lista `SECOES` de `web/src/conteudo/landing.ts`, a mesma que o teste confere.
+
+- **Conteúdo tipado, separado da apresentação.** `conteudo/landing.ts` tem os textos e as mídias
+  (`Recurso`, `Beneficio`, `Passo`, `Integracao`, `PerguntaFrequente`, `Midia`) — evolução do antigo
+  `RECURSOS` da `Landing.tsx`. Trocar um texto ou um vídeo não toca nos componentes.
+- **Componentes reutilizáveis** em `web/src/componentes`: `Secao` (âncora + título por
+  `aria-labelledby`), `Cta` (âncora da página ou rota do app), `Midia` e o hook
+  `usePrefereMenosMovimento`, `FormularioDeDemonstracao` e `PedidosDeDemonstracao` (o dashboard).
+- **Mídia sem pesar no carregamento.** `<video muted loop playsInline autoPlay preload="none">` com
+  poster, largura e altura fixas (sem deslocar o layout); as `<source>` (WebM, depois MP4) só entram
+  quando o vídeo se aproxima da tela (`IntersectionObserver`). Com `prefers-reduced-motion` fica só
+  o poster; sem vídeo ou com falha, a captura estática.
+- **SEO e compartilhamento** no `index.html`: título e descrição de venda, canonical, Open Graph e
+  Twitter card (`compartilhar.jpg`, 1200×630), favicon e `theme-color`. A URL absoluta vem de
+  `VITE_SITE_URL` no build (o plugin `url-do-site` do `vite.config.ts`).
+
+### Mídias da landing
+
+As mídias ficam **no repositório**, em `web/public/midia` (um arquivo por recurso e formato:
+`agente.mp4`, `agente.webm`, `agente.jpg`), com orçamento de **1,5 MB por arquivo e 25 MB no total**
+— o gravador (`npm run midia`) falha acima disso. **Sem Git LFS**: o build do Azure Static Web Apps e
+o checkout do CI leem o repositório direto, e o LFS exigiria configurar os dois. Os formatos de
+mídia estão como `binary` no `.gitattributes` (o `text=auto` não toca neles). Se uma mídia não couber
+no orçamento, ela vai para um Blob Storage com CDN e a URL entra no `landing.ts`. O roteiro e o
+caminho para regravar estão em [landing-conteudo.md](landing-conteudo.md).
+
+### Pedido de demonstração
+
+- **Rota pública, validada antes do banco.** `POST /api/demonstracoes` é a única escrita anônima da
+  API. O `ValidadorDeDemonstracao` (Core) exige nome, e-mail válido e o consentimento, e limita os
+  tamanhos (empresa e mensagem são opcionais); o 400 traz os erros por campo, e a web repete a mesma
+  validação no formulário.
+- **Limite de taxa por IP do cliente, certo atrás do proxy.** No Azure Container Apps todo visitante
+  chega com o IP do proxy — dividiriam uma cota só. Por isso `UseForwardedHeaders`
+  (`X-Forwarded-For`/`Proto`) roda ANTES do `UseRateLimiter`, e só aceita o cabeçalho de quem está em
+  `Proxy:RedesConfiaveis` (de qualquer outro ele é ignorado: o visitante não escolhe o próprio IP para
+  fugir da cota). O limitador é de janela fixa de um minuto, particionado pelo IP, com
+  `Demonstracoes:LimitePorMinuto` (padrão 5); acima disso, 429 com `Retry-After`. Só a rota do
+  formulário tem a política.
+- **Privacidade dos contatos (LGPD).** Grava só o que o visitante informou (nome, e-mail, empresa,
+  mensagem) e o instante do consentimento — nem IP, nem navegador. Ler (`GET
+  /api/dashboard/demonstracoes`, paginado) e excluir (`DELETE /api/dashboard/demonstracoes/{id}`, o
+  atendimento ao pedido de eliminação do titular) só no grupo `/api/dashboard`, sob a política JWT
+  padrão. A retenção é `Demonstracoes:RetencaoDias` (padrão 365): o `ExpurgoDiario` apaga os pedidos
+  vencidos na MESMA volta de 24 h do expurgo dos eventos (`IExpurgoDePedidos` ao lado do
+  `IExpurgoDeEventos`), cada um com o seu tratamento de falha — um que falha não impede o outro.
+- **Sem tocar na telemetria.** A tabela `PedidosDeDemonstracao` não tem relação com máquinas nem
+  eventos.
 
 As convenções vêm do git.kit: pacotes centralizados (`Directory.Packages.props`), aviso é erro e a
 documentação XML gerada (`Directory.Build.props`), SDK fixado (`global.json`).
@@ -48,9 +104,17 @@ objetivos cumpridos × recusados e turnos por objetivo cumprido (retrabalho). Se
 razão é nula, e a web mostra um traço.
 
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
-(`Infrastructure/Migrations`) aplicadas na subida. `Banco:Provider=SqlServer` troca para o Azure SQL
-sem mudar código; nesse provider o esquema nasce do modelo (`EnsureCreated`), e as migrations
-próprias do SQL Server entram num projeto de migrations separado quando a base for para lá.
+(`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
+demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
+nesse provider o esquema nasce do modelo (`EnsureCreated`), e as migrations próprias do SQL Server
+entram num projeto de migrations separado quando a base for para lá.
+
+**A restrição do `EnsureCreated` (Azure SQL).** Ele só cria o esquema numa base VAZIA: numa base que
+já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
+idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
+antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`. O teste
+`Script_do_azure_sql_cria_a_tabela_com_as_mesmas_colunas_do_modelo` compara o script com o
+`CREATE TABLE` que o EF gera para o SQL Server a partir do mesmo modelo.
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
 repositório ou cliente, argumentos de comando, prompt, resposta, código, e-mail nem usuário do
@@ -64,8 +128,8 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 
 | Suíte | O que prova |
 |---|---|
-| `api/tests/DevKitPage.Core.Tests` | validação do lote, qualidade com divisor zero, chave, senha, período |
-| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login |
-| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo |
-| `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing, login, expiração, troca, KPIs, filtros, divisor zero |
-| `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard |
+| `api/tests/DevKitPage.Core.Tests` | validação do lote e do pedido de demonstração (obrigatórios, e-mail, limites, consentimento), qualidade com divisor zero, chave, senha, período |
+| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login; pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e o script do Azure SQL contra o modelo |
+| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
+| `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login, expiração, troca, KPIs, filtros, divisor zero |
+| `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard; landing → seções e vídeo do hero → pedido de demonstração → o admin vê e exclui no dashboard |

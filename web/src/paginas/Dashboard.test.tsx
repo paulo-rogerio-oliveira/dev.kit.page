@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
-import { API, qualidadeVazia, requisicoes, servidor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, qualidadeVazia, requisicoes, servidor, tokenValido } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
@@ -58,6 +58,61 @@ describe('Dashboard', () => {
       const dias = (Date.parse(ultima.searchParams.get('ate')!) - Date.parse(ultima.searchParams.get('de')!)) / 86_400_000 + 1;
       expect(dias).toBe(7);
     });
+  });
+
+  it('lista os pedidos de demonstração e exclui com confirmação', async () => {
+    let itens = [demonstracao];
+    const excluidos: string[] = [];
+    servidor.use(
+      http.get(`${API}/api/dashboard/demonstracoes`, () => HttpResponse.json({ itens, total: itens.length, numeroDaPagina: 1, tamanho: 10 })),
+      http.delete(`${API}/api/dashboard/demonstracoes/:id`, ({ params }) => {
+        excluidos.push(String(params.id));
+        itens = [];
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/dashboard', tokenValido());
+
+    const secao = await screen.findByRole('region', { name: 'Pedidos de demonstração' });
+    expect(await within(secao).findByText('Ana Souza')).toBeInTheDocument();
+    expect(within(secao).getByRole('link', { name: 'ana@empresa.com.br' })).toHaveAttribute('href', 'mailto:ana@empresa.com.br');
+
+    await userEvent.click(within(secao).getByRole('button', { name: 'Excluir o pedido de Ana Souza' }));
+
+    expect(confirmar).toHaveBeenCalled();
+    expect(await within(secao).findByText('Nenhum pedido de demonstração recebido.')).toBeInTheDocument();
+    expect(excluidos).toEqual(['7']);
+    confirmar.mockRestore();
+  });
+
+  it('sem confirmar, o pedido não é excluído', async () => {
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderizar('/dashboard', tokenValido());
+    const secao = await screen.findByRole('region', { name: 'Pedidos de demonstração' });
+
+    await userEvent.click(await within(secao).findByRole('button', { name: 'Excluir o pedido de Ana Souza' }));
+
+    expect(within(secao).getByText('Ana Souza')).toBeInTheDocument();
+    confirmar.mockRestore();
+  });
+
+  it('a lista de pedidos pagina', async () => {
+    const paginas: string[] = [];
+    servidor.use(http.get(`${API}/api/dashboard/demonstracoes`, ({ request }) => {
+      const pagina = new URL(request.url).searchParams.get('pagina')!;
+      paginas.push(pagina);
+      return HttpResponse.json({ itens: [{ ...demonstracao, nome: `Pessoa ${pagina}` }], total: 15, numeroDaPagina: Number(pagina), tamanho: 10 });
+    }));
+    renderizar('/dashboard', tokenValido());
+    const secao = await screen.findByRole('region', { name: 'Pedidos de demonstração' });
+    await within(secao).findByText('Pessoa 1');
+
+    await userEvent.click(within(secao).getByRole('button', { name: 'Próxima' }));
+
+    expect(await within(secao).findByText('Pessoa 2')).toBeInTheDocument();
+    expect(within(secao).getByText(/Página 2 de 2 · 15 pedido/)).toBeInTheDocument();
+    expect(paginas).toEqual(['1', '2']);
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {

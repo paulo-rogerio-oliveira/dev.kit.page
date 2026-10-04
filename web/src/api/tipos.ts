@@ -83,6 +83,31 @@ export interface Pagina<T> {
   tamanho: number;
 }
 
+/** O pedido de demonstração do formulário da landing (POST público). */
+export interface PedidoDeDemonstracao {
+  nome: string;
+  email: string;
+  empresa: string;
+  mensagem: string;
+  consentimento: boolean;
+}
+
+export interface PedidoDeDemonstracaoCriado {
+  id: number;
+  recebidoEm: string;
+}
+
+/** Um pedido na lista do dashboard (rota autenticada). */
+export interface DemonstracaoResumo {
+  id: number;
+  nome: string;
+  email: string;
+  empresa: string;
+  mensagem: string;
+  recebidoEm: string;
+  consentimentoEm: string;
+}
+
 /** O filtro do dashboard: período (AAAA-MM-DD, inclusive) e máquina (vazio = todas). */
 export interface Filtro {
   de: string;

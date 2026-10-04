@@ -1,9 +1,12 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using DevKitPage.Contracts.V1;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DevKitPage.Api.Tests;
 
@@ -17,25 +20,37 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     public const string NovaSenha = "senhaNova2026x";
     public const string CodigoDeRegistro = "convite-de-teste";
     public const string Segredo = "segredo-dos-testes-com-mais-de-32-caracteres";
+    public const int LimitePorMinuto = 3;
 
     private readonly string _arquivo = Path.Combine(Path.GetTempPath(), $"devkitpage-api-{Guid.NewGuid():N}.db");
     private readonly string _ambiente;
     private readonly bool _comSegredo;
+    private readonly string? _ipDaConexao;
+    private readonly string? _redeConfiavel;
 
-    public ApiDeTeste(string ambiente = "Testing", bool comSegredo = true)
+    /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
+    /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
+    public ApiDeTeste(string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null)
     {
         _ambiente = ambiente;
         _comSegredo = comSegredo;
+        _ipDaConexao = ipDaConexao;
+        _redeConfiavel = redeConfiavel;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_ambiente);
+        if (_redeConfiavel is not null)
+            builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
+        if (_ipDaConexao is not null)
+            builder.ConfigureServices(s => s.AddSingleton<IStartupFilter>(new ConexaoDe(IPAddress.Parse(_ipDaConexao))));
         builder.UseSetting("ConnectionStrings:DevKitPage", $"Data Source={_arquivo}");
         builder.UseSetting("Seed:AdminPassword", SenhaInicial);
         builder.UseSetting("Telemetria:CodigoDeRegistro", CodigoDeRegistro);
         builder.UseSetting("Telemetria:MaxEventosPorLote", "50");
         builder.UseSetting("Jwt:Segredo", _comSegredo ? Segredo : string.Empty);
+        builder.UseSetting("Demonstracoes:LimitePorMinuto", LimitePorMinuto.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public async Task<LoginResponse> LoginAsync(HttpClient cliente, string senha = SenhaInicial)
@@ -74,5 +89,19 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         base.Dispose(disposing);
         SqliteConnection.ClearAllPools();
         try { File.Delete(_arquivo); } catch (IOException) { }
+    }
+
+    /// <summary>Faz toda requisição chegar deste IP, ANTES do pipeline da API — como o proxy na frente dela.</summary>
+    private sealed class ConexaoDe(IPAddress ip) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> proximo) => app =>
+        {
+            app.Use((http, seguir) =>
+            {
+                http.Connection.RemoteIpAddress = ip;
+                return seguir(http);
+            });
+            proximo(app);
+        };
     }
 }

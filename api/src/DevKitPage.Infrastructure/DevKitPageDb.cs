@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DevKitPage.Infrastructure;
 
 /// <summary>
-/// A base do dev.kit.page: usuários, máquinas, eventos brutos e totais diários. As datas vão em
+/// A base do dev.kit.page: usuários, máquinas, eventos brutos, totais diários e pedidos de demonstração. As datas vão em
 /// UTC (<see cref="DateTime"/>) — o SQLite não compara <see cref="DateTimeOffset"/> no SQL, e a
 /// API converte na borda.
 /// </summary>
@@ -14,6 +14,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<Maquina> Maquinas => Set<Maquina>();
     public DbSet<EventoDeUso> Eventos => Set<EventoDeUso>();
     public DbSet<TotalDiario> TotaisDiarios => Set<TotalDiario>();
+    public DbSet<PedidoDeDemonstracao> PedidosDeDemonstracao => Set<PedidoDeDemonstracao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +59,18 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(x => new { x.MaquinaId, x.Dia, x.Tipo, x.Detalhe }).IsUnique();
             e.HasIndex(x => x.Dia);
             e.HasOne<Maquina>().WithMany().HasForeignKey(x => x.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Sem relação com a telemetria. No Azure SQL a tabela nasce do script
+        // api/scripts/sqlserver/PedidosDeDemonstracao.sql (o EnsureCreated não cria tabela em base existente).
+        modelBuilder.Entity<PedidoDeDemonstracao>(e =>
+        {
+            e.ToTable("PedidosDeDemonstracao");
+            e.Property(p => p.Nome).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDoNome);
+            e.Property(p => p.Email).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDoEmail);
+            e.Property(p => p.Empresa).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaEmpresa);
+            e.Property(p => p.Mensagem).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaMensagem);
+            e.HasIndex(p => p.RecebidoEmUtc);
         });
     }
 

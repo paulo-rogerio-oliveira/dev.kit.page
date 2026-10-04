@@ -43,6 +43,30 @@ public sealed class OpcoesDeTelemetria
     public string CodigoDeRegistro { get; set; } = string.Empty;
 }
 
+/// <summary>O formulário público de pedido de demonstração (seção <c>Demonstracoes</c>).</summary>
+public sealed class OpcoesDeDemonstracao
+{
+    public const string Secao = "Demonstracoes";
+
+    /// <summary>Por quantos dias o pedido é guardado (LGPD): depois disso o expurgo diário o apaga.</summary>
+    public int RetencaoDias { get; set; } = 365;
+
+    /// <summary>Quantos pedidos um mesmo IP de cliente envia por minuto; acima disto, 429.</summary>
+    public int LimitePorMinuto { get; set; } = 5;
+}
+
+/// <summary>
+/// O proxy na frente da API (seção <c>Proxy</c>). No Azure Container Apps todo visitante chega com o
+/// IP do proxy: o IP do cliente vem no <c>X-Forwarded-For</c>, aceito SÓ de quem está nestas redes.
+/// </summary>
+public sealed class OpcoesDoProxy
+{
+    public const string Secao = "Proxy";
+
+    /// <summary>As redes (CIDR, ex.: <c>100.100.0.0/16</c>) dos proxies confiáveis. Vazio: só o loopback.</summary>
+    public string[] RedesConfiaveis { get; set; } = [];
+}
+
 /// <summary>A base embarcada (seção <c>Banco</c>): o provider é configuração, não código.</summary>
 public sealed class OpcoesDoBanco
 {

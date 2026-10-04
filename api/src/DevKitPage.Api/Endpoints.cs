@@ -103,6 +103,27 @@ public static class Endpoints
 
         grupo.MapGet("/eventos", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => consultas.EventosAsync(Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 50, ct));
+
+        // Os pedidos de demonstração: ler e excluir (eliminação a pedido do titular) só autenticado.
+        grupo.MapGet("/demonstracoes", (int? pagina, int? tamanho, IPedidosDeDemonstracao pedidos, CancellationToken ct)
+            => pedidos.ListarAsync(pagina ?? 1, tamanho ?? 20, ct));
+
+        grupo.MapDelete("/demonstracoes/{id:long}", async (long id, IPedidosDeDemonstracao pedidos, CancellationToken ct)
+            => await pedidos.ExcluirAsync(id, ct) ? Results.NoContent() : Results.NotFound());
+    }
+
+    public static void MapearDemonstracoes(this IEndpointRouteBuilder app)
+    {
+        // A única escrita anônima da API: validada antes do banco e limitada por IP do cliente.
+        app.MapPost("/api/demonstracoes", async (PedidoDeDemonstracaoV1? pedido, IPedidosDeDemonstracao pedidos, CancellationToken ct) =>
+        {
+            var erros = ValidadorDeDemonstracao.Validar(pedido);
+            if (erros.Count > 0)
+                return Results.ValidationProblem(erros, "Confira os campos do pedido.");
+
+            var criado = await pedidos.RegistrarAsync(pedido!, ct);
+            return Results.Created($"/api/dashboard/demonstracoes/{criado.Id}", criado);
+        }).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoFormulario).WithTags("Demonstrações");
     }
 
     private static DateOnly Hoje(TimeProvider relogio) => DateOnly.FromDateTime(relogio.GetUtcNow().UtcDateTime);

@@ -1,17 +1,20 @@
 import type {
-  EventoDoLog, Filtro, LoginResponse, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta,
+  DemonstracaoResumo, EventoDoLog, Filtro, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
+  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
-/** Uma resposta de erro da API, com o status e a mensagem do ProblemDetails. */
+/** Uma resposta de erro da API, com o status, a mensagem do ProblemDetails e os erros por campo (400 de validação). */
 export class ErroDaApi extends Error {
   readonly status: number;
+  readonly erros: Record<string, string[]>;
 
-  constructor(status: number, mensagem: string) {
+  constructor(status: number, mensagem: string, erros: Record<string, string[]> = {}) {
     super(mensagem);
     this.status = status;
+    this.erros = erros;
   }
 }
 
@@ -28,15 +31,19 @@ async function chamar<T>(caminho: string, opcoes: { metodo?: string; corpo?: unk
 
   if (!resposta.ok) {
     let mensagem = `A API respondeu ${resposta.status}.`;
+    let erros: Record<string, string[]> = {};
     try {
-      const problema = (await resposta.json()) as { detail?: string; title?: string };
+      const problema = (await resposta.json()) as { detail?: string; title?: string; errors?: Record<string, string[]> };
       mensagem = problema.detail ?? problema.title ?? mensagem;
+      erros = problema.errors ?? {};
     } catch {
       // Sem corpo (o 401 do JWT): fica a mensagem padrão.
     }
-    throw new ErroDaApi(resposta.status, mensagem);
+    throw new ErroDaApi(resposta.status, mensagem, erros);
   }
 
+  // 204 (a exclusão): sem corpo.
+  if (resposta.status === 204) return undefined as T;
   return (await resposta.json()) as T;
 }
 
@@ -63,4 +70,13 @@ export const api = {
 
   eventos: (token: string, filtro: Filtro, pagina: number, tamanho = 20) =>
     chamar<Pagina<EventoDoLog>>(`/api/dashboard/eventos?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+
+  pedirDemonstracao: (pedido: PedidoDeDemonstracao) =>
+    chamar<PedidoDeDemonstracaoCriado>('/api/demonstracoes', { metodo: 'POST', corpo: pedido }),
+
+  demonstracoes: (token: string, pagina: number, tamanho = 10) =>
+    chamar<Pagina<DemonstracaoResumo>>(`/api/dashboard/demonstracoes?${new URLSearchParams({ pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+
+  excluirDemonstracao: (token: string, id: number) =>
+    chamar<void>(`/api/dashboard/demonstracoes/${id}`, { metodo: 'DELETE', token }),
 };

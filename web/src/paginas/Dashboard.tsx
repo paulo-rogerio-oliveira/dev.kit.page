@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
 import type { EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
+import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { formatar, ultimosDias } from '../formatar';
 import { useSessao } from '../sessao';
 
@@ -16,7 +17,8 @@ interface Dados {
 
 /**
  * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo, os KPIs
- * de QUANTIDADE e de QUALIDADE, a série diária, as falhas por causa e o log paginado. Um 401 da
+ * de QUANTIDADE e de QUALIDADE, a série diária, as falhas por causa, o log paginado e os pedidos
+ * de demonstração da landing (fora do filtro: não são telemetria). Um 401 da
  * API (token vencido) encerra a sessão e volta ao login.
  */
 export function Dashboard() {
@@ -165,6 +167,8 @@ export function Dashboard() {
             </section>
           </>
         )}
+
+        <PedidosDeDemonstracao token={token} aoFalhar={tratar} />
       </main>
     </div>
   );

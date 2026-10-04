@@ -116,6 +116,45 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("Maquinas", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.PedidoDeDemonstracao", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ConsentimentoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Empresa")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Mensagem")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecebidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecebidoEmUtc");
+
+                    b.ToTable("PedidosDeDemonstracao", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.TotalDiario", b =>
                 {
                     b.Property<long>("Id")

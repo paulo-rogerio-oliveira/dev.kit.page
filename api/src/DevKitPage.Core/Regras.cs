@@ -68,6 +68,61 @@ public static class ValidadorDeLote
     }
 }
 
+/// <summary>
+/// A validação do pedido de demonstração ANTES de tocar no banco — a mesma que a web aplica no
+/// formulário. Os erros vêm por campo (o <c>ValidationProblem</c> da API).
+/// </summary>
+public static class ValidadorDeDemonstracao
+{
+    public const int TamanhoMaximoDoNome = 100;
+    public const int TamanhoMaximoDoEmail = 254;
+    public const int TamanhoMaximoDaEmpresa = 100;
+    public const int TamanhoMaximoDaMensagem = 1000;
+
+    /// <summary>Os erros por campo (nome do campo em camelCase); vazio quando o pedido pode seguir.</summary>
+    public static Dictionary<string, string[]> Validar(PedidoDeDemonstracaoV1? pedido)
+    {
+        var erros = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (pedido is null)
+        {
+            erros["pedido"] = ["O corpo do pedido é obrigatório."];
+            return erros;
+        }
+
+        var nome = (pedido.Nome ?? string.Empty).Trim();
+        if (nome.Length == 0)
+            erros["nome"] = ["Informe o seu nome."];
+        else if (nome.Length > TamanhoMaximoDoNome)
+            erros["nome"] = [$"O nome tem até {TamanhoMaximoDoNome} caracteres."];
+
+        var email = (pedido.Email ?? string.Empty).Trim();
+        if (email.Length == 0)
+            erros["email"] = ["Informe o seu e-mail."];
+        else if (email.Length > TamanhoMaximoDoEmail || !EmailValido(email))
+            erros["email"] = ["Informe um e-mail válido."];
+
+        if ((pedido.Empresa ?? string.Empty).Trim().Length > TamanhoMaximoDaEmpresa)
+            erros["empresa"] = [$"A empresa tem até {TamanhoMaximoDaEmpresa} caracteres."];
+        if ((pedido.Mensagem ?? string.Empty).Trim().Length > TamanhoMaximoDaMensagem)
+            erros["mensagem"] = [$"A mensagem tem até {TamanhoMaximoDaMensagem} caracteres."];
+        if (!pedido.Consentimento)
+            erros["consentimento"] = ["É preciso concordar com o uso dos dados para o contato."];
+
+        return erros;
+    }
+
+    /// <summary>Um endereço com uma arroba, sem espaço, e um ponto no domínio — o resto o contato confirma.</summary>
+    public static bool EmailValido(string email)
+    {
+        var arroba = email.IndexOf('@');
+        if (arroba <= 0 || arroba != email.LastIndexOf('@') || email.Any(char.IsWhiteSpace))
+            return false;
+        var dominio = email[(arroba + 1)..];
+        var ponto = dominio.LastIndexOf('.');
+        return ponto > 0 && ponto < dominio.Length - 1;
+    }
+}
+
 /// <summary>A política de senha do dashboard.</summary>
 public static class PoliticaDeSenha
 {
