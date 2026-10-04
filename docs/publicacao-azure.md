@@ -11,6 +11,32 @@ de saúde em `/health` (confere o banco).
 **Opção B — App Service (Linux, .NET 10)**: `dotnet publish api/src/DevKitPage.Api -c Release` e
 deploy do pacote; health check do App Service em `/health`.
 
+No App Service, além das variáveis da tabela abaixo:
+
+- **Identidade**: *Identity → System assigned → On*, para resolver as referências ao Key Vault (a
+  sintaxe `@Microsoft.KeyVault(...)` funciona direto nos Application Settings).
+- **Configuration → General settings**: *Always On* ligado (sem ele o app dorme e o expurgo diário
+  não roda — exige plano Basic ou acima) e *HTTPS Only*.
+- **CORS do portal vazio**: quem responde o CORS é a API (`Cors__Origens__0`). O CORS da plataforma
+  passa por cima do da aplicação.
+- **Health check**: *Monitoring → Health check* → caminho `/health`.
+- **SQLite no App Service**: o caminho padrão (`dados/devkitpage.db`) cai em `wwwroot`, que é
+  apagado a cada deploy e fica **somente leitura** no deploy por pacote (a API não sobe). Use
+  `ConnectionStrings__DevKitPage=Data Source=/home/dados/devkitpage.db` (`/home` é persistente;
+  no Windows, `D:\home\dados\devkitpage.db`), com uma instância só. Para uso real, Azure SQL.
+- **Deploy manual**:
+
+  ```bash
+  dotnet publish api/src/DevKitPage.Api -c Release -o publicar
+  # compacte o CONTEÚDO de publicar/ em publicar.zip (a dll na raiz do zip)
+  az webapp deploy -g <grupo> -n <app> --src-path publicar.zip --type zip
+  ```
+
+  Ou *Deployment Center → GitHub*, que gera o workflow de build e deploy (aponte o projeto
+  `api/src/DevKitPage.Api`).
+- **Log da primeira subida** (a senha do admin, se o `Seed__AdminPassword` não foi configurado):
+  *Monitoring → Log stream*, com *App Service logs → Application logging* ligado.
+
 ### Configuração (Application Settings / variáveis do Container App)
 
 | Variável | Valor |
@@ -29,14 +55,46 @@ deploy do pacote; health check do App Service em `/health`.
 
 Dê à identidade gerenciada da API o papel **Key Vault Secrets User** no cofre.
 
+A API não lê o Key Vault sozinha (não há provider do cofre no código): quem resolve a referência é a
+plataforma, e a sintaxe muda conforme a opção:
+
+- **App Service**: a referência `@Microsoft.KeyVault(SecretUri=...)` direto no valor do Application Setting.
+- **Container Apps**: essa sintaxe **não** funciona (a variável chegaria com o texto literal e a API
+  recusaria subir). Crie um *segredo* do Container App apontando para o cofre e use `secretref:` na
+  variável:
+
+  ```bash
+  az containerapp secret set -n <api> -g <grupo> \
+    --secrets jwt-segredo=keyvaultref:https://<cofre>.vault.azure.net/secrets/jwt-segredo,identityref:system
+  az containerapp update -n <api> -g <grupo> --set-env-vars Jwt__Segredo=secretref:jwt-segredo
+  ```
+
+  O mesmo para `codigo-registro` e `admin-password`.
+
+O `Jwt__Segredo` precisa de **32 caracteres ou mais** (ex.: `openssl rand -base64 48`). Sem o
+`Seed__AdminPassword`, a senha inicial do admin é gerada e escrita **uma vez** no log da primeira
+subida (*Log stream* / *Console logs*). O `Cors__Origens__0` é a origem exata da web, sem barra no fim.
+
 ### Banco
 
 - **Azure SQL**: `Banco__Provider=SqlServer`. Na primeira subida o esquema nasce do modelo e o admin
   é semeado. Antes de evoluir o esquema em produção, gere as migrations do SQL Server num projeto de
   migrations próprio (ver [arquitetura](arquitetura.md)).
+  Com identidade gerenciada, crie o usuário dela na base (o servidor precisa de um admin do Entra ID)
+  — o `db_ddladmin` é porque a primeira subida cria o esquema:
+
+  ```sql
+  CREATE USER [<nome-da-api>] FROM EXTERNAL PROVIDER;
+  ALTER ROLE db_datareader ADD MEMBER [<nome-da-api>];
+  ALTER ROLE db_datawriter ADD MEMBER [<nome-da-api>];
+  ALTER ROLE db_ddladmin ADD MEMBER [<nome-da-api>];
+  ```
+
+  E libere o acesso da API no firewall do servidor (*Allow Azure services* ou a rede do ambiente).
 - **SQLite em volume**: válido para uma instância só (Container Apps com réplica única e um volume
   Azure Files em `/app/dados`). As migrations (inclusive a dos pedidos de demonstração) são
-  aplicadas sozinhas na subida.
+  aplicadas sozinhas na subida. Atenção: o SQLite sobre o SMB do Azure Files sofre com travas de
+  arquivo (`database is locked`) — serve para demonstração; para uso real, Azure SQL.
 
 ### Atualizar uma base Azure SQL que já existe (US #283)
 
@@ -55,9 +113,26 @@ sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method Acti
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as
 variáveis de build `VITE_API_URL=https://<api>` e `VITE_SITE_URL=https://<site>` (a URL absoluta do
-canonical e da imagem do Open Graph). Configure o fallback de rotas para `index.html` (rotas do
-React Router: `/login`, `/dashboard`). As mídias da landing (`web/public/midia`) vão no próprio build
-— estão no repositório, sem LFS.
+canonical e da imagem do Open Graph). O fallback de rotas para `index.html` (rotas do React Router:
+`/login`, `/dashboard`) já vai no build, pelo [`web/public/staticwebapp.config.json`](../web/public/staticwebapp.config.json)
+— sem ele, recarregar o `/dashboard` dá 404. As mídias da landing (`web/public/midia`) vão no próprio
+build — estão no repositório, sem LFS.
+
+As `VITE_*` são lidas no **build**, não em execução: as *Environment variables* do portal do Static
+Web App não chegam a elas. Ponha-as no `env:` do passo de build do workflow que o Static Web Apps
+gera no GitHub (`app_location: web`, `output_location: dist`):
+
+```yaml
+      - uses: Azure/static-web-apps-deploy@v1
+        env:
+          VITE_API_URL: https://<api>
+          VITE_SITE_URL: https://<site>
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: web
+          output_location: dist
+```
 
 ## Depois de publicar
 

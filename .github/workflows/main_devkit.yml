@@ -21,13 +21,11 @@ jobs:
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.x'
+          global-json-file: api/global.json
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
-
+      # Não há projeto na raiz: publica só a API (a solução traria os projetos de teste junto).
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish api/src/DevKitPage.Api/DevKitPage.Api.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
