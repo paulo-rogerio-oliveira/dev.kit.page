@@ -118,6 +118,9 @@ canonical e da imagem do Open Graph). O fallback de rotas para `index.html` (rot
 — sem ele, recarregar o `/dashboard` dá 404. As mídias da landing (`web/public/midia`) vão no próprio
 build — estão no repositório, sem LFS.
 
+O Node do build sai do `engines` do `web/package.json` (22.x, o mesmo do CI): o Vite 7 não compila
+em Node anterior ao 20.19.
+
 As `VITE_*` são lidas no **build**, não em execução: as *Environment variables* do portal do Static
 Web App não chegam a elas. Ponha-as no `env:` do passo de build do workflow que o Static Web Apps
 gera no GitHub (`app_location: web`, `output_location: dist`):
