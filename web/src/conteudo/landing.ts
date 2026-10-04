@@ -109,7 +109,7 @@ export const BENEFICIOS: Beneficio[] = [
   {
     titulo: 'Uso e qualidade medidos',
     texto:
-      'O dashboard mostra, por máquina, turnos, falhas por causa, nota média dos avaliadores e retrabalho por objetivo cumprido — com o envio ligado só por opção.',
+      'O dashboard mostra, por máquina, turnos, falhas por causa, nota média dos avaliadores e retrabalho por objetivo cumprido — envio anônimo, que você desliga quando quiser.',
   },
 ];
 
@@ -208,8 +208,8 @@ export const SEGURANCA: Beneficio[] = [
     texto: 'O agente trabalha em clones na sua máquina, no branch da task. Nada sai sem o seu commit e o seu push.',
   },
   {
-    titulo: 'Telemetria opcional e anônima',
-    texto: 'O envio de uso é opt-in, identificado por um GUID da máquina, sem caminhos, código, prompts nem nomes de cliente.',
+    titulo: 'Telemetria anônima, que você desliga',
+    texto: 'O envio de uso vem ligado e se desliga em Configurações → Telemetria de uso. É identificado por um GUID da máquina, sem caminhos, código, prompts nem nomes de cliente.',
   },
 ];
 

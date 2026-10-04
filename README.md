@@ -3,7 +3,7 @@
 A página do **dev.kit**: uma landing page de **venda** do produto (com vídeos de cada recurso e o
 pedido de demonstração), o **login** e um **dashboard**
 com a quantidade e a qualidade de uso do dev.kit **por máquina**, alimentado pela telemetria que o
-próprio dev.kit envia (repositório `git.kit`, opt-in em *Configurações → Telemetria de uso*).
+próprio dev.kit envia (repositório `git.kit`; ligado por padrão, desliga-se em *Configurações → Telemetria de uso*).
 
 | Pasta | O que tem |
 |---|---|
@@ -40,8 +40,9 @@ npm run dev
 
 Abra http://localhost:5173 → **Entrar** → `admin` e a senha inicial → defina a nova senha → dashboard.
 
-**3. O dev.kit enviando**: no dev.kit, *Configurações → Telemetria de uso*: ligue o opt-in, informe
-`http://localhost:5080` e o código de registro, salve e clique **Enviar agora** (ou
+**3. O dev.kit enviando**: o envio vem ligado, com a URL e o código de registro da produção. Para
+testar local, em *Configurações → Telemetria de uso* troque a URL por `http://localhost:5080` e o
+código pelo seu, salve e clique **Enviar agora** (ou
 `devcli telemetria --enviar`). A máquina aparece no filtro do dashboard.
 
 ## Testes

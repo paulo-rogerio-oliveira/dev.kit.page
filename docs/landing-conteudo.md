@@ -29,7 +29,7 @@ Planos, preços e checkout estão **fora** do escopo: o CTA é o pedido de demon
 - **Como funciona:** work item → o agente nos repositórios → o avaliador confere → commit, push e PR.
 - **Integrações:** Azure DevOps, GitHub, as CLIs claude/kiro/kimi/glm, TortoiseGit, o serviço do Windows.
 - **Segurança e privacidade:** o agente nunca vê o token; gravar é explícito (simula por padrão);
-  o código fica na máquina; a telemetria é opt-in e anônima.
+  o código fica na máquina; a telemetria é anônima, vem ligada e o usuário a desliga.
 - **Contato:** o formulário *Quero uma demonstração* (nome, e-mail, empresa e mensagem opcionais,
   consentimento LGPD obrigatório) — ver [arquitetura](arquitetura.md#pedido-de-demonstração).
 - **FAQ:** processo no Azure DevOps, agentes suportados, commit e push sozinho, onde o código roda,
