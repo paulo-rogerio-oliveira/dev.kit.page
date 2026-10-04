@@ -118,7 +118,7 @@ canonical e da imagem do Open Graph). O fallback de rotas para `index.html` (rot
 — sem ele, recarregar o `/dashboard` dá 404. As mídias da landing (`web/public/midia`) vão no próprio
 build — estão no repositório, sem LFS.
 
-O Node do build sai do `engines` do `web/package.json` (22.x, o mesmo do CI): o Vite 7 não compila
+O Node do build sai do `engines` do `web/package.json` (`>=22`, como o README e o CI): o Vite 7 não compila
 em Node anterior ao 20.19.
 
 As `VITE_*` são lidas no **build**, não em execução: as *Environment variables* do portal do Static
@@ -140,7 +140,9 @@ gera no GitHub (`app_location: web`, `output_location: dist`):
 ## Depois de publicar
 
 1. Abra a web → **Entrar** → `admin` e a senha do Key Vault → defina a nova senha.
-2. No dev.kit de cada máquina: *Configurações → Telemetria de uso* → URL da API e código de registro.
+2. O dev.kit vem com a URL da API e o código de registro preenchidos no build, e com o envio ligado
+   (o usuário desliga em *Configurações → Telemetria de uso*). O `Telemetria__CodigoDeRegistro` da
+   API tem de ser o mesmo do build do dev.kit.
 3. `devcli telemetria --enviar` numa máquina e confira o dashboard.
 4. Envie um pedido pelo formulário *Quero uma demonstração* da landing e confira-o em *Pedidos de
    demonstração* no dashboard (exclua-o depois).

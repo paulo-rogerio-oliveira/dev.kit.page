@@ -65,8 +65,13 @@ hostname. A sessão é o id interno da task no dev.kit.
 
 ## No dev.kit
 
-- **Opt-in** em *Configurações → Telemetria de uso* (desligado por padrão): URL da API e código de
-  registro. Só o que for registrado **depois** de ligar é enviado.
+- **Ligado por padrão** (opt-out): a URL da API e o código de registro vêm preenchidos no build do
+  dev.kit, e o usuário desliga em *Configurações → Telemetria de uso*. Só o que for registrado com o
+  envio ligado é enviado.
+- O código de registro embutido no instalador é, na prática, **público** (dá para extraí-lo do
+  binário). Ele separa as máquinas do dev.kit de chamadas anônimas, mas não autentica ninguém. Se
+  vazar ou for abusado, troque o `Telemetria__CodigoDeRegistro` na API e publique um dev.kit novo:
+  as máquinas já registradas continuam enviando com a chave delas.
 - **Fila local**: a própria tabela de telemetria; o que não foi aceito espera o próximo envio.
 - **Espera exponencial** depois de falha (1, 2, 4… minutos, até 6 h); uma falha nunca afeta o turno.
 - **Enviar agora**: o botão das Configurações ou `devcli telemetria --enviar`.

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "engines": {
-    "node": "22.x"
+    "node": ">=22"
   },
   "description": "dev.kit.page — landing page do dev.kit, login e dashboard de uso por máquina",
   "scripts": {

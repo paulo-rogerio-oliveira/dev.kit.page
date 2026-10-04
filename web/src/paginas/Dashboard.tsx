@@ -94,8 +94,8 @@ export function Dashboard() {
 
         {!carregando && !erro && maquinas.length === 0 && (
           <p className="vazio" role="status">
-            Nenhuma máquina enviou telemetria ainda. No dev.kit, ligue o envio em Configurações → Telemetria de uso,
-            com a URL desta API e o código de registro.
+            Nenhuma máquina enviou telemetria ainda. No dev.kit, confira em Configurações → Telemetria de uso que o
+            envio está ligado, com a URL desta API e o código de registro.
           </p>
         )}
 

@@ -112,7 +112,7 @@ export function Landing() {
       </main>
 
       <footer className="rodape">
-        <p>O dashboard mostra, por máquina, a quantidade e a qualidade de uso do dev.kit — com o envio ligado (opt-in) em Configurações → Telemetria de uso.</p>
+        <p>O dashboard mostra, por máquina, a quantidade e a qualidade de uso do dev.kit — o envio vem ligado e se desliga em Configurações → Telemetria de uso.</p>
         <Link to="/login">Entrar no dashboard</Link>
       </footer>
     </div>
