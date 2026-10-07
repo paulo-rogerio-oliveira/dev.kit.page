@@ -22,8 +22,14 @@ public static class ContratoV1
 /// <param name="Valor">A medida (duração do turno em ms, nota do avaliador), quando há.</param>
 /// <param name="Detalhe">O recorte (ferramenta, executável, causa da falha, CLI, versão).</param>
 /// <param name="Em">Quando aconteceu (UTC).</param>
+/// <param name="Trace">
+/// Opcional (US #381): o trace JÁ SANITIZADO no dev.kit de uma <see cref="TiposDeEvento.ExcecaoNaoClassificada"/>
+/// — o tipo e os quadros, sem caminhos, e-mails nem URLs. Até <c>8 KB</c>; o cliente antigo não manda.
+/// </param>
+/// <param name="Assinatura">Opcional (US #381): a impressão digital da exceção, que agrupa as ocorrências.</param>
 public sealed record TelemetryEventV1(
-    string EventId, string Tipo, string SessaoId, int Quantidade, long? Valor, string Detalhe, DateTimeOffset Em);
+    string EventId, string Tipo, string SessaoId, int Quantidade, long? Valor, string Detalhe, DateTimeOffset Em,
+    string? Trace = null, string? Assinatura = null);
 
 /// <summary>Um lote de eventos de uma máquina.</summary>
 public sealed record TelemetryBatchV1(string Versao, string MaquinaId, string VersaoDevKit, IReadOnlyList<TelemetryEventV1> Eventos);
@@ -58,10 +64,17 @@ public static class TiposDeEvento
     public const string ObjetivoRecusado = "ObjetivoRecusado";
     public const string SessaoIniciada = "SessaoIniciada";
 
+    /// <summary>
+    /// Uma exceção que nenhum detector classificou (US #381): o turno que falhou sem causa em
+    /// <c>TurnFailures.Padrao</c> ou a exceção não tratada do app, do serviço ou do devcli. Leva o
+    /// <see cref="TelemetryEventV1.Trace"/> e a <see cref="TelemetryEventV1.Assinatura"/>.
+    /// </summary>
+    public const string ExcecaoNaoClassificada = "ExcecaoNaoClassificada";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         ArquivoAlterado, FluxoExecutado, FerramentaAcionada, ComandoDelegado, TurnoExecutado,
-        TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada,
+        TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada, ExcecaoNaoClassificada,
     };
 }

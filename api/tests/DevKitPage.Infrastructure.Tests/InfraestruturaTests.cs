@@ -19,9 +19,13 @@ public sealed class InfraestruturaTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await _base.DisposeAsync();
 
-    private Task<BatchResultV1> Enviar(int maquina, params TelemetryEventV1[] eventos)
+    private Task<BatchResultV1> Enviar(int maquina, params TelemetryEventV1[] eventos) => EnviarNaVersao(maquina, "1.4.0", eventos);
+
+    private Task<BatchResultV1> EnviarNaVersao(int maquina, string versao, params TelemetryEventV1[] eventos)
         => _base.ComAsync(sp => sp.GetRequiredService<IIngestaoDeTelemetria>()
-            .RegistrarAsync(maquina, new TelemetryBatchV1("v1", "x", "1.4.0", eventos), default));
+            .RegistrarAsync(maquina, new TelemetryBatchV1("v1", "x", versao, eventos), default));
+
+    private const string TraceDoDevKit = "System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.Planejador.Escolher() linha 42\n   at GitKit.App.Services.BackgroundJobService.RodarAsync() linha 1161";
 
     private static readonly Periodo Outubro = new(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 31));
 
@@ -144,6 +148,132 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         var depois = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3)), null, default));
         Assert.Equal(2L, antes.Turnos);
         Assert.Equal(antes.Turnos, depois.Turnos);
+    }
+
+    [Fact]
+    public async Task Mesma_assinatura_vira_um_grupo_com_duas_ocorrencias_e_duas_maquinas_e_o_reenvio_nao_duplica()
+    {
+        var m1 = await _base.MaquinaAsync("m-1");
+        var m2 = await _base.MaquinaAsync("m-2");
+        var deM1 = BaseDeTeste.Excecao("x1", Hoje, "abc123", TraceDoDevKit);
+
+        await Enviar(m1, deM1);
+        await Enviar(m2, BaseDeTeste.Excecao("x2", Hoje.AddMinutes(5), "abc123", TraceDoDevKit));
+        await Enviar(m1, deM1); // o reenvio
+
+        var consultas = (IServiceProvider sp) => sp.GetRequiredService<IConsultasDoPainel>();
+        var pagina = await _base.ComAsync(sp => consultas(sp).ErrosAsync(Outubro, null, 1, 20, default));
+        var grupo = Assert.Single(pagina.Itens);
+        Assert.Equal(("abc123", 2L, 2, EstadosDoGrupo.Novo), (grupo.Assinatura, grupo.Ocorrencias, grupo.Maquinas, grupo.Estado));
+        Assert.Equal("System.InvalidOperationException", grupo.Tipo);
+
+        var detalhe = (await _base.ComAsync(sp => consultas(sp).ErroAsync(grupo.Id, Outubro, default)))!;
+        Assert.Equal(2, detalhe.Ocorrencias.Count);
+        Assert.Contains("GitKit.Core.Services.Planejador.Escolher()", detalhe.Trace);
+        Assert.Equal(new[] { "máquina m-1", "máquina m-2" }, detalhe.Maquinas);
+        Assert.Equal(2L, Assert.Single(detalhe.PorDia).Quantidade);
+
+        // Filtrado por máquina, conta só a dela; e o erro não entra na taxa de falha de turno.
+        var soM1 = await _base.ComAsync(sp => consultas(sp).ErrosAsync(Outubro, m1, 1, 20, default));
+        Assert.Equal((1L, 1), (soM1.Itens[0].Ocorrencias, soM1.Itens[0].Maquinas));
+        Assert.Equal(0, (await _base.ComAsync(sp => consultas(sp).QualidadeAsync(Outubro, null, default))).TurnosComFalha);
+    }
+
+    [Fact]
+    public async Task Trace_com_caminho_email_e_url_e_mascarado_de_novo_na_gravacao()
+    {
+        var maquina = await _base.MaquinaAsync("m-1");
+        var vazado = "System.IO.IOException: C:\\Users\\ana\\repo\\x.cs nao abriu (ana@cliente.com.br, https://cliente.dev/a?token=1)\n   at GitKit.X.Y() in \\\\servidor\\share\\y.cs:line 9";
+
+        await Enviar(maquina, BaseDeTeste.Excecao("x1", Hoje, "def456", vazado));
+
+        var trace = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.Trace).SingleAsync());
+        Assert.DoesNotContain("ana", trace);
+        Assert.DoesNotContain("cliente", trace);
+        Assert.DoesNotContain("servidor", trace);
+        Assert.Contains("<caminho>", trace);
+        Assert.Contains("GitKit.X.Y()", trace);
+    }
+
+    [Fact]
+    public async Task Grupo_resolvido_regride_quando_volta_na_versao_da_correcao_e_nao_antes()
+    {
+        var maquina = await _base.MaquinaAsync("m-1");
+        await Enviar(maquina, BaseDeTeste.Excecao("x1", Hoje, "abc123", TraceDoDevKit));
+        var id = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().GruposDeErro.Select(g => g.Id).SingleAsync());
+        await _base.ComAsync(sp => sp.GetRequiredService<IReacaoAErros>().AlterarEstadoAsync(id, new AlterarEstadoDoGrupo(EstadosDoGrupo.Resolvido, "1.5.0"), default));
+
+        await EnviarNaVersao(maquina, "1.4.9", BaseDeTeste.Excecao("x2", Hoje.AddMinutes(1), "abc123", TraceDoDevKit));
+        var antes = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().GruposDeErro.AsNoTracking().SingleAsync());
+        await EnviarNaVersao(maquina, "1.5.0", BaseDeTeste.Excecao("x3", Hoje.AddMinutes(2), "abc123", TraceDoDevKit));
+        var depois = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().GruposDeErro.AsNoTracking().SingleAsync());
+
+        Assert.Equal((EstadosDoGrupo.Resolvido, "1.5.0"), (antes.Estado, antes.ResolvidoNaVersao));
+        Assert.Equal((EstadosDoGrupo.Regrediu, "1.5.0"), (depois.Estado, depois.UltimaVersao));
+    }
+
+    [Fact]
+    public async Task Cada_grupo_guarda_so_as_ultimas_ocorrencias()
+    {
+        var maquina = await _base.MaquinaAsync("m-1");
+        await Enviar(maquina, Enumerable.Range(1, RegrasDeErro.OcorrenciasGuardadasPorGrupo + 5)
+            .Select(i => BaseDeTeste.Excecao($"x{i}", Hoje.AddMinutes(i), "abc123", TraceDoDevKit)).ToArray());
+
+        var guardadas = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync());
+        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(Outubro, null, 1, 20, default))).Itens);
+
+        Assert.Equal(RegrasDeErro.OcorrenciasGuardadasPorGrupo, guardadas.Count);
+        Assert.DoesNotContain("x1", guardadas); // a mais antiga saiu
+        Assert.Equal(RegrasDeErro.OcorrenciasGuardadasPorGrupo + 5L, grupo.Ocorrencias); // a contagem não depende delas
+    }
+
+    [Fact]
+    public async Task Expurgo_remove_as_ocorrencias_velhas_e_mantem_o_grupo_e_a_contagem()
+    {
+        var maquina = await _base.MaquinaAsync("m-1");
+        var agora = _base.Relogio.Agora;
+        await Enviar(maquina,
+            BaseDeTeste.Excecao("velha", agora.AddDays(-31), "abc123", TraceDoDevKit),
+            BaseDeTeste.Excecao("nova", agora.AddDays(-1), "abc123", TraceDoDevKit));
+
+        var apagadas = await _base.ComAsync(sp => sp.GetRequiredService<IExpurgoDeOcorrencias>().ExpurgarAsync(default));
+
+        Assert.Equal(1, apagadas);
+        Assert.Equal(new[] { "nova" }, await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync()));
+        var periodo = new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3));
+        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(periodo, null, 1, 20, default))).Itens);
+        Assert.Equal(2L, grupo.Ocorrencias);
+    }
+
+    [Fact]
+    public async Task Maquinas_ativas_sao_as_com_evento_no_periodo_e_registradas_as_que_ja_existiam()
+    {
+        var m1 = await _base.MaquinaAsync("m-1");
+        await _base.MaquinaAsync("m-2"); // registrada, sem evento
+        var m3 = await _base.MaquinaAsync("m-3");
+        await Enviar(m1, BaseDeTeste.Evento("a1", TiposDeEvento.SessaoIniciada, Hoje));
+        await Enviar(m3, BaseDeTeste.Evento("c1", TiposDeEvento.SessaoIniciada, Hoje.AddMonths(-3))); // fora do período
+
+        var todas = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(Outubro, null, default));
+        var soM1 = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(Outubro, m1, default));
+
+        Assert.Equal((1L, 3L), (todas.MaquinasAtivas, todas.MaquinasRegistradas));
+        Assert.Equal((1L, 1L), (soM1.MaquinasAtivas, soM1.MaquinasRegistradas));
+    }
+
+    [Fact]
+    public void Script_do_azure_sql_cria_os_grupos_e_as_ocorrencias_com_as_colunas_do_modelo()
+    {
+        var script = BaseDeTeste.ScriptDoAzureSql("GruposDeErro.sql");
+
+        foreach (var tabela in new[] { "GruposDeErro", "OcorrenciasDeErro" })
+        {
+            Assert.Contains($"IF OBJECT_ID(N'[dbo].[{tabela}]', N'U') IS NULL", script);
+            foreach (var coluna in BaseDeTeste.ColunasNoSqlServer(tabela))
+                Assert.Contains(coluna, script);
+        }
+
+        Assert.Contains("CREATE UNIQUE INDEX [IX_GruposDeErro_Assinatura]", script);
     }
 
     [Fact]

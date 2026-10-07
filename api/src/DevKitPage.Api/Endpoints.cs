@@ -104,6 +104,30 @@ public static class Endpoints
         grupo.MapGet("/eventos", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => consultas.EventosAsync(Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 50, ct));
 
+        // As exceções não classificadas (US #381): os grupos, o detalhe com o trace, a reação e a
+        // exportação — o dado para abrir o Bug ou escrever o detector que tira o grupo daqui.
+        grupo.MapGet("/erros", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => consultas.ErrosAsync(Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 20, ct));
+
+        grupo.MapGet("/erros/{id:long}", async (long id, DateOnly? de, DateOnly? ate, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => await consultas.ErroAsync(id, Periodo.Pedido(de, ate, Hoje(relogio)), ct) is { } detalhe ? Results.Ok(detalhe) : Results.NotFound());
+
+        grupo.MapPut("/erros/{id:long}/estado", async (long id, AlterarEstadoDoGrupo? pedido, IReacaoAErros reacao, CancellationToken ct) =>
+        {
+            var problema = RegrasDeErro.Validar(pedido);
+            if (problema.Length > 0)
+                return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
+            return await reacao.AlterarEstadoAsync(id, pedido!, ct) ? Results.NoContent() : Results.NotFound();
+        });
+
+        grupo.MapGet("/erros/{id:long}/exportar", async (long id, DateOnly? de, DateOnly? ate, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct) =>
+        {
+            if (await consultas.ErroAsync(id, Periodo.Pedido(de, ate, Hoje(relogio)), ct) is not { } detalhe)
+                return Results.NotFound();
+            var json = JsonSerializer.SerializeToUtf8Bytes(detalhe, Exportacao);
+            return Results.File(json, "application/json", $"excecao-{detalhe.Grupo.Assinatura}.json");
+        });
+
         // Os pedidos de demonstração: ler e excluir (eliminação a pedido do titular) só autenticado.
         grupo.MapGet("/demonstracoes", (int? pagina, int? tamanho, IPedidosDeDemonstracao pedidos, CancellationToken ct)
             => pedidos.ListarAsync(pagina ?? 1, tamanho ?? 20, ct));
@@ -127,4 +151,7 @@ public static class Endpoints
     }
 
     private static DateOnly Hoje(TimeProvider relogio) => DateOnly.FromDateTime(relogio.GetUtcNow().UtcDateTime);
+
+    /// <summary>O JSON dos arquivos exportados: o mesmo camelCase da API, indentado para quem abre o arquivo.</summary>
+    private static readonly JsonSerializerOptions Exportacao = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 }

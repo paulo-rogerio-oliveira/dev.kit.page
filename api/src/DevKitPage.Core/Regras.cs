@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using DevKitPage.Contracts.V1;
 
 namespace DevKitPage.Core;
@@ -153,6 +154,125 @@ public readonly record struct Periodo(DateOnly De, DateOnly Ate)
         var inicio = de ?? fim.AddDays(-(DiasPadrao - 1));
         return inicio <= fim ? new Periodo(inicio, fim) : new Periodo(fim, inicio);
     }
+}
+
+/// <summary>
+/// As regras das exceções não classificadas (US #381): o limite e a máscara do trace, a assinatura,
+/// as transições de estado e a regressão por versão.
+/// <para>
+/// O trace chega JÁ sanitizado pelo dev.kit (<c>TraceSanitizado</c>, no git.kit); a máscara daqui é
+/// a DEFESA EM PROFUNDIDADE — um dev.kit com defeito no sanitizador não grava caminho, e-mail nem
+/// URL no banco do dashboard. O <see cref="ValidadorDeLote.TamanhoMaximoDoTexto"/> do recorte não
+/// muda: o trace tem campo e limite próprios.
+/// </para>
+/// </summary>
+public static partial class RegrasDeErro
+{
+    /// <summary>O tamanho máximo do trace guardado (8 KB); o que passar é cortado, não recusado.</summary>
+    public const int TamanhoMaximoDoTrace = 8192;
+
+    /// <summary>O tamanho máximo da assinatura.</summary>
+    public const int TamanhoMaximoDaAssinatura = 64;
+
+    /// <summary>O tamanho máximo da versão informada ao resolver.</summary>
+    public const int TamanhoMaximoDaVersao = 50;
+
+    /// <summary>Quantas ocorrências (com o trace) cada grupo guarda: as mais recentes.</summary>
+    public const int OcorrenciasGuardadasPorGrupo = 20;
+
+    /// <summary>O trace mascarado e cortado no tamanho que o banco guarda.</summary>
+    public static string Mascarar(string? trace)
+    {
+        var texto = (trace ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+        texto = Url().Replace(texto, "<url>");
+        texto = Email().Replace(texto, "<email>");
+        texto = CaminhoUnc().Replace(texto, "<caminho>");
+        texto = CaminhoWindows().Replace(texto, "<caminho>");
+        texto = CaminhoUnix().Replace(texto, "<caminho>");
+        texto = Guid().Replace(texto, "<guid>");
+        return texto.Length <= TamanhoMaximoDoTrace ? texto : texto[..TamanhoMaximoDoTrace];
+    }
+
+    /// <summary>
+    /// A assinatura do evento — a que o dev.kit mandou ou, sem ela (um cliente com defeito), a
+    /// derivada do trace: o grupo nunca fica sem chave.
+    /// </summary>
+    public static string Assinatura(string? assinatura, string trace)
+    {
+        var informada = (assinatura ?? string.Empty).Trim();
+        if (informada.Length > 0)
+            return informada.Length <= TamanhoMaximoDaAssinatura ? informada : informada[..TamanhoMaximoDaAssinatura];
+
+        var base_ = string.Join('\n', trace.Split('\n').Take(6));
+        return "t" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(base_)))[..15];
+    }
+
+    /// <summary>O tipo da exceção: a primeira linha do trace até os dois-pontos.</summary>
+    public static string Tipo(string trace)
+    {
+        var primeira = trace.Split('\n', 2)[0].Trim();
+        var doisPontos = primeira.IndexOf(": ", StringComparison.Ordinal);
+        var tipo = doisPontos > 0 ? primeira[..doisPontos] : primeira;
+        tipo = tipo.Length == 0 ? "Exceção sem trace" : tipo;
+        return tipo.Length <= ValidadorDeLote.TamanhoMaximoDoTexto ? tipo : tipo[..ValidadorDeLote.TamanhoMaximoDoTexto];
+    }
+
+    /// <summary>O problema da reação pedida, ou vazio quando ela pode seguir.</summary>
+    public static string Validar(AlterarEstadoDoGrupo? pedido)
+    {
+        if (pedido is null || !EstadosDoGrupo.Escolhiveis.Contains(pedido.Estado ?? string.Empty))
+            return $"Estado inválido: use {string.Join(", ", EstadosDoGrupo.Escolhiveis)}.";
+        if ((pedido.Versao ?? string.Empty).Trim().Length > TamanhoMaximoDaVersao)
+            return $"A versão tem até {TamanhoMaximoDaVersao} caracteres.";
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// O estado do grupo quando chega uma ocorrência nova: o grupo RESOLVIDO que volta numa versão
+    /// igual ou maior que a da correção (ou resolvido sem versão) REGREDIU; os outros ficam como estão
+    /// — o ignorado continua ignorado, e é para isso que ele existe.
+    /// </summary>
+    public static string EstadoAoReceber(string estado, string? resolvidoNaVersao, string versaoDaOcorrencia)
+    {
+        if (estado != EstadosDoGrupo.Resolvido)
+            return estado;
+        if (string.IsNullOrWhiteSpace(resolvidoNaVersao))
+            return EstadosDoGrupo.Regrediu;
+        return CompararVersoes(versaoDaOcorrencia, resolvidoNaVersao) >= 0 ? EstadosDoGrupo.Regrediu : estado;
+    }
+
+    /// <summary>
+    /// Compara duas versões do dev.kit (<c>1.4.0</c>, <c>v1.10.2-beta</c>): numérica por parte, sem o
+    /// prefixo <c>v</c> e sem o sufixo; o que não é versão compara como texto.
+    /// </summary>
+    public static int CompararVersoes(string a, string b)
+    {
+        static Version? Ler(string texto)
+        {
+            var limpo = (texto ?? string.Empty).Trim().TrimStart('v', 'V').Split('-', '+', ' ')[0];
+            return Version.TryParse(limpo.Contains('.', StringComparison.Ordinal) ? limpo : limpo + ".0", out var versao) ? versao : null;
+        }
+
+        return Ler(a) is { } va && Ler(b) is { } vb ? va.CompareTo(vb) : string.CompareOrdinal(a, b);
+    }
+
+    [GeneratedRegex(@"\b(?:https?|ftp)://[^\s""'<>]+", RegexOptions.IgnoreCase)]
+    private static partial Regex Url();
+
+    [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")]
+    private static partial Regex Email();
+
+    [GeneratedRegex(@"\\\\[^\s\\""'<>|]+[^\n""'<>|]*?(?=:line\b|:\d|[""'<>|\n]|$)", RegexOptions.Multiline)]
+    private static partial Regex CaminhoUnc();
+
+    [GeneratedRegex(@"\b[A-Za-z]:[\\/][^\n""'<>|]*?(?=:line\b|:\d|[""'<>|\n]|$)", RegexOptions.Multiline)]
+    private static partial Regex CaminhoWindows();
+
+    [GeneratedRegex(@"(?<![\w.<>])/(?:home|Users|usr|var|tmp|opt|mnt|root|etc|srv|private|Volumes)/[^\s:""'<>|]*")]
+    private static partial Regex CaminhoUnix();
+
+    [GeneratedRegex(@"\b[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}\b")]
+    private static partial Regex Guid();
 }
 
 /// <summary>Uma soma de um tipo (e recorte) no período — o que as consultas tiram do banco.</summary>

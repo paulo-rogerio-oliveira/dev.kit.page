@@ -80,6 +80,52 @@ public sealed class PedidoDeDemonstracao
 }
 
 /// <summary>
+/// Um GRUPO de exceção não classificada (US #381): todas as ocorrências com a mesma assinatura.
+/// Criado (ou atualizado) na ingestão, na MESMA transação do evento, e nunca expurgado — é ele que
+/// guarda o estado da reação. As contagens por período e máquina não ficam aqui: saem dos
+/// <see cref="TotalDiario"/> (tipo <c>ExcecaoNaoClassificada</c>, recorte = a assinatura).
+/// </summary>
+public sealed class GrupoDeErro
+{
+    public long Id { get; set; }
+
+    /// <summary>Única: é a chave do agrupamento.</summary>
+    public string Assinatura { get; set; } = string.Empty;
+
+    /// <summary>O tipo da exceção (a primeira linha do trace).</summary>
+    public string Tipo { get; set; } = string.Empty;
+
+    /// <summary>Um dos <c>EstadosDoGrupo</c>.</summary>
+    public string Estado { get; set; } = string.Empty;
+
+    /// <summary>A versão em que se espera que pare; a ocorrência numa versão igual ou maior é regressão.</summary>
+    public string? ResolvidoNaVersao { get; set; }
+
+    public string PrimeiraVersao { get; set; } = string.Empty;
+    public string UltimaVersao { get; set; } = string.Empty;
+    public DateTime PrimeiroVistoEmUtc { get; set; }
+    public DateTime UltimoVistoEmUtc { get; set; }
+}
+
+/// <summary>
+/// Uma ocorrência GUARDADA de um grupo, com o trace dela. Só as últimas
+/// <see cref="RegrasDeErro.OcorrenciasGuardadasPorGrupo"/> de cada grupo ficam, e o expurgo diário
+/// apaga as que passaram de <see cref="OpcoesDeTelemetria.RetencaoDias"/> — o grupo fica.
+/// </summary>
+public sealed class OcorrenciaDeErro
+{
+    public long Id { get; set; }
+    public long GrupoId { get; set; }
+    public GrupoDeErro? Grupo { get; set; }
+    public int MaquinaId { get; set; }
+    public Maquina? Maquina { get; set; }
+    public string EventId { get; set; } = string.Empty;
+    public string VersaoDevKit { get; set; } = string.Empty;
+    public string Trace { get; set; } = string.Empty;
+    public DateTime EmUtc { get; set; }
+}
+
+/// <summary>
 /// O total CONSOLIDADO de um tipo (e recorte) por máquina e dia. Atualizado na ingestão, junto com
 /// o evento bruto, e nunca tocado pelo expurgo: é por isso que o histórico do dashboard sobrevive à
 /// retenção dos eventos.

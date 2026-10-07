@@ -103,6 +103,30 @@ seu dia, tipo e recorte (`TotaisDiarios`). Os números do dashboard saem dali, a
 objetivos cumpridos × recusados e turnos por objetivo cumprido (retrabalho). Sem denominador, a
 razão é nula, e a web mostra um traço.
 
+**Máquinas nas métricas (US #381).** A `QuantidadeResposta` traz `MaquinasAtivas` (máquinas
+distintas com total no período — a mesma fonte dos outros números, então o expurgo não as apaga) e
+`MaquinasRegistradas` (as que já existiam no fim do período). Nenhuma tabela nova: a contagem sai de
+`TotaisDiarios` e de `Maquinas`, e a lista `/api/dashboard/maquinas` continua alimentando o filtro.
+
+**Exceções não classificadas (US #381).** O dev.kit manda o evento `ExcecaoNaoClassificada` com o
+`trace` JÁ sanitizado e a `assinatura` (campos opcionais do v1). Na ingestão, na MESMA transação:
+- o recorte do evento é a assinatura, então o total diário por (dia, tipo, assinatura) dá as
+  ocorrências, a linha do tempo e as máquinas de cada grupo — sem tabela de contagem, e sobrevivendo
+  ao expurgo como o resto do histórico;
+- o `GrupoDeErro` (um por assinatura, nunca expurgado) guarda o tipo, o estado da reação, a primeira
+  e a última versão e quando foi visto; a `OcorrenciaDeErro` guarda o trace das últimas 20 de cada
+  grupo, expurgadas além de `Telemetria:RetencaoDias` pelo `ExpurgoDiario`;
+- o trace é mascarado DE NOVO (`RegrasDeErro.Mascarar`: caminhos Windows, UNC e Unix, e-mails, URLs e
+  GUIDs) e cortado em 8 KB — defesa em profundidade, caso um dev.kit com defeito escape do sanitizador.
+  O `Detalhe` continua com 200 caracteres: é chave do total diário, e texto livre ali explodiria a
+  cardinalidade.
+
+A reação segue o Sentry: `Novo` → `Visto` → `Resolvido` (com a versão da correção) ou `Ignorado`; o
+grupo resolvido que volta numa versão igual ou maior que a da correção passa a `Regrediu` (só o
+servidor põe esse estado). Para coletar, `GET /api/dashboard/erros/{id}/exportar` devolve o detalhe em
+JSON (trace, ocorrências, linha do tempo, versões e máquinas). O ciclo fecha no dev.kit: um detector
+novo em `TurnFailures.Padrao` tira a falha de "não classificada", e o grupo para de crescer.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -112,9 +136,9 @@ entram num projeto de migrations separado quando a base for para lá.
 **A restrição do `EnsureCreated` (Azure SQL).** Ele só cria o esquema numa base VAZIA: numa base que
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
-antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`. O teste
-`Script_do_azure_sql_cria_a_tabela_com_as_mesmas_colunas_do_modelo` compara o script com o
-`CREATE TABLE` que o EF gera para o SQL Server a partir do mesmo modelo.
+antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e a da US #381,
+`GruposDeErro.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
 repositório ou cliente, argumentos de comando, prompt, resposta, código, e-mail nem usuário do
@@ -128,8 +152,8 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 
 | Suíte | O que prova |
 |---|---|
-| `api/tests/DevKitPage.Core.Tests` | validação do lote e do pedido de demonstração (obrigatórios, e-mail, limites, consentimento), qualidade com divisor zero, chave, senha, período |
-| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login; pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e o script do Azure SQL contra o modelo |
-| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
+| `api/tests/DevKitPage.Core.Tests` | validação do lote (inclusive o v1 antigo, sem os campos novos) e do pedido de demonstração (obrigatórios, e-mail, limites, consentimento), qualidade com divisor zero, chave, senha, período; a máscara e o limite do trace, as transições e a regressão por versão |
+| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login, máquinas ativas e registradas; grupos de exceção (mesma assinatura = um grupo com as ocorrências e as máquinas, reenvio sem duplicar, trace mascarado na gravação, regressão, só as últimas ocorrências, expurgo mantendo o grupo); pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e os scripts do Azure SQL contra o modelo |
+| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login, expiração, troca, KPIs, filtros, divisor zero |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard; landing → seções e vídeo do hero → pedido de demonstração → o admin vê e exclui no dashboard |

@@ -48,6 +48,29 @@ public interface IConsultasDoPainel
     Task<QualidadeResposta> QualidadeAsync(Periodo periodo, int? maquina, CancellationToken ct);
 
     Task<Pagina<EventoDoLog>> EventosAsync(Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct);
+
+    /// <summary>
+    /// Os grupos de exceção não classificada com ocorrência no período (US #381), do visto por último
+    /// para o mais antigo. As contagens são do período (e da máquina, quando filtrada).
+    /// </summary>
+    Task<Pagina<GrupoDeErroResumo>> ErrosAsync(Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct);
+
+    /// <summary>O detalhe de um grupo no período — também o corpo da exportação. Nulo quando ele não existe.</summary>
+    Task<GrupoDeErroDetalhe?> ErroAsync(long id, Periodo periodo, CancellationToken ct);
+}
+
+/// <summary>A reação a um grupo de exceção (US #381): marcar visto, resolver na versão, ignorar, reabrir.</summary>
+public interface IReacaoAErros
+{
+    /// <summary>Grava o estado JÁ validado (<see cref="RegrasDeErro.Validar"/>). Falso quando o grupo não existe.</summary>
+    Task<bool> AlterarEstadoAsync(long id, AlterarEstadoDoGrupo pedido, CancellationToken ct);
+}
+
+/// <summary>O expurgo das ocorrências de erro além da retenção (o grupo, com o estado, fica).</summary>
+public interface IExpurgoDeOcorrencias
+{
+    /// <summary>Apaga as ocorrências anteriores ao corte e devolve quantas.</summary>
+    Task<int> ExpurgarAsync(CancellationToken ct);
 }
 
 /// <summary>O expurgo dos eventos brutos além da retenção. Os totais diários ficam.</summary>

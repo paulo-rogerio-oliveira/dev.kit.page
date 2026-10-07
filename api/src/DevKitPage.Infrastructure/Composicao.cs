@@ -45,6 +45,8 @@ public static class Composicao
         servicos.AddScoped<IIngestaoDeTelemetria, IngestaoDeTelemetria>();
         servicos.AddScoped<IConsultasDoPainel, ConsultasDoPainel>();
         servicos.AddScoped<IExpurgoDeEventos, ExpurgoDeEventos>();
+        servicos.AddScoped<IReacaoAErros, ReacaoAErros>();
+        servicos.AddScoped<IExpurgoDeOcorrencias, ExpurgoDeOcorrencias>();
         servicos.AddScoped<IPedidosDeDemonstracao, PedidosDeDemonstracao>();
         servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
         servicos.AddScoped<InicializadorDaBase>();

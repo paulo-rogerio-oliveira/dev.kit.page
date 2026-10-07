@@ -69,6 +69,37 @@ public sealed class BaseDeTeste : IAsyncDisposable
     public static TelemetryEventV1 Evento(string id, string tipo, DateTimeOffset em, int quantidade = 1, long? valor = null, string detalhe = "")
         => new(id, tipo, "s1", quantidade, valor, detalhe, em);
 
+    /// <summary>Uma exceção não classificada (US #381), com o trace e a assinatura que o dev.kit manda.</summary>
+    public static TelemetryEventV1 Excecao(string id, DateTimeOffset em, string assinatura, string trace)
+        => new(id, TiposDeEvento.ExcecaoNaoClassificada, "s1", 1, null, assinatura, em, trace, assinatura);
+
+    /// <summary>
+    /// As colunas de uma tabela no <c>CREATE TABLE</c> que o EnsureCreated faria no SQL Server, a partir
+    /// do MESMO modelo — o que cada script de <c>api/scripts/sqlserver</c> tem de repetir.
+    /// </summary>
+    public static IReadOnlyList<string> ColunasNoSqlServer(string tabela)
+    {
+        var opcoes = new DbContextOptionsBuilder<DevKitPageDb>().UseSqlServer("Server=.;Database=modelo").Options;
+        using var db = new DevKitPageDb(opcoes);
+        var doModelo = db.Database.GenerateCreateScript();
+        var bloco = doModelo[doModelo.IndexOf($"CREATE TABLE [{tabela}]", StringComparison.Ordinal)..];
+        bloco = bloco[..bloco.IndexOf(");", StringComparison.Ordinal)];
+        return bloco.Split('\n').Select(l => l.Trim().TrimEnd(',')).Where(l => l.StartsWith('[')).ToList();
+    }
+
+    /// <summary>O texto de um script versionado, achado subindo da pasta do teste até a raiz da API.</summary>
+    public static string ScriptDoAzureSql(string nome)
+    {
+        for (var pasta = new DirectoryInfo(AppContext.BaseDirectory); pasta is not null; pasta = pasta.Parent)
+        {
+            var arquivo = Path.Combine(pasta.FullName, "scripts", "sqlserver", nome);
+            if (File.Exists(arquivo))
+                return File.ReadAllText(arquivo);
+        }
+
+        throw new FileNotFoundException($"api/scripts/sqlserver/{nome} não encontrado.");
+    }
+
     public async ValueTask DisposeAsync()
     {
         await Servicos.DisposeAsync();

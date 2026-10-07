@@ -109,6 +109,13 @@ sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method Acti
 (ou cole o conteúdo do script no *Query editor* da base no portal). Sem a tabela, o `POST
 /api/demonstracoes` responde 500 e o dashboard não lista os pedidos.
 
+### Exceções não classificadas (US #381)
+
+Antes de publicar a versão da API com o painel de exceções, rode também
+`api/scripts/sqlserver/GruposDeErro.sql` (idempotente, como o anterior). Sem as tabelas, o lote que
+traz um `ExcecaoNaoClassificada` falha com 500 — e o dev.kit o reenvia até elas existirem, sem perder
+nada da fila local.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as
