@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
 import type { EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { formatar, ultimosDias } from '../formatar';
@@ -17,15 +18,18 @@ interface Dados {
 
 /**
  * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo, os KPIs
- * de QUANTIDADE e de QUALIDADE, a série diária, as falhas por causa, o log paginado e os pedidos
+ * de QUANTIDADE (com as máquinas ativas e registradas) e de QUALIDADE, a série diária, as falhas por
+ * causa, as exceções não classificadas com o trace e a reação (US #381), o log paginado e os pedidos
  * de demonstração da landing (fora do filtro: não são telemetria). Um 401 da
  * API (token vencido) encerra a sessão e volta ao login.
  */
 export function Dashboard() {
   const { sessao, sair } = useSessao();
   const token = sessao!.token;
+  const ehAdmin = (sessao!.papel ?? 'admin') === 'admin';
   const [dias, setDias] = useState<number>(30);
   const [maquina, setMaquina] = useState<number | null>(null);
+  const filtro = useMemo<Filtro>(() => ({ ...ultimosDias(dias), maquina }), [dias, maquina]);
   const [pagina, setPagina] = useState(1);
   const [maquinas, setMaquinas] = useState<MaquinaResumo[]>([]);
   const [dados, setDados] = useState<Dados | null>(null);
@@ -46,7 +50,6 @@ export function Dashboard() {
 
   useEffect(() => {
     let vivo = true;
-    const filtro: Filtro = { ...ultimosDias(dias), maquina };
     setCarregando(true);
     setErro('');
     Promise.all([api.quantidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina)])
@@ -56,7 +59,7 @@ export function Dashboard() {
     return () => {
       vivo = false;
     };
-  }, [token, dias, maquina, pagina, tratar]);
+  }, [token, filtro, pagina, tratar]);
 
   const q = dados?.quantidade;
   const ql = dados?.qualidade;
@@ -104,6 +107,8 @@ export function Dashboard() {
             <section aria-labelledby="titulo-quantidade">
               <h2 id="titulo-quantidade">Quantidade de uso</h2>
               <div className="kpis">
+                <Kpi rotulo="Máquinas ativas" valor={formatar.inteiro(q.maquinasAtivas)} nota="com uso no período" />
+                <Kpi rotulo="Máquinas registradas" valor={formatar.inteiro(q.maquinasRegistradas)} />
                 <Kpi rotulo="Sessões" valor={formatar.inteiro(q.sessoes)} />
                 <Kpi rotulo="Turnos" valor={formatar.inteiro(q.turnos)} />
                 <Kpi rotulo="Fluxos" valor={formatar.inteiro(q.fluxos)} />
@@ -133,6 +138,8 @@ export function Dashboard() {
                 pontos={ql.falhasPorCausa.map((c) => ({ rotulo: c.causa, valor: c.quantidade }))}
               />
             </section>
+
+            <ExcecoesNaoClassificadas token={token} filtro={filtro} podeReagir={ehAdmin} aoFalhar={tratar} />
 
             <section aria-labelledby="titulo-eventos">
               <h2 id="titulo-eventos">Eventos recentes</h2>

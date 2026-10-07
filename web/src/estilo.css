@@ -207,6 +207,29 @@ input, select {
 .numero { text-align: right !important; font-variant-numeric: tabular-nums; }
 .paginacao { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--texto-2); }
 
+/* Exceções não classificadas (US #381): a lista, o detalhe com o trace e as ações de reação. */
+.nota-da-secao { margin: -6px 0 12px; color: var(--texto-2); font-size: 0.9rem; }
+.link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--primaria); cursor: pointer; text-align: left; }
+.link:hover { text-decoration: underline; }
+.assinatura { display: block; color: var(--texto-mudo); font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; }
+.linha-aberta td { background: var(--primaria-tinta); }
+.estado { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; border: 1px solid var(--borda); }
+.estado-novo, .estado-regrediu { background: var(--primaria-tinta); color: var(--primaria-botao-hover); font-weight: 600; }
+.estado-resolvido { color: var(--texto-2); }
+.estado-ignorado { color: var(--texto-mudo); }
+.detalhe-do-erro { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; }
+.detalhe-do-erro h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.detalhe-do-erro h4 { margin: 0; font-size: 0.95rem; }
+.detalhe-do-erro header p { margin: 0; color: var(--texto-2); font-size: 0.9rem; }
+.trace {
+  margin: 0; max-height: 320px; overflow: auto; padding: 12px 14px; border-radius: 8px;
+  background: #0d0d0d; color: #f1f1ee; font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre;
+}
+.trace:focus { outline: 2px solid var(--serie-1); outline-offset: 2px; }
+.acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.acoes .resolver { flex-direction: row; align-items: center; gap: 8px; }
+.acoes .resolver input { width: 110px; }
+
 @media (max-width: 760px) {
   .topo, .painel { padding-left: 16px; padding-right: 16px; }
 }

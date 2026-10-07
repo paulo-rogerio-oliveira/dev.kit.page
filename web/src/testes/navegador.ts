@@ -11,10 +11,24 @@ export const navegador = {
   visivelNaHora: true,
 };
 
+/**
+ * O que o dashboard entregou ao navegador (US #381): os arquivos baixados (o nome e o conteúdo) e o
+ * texto copiado para a área de transferência.
+ */
+export const entregues = {
+  arquivos: [] as { nome: string; conteudo: Blob }[],
+  copiado: '',
+};
+
 export function restaurarNavegador() {
   navegador.menosMovimento = false;
   navegador.visivelNaHora = true;
+  entregues.arquivos.length = 0;
+  entregues.copiado = '';
 }
+
+/** O último Blob passado ao createObjectURL — o link de download o leva. */
+let ultimoBlob: Blob | null = null;
 
 /** Os observadores criados, para o teste disparar a entrada na tela quando quiser. */
 export const observadores: ObservadorDeMentira[] = [];
@@ -63,4 +77,29 @@ export function instalarNavegador() {
   HTMLMediaElement.prototype.load = vi.fn();
   HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   HTMLMediaElement.prototype.pause = vi.fn();
+
+  // O download (US #381): o jsdom não tem o createObjectURL nem navega para blob:, então o link com
+  // `download` registra o arquivo em vez de navegar. Os outros links seguem o click de sempre.
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: (blob: Blob) => {
+      ultimoBlob = blob;
+      return 'blob:teste';
+    },
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: () => {} });
+  const clicar = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+    if (this.download && ultimoBlob) entregues.arquivos.push({ nome: this.download, conteudo: ultimoBlob });
+    else clicar.call(this);
+  };
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText: (texto: string) => {
+        entregues.copiado = texto;
+        return Promise.resolve();
+      },
+    },
+  });
 }

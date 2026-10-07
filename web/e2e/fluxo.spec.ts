@@ -73,4 +73,35 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
   // 6. O filtro pela máquina mantém os números (ela é a única).
   await page.getByLabel('Máquina').selectOption({ label: 'máquina e2e0maqu (dev.kit 1.4.0)' });
   await expect(page.getByTestId('kpi-Turnos')).toHaveText('3');
+  await expect(page.getByTestId('kpi-Máquinas ativas')).toHaveText('1');
+  await expect(page.getByTestId('kpi-Máquinas registradas')).toHaveText('1');
+
+  // 7. (US #381) A máquina envia uma exceção não classificada — com um caminho que escapou do
+  //    sanitizador do dev.kit, para provar a máscara de defesa da API — e o grupo aparece com o trace.
+  const excecao = {
+    ...evento('e2e-x1', 'ExcecaoNaoClassificada', null, 'e2e0assinatura01'),
+    trace: 'System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.Planejador.Escolher() in C:\\Users\\ana\\src\\Planejador.cs:line 42',
+    assinatura: 'e2e0assinatura01',
+  };
+  const envio = await request.post(`${API}/api/telemetria/lote`, {
+    data: { versao: 'v1', maquinaId: MAQUINA, versaoDevKit: '1.4.0', eventos: [excecao] },
+    headers: { 'X-Machine-Key': chave },
+  });
+  expect(envio.status()).toBe(202);
+
+  await page.reload();
+  const excecoes = page.getByRole('region', { name: 'Exceções não classificadas' });
+  await excecoes.getByRole('button', { name: 'System.InvalidOperationException' }).click();
+  const trace = page.getByLabel('Trace da exceção');
+  await expect(trace).toContainText('GitKit.Core.Services.Planejador.Escolher()');
+  await expect(trace).not.toContainText('ana');
+  await expect(trace).toContainText('<caminho>:line 42');
+  await excecoes.screenshot({ path: 'test-results/capturas/05-excecoes-nao-classificadas.png' });
+
+  // 8. A reação: resolver na versão da correção.
+  await page.getByLabel('Versão da correção').fill('1.5.0');
+  await page.getByRole('button', { name: 'Resolver na versão' }).click();
+  await expect(page.getByText('Marcado como resolvido na versão 1.5.0.')).toBeVisible();
+  await expect(excecoes.locator('tbody .estado').first()).toHaveText('Resolvido');
+  await excecoes.screenshot({ path: 'test-results/capturas/06-excecao-resolvida.png' });
 });

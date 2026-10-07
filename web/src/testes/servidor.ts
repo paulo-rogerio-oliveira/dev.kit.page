@@ -1,7 +1,8 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  DemonstracaoResumo, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
+  DemonstracaoResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao,
+  QualidadeResposta, QuantidadeResposta,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -22,6 +23,7 @@ export const maquinas: MaquinaResumo[] = [
 
 export const quantidade: QuantidadeResposta = {
   de: '2026-09-04', ate: '2026-10-03', sessoes: 3, turnos: 8, fluxos: 2, ferramentas: 41, comandosDelegados: 5, arquivosAlterados: 17,
+  maquinasAtivas: 1, maquinasRegistradas: 2,
   serieDiaria: [
     { dia: '2026-10-02', sessoes: 1, turnos: 3, fluxos: 1, ferramentas: 20, comandosDelegados: 2, arquivosAlterados: 7 },
     { dia: '2026-10-03', sessoes: 2, turnos: 5, fluxos: 1, ferramentas: 21, comandosDelegados: 3, arquivosAlterados: 10 },
@@ -52,6 +54,28 @@ export const demonstracao: DemonstracaoResumo = {
 
 export const demonstracoes: Pagina<DemonstracaoResumo> = { itens: [demonstracao], total: 1, numeroDaPagina: 1, tamanho: 10 };
 
+/** Um grupo de exceção não classificada (US #381). */
+export const grupoDeErro: GrupoDeErroResumo = {
+  id: 5, assinatura: 'abc123', tipo: 'System.InvalidOperationException', estado: 'Novo', resolvidoNaVersao: null,
+  ocorrencias: 3, maquinas: 2, primeiraVersao: '1.4.0', ultimaVersao: '1.4.2',
+  primeiroVistoEm: '2026-10-01T10:00:00Z', ultimoVistoEm: '2026-10-03T10:00:00Z',
+};
+
+export const erros: Pagina<GrupoDeErroResumo> = { itens: [grupoDeErro], total: 1, numeroDaPagina: 1, tamanho: 10 };
+
+/** O detalhe do grupo — o trace como o dev.kit o manda: sem caminhos. */
+export const erroDetalhe: GrupoDeErroDetalhe = {
+  grupo: grupoDeErro,
+  trace: 'System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.Planejador.Escolher() linha 42',
+  ocorrencias: [{ eventId: 'x1', apelido: 'máquina a1b2c3d4', versaoDevKit: '1.4.2', trace: '…', em: '2026-10-03T10:00:00Z' }],
+  porDia: [{ dia: '2026-10-01', quantidade: 1 }, { dia: '2026-10-03', quantidade: 2 }],
+  versoes: ['1.4.0', '1.4.2'],
+  maquinas: ['máquina a1b2c3d4', 'máquina f6g7h8i9'],
+};
+
+/** As reações (PUT de estado) que chegaram ao servidor de mentira. */
+export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
+
 /** Os pedidos de demonstração que chegaram ao POST público. */
 export const pedidosRecebidos: PedidoDeDemonstracao[] = [];
 
@@ -79,6 +103,16 @@ export const handlersPadrao = [
   }),
   http.get(`${API}/api/dashboard/demonstracoes`, () => HttpResponse.json(demonstracoes)),
   http.delete(`${API}/api/dashboard/demonstracoes/:id`, () => new HttpResponse(null, { status: 204 })),
+  http.get(`${API}/api/dashboard/erros`, () => HttpResponse.json(erros)),
+  http.get(`${API}/api/dashboard/erros/:id`, () => HttpResponse.json(erroDetalhe)),
+  http.put(`${API}/api/dashboard/erros/:id/estado`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { estado: string; versao: string | null };
+    reacoes.push({ id: String(params.id), ...corpo });
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get(`${API}/api/dashboard/erros/:id/exportar`, () => new HttpResponse(JSON.stringify(erroDetalhe), {
+    headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=excecao-abc123.json; filename*=UTF-8\'\'excecao-abc123.json' },
+  })),
 ];
 
 export const servidor = setupServer(...handlersPadrao);
