@@ -71,7 +71,8 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
   await page.screenshot({ path: 'test-results/capturas/04-dashboard.png', fullPage: true });
 
   // 6. O filtro pela máquina mantém os números (ela é a única).
-  await page.getByLabel('Máquina').selectOption({ label: 'máquina e2e0maqu (dev.kit 1.4.0)' });
+  // O primeiro combobox é o filtro de máquina: o getByLabel('Máquina') casa também os KPIs "Máquinas …".
+  await page.getByRole('combobox').first().selectOption({ label: 'máquina e2e0maqu (dev.kit 1.4.0)' });
   await expect(page.getByTestId('kpi-Turnos')).toHaveText('3');
   await expect(page.getByTestId('kpi-Máquinas ativas')).toHaveText('1');
   await expect(page.getByTestId('kpi-Máquinas registradas')).toHaveText('1');
