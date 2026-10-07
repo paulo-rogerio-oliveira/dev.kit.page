@@ -130,12 +130,16 @@ public sealed class RegrasTests
     [InlineData("mande para ana.souza@cliente.com.br", "cliente")]
     [InlineData("GET https://cliente.visualstudio.com/_apis?token=abc falhou", "token")]
     [InlineData("sessão 3f2b8c1e-9d4a-4c6e-8f00-123456789abc", "3f2b8c1e")]
+    [InlineData("fatal: '/c/Users/ana/repos/cliente' is not a git repository", "ana")]
+    [InlineData("git@ssh.dev.azure.com:v3/acme/erp/erp: Permission denied (publickey)", "acme")]
+    [InlineData("fatal: unable to access 'ssh://git@github.com/acme/erp.git'", "acme")]
+    [InlineData(@"Acesso negado para ACME\ana.souza ao abrir o serviço", "ana.souza")]
     public void Mascara_de_defesa_tira_caminho_email_url_e_guid(string texto, string vazado)
     {
         var mascarado = RegrasDeErro.Mascarar(texto);
 
         Assert.DoesNotContain(vazado, mascarado);
-        Assert.Matches("<(caminho|email|url|guid)>", mascarado);
+        Assert.Matches("<(caminho|email|url|guid|usuario)>", mascarado);
     }
 
     [Fact]

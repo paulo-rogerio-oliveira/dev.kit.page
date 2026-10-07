@@ -185,10 +185,13 @@ public static partial class RegrasDeErro
     {
         var texto = (trace ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
         texto = Url().Replace(texto, "<url>");
+        texto = RemotoSsh().Replace(texto, "<url>");
         texto = Email().Replace(texto, "<email>");
         texto = CaminhoUnc().Replace(texto, "<caminho>");
         texto = CaminhoWindows().Replace(texto, "<caminho>");
+        texto = CaminhoGitBash().Replace(texto, "<caminho>");
         texto = CaminhoUnix().Replace(texto, "<caminho>");
+        texto = UsuarioDeDominio().Replace(texto, "<usuario>");
         texto = Guid().Replace(texto, "<guid>");
         return texto.Length <= TamanhoMaximoDoTrace ? texto : texto[..TamanhoMaximoDoTrace];
     }
@@ -256,8 +259,17 @@ public static partial class RegrasDeErro
         return Ler(a) is { } va && Ler(b) is { } vb ? va.CompareTo(vb) : string.CompareOrdinal(a, b);
     }
 
-    [GeneratedRegex(@"\b(?:https?|ftp)://[^\s""'<>]+", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?:https?|ftp|ssh|git|file)://[^\s""'<>]+", RegexOptions.IgnoreCase)]
     private static partial Regex Url();
+
+    [GeneratedRegex(@"\b[\w.\-]+@[\w.\-]+:[^\s""'<>]+")]
+    private static partial Regex RemotoSsh();
+
+    [GeneratedRegex(@"(?<![\w.<>])/[A-Za-z]/[^\s:""'<>|]*")]
+    private static partial Regex CaminhoGitBash();
+
+    [GeneratedRegex(@"\b[A-Za-z][\w.\-]*\\[A-Za-z][\w.$\-]*")]
+    private static partial Regex UsuarioDeDominio();
 
     [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")]
     private static partial Regex Email();
