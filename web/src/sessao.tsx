@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { LoginResponse } from './api/tipos';
+import type { LoginResponse, Papel } from './api/tipos';
 
 /** Onde o token fica: a aba do navegador (fecha a aba, acaba a sessão). */
 export const CHAVE_DA_SESSAO = 'devkitpage.sessao';
@@ -15,6 +15,14 @@ interface ContextoDaSessao {
 }
 
 const Contexto = createContext<ContextoDaSessao | null>(null);
+
+/**
+ * O papel da sessão (US #381): o que a API devolveu no login. Uma sessão gravada antes do papel
+ * existir (sem o campo) era do admin — o único usuário de então.
+ */
+export function papelDa(sessao: LoginResponse): Papel {
+  return sessao.papel ?? (sessao.ehAdmin ? 'admin' : 'gestor');
+}
 
 /** A sessão gravada, se ainda não venceu. */
 export function sessaoGravada(agora = Date.now()): LoginResponse | null {

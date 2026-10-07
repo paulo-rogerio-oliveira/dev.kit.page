@@ -1,8 +1,8 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  DemonstracaoResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao,
-  QualidadeResposta, QuantidadeResposta,
+  ColaboradorResumo, DemonstracaoResumo, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina,
+  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -14,7 +14,26 @@ export const tokenValido = (deveTrocarSenha = false): LoginResponse => ({
   deveTrocarSenha,
   login: 'admin',
   ehAdmin: true,
+  papel: 'admin',
+  empresa: null,
 });
+
+/** O gestor da Empresa A (US #381): vê só a empresa dele. */
+export const tokenDoGestor = (): LoginResponse => ({
+  ...tokenValido(), token: 'token-gestor', login: 'gestor.a', ehAdmin: false, papel: 'gestor', empresa: 'Empresa A',
+});
+
+export const colaboradores: ColaboradorResumo[] = [
+  { maquinaId: 1, colaborador: 'Ana Souza', apelido: 'máquina a1b2c3d4', empresa: 'Empresa A', versaoDevKit: '1.4.0', consentiuEm: '2026-10-01T10:00:00Z', ultimoEnvioEm: '2026-10-03T10:00:00Z' },
+  { maquinaId: 3, colaborador: '', apelido: 'máquina k1l2m3n4', empresa: 'Empresa A', versaoDevKit: '1.4.0', consentiuEm: '2026-10-02T10:00:00Z', ultimoEnvioEm: null },
+];
+
+export const empresa: EmpresaResumo = {
+  id: 4, nome: 'Empresa A', plano: 'Empresarial', assentos: 10, codigoDeAdesao: 'DK-7QH4-M2XA', colaboradores: 2, criadaEm: '2026-10-01T10:00:00Z',
+};
+
+/** As empresas criadas e os gestores convidados pelo admin no servidor de mentira. */
+export const cadastros: { empresas: unknown[]; gestores: { empresa: string; login: string }[] } = { empresas: [], gestores: [] };
 
 export const maquinas: MaquinaResumo[] = [
   { id: 1, maquinaId: 'a1b2c3d4e5', apelido: 'máquina a1b2c3d4', versaoDevKit: '1.4.0', registradaEm: '2026-10-01T10:00:00Z', ultimoEnvioEm: '2026-10-03T10:00:00Z', eventos: 12 },
@@ -87,6 +106,7 @@ export const handlersPadrao = [
     const { login, senha } = (await request.json()) as { login: string; senha: string };
     if (login === 'admin' && senha === 'certa') return HttpResponse.json(tokenValido());
     if (login === 'admin' && senha === 'inicial') return HttpResponse.json(tokenValido(true));
+    if (login === 'gestor.a' && senha === 'certa') return HttpResponse.json(tokenDoGestor());
     return HttpResponse.json({ detail: 'Login ou senha inválidos.' }, { status: 401 });
   }),
   http.post(`${API}/api/auth/trocar-senha`, () => HttpResponse.json(tokenValido())),
@@ -113,6 +133,24 @@ export const handlersPadrao = [
   http.get(`${API}/api/dashboard/erros/:id/exportar`, () => new HttpResponse(JSON.stringify(erroDetalhe), {
     headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=excecao-abc123.json; filename*=UTF-8\'\'excecao-abc123.json' },
   })),
+  http.get(`${API}/api/dashboard/colaboradores`, () => HttpResponse.json(colaboradores)),
+  http.get(`${API}/api/dashboard/exportar`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return new HttpResponse('colaborador;maquina\r\nAna Souza;máquina a1b2c3d4\r\n', {
+      headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=uso-dos-colaboradores-20260904-20261003.csv' },
+    });
+  }),
+  http.get(`${API}/api/empresas`, () => HttpResponse.json([empresa])),
+  http.post(`${API}/api/empresas`, async ({ request }) => {
+    const corpo = await request.json();
+    cadastros.empresas.push(corpo);
+    return HttpResponse.json({ ...empresa, id: 9, ...(corpo as object), codigoDeAdesao: 'DK-NOVA-0001', colaboradores: 0 }, { status: 201 });
+  }),
+  http.post(`${API}/api/empresas/:id/gestores`, async ({ params, request }) => {
+    const { login } = (await request.json()) as { login: string };
+    cadastros.gestores.push({ empresa: String(params.id), login });
+    return HttpResponse.json({ id: 12, login, senhaInicial: 'DkSENHA1234a1' }, { status: 201 });
+  }),
 ];
 
 export const servidor = setupServer(...handlersPadrao);

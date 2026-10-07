@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
 import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
-import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, servidor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, servidor, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
@@ -200,6 +200,45 @@ describe('Dashboard', () => {
     expect(detalhe.getByRole('button', { name: 'Exportar JSON' })).toBeInTheDocument();
     expect(detalhe.queryByRole('button', { name: 'Marcar visto' })).not.toBeInTheDocument();
     expect(detalhe.queryByRole('button', { name: 'Ignorar' })).not.toBeInTheDocument();
+  });
+
+  it('o gestor filtra por colaborador, exporta o CSV e não vê os pedidos de demonstração nem Empresas', async () => {
+    renderizar('/dashboard', tokenDoGestor());
+
+    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    expect(screen.getByText('gestor.a · Empresa A')).toBeInTheDocument();
+    const filtro = screen.getByLabelText('Colaborador');
+    expect(await within(filtro).findByRole('option', { name: 'Ana Souza' })).toBeInTheDocument();
+    expect(within(filtro).getByRole('option', { name: 'máquina k1l2m3n4' })).toBeInTheDocument(); // sem nome informado: o apelido
+    expect(screen.queryByRole('region', { name: 'Pedidos de demonstração' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Empresas' })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(filtro, '1');
+    await userEvent.click(screen.getByRole('button', { name: 'Exportar uso (CSV)' }));
+
+    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
+    expect(entregues.arquivos[0].nome).toBe('uso-dos-colaboradores-20260904-20261003.csv');
+    expect(await lerTexto(entregues.arquivos[0].conteudo)).toContain('Ana Souza');
+    const exportacao = requisicoes.find((r) => r.pathname === '/api/dashboard/exportar')!;
+    expect(exportacao.searchParams.get('maquina')).toBe('1');
+    expect(exportacao.searchParams.get('formato')).toBe('csv');
+    expect(screen.getByText(/registrado na trilha de auditoria/)).toBeInTheDocument();
+  });
+
+  it('o admin vê o link de Empresas e o filtro por máquina', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    expect(await screen.findByRole('link', { name: 'Empresas' })).toHaveAttribute('href', '/empresas');
+    expect(screen.getByLabelText('Máquina')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Pedidos de demonstração' })).toBeInTheDocument();
+  });
+
+  it('o gestor sem colaboradores recebe a instrução de adesão', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/colaboradores`, () => HttpResponse.json([])));
+
+    renderizar('/dashboard', tokenDoGestor());
+
+    expect(await screen.findByText(/Nenhum colaborador aderiu ainda/)).toBeInTheDocument();
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {

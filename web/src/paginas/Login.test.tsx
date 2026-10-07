@@ -19,6 +19,18 @@ describe('Login', () => {
     expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
   });
 
+  it('o gestor entra e cai no dashboard da empresa dele (US #381)', async () => {
+    renderizar('/login');
+
+    await userEvent.type(screen.getByLabelText('Login'), 'gestor.a');
+    await userEvent.type(screen.getByLabelText('Senha'), 'certa');
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(screen.getByText('gestor.a · Empresa A')).toBeInTheDocument();
+    expect(screen.getByLabelText('Colaborador')).toBeInTheDocument();
+  });
+
   it('credencial inválida mostra o erro e fica no login', async () => {
     renderizar('/login');
 
