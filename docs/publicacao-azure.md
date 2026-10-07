@@ -116,6 +116,12 @@ Antes de publicar a versão da API com o painel de exceções, rode também
 traz um `ExcecaoNaoClassificada` falha com 500 — e o dev.kit o reenvia até elas existirem, sem perder
 nada da fila local.
 
+### Plano empresarial (US #381)
+
+Rode também `api/scripts/sqlserver/Empresas.sql` (idempotente): cria `Empresas` e `AcessosAosDados` e
+acrescenta as colunas de papel/empresa em `Usuarios` e de adesão em `Maquinas`. O limite das
+exportações por usuário é `Painel__ExportacoesPorMinuto` (padrão 10).
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

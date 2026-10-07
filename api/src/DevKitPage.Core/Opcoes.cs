@@ -55,6 +55,18 @@ public sealed class OpcoesDeDemonstracao
     public int LimitePorMinuto { get; set; } = 5;
 }
 
+/// <summary>O painel empresarial (seção <c>Painel</c>, US #381).</summary>
+public sealed class OpcoesDoPainel
+{
+    public const string Secao = "Painel";
+
+    /// <summary>
+    /// Quantas exportações (e criações de empresa ou gestor) um mesmo usuário faz por minuto; acima
+    /// disto, 429. Coletar os dados dos colaboradores é legítimo, mas não em laço.
+    /// </summary>
+    public int ExportacoesPorMinuto { get; set; } = 10;
+}
+
 /// <summary>
 /// O proxy na frente da API (seção <c>Proxy</c>). No Azure Container Apps todo visitante chega com o
 /// IP do proxy: o IP do cliente vem no <c>X-Forwarded-For</c>, aceito SÓ de quem está nestas redes.

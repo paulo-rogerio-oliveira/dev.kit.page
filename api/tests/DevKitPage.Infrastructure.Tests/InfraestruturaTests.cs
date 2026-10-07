@@ -61,7 +61,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
 
         Assert.Equal(new BatchResultV1(4, 2, 1, 1), primeiro);
         Assert.Equal(new BatchResultV1(4, 0, 3, 1), segundo);
-        var quantidade = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(Outubro, null, default));
+        var quantidade = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default));
         Assert.Equal((1L, 3L), (quantidade.Turnos, quantidade.ArquivosAlterados));
     }
 
@@ -97,9 +97,9 @@ public sealed class InfraestruturaTests : IAsyncLifetime
             BaseDeTeste.Evento("b2", TiposDeEvento.ComandoDelegado, Hoje.AddMonths(-2), detalhe: "dotnet.exe")); // fora do período
 
         var consultas = (IServiceProvider sp) => sp.GetRequiredService<IConsultasDoPainel>();
-        var todas = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(Outubro, null, default));
-        var soM1 = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(Outubro, m1, default));
-        var qualidade = await _base.ComAsync(sp => consultas(sp).QualidadeAsync(Outubro, m1, default));
+        var todas = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default));
+        var soM1 = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, m1, default));
+        var qualidade = await _base.ComAsync(sp => consultas(sp).QualidadeAsync(EscopoDoPainel.Tudo, Outubro, m1, default));
 
         Assert.Equal((1L, 3L, 7L, 0L), (todas.Sessoes, todas.Turnos, todas.Ferramentas, todas.ComandosDelegados));
         Assert.Equal(2L, soM1.Turnos);
@@ -111,7 +111,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         Assert.Equal(2.0, qualidade.TurnosPorObjetivoCumprido);
         Assert.Null(qualidade.RazaoCumpridosRecusados); // nenhuma recusa: sem denominador
 
-        var maquinas = await _base.ComAsync(sp => consultas(sp).MaquinasAsync(default));
+        var maquinas = await _base.ComAsync(sp => consultas(sp).MaquinasAsync(EscopoDoPainel.Tudo, default));
         Assert.Equal(7L, maquinas.Single(m => m.Id == m1).Eventos);
         Assert.NotNull(maquinas.Single(m => m.Id == m1).UltimoEnvioEm);
     }
@@ -123,7 +123,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         await Enviar(maquina, Enumerable.Range(1, 5)
             .Select(i => BaseDeTeste.Evento($"p{i}", TiposDeEvento.FerramentaAcionada, Hoje.AddMinutes(i), detalhe: "Read")).ToArray());
 
-        var pagina = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().EventosAsync(Outubro, maquina, 2, 2, default));
+        var pagina = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().EventosAsync(EscopoDoPainel.Tudo, Outubro, maquina, 2, 2, default));
 
         Assert.Equal(5, pagina.Total);
         Assert.Equal(new[] { "p3", "p2" }, pagina.Itens.Select(e => e.EventId));
@@ -138,14 +138,14 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         await Enviar(maquina,
             BaseDeTeste.Evento("velho", TiposDeEvento.TurnoExecutado, agora.AddDays(-31), valor: 1000),
             BaseDeTeste.Evento("novo", TiposDeEvento.TurnoExecutado, agora.AddDays(-29), valor: 1000));
-        var antes = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3)), null, default));
+        var antes = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(EscopoDoPainel.Tudo, new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3)), null, default));
 
         var apagados = await _base.ComAsync(sp => sp.GetRequiredService<IExpurgoDeEventos>().ExpurgarAsync(default));
 
         Assert.Equal(1, apagados);
         var restantes = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Eventos.Select(e => e.EventId).ToListAsync());
         Assert.Equal(new[] { "novo" }, restantes);
-        var depois = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3)), null, default));
+        var depois = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(EscopoDoPainel.Tudo, new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3)), null, default));
         Assert.Equal(2L, antes.Turnos);
         Assert.Equal(antes.Turnos, depois.Turnos);
     }
@@ -162,21 +162,21 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         await Enviar(m1, deM1); // o reenvio
 
         var consultas = (IServiceProvider sp) => sp.GetRequiredService<IConsultasDoPainel>();
-        var pagina = await _base.ComAsync(sp => consultas(sp).ErrosAsync(Outubro, null, 1, 20, default));
+        var pagina = await _base.ComAsync(sp => consultas(sp).ErrosAsync(EscopoDoPainel.Tudo, Outubro, null, 1, 20, default));
         var grupo = Assert.Single(pagina.Itens);
         Assert.Equal(("abc123", 2L, 2, EstadosDoGrupo.Novo), (grupo.Assinatura, grupo.Ocorrencias, grupo.Maquinas, grupo.Estado));
         Assert.Equal("System.InvalidOperationException", grupo.Tipo);
 
-        var detalhe = (await _base.ComAsync(sp => consultas(sp).ErroAsync(grupo.Id, Outubro, default)))!;
+        var detalhe = (await _base.ComAsync(sp => consultas(sp).ErroAsync(EscopoDoPainel.Tudo, grupo.Id, Outubro, default)))!;
         Assert.Equal(2, detalhe.Ocorrencias.Count);
         Assert.Contains("GitKit.Core.Services.Planejador.Escolher()", detalhe.Trace);
         Assert.Equal(new[] { "máquina m-1", "máquina m-2" }, detalhe.Maquinas);
         Assert.Equal(2L, Assert.Single(detalhe.PorDia).Quantidade);
 
         // Filtrado por máquina, conta só a dela; e o erro não entra na taxa de falha de turno.
-        var soM1 = await _base.ComAsync(sp => consultas(sp).ErrosAsync(Outubro, m1, 1, 20, default));
+        var soM1 = await _base.ComAsync(sp => consultas(sp).ErrosAsync(EscopoDoPainel.Tudo, Outubro, m1, 1, 20, default));
         Assert.Equal((1L, 1), (soM1.Itens[0].Ocorrencias, soM1.Itens[0].Maquinas));
-        Assert.Equal(0, (await _base.ComAsync(sp => consultas(sp).QualidadeAsync(Outubro, null, default))).TurnosComFalha);
+        Assert.Equal(0, (await _base.ComAsync(sp => consultas(sp).QualidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default))).TurnosComFalha);
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
             .Select(i => BaseDeTeste.Excecao($"x{i}", Hoje.AddMinutes(i), "abc123", TraceDoDevKit)).ToArray());
 
         var guardadas = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync());
-        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(Outubro, null, 1, 20, default))).Itens);
+        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(EscopoDoPainel.Tudo, Outubro, null, 1, 20, default))).Itens);
 
         Assert.Equal(RegrasDeErro.OcorrenciasGuardadasPorGrupo, guardadas.Count);
         Assert.DoesNotContain("x1", guardadas); // a mais antiga saiu
@@ -241,7 +241,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         Assert.Equal(1, apagadas);
         Assert.Equal(new[] { "nova" }, await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync()));
         var periodo = new Periodo(new DateOnly(2026, 8, 1), new DateOnly(2026, 10, 3));
-        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(periodo, null, 1, 20, default))).Itens);
+        var grupo = Assert.Single((await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(EscopoDoPainel.Tudo, periodo, null, 1, 20, default))).Itens);
         Assert.Equal(2L, grupo.Ocorrencias);
     }
 
@@ -254,8 +254,8 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         await Enviar(m1, BaseDeTeste.Evento("a1", TiposDeEvento.SessaoIniciada, Hoje));
         await Enviar(m3, BaseDeTeste.Evento("c1", TiposDeEvento.SessaoIniciada, Hoje.AddMonths(-3))); // fora do período
 
-        var todas = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(Outubro, null, default));
-        var soM1 = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(Outubro, m1, default));
+        var todas = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default));
+        var soM1 = await _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, m1, default));
 
         Assert.Equal((1L, 3L), (todas.MaquinasAtivas, todas.MaquinasRegistradas));
         Assert.Equal((1L, 1L), (soM1.MaquinasAtivas, soM1.MaquinasRegistradas));
@@ -274,6 +274,95 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         }
 
         Assert.Contains("CREATE UNIQUE INDEX [IX_GruposDeErro_Assinatura]", script);
+    }
+
+    [Fact]
+    public async Task Registro_com_codigo_de_empresa_associa_a_maquina_e_o_vazio_desfaz_o_vinculo()
+    {
+        var empresa = await _base.ComAsync(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("Empresa A", "Empresarial", 5), default));
+        Assert.Matches("^DK-[A-Z2-9]{4}-[A-Z2-9]{4}$", empresa.CodigoDeAdesao);
+
+        var id = await _base.MaquinaAsync("m-1", $" {empresa.CodigoDeAdesao.ToLowerInvariant()} ", "Ana Souza");
+        var vinculada = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.AsNoTracking().SingleAsync(m => m.Id == id));
+        var consentiu = vinculada.ConsentiuEmUtc;
+
+        // O dev.kit antigo registra de novo SEM o campo (a chave girando): o vínculo e o consentimento ficam.
+        await _base.MaquinaAsync("m-1");
+        var mantida = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.AsNoTracking().SingleAsync(m => m.Id == id));
+        // O colaborador retirou a adesão no dev.kit: o código vem vazio.
+        await _base.MaquinaAsync("m-1", string.Empty);
+        var anonima = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.AsNoTracking().SingleAsync(m => m.Id == id));
+
+        Assert.Equal((empresa.Id, "Ana Souza"), (vinculada.EmpresaId, vinculada.Colaborador));
+        Assert.Equal(_base.Relogio.Agora.UtcDateTime, consentiu);
+        Assert.Equal((empresa.Id, consentiu), (mantida.EmpresaId, mantida.ConsentiuEmUtc));
+        Assert.Equal(((int?)null, string.Empty, (DateTime?)null), (anonima.EmpresaId, anonima.Colaborador, anonima.ConsentiuEmUtc));
+    }
+
+    [Fact]
+    public async Task Escopo_do_gestor_conta_a_empresa_nos_totais_e_mostra_so_quem_consentiu()
+    {
+        var empresas = (IServiceProvider sp) => sp.GetRequiredService<IEmpresas>();
+        var a = await _base.ComAsync(sp => empresas(sp).CriarAsync(new EmpresaNova("A", "Empresarial", 5), default));
+        var b = await _base.ComAsync(sp => empresas(sp).CriarAsync(new EmpresaNova("B", "Empresarial", 5), default));
+        var deA = await _base.MaquinaAsync("m-a", a.CodigoDeAdesao, "Ana");
+        var deB = await _base.MaquinaAsync("m-b", b.CodigoDeAdesao, "Bruno");
+        var anonima = await _base.MaquinaAsync("m-x");
+        await Enviar(deA, BaseDeTeste.Evento("a1", TiposDeEvento.TurnoExecutado, Hoje, valor: 1000));
+        await Enviar(deB, BaseDeTeste.Evento("b1", TiposDeEvento.TurnoExecutado, Hoje, valor: 1000), BaseDeTeste.Evento("b2", TiposDeEvento.TurnoExecutado, Hoje, valor: 1000));
+        await Enviar(anonima, BaseDeTeste.Evento("x1", TiposDeEvento.TurnoExecutado, Hoje, valor: 1000));
+        var escopoA = new EscopoDoPainel(a.Id);
+
+        var consultas = (IServiceProvider sp) => sp.GetRequiredService<IConsultasDoPainel>();
+        var deTodos = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default));
+        var soA = await _base.ComAsync(sp => consultas(sp).QuantidadeAsync(escopoA, Outubro, null, default));
+        var maquinasDeA = await _base.ComAsync(sp => consultas(sp).MaquinasAsync(escopoA, default));
+        var exportado = await _base.ComAsync(sp => consultas(sp).ExportarAsync(escopoA, Outubro, null, default));
+
+        Assert.Equal(4L, deTodos.Turnos);
+        Assert.Equal((1L, 1L), (soA.Turnos, soA.MaquinasRegistradas));
+        Assert.Equal(new[] { deA }, maquinasDeA.Select(m => m.Id));
+        Assert.True(await _base.ComAsync(sp => consultas(sp).MaquinaVisivelAsync(escopoA, deA, default)));
+        Assert.False(await _base.ComAsync(sp => consultas(sp).MaquinaVisivelAsync(escopoA, deB, default)));
+        Assert.False(await _base.ComAsync(sp => consultas(sp).MaquinaVisivelAsync(escopoA, anonima, default)));
+        var linha = Assert.Single(exportado);
+        Assert.Equal(("Ana", "A", 1L), (linha.Colaborador, linha.Empresa, linha.Turnos));
+    }
+
+    [Fact]
+    public async Task Expurgo_da_trilha_de_acesso_remove_so_o_que_passou_da_retencao()
+    {
+        var auditoria = (IServiceProvider sp) => sp.GetRequiredService<IAuditoriaDeAcesso>();
+        _base.Relogio.Agora = _base.Relogio.Agora.AddDays(-31);
+        await _base.ComAsync(async sp => { await auditoria(sp).RegistrarAsync(1, "admin", EscopoDoPainel.Tudo, "exportar velho", 3, default); return 0; });
+        _base.Relogio.Agora = _base.Relogio.Agora.AddDays(31);
+        await _base.ComAsync(async sp => { await auditoria(sp).RegistrarAsync(1, "admin", EscopoDoPainel.Tudo, "exportar novo", 3, default); return 0; });
+
+        var apagados = await _base.ComAsync(sp => sp.GetRequiredService<IExpurgoDeAcessos>().ExpurgarAsync(default));
+
+        Assert.Equal(1, apagados);
+        Assert.Equal(new[] { "exportar novo" }, await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().AcessosAosDados.Select(x => x.OQue).ToListAsync()));
+    }
+
+    [Fact]
+    public void Script_do_azure_sql_cria_as_empresas_a_trilha_e_as_colunas_novas()
+    {
+        var script = BaseDeTeste.ScriptDoAzureSql("Empresas.sql");
+
+        foreach (var tabela in new[] { "Empresas", "AcessosAosDados" })
+        {
+            Assert.Contains($"IF OBJECT_ID(N'[dbo].[{tabela}]', N'U') IS NULL", script);
+            foreach (var coluna in BaseDeTeste.ColunasNoSqlServer(tabela))
+                Assert.Contains(coluna, script);
+        }
+
+        // As colunas acrescentadas às tabelas que já existem, com o tipo do modelo.
+        var usuarios = BaseDeTeste.ColunasNoSqlServer("Usuarios");
+        var maquinas = BaseDeTeste.ColunasNoSqlServer("Maquinas");
+        foreach (var coluna in new[] { "[EmpresaId]", "[Papel]" })
+            Assert.Contains(usuarios.Single(c => c.StartsWith(coluna, StringComparison.Ordinal)).Replace(" NOT NULL", string.Empty, StringComparison.Ordinal), script);
+        foreach (var coluna in new[] { "[EmpresaId]", "[Colaborador]", "[ConsentiuEmUtc]" })
+            Assert.Contains(maquinas.Single(c => c.StartsWith(coluna, StringComparison.Ordinal)).Replace(" NOT NULL", string.Empty, StringComparison.Ordinal), script);
     }
 
     [Fact]

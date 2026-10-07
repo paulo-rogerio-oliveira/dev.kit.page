@@ -173,6 +173,69 @@ public sealed class RegrasTests
     public void So_os_estados_escolhiveis_sao_aceitos_na_reacao(string estado, string? versao, bool aceito)
         => Assert.Equal(aceito, RegrasDeErro.Validar(new AlterarEstadoDoGrupo(estado, versao)).Length == 0);
 
+    [Theory]
+    [InlineData("admin", null, true, null)]
+    [InlineData("admin", "7", true, null)] // o admin é tudo, mesmo com uma empresa na claim
+    [InlineData("gestor", "7", false, 7)]
+    public void Escopo_sai_do_papel_e_da_empresa(string papel, string? empresa, bool ehAdmin, int? empresaId)
+    {
+        var escopo = EscopoDoPainel.DasClaims(papel, empresa)!;
+
+        Assert.Equal((ehAdmin, empresaId), (escopo.EhAdmin, escopo.EmpresaId));
+    }
+
+    [Theory]
+    [InlineData("gestor", null)]
+    [InlineData("gestor", "")]
+    [InlineData("gestor", "abc")]
+    [InlineData("gestor", "-1")]
+    [InlineData("gestor", "0")]
+    [InlineData(null, null)]
+    [InlineData("visitante", "7")]
+    public void Token_sem_escopo_valido_nunca_vira_ver_tudo(string? papel, string? empresa)
+        => Assert.Null(EscopoDoPainel.DasClaims(papel, empresa));
+
+    [Fact]
+    public void Empresa_valida_nome_plano_e_assentos_e_o_login_do_gestor()
+    {
+        Assert.Empty(ValidadorDeEmpresa.Validar(new EmpresaNova("Empresa A", "Empresarial", 10)));
+        Assert.Equal(new[] { "assentos", "nome", "plano" }, ValidadorDeEmpresa.Validar(new EmpresaNova(" ", "", 0)).Keys.Order());
+        Assert.Empty(ValidadorDeEmpresa.ValidarLogin("gestor.a"));
+        Assert.NotEmpty(ValidadorDeEmpresa.ValidarLogin("gestor a"));
+        Assert.Equal(100, ValidadorDeEmpresa.Colaborador(new string('x', 300)).Length);
+    }
+
+    [Fact]
+    public void Codigo_de_adesao_e_aleatorio_e_compara_sem_caixa_nem_espaco()
+    {
+        var codigo = CodigoDeAdesao.Gerar();
+
+        Assert.Matches("^DK-[A-Z2-9]{4}-[A-Z2-9]{4}$", codigo);
+        Assert.NotEqual(codigo, CodigoDeAdesao.Gerar());
+        Assert.Equal(codigo, CodigoDeAdesao.Normalizar($"  {codigo.ToLowerInvariant()} "));
+    }
+
+    [Theory]
+    [InlineData("Ana", "Ana")]
+    [InlineData("=1+1", "'=1+1")]
+    [InlineData("+cmd", "'+cmd")]
+    [InlineData("-2", "'-2")]
+    [InlineData("@SUM(A1)", "'@SUM(A1)")]
+    [InlineData("Silva; Ana", "\"Silva; Ana\"")]
+    [InlineData("O \"Ana\"", "\"O \"\"Ana\"\"\"")]
+    public void Celula_do_csv_neutraliza_formula_e_escapa_o_separador(string valor, string esperado)
+        => Assert.Equal(esperado, ExportacaoCsv.Celula(valor));
+
+    [Fact]
+    public void Csv_tem_o_cabecalho_e_uma_linha_por_colaborador_e_dia()
+    {
+        var csv = ExportacaoCsv.Gerar([new LinhaExportada("Ana", "máquina a1", "Empresa A", new DateOnly(2026, 10, 3), 1, 2, 0, 5, 1, 3, 1, 0)]);
+
+        var linhas = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(string.Join(';', ExportacaoCsv.Cabecalho), linhas[0]);
+        Assert.Equal("Ana;máquina a1;Empresa A;2026-10-03;1;2;0;5;1;3;1;0", linhas[1]);
+    }
+
     [Fact]
     public void Periodo_padrao_sao_os_ultimos_30_dias_e_a_ordem_e_garantida()
     {

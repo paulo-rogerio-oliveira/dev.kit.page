@@ -23,6 +23,7 @@ public sealed class ExpurgoDiario(IServiceScopeFactory escopos, ILogger<ExpurgoD
             {
                 await ExpurgarAsync<IExpurgoDeEventos>("evento(s)", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDeOcorrencias>("ocorrência(s) de exceção", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
+                await ExpurgarAsync<IExpurgoDeAcessos>("registro(s) da trilha de acesso", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDePedidos>("pedido(s) de demonstração", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
             }
             while (await relogio.WaitForNextTickAsync(stoppingToken));

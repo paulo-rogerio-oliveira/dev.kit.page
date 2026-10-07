@@ -127,6 +127,30 @@ servidor põe esse estado). Para coletar, `GET /api/dashboard/erros/{id}/exporta
 JSON (trace, ocorrências, linha do tempo, versões e máquinas). O ciclo fecha no dev.kit: um detector
 novo em `TurnFailures.Padrao` tira a falha de "não classificada", e o grupo para de crescer.
 
+**Venda empresarial (US #381).** O gestor de uma empresa vê e coleta o uso dos colaboradores dela:
+- **Empresa e gestor.** O admin cria a `Empresa` (nome, plano, assentos e um código de adesão
+  aleatório, `DK-XXXX-XXXX`) e convida o gestor (`POST /api/empresas/{id}/gestores`). O gestor é um
+  `Usuario` com `Papel = gestor` e `EmpresaId` — o MESMO login, JWT e troca obrigatória de senha do
+  admin; o token leva as claims `role` e `empresa`.
+- **Adesão no dev.kit, com consentimento.** O colaborador informa o código e o próprio nome em
+  *Configurações → Telemetria de uso* e aceita o aviso do que o gestor passa a ver; só então o dev.kit
+  manda `codigoEmpresa` e `colaborador` no registro (`MachineRegistrationV1`, campos opcionais). A
+  máquina ganha `EmpresaId`, `Colaborador` e `ConsentiuEmUtc`. Código desconhecido ou empresa sem
+  assento livre deixam a máquina anônima, e a resposta (`adesao`) diz por quê; código vazio desfaz o
+  vínculo; o dev.kit antigo (sem o campo) não mexe nele.
+- **Isolamento num ponto só.** Toda rota do painel lê o `EscopoDoPainel` das claims
+  (`Seguranca.Escopo`) e o passa às consultas, que o aplicam em `ConsultasDoPainel` — e só lá. Os
+  TOTAIS contam todas as máquinas da empresa; o dado INDIVIDUAL (lista de máquinas, filtro, log, nomes
+  nas ocorrências de erro, colaboradores, exportação) só as que consentiram. O filtro de uma máquina
+  fora do escopo é 403, não uma lista vazia; um token sem escopo válido nunca vira "ver tudo".
+- **Coleta auditada.** `GET /api/dashboard/exportar?formato=csv|json` devolve o uso por colaborador e
+  dia; cada exportação grava uma linha em `AcessosAosDados` (quem, quando, o quê e quantas linhas),
+  expurgada com `Telemetria:RetencaoDias`. O CSV usa `;` e neutraliza a célula que começa com
+  `= + - @` (o nome é texto do colaborador). A exportação e os cadastros têm limite por usuário
+  (`Painel:ExportacoesPorMinuto`, padrão 10).
+- **O que é só do admin** (`Seguranca.PoliticaAdmin`): as empresas, os pedidos de demonstração e a
+  reação aos erros.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -136,8 +160,8 @@ entram num projeto de migrations separado quando a base for para lá.
 **A restrição do `EnsureCreated` (Azure SQL).** Ele só cria o esquema numa base VAZIA: numa base que
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
-antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e a da US #381,
-`GruposDeErro.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`). Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -154,6 +178,6 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 |---|---|
 | `api/tests/DevKitPage.Core.Tests` | validação do lote (inclusive o v1 antigo, sem os campos novos) e do pedido de demonstração (obrigatórios, e-mail, limites, consentimento), qualidade com divisor zero, chave, senha, período; a máscara e o limite do trace, as transições e a regressão por versão |
 | `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login, máquinas ativas e registradas; grupos de exceção (mesma assinatura = um grupo com as ocorrências e as máquinas, reenvio sem duplicar, trace mascarado na gravação, regressão, só as últimas ocorrências, expurgo mantendo o grupo); pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e os scripts do Azure SQL contra o modelo |
-| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
+| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; `EmpresasApiTests`: o gestor da empresa A não lê máquinas, erros nem a exportação da B (403 pelo id), a máquina sem consentimento só nos totais, o CSV auditado e sem fórmula, o 429 da exportação em laço, a adesão recusada sem assento ou com código desconhecido, o admin vê tudo e o gestor não administra; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login, expiração, troca, KPIs, filtros, divisor zero |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard; landing → seções e vídeo do hero → pedido de demonstração → o admin vê e exclui no dashboard |

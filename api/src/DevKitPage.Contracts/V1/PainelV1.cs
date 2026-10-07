@@ -7,7 +7,10 @@ public sealed record LoginRequest(string Login, string Senha);
 /// <param name="Token">O JWT (Bearer).</param>
 /// <param name="ExpiraEm">Quando ele vence — a web volta ao login nesse momento.</param>
 /// <param name="DeveTrocarSenha">O usuário só acessa a troca de senha enquanto isto for verdade.</param>
-public sealed record LoginResponse(string Token, DateTimeOffset ExpiraEm, bool DeveTrocarSenha, string Login, bool EhAdmin);
+/// <param name="Papel">Um de <see cref="Papeis"/> (US #381): o gestor vê só a empresa dele.</param>
+/// <param name="Empresa">O nome da empresa do gestor; nulo para o admin.</param>
+public sealed record LoginResponse(
+    string Token, DateTimeOffset ExpiraEm, bool DeveTrocarSenha, string Login, bool EhAdmin, string Papel = Papeis.Admin, string? Empresa = null);
 
 /// <summary>A troca de senha (obrigatória no primeiro acesso do admin).</summary>
 public sealed record TrocarSenhaRequest(string SenhaAtual, string NovaSenha);

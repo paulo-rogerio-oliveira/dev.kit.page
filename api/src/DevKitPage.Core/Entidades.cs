@@ -8,6 +8,17 @@ public sealed class Usuario
     public string SenhaHash { get; set; } = string.Empty;
     public bool EhAdmin { get; set; }
 
+    /// <summary>
+    /// Um de <c>Papeis</c> (US #381): <c>admin</c> (o semeado; <see cref="EhAdmin"/> ligado) ou
+    /// <c>gestor</c> (de UMA empresa, <see cref="EmpresaId"/>). É a claim <c>role</c> do token.
+    /// </summary>
+    public string Papel { get; set; } = "admin";
+
+    /// <summary>A empresa do gestor; nula para o admin.</summary>
+    public int? EmpresaId { get; set; }
+
+    public Empresa? Empresa { get; set; }
+
     /// <summary>O admin semeado nasce com isto ligado: só a troca de senha é acessível até ele trocar.</summary>
     public bool DeveTrocarSenha { get; set; }
 
@@ -31,6 +42,64 @@ public sealed class Maquina
     public string VersaoDevKit { get; set; } = string.Empty;
     public DateTime RegistradaEmUtc { get; set; }
     public DateTime? UltimoEnvioEmUtc { get; set; }
+
+    /// <summary>
+    /// A empresa a que o colaborador aderiu NO DEV.KIT (US #381), com o código de adesão e o aceite do
+    /// aviso de coleta. Nula: a máquina é anônima e não aparece para gestor nenhum.
+    /// </summary>
+    public int? EmpresaId { get; set; }
+
+    public Empresa? Empresa { get; set; }
+
+    /// <summary>O nome que o próprio colaborador informou no dev.kit (o que o gestor vê).</summary>
+    public string Colaborador { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Quando o colaborador consentiu. Sem ele, a máquina da empresa entra SÓ nos totais — nada
+    /// individual (lista, filtro, log, exportação) aparece para o gestor.
+    /// </summary>
+    public DateTime? ConsentiuEmUtc { get; set; }
+}
+
+/// <summary>
+/// Uma empresa do plano empresarial (US #381): o gestor dela vê e exporta o uso dos colaboradores
+/// que aderiram com o <see cref="CodigoDeAdesao"/> e consentiram.
+/// </summary>
+public sealed class Empresa
+{
+    public int Id { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public string Plano { get; set; } = string.Empty;
+
+    /// <summary>Quantas máquinas podem aderir; a adesão acima disto é recusada (a máquina fica anônima).</summary>
+    public int Assentos { get; set; }
+
+    /// <summary>Único: o que o colaborador informa no dev.kit para aderir.</summary>
+    public string CodigoDeAdesao { get; set; } = string.Empty;
+
+    public DateTime CriadaEmUtc { get; set; }
+}
+
+/// <summary>
+/// A trilha de auditoria do acesso aos dados dos colaboradores (US #381): quem exportou o quê, e
+/// quando. Expurgada com <see cref="OpcoesDeTelemetria.RetencaoDias"/>, como os eventos brutos.
+/// </summary>
+public sealed class AcessoAosDados
+{
+    public long Id { get; set; }
+    public int UsuarioId { get; set; }
+    public string Login { get; set; } = string.Empty;
+
+    /// <summary>A empresa do escopo de quem acessou; nula é o admin (todas).</summary>
+    public int? EmpresaId { get; set; }
+
+    /// <summary>O que foi acessado: a rota, o formato, o período e o filtro.</summary>
+    public string OQue { get; set; } = string.Empty;
+
+    /// <summary>Quantas linhas saíram.</summary>
+    public int Linhas { get; set; }
+
+    public DateTime EmUtc { get; set; }
 }
 
 /// <summary>

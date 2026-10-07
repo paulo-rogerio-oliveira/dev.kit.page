@@ -30,6 +30,15 @@ public static class Seguranca
     /// <summary>A política da ingestão: só a chave da máquina.</summary>
     public const string PoliticaMaquina = "Maquina";
 
+    /// <summary>
+    /// A política do que é só do admin (US #381): as empresas, os pedidos de demonstração e a reação
+    /// aos erros. Inclui a regra da troca pendente, porque substitui a política padrão.
+    /// </summary>
+    public const string PoliticaAdmin = "Admin";
+
+    /// <summary>A claim da empresa do gestor (US #381) — o <see cref="EscopoDoPainel"/> sai dela e do papel.</summary>
+    public const string ClaimEmpresa = "empresa";
+
     public static IServiceCollection AdicionarSeguranca(this IServiceCollection servicos, IHostEnvironment ambiente)
     {
         // Sem segredo configurado FORA de Production, um segredo efêmero (os tokens morrem na
@@ -58,6 +67,10 @@ public static class Seguranca
                 .RequireAssertion(c => !c.User.HasClaim(ClaimTrocaPendente, "true"))
                 .Build())
             .AddPolicy(PoliticaAutenticado, p => p.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser())
+            .AddPolicy(PoliticaAdmin, p => p.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireRole(Papeis.Admin)
+                .RequireAssertion(c => !c.User.HasClaim(ClaimTrocaPendente, "true")))
             .AddPolicy(PoliticaMaquina, p => p.AddAuthenticationSchemes(AutenticacaoDeMaquina.Esquema).RequireClaim(AutenticacaoDeMaquina.ClaimDaMaquina));
 
         servicos.AddSingleton<EmissorDeToken>();
@@ -92,6 +105,13 @@ public static class Seguranca
     /// <summary>O id do usuário do token.</summary>
     public static int? UsuarioId(ClaimsPrincipal usuario)
         => int.TryParse(usuario.FindFirstValue(JwtRegisteredClaimNames.Sub), out var id) ? id : null;
+
+    /// <summary>
+    /// O escopo do painel de quem fez a requisição (US #381), das claims <c>role</c> e
+    /// <see cref="ClaimEmpresa"/>. Nulo é token sem escopo válido — a rota responde 403.
+    /// </summary>
+    public static EscopoDoPainel? Escopo(ClaimsPrincipal usuario)
+        => EscopoDoPainel.DasClaims(usuario.FindFirstValue("role"), usuario.FindFirstValue(ClaimEmpresa));
 }
 
 /// <summary>Emite o JWT do usuário.</summary>
@@ -108,8 +128,11 @@ public sealed class EmissorDeToken(IOptions<OpcoesDeAutenticacao> opcoes, TimePr
             [JwtRegisteredClaimNames.Sub] = usuario.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [JwtRegisteredClaimNames.Name] = usuario.Login,
         };
-        if (usuario.EhAdmin)
-            claims["role"] = "admin";
+        // O papel (US #381): o admin semeado continua "admin" pelo EhAdmin; o gestor leva a empresa.
+        var papel = usuario.EhAdmin ? Papeis.Admin : usuario.Papel;
+        claims["role"] = papel;
+        if (papel == Papeis.Gestor && usuario.EmpresaId is { } empresa)
+            claims[Seguranca.ClaimEmpresa] = empresa.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (usuario.DeveTrocarSenha)
             claims[Seguranca.ClaimTrocaPendente] = "true";
 
@@ -124,7 +147,7 @@ public sealed class EmissorDeToken(IOptions<OpcoesDeAutenticacao> opcoes, TimePr
             SigningCredentials = new SigningCredentials(Seguranca.Chave(cfg), SecurityAlgorithms.HmacSha256),
         });
 
-        return new LoginResponse(token, expira, usuario.DeveTrocarSenha, usuario.Login, usuario.EhAdmin);
+        return new LoginResponse(token, expira, usuario.DeveTrocarSenha, usuario.Login, usuario.EhAdmin, papel, usuario.Empresa?.Nome);
     }
 }
 

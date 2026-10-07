@@ -275,6 +275,142 @@ public static partial class RegrasDeErro
     private static partial Regex Guid();
 }
 
+/// <summary>
+/// O ESCOPO de quem consulta o painel (US #381) — o filtro ÚNICO de isolamento entre empresas. Toda
+/// consulta do painel o recebe e o aplica num ponto só (<c>ConsultasDoPainel</c>), em vez de cada
+/// rota repetir a regra por papel: o admin vê tudo; o gestor, só as máquinas da empresa dele — e,
+/// delas, o dado INDIVIDUAL só das que consentiram.
+/// </summary>
+/// <param name="EmpresaId">A empresa do gestor; nula é o admin (todas as máquinas).</param>
+public sealed record EscopoDoPainel(int? EmpresaId)
+{
+    /// <summary>O escopo do admin.</summary>
+    public static EscopoDoPainel Tudo { get; } = new((int?)null);
+
+    /// <summary>O admin vê tudo, inclusive as máquinas anônimas.</summary>
+    public bool EhAdmin => EmpresaId is null;
+
+    /// <summary>
+    /// O escopo das claims do token: <c>admin</c> é tudo; <c>gestor</c> com a empresa é ela. Qualquer
+    /// outra combinação (gestor sem empresa, papel desconhecido) é NULO — a rota responde 403, e um
+    /// token malformado nunca vira "ver tudo".
+    /// </summary>
+    public static EscopoDoPainel? DasClaims(string? papel, string? empresa)
+        => papel switch
+        {
+            Papeis.Admin => Tudo,
+            Papeis.Gestor when int.TryParse(empresa, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) && id > 0
+                => new EscopoDoPainel(id),
+            _ => null,
+        };
+}
+
+/// <summary>A validação de uma empresa nova e do convite de gestor, antes do banco.</summary>
+public static class ValidadorDeEmpresa
+{
+    public const int TamanhoMaximoDoNome = 100;
+    public const int TamanhoMaximoDoPlano = 50;
+    public const int TamanhoMaximoDoLogin = 100;
+    public const int TamanhoMaximoDoColaborador = 100;
+    public const int AssentosMaximos = 10_000;
+
+    /// <summary>Os erros por campo; vazio quando a empresa pode ser criada.</summary>
+    public static Dictionary<string, string[]> Validar(EmpresaNova? empresa)
+    {
+        var erros = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (empresa is null)
+        {
+            erros["empresa"] = ["O corpo do pedido é obrigatório."];
+            return erros;
+        }
+
+        var nome = (empresa.Nome ?? string.Empty).Trim();
+        if (nome.Length is 0 or > TamanhoMaximoDoNome)
+            erros["nome"] = [$"Informe o nome da empresa (até {TamanhoMaximoDoNome} caracteres)."];
+        if ((empresa.Plano ?? string.Empty).Trim().Length is 0 or > TamanhoMaximoDoPlano)
+            erros["plano"] = [$"Informe o plano (até {TamanhoMaximoDoPlano} caracteres)."];
+        if (empresa.Assentos is < 1 or > AssentosMaximos)
+            erros["assentos"] = [$"Os assentos vão de 1 a {AssentosMaximos}."];
+        return erros;
+    }
+
+    /// <summary>O problema do login do gestor, ou vazio.</summary>
+    public static string ValidarLogin(string? login)
+    {
+        var limpo = (login ?? string.Empty).Trim();
+        if (limpo.Length is 0 or > TamanhoMaximoDoLogin || limpo.Any(char.IsWhiteSpace))
+            return $"Informe o login do gestor, sem espaços (até {TamanhoMaximoDoLogin} caracteres).";
+        return string.Empty;
+    }
+
+    /// <summary>O nome do colaborador como o banco o guarda.</summary>
+    public static string Colaborador(string? nome)
+    {
+        var limpo = (nome ?? string.Empty).Trim();
+        return limpo.Length <= TamanhoMaximoDoColaborador ? limpo : limpo[..TamanhoMaximoDoColaborador];
+    }
+}
+
+/// <summary>O código de adesão de uma empresa: curto para ditar, sem letras que se confundem.</summary>
+public static class CodigoDeAdesao
+{
+    private const string Alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    /// <summary>Um código novo, como <c>DK-7QH4-M2XA</c>.</summary>
+    public static string Gerar()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var letras = bytes.Select(b => Alfabeto[b % Alfabeto.Length]).ToArray();
+        return $"DK-{new string(letras, 0, 4)}-{new string(letras, 4, 4)}";
+    }
+
+    /// <summary>O código como se compara: sem espaços e em maiúsculas (o colaborador digita de qualquer jeito).</summary>
+    public static string Normalizar(string? codigo) => (codigo ?? string.Empty).Trim().ToUpperInvariant();
+}
+
+/// <summary>
+/// A exportação em CSV (US #381): separador ponto e vírgula (o Excel em pt-BR abre direto), aspas
+/// quando preciso e a célula que começa com <c>= + - @</c> neutralizada com apóstrofo — o nome do
+/// colaborador é texto dele, e uma planilha não pode executar fórmula vinda dali.
+/// </summary>
+public static class ExportacaoCsv
+{
+    public static readonly string[] Cabecalho =
+    [
+        "colaborador", "maquina", "empresa", "dia", "sessoes", "turnos", "turnos_com_falha", "ferramentas",
+        "comandos_delegados", "arquivos_alterados", "objetivos_cumpridos", "objetivos_recusados",
+    ];
+
+    public static string Gerar(IEnumerable<LinhaExportada> linhas)
+    {
+        var texto = new StringBuilder();
+        texto.Append(string.Join(';', Cabecalho)).Append("\r\n");
+        foreach (var l in linhas)
+        {
+            string[] celulas =
+            [
+                Celula(l.Colaborador), Celula(l.Apelido), Celula(l.Empresa), l.Dia.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                Numero(l.Sessoes), Numero(l.Turnos), Numero(l.TurnosComFalha), Numero(l.Ferramentas),
+                Numero(l.ComandosDelegados), Numero(l.ArquivosAlterados), Numero(l.ObjetivosCumpridos), Numero(l.ObjetivosRecusados),
+            ];
+            texto.Append(string.Join(';', celulas)).Append("\r\n");
+        }
+
+        return texto.ToString();
+    }
+
+    private static string Numero(long valor) => valor.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A célula de texto: neutraliza fórmula e põe aspas quando há separador, aspas ou quebra.</summary>
+    public static string Celula(string? valor)
+    {
+        var texto = valor ?? string.Empty;
+        if (texto.Length > 0 && "=+-@\t\r".Contains(texto[0], StringComparison.Ordinal))
+            texto = "'" + texto;
+        return texto.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{texto.Replace("\"", "\"\"", StringComparison.Ordinal)}\"" : texto;
+    }
+}
+
 /// <summary>Uma soma de um tipo (e recorte) no período — o que as consultas tiram do banco.</summary>
 public sealed record SomaPorTipo(string Tipo, string Detalhe, long Quantidade, long Eventos, long Valor);
 

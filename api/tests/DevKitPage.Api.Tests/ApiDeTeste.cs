@@ -73,14 +73,42 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         return cliente;
     }
 
-    /// <summary>Registra uma máquina pelo código e devolve um cliente com a chave dela.</summary>
-    public async Task<HttpClient> MaquinaAsync(string maquinaId)
+    /// <summary>Registra uma máquina pelo código (e, com <paramref name="codigoEmpresa"/>, adere à empresa) e devolve um cliente com a chave dela.</summary>
+    public async Task<HttpClient> MaquinaAsync(string maquinaId, string? codigoEmpresa = null, string? colaborador = null)
     {
         var cliente = CreateClient();
-        var resposta = await cliente.PostAsJsonAsync("/api/maquinas/registrar", new MachineRegistrationV1(maquinaId, "1.4.0", CodigoDeRegistro));
+        var resposta = await cliente.PostAsJsonAsync("/api/maquinas/registrar", new MachineRegistrationV1(maquinaId, "1.4.0", CodigoDeRegistro, codigoEmpresa, colaborador));
         resposta.EnsureSuccessStatusCode();
         var chave = (await resposta.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!.Chave;
         cliente.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, chave);
+        return cliente;
+    }
+
+    /// <summary>O admin cria uma empresa (US #381) e devolve o resumo, com o código de adesão.</summary>
+    public static async Task<EmpresaResumo> EmpresaAsync(HttpClient admin, string nome, int assentos = 10)
+    {
+        var resposta = await admin.PostAsJsonAsync("/api/empresas", new EmpresaNova(nome, "Empresarial", assentos));
+        resposta.EnsureSuccessStatusCode();
+        return (await resposta.Content.ReadFromJsonAsync<EmpresaResumo>())!;
+    }
+
+    /// <summary>
+    /// O admin convida o gestor da empresa; o gestor entra com a senha inicial, faz a troca obrigatória
+    /// e devolve um cliente que acessa o dashboard da empresa dele.
+    /// </summary>
+    public async Task<HttpClient> GestorAsync(HttpClient admin, int empresa, string login)
+    {
+        var convite = await admin.PostAsJsonAsync($"/api/empresas/{empresa}/gestores", new GestorNovo(login));
+        convite.EnsureSuccessStatusCode();
+        var criado = (await convite.Content.ReadFromJsonAsync<GestorCriado>())!;
+
+        var cliente = CreateClient();
+        var primeiro = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(login, criado.SenhaInicial));
+        primeiro.EnsureSuccessStatusCode();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await primeiro.Content.ReadFromJsonAsync<LoginResponse>())!.Token);
+        var troca = await cliente.PostAsJsonAsync("/api/auth/trocar-senha", new TrocarSenhaRequest(criado.SenhaInicial, NovaSenha));
+        troca.EnsureSuccessStatusCode();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await troca.Content.ReadFromJsonAsync<LoginResponse>())!.Token);
         return cliente;
     }
 

@@ -58,10 +58,10 @@ public sealed class BaseDeTeste : IAsyncDisposable
         return await acao(escopo.ServiceProvider);
     }
 
-    /// <summary>Registra uma máquina e devolve o id interno.</summary>
-    public async Task<int> MaquinaAsync(string maquinaId)
+    /// <summary>Registra uma máquina (com a adesão à empresa, quando há código) e devolve o id interno.</summary>
+    public async Task<int> MaquinaAsync(string maquinaId, string? codigoEmpresa = null, string? colaborador = null)
     {
-        await ComAsync(sp => sp.GetRequiredService<IMaquinas>().RegistrarAsync(maquinaId, "1.4.0", default));
+        await ComAsync(sp => sp.GetRequiredService<IMaquinas>().RegistrarAsync(maquinaId, "1.4.0", codigoEmpresa, colaborador, default));
         return await ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas
             .Where(m => m.MaquinaId == maquinaId).Select(m => m.Id).SingleAsync());
     }

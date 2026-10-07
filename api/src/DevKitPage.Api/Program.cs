@@ -37,6 +37,7 @@ app.MapearAutenticacao();
 app.MapearMaquinas();
 app.MapearTelemetria();
 app.MapearPainel();
+app.MapearEmpresas();
 app.MapearDemonstracoes();
 
 await app.RunAsync();

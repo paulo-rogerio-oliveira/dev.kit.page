@@ -42,10 +42,18 @@ public sealed record TelemetryBatchV1(string Versao, string MaquinaId, string Ve
 public sealed record BatchResultV1(int Recebidos, int Novos, int Duplicados, int Ignorados);
 
 /// <summary>O pedido de registro de uma máquina: o id anônimo, sem hostname nem usuário.</summary>
-public sealed record MachineRegistrationV1(string MaquinaId, string VersaoDevKit, string CodigoRegistro);
+/// <param name="CodigoEmpresa">
+/// Opcional (US #381): o código de adesão da empresa, que o dev.kit só manda depois de o colaborador
+/// ACEITAR o aviso de coleta. Nulo (o cliente antigo) não mexe no vínculo; vazio desfaz.
+/// </param>
+/// <param name="Colaborador">Opcional (US #381): o nome que o próprio colaborador informou, compartilhado com o gestor.</param>
+public sealed record MachineRegistrationV1(
+    string MaquinaId, string VersaoDevKit, string CodigoRegistro, string? CodigoEmpresa = null, string? Colaborador = null);
 
 /// <summary>A chave da máquina — devolvida UMA vez; a API guarda só o hash.</summary>
-public sealed record MachineRegistrationResponseV1(string Chave);
+/// <param name="Empresa">A empresa a que a máquina ficou vinculada, ou nulo (US #381).</param>
+/// <param name="Adesao">O que aconteceu com o código da empresa, para o dev.kit mostrar ao colaborador.</param>
+public sealed record MachineRegistrationResponseV1(string Chave, string? Empresa = null, string? Adesao = null);
 
 /// <summary>
 /// Os tipos de evento que o dev.kit envia (o <c>TelemetryEventKind</c> do git.kit, pelo nome).
