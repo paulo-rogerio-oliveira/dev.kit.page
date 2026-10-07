@@ -139,6 +139,19 @@ input[aria-invalid='true'], textarea[aria-invalid='true'] { border-color: var(--
 
 .rodape { text-align: center; padding: 32px; color: var(--texto-2); border-top: 1px solid var(--borda); }
 
+/* Comparativo (US #381): a tabela rola no celular em vez de espremer as colunas. */
+.tabela-rolavel { overflow-x: auto; border: 1px solid var(--borda); border-radius: 12px; background: var(--superficie); }
+.comparativo { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.95rem; }
+.comparativo caption { caption-side: bottom; text-align: left; padding: 10px 16px; color: var(--texto-mudo); font-size: 0.85rem; }
+.comparativo th, .comparativo td { padding: 12px 16px; border-bottom: 1px solid var(--grade); text-align: center; }
+.comparativo th[scope='row'] { text-align: left; font-weight: 500; color: var(--texto); }
+.comparativo thead th { font-weight: 700; }
+.comparativo thead th:nth-child(2), .comparativo td:nth-child(2) { background: var(--primaria-tinta); }
+.comparativo .valor-sim { font-weight: 700; }
+.comparativo .valor-nao { color: var(--texto-mudo); }
+.comparativo .valor-parcial { color: var(--texto-2); font-style: italic; }
+.ctas-da-secao { margin-top: 24px; }
+
 @media (min-width: 760px) {
   .landing .topo { padding: 14px 32px; }
   .hero { grid-template-columns: 1fr 1.15fr; padding: 64px 32px; }

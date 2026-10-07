@@ -29,10 +29,22 @@ export interface Beneficio {
   texto: string;
 }
 
-/** Um passo do "como funciona" — do work item à Pull Request. */
+/** Uma etapa nomeada do "como funciona" — do work item à Pull Request (US #381: o fluxo novo). */
 export interface Passo {
   titulo: string;
   texto: string;
+}
+
+/** Um produto da tabela comparativa (US #381). O dev.kit é sempre a primeira coluna. */
+export type ProdutoComparado = 'devkit' | 'copilot' | 'devin' | 'cursor';
+
+/** O que a página pública do produto mostra sobre o recurso: sim, não ou em parte (com integração ou configuração extra). */
+export type Disponibilidade = 'sim' | 'nao' | 'parcial';
+
+/** Uma linha da tabela comparativa: o recurso e o valor de CADA produto (o teste confere que nenhum falta). */
+export interface LinhaComparativa {
+  recurso: string;
+  valores: Record<ProdutoComparado, Disponibilidade>;
 }
 
 export interface Integracao {
@@ -66,14 +78,19 @@ function midia(nome: string, alt: string, captura?: string): Midia {
   };
 }
 
-/** As seções, NA ORDEM da página (critério 1 da US #283) — a landing e o teste usam esta lista. */
+/**
+ * As seções, NA ORDEM da página (critério 1 da US #283, com o comparativo e as empresas da US #381)
+ * — a landing e o teste usam esta lista.
+ */
 export const SECOES: SecaoDaLanding[] = [
   { id: 'inicio', rotulo: 'Início' },
   { id: 'beneficios', rotulo: 'Benefícios' },
   { id: 'como-funciona', rotulo: 'Como funciona' },
   { id: 'recursos', rotulo: 'Recursos' },
+  { id: 'comparativo', rotulo: 'Comparativo' },
   { id: 'integracoes', rotulo: 'Integrações' },
   { id: 'seguranca', rotulo: 'Segurança' },
+  { id: 'empresas', rotulo: 'Empresas' },
   { id: 'contato', rotulo: 'Contato' },
   { id: 'faq', rotulo: 'Perguntas' },
   { id: 'comecar', rotulo: 'Começar' },
@@ -106,30 +123,44 @@ export const BENEFICIOS: Beneficio[] = [
     texto:
       'As horas do dia vão para os work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — sem planilha no fim do dia.',
   },
-  {
-    titulo: 'Uso e qualidade medidos',
-    texto:
-      'O dashboard mostra, por máquina, turnos, falhas por causa, nota média dos avaliadores e retrabalho por objetivo cumprido — envio anônimo, que você desliga quando quiser.',
-  },
 ];
 
+/**
+ * O fluxo em ETAPAS NOMEADAS (US #381), como a Devin conta o dela — mas com o que só o dev.kit tem: a
+ * nota mínima de cada avaliador, os gatilhos entre agentes e a sua aprovação antes do fechamento.
+ */
 export const PASSOS: Passo[] = [
   {
-    titulo: 'Escolha o work item',
-    texto: 'Uma US ou um Bug da iteração (ou uma tarefa avulsa), os repositórios e o que precisa ser feito.',
+    titulo: 'Work item',
+    texto: 'Uma US ou um Bug da iteração (ou uma tarefa avulsa), os repositórios e o fluxo salvo que vai conduzi-la.',
   },
   {
-    titulo: 'O agente trabalha nos repositórios',
+    titulo: 'Executor',
     texto:
-      'O dev.kit clona cada repositório no branch da task, grava as regras e as skills do time e roda a CLI do agente, turno a turno.',
+      'O agente executor recebe a task com as regras, as skills e os Tech Plans do time, clona cada repositório no branch dela e trabalha turno a turno: implementa, compila, testa e envia.',
   },
   {
-    titulo: 'O avaliador confere',
-    texto: 'Um agente avaliador dá a nota. Abaixo da mínima, o que ele apontou volta para o agente corrigir.',
+    titulo: 'Avaliadores com nota mínima',
+    texto:
+      'Cada avaliador dá uma nota de 0 a 100 ao trabalho. Abaixo da mínima de QUALQUER um, o que ele apontou volta ao executor; a nota só vale se for dada depois da última alteração.',
   },
   {
-    titulo: 'Commit, push e Pull Request',
-    texto: 'Com a nota na mínima, o trabalho segue para o commit, o push e a PR — e para a sua aprovação.',
+    titulo: 'Gatilhos entre agentes',
+    texto:
+      'Ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar: cada evento dispara o próximo agente do fluxo, com os parâmetros dele — sem ninguém copiando contexto de uma janela para outra.',
+  },
+  {
+    titulo: 'Objetivo cumprido',
+    texto:
+      'O executor declara o objetivo cumprido, e o dev.kit só aceita com a nota de cada avaliador na mínima. Há teto de rodadas: um fluxo em impasse para e chama você, em vez de girar sem fim.',
+  },
+  {
+    titulo: 'Sua aprovação',
+    texto: 'O trabalho aceito espera você: diffs, logs, capturas e o resumo item a item contra o pedido, num lugar só.',
+  },
+  {
+    titulo: 'Fechamento com a PR',
+    texto: 'Aprovado, o agente de fechamento abre a Pull Request e atualiza o work item — commit, push e PR no branch da task.',
   },
 ];
 
@@ -143,9 +174,9 @@ export const RECURSOS: Recurso[] = [
   },
   {
     id: 'fluxos',
-    titulo: 'Fluxos com avaliadores e objetivo',
+    titulo: 'Fluxos com avaliadores, gatilhos e objetivo',
     texto:
-      'Encadeie agentes num fluxo: um planeja, outro implementa e um avaliador dá nota ao trabalho. O objetivo só é aceito com a nota mínima de cada avaliador, dada depois da última alteração — e o fluxo segue sozinho para a aprovação.',
+      'Encadeie agentes num fluxo: um planeja, outro implementa e os avaliadores dão nota ao trabalho. Gatilhos ligam as etapas — ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar — e cada agente recebe os parâmetros do fluxo. O objetivo só é aceito com a nota mínima de cada avaliador, dada depois da última alteração; o teto de rodadas para o fluxo em impasse e chama você. Exporte e importe os fluxos para levá-los a outro time.',
     midia: midia('fluxos', 'A aba Atividades com as tasks do fluxo em execução, aguardando interação e prontas para enviar.', '/capturas/tela-atividades.png'),
   },
   {
@@ -209,9 +240,69 @@ export const SEGURANCA: Beneficio[] = [
   },
   {
     titulo: 'Telemetria anônima, que você desliga',
-    texto: 'O envio de uso vem ligado e se desliga em Configurações → Telemetria de uso. É identificado por um GUID da máquina, sem caminhos, código, prompts nem nomes de cliente.',
+    texto:
+      'O envio de uso vem ligado e se desliga em Configurações → Telemetria de uso. É identificado por um GUID da máquina, sem caminhos, código, prompts nem nomes de cliente — inclusive o trace de um erro, que sai sem caminhos, e-mails nem URLs. Ao aderir a uma empresa, o nome que você informar é compartilhado com o gestor dela, e só com o seu consentimento.',
   },
 ];
+
+/** Os produtos da tabela comparativa, na ordem das colunas. As fontes e a data estão em docs/landing-conteudo.md. */
+export const PRODUTOS_COMPARADOS: { id: ProdutoComparado; nome: string }[] = [
+  { id: 'devkit', nome: 'dev.kit' },
+  { id: 'copilot', nome: 'Copilot coding agent + Azure Boards' },
+  { id: 'devin', nome: 'Devin' },
+  { id: 'cursor', nome: 'Cursor' },
+];
+
+/**
+ * A tabela comparativa (US #381): os recursos que pesam para quem trabalha no Azure DevOps. Só o que a
+ * página pública de cada produto mostra, sem preço — revisada a cada versão da landing.
+ */
+export const COMPARATIVO: LinhaComparativa[] = [
+  { recurso: 'Azure Repos, sem precisar do código no GitHub', valores: { devkit: 'sim', copilot: 'nao', devin: 'parcial', cursor: 'sim' } },
+  { recurso: 'Work item do Azure Boards como ponto de partida', valores: { devkit: 'sim', copilot: 'sim', devin: 'parcial', cursor: 'nao' } },
+  { recurso: 'Avaliadores que dão nota ao trabalho', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Nota mínima por avaliador para aceitar o objetivo', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Gatilhos entre agentes num fluxo salvo', valores: { devkit: 'sim', copilot: 'nao', devin: 'parcial', cursor: 'nao' } },
+  { recurso: 'Agendamento na sua máquina (cron, serviço do Windows)', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Horas lançadas no work item', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Cherry-pick e replicação de branch numa cópia temporária', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Depurador que o agente usa sem tela', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'nao' } },
+  { recurso: 'Roda na sua máquina, com o seu código', valores: { devkit: 'sim', copilot: 'nao', devin: 'nao', cursor: 'sim' } },
+];
+
+/** O texto de cada valor da tabela. */
+export const ROTULO_DA_DISPONIBILIDADE: Record<Disponibilidade, string> = {
+  sim: 'Sim',
+  nao: 'Não',
+  parcial: 'Em parte',
+};
+
+/**
+ * "Para empresas" (US #381): a venda empresarial — o gestor vê e exporta o uso do time, e o
+ * colaborador decide o que compartilha. O contato é o MESMO formulário de demonstração.
+ */
+export const EMPRESAS = {
+  titulo: 'Para empresas',
+  subtitulo: 'O uso do agente no time inteiro, com o consentimento de cada pessoa.',
+  itens: [
+    {
+      titulo: 'O gestor acompanha o time',
+      texto: 'Sessões, turnos, falhas, notas dos avaliadores e objetivos de cada colaborador que aderiu — só da sua empresa, nunca de outra.',
+    },
+    {
+      titulo: 'Consentimento do colaborador',
+      texto: 'Cada pessoa adere no próprio dev.kit, com o código da empresa e o aceite de um aviso claro do que o gestor passa a ver. Sem o aceite, a máquina segue anônima.',
+    },
+    {
+      titulo: 'Exportação auditada',
+      texto: 'Os dados saem em CSV ou JSON, por período e por colaborador, e cada exportação fica registrada: quem, quando e o quê.',
+    },
+    {
+      titulo: 'Assentos e adesão simples',
+      texto: 'O plano define os assentos; o código de adesão entra em Configurações, sem instalar nada além do dev.kit.',
+    },
+  ] satisfies Beneficio[],
+};
 
 export const PERGUNTAS: PerguntaFrequente[] = [
   {
@@ -230,6 +321,11 @@ export const PERGUNTAS: PerguntaFrequente[] = [
   {
     pergunta: 'Onde o código roda?',
     resposta: 'Na sua máquina, em clones na pasta da task. O dev.kit não leva o seu código para servidor nenhum.',
+  },
+  {
+    pergunta: 'Como funciona o plano para empresas?',
+    resposta:
+      'A empresa recebe um código de adesão. Cada colaborador o informa no dev.kit e aceita o aviso de coleta; a partir daí o gestor acompanha e exporta o uso dele. Quem não aderir continua anônimo.',
   },
   {
     pergunta: 'O que acontece com os dados do pedido de demonstração?',
