@@ -76,13 +76,21 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <summary>Registra uma máquina pelo código (e, com <paramref name="codigoEmpresa"/>, adere à empresa) e devolve um cliente com a chave dela.</summary>
     public async Task<HttpClient> MaquinaAsync(string maquinaId, string? codigoEmpresa = null, string? colaborador = null)
     {
+        // A máquina que já foi registrada aqui se registra de novo com a chave atual, como o dev.kit.
         var cliente = CreateClient();
+        if (Chaves.TryGetValue(maquinaId, out var atual))
+            cliente.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, atual);
         var resposta = await cliente.PostAsJsonAsync("/api/maquinas/registrar", new MachineRegistrationV1(maquinaId, "1.4.0", CodigoDeRegistro, codigoEmpresa, colaborador));
         resposta.EnsureSuccessStatusCode();
         var chave = (await resposta.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!.Chave;
+        Chaves[maquinaId] = chave;
+        cliente.DefaultRequestHeaders.Remove(ContratoV1.CabecalhoDaChave);
         cliente.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, chave);
         return cliente;
     }
+
+    /// <summary>A chave atual de cada máquina registrada por <see cref="MaquinaAsync"/>.</summary>
+    public Dictionary<string, string> Chaves { get; } = new(StringComparer.Ordinal);
 
     /// <summary>O admin cria uma empresa (US #381) e devolve o resumo, com o código de adesão.</summary>
     public static async Task<EmpresaResumo> EmpresaAsync(HttpClient admin, string nome, int assentos = 10)

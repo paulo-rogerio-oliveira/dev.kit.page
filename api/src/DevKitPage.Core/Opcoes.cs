@@ -48,6 +48,13 @@ public sealed class OpcoesDeTelemetria
     /// mais antigas; os grupos e as contagens (nos totais diários) ficam.
     /// </summary>
     public int MaxOcorrenciasGuardadas { get; set; } = 10_000;
+
+    /// <summary>
+    /// O teto de ocorrências guardadas POR EMPRESA (as máquinas anônimas contam como um grupo só), antes
+    /// do global: uma empresa — ou uma máquina — que gere exceções em laço descarta as dela, e não o
+    /// trace das outras.
+    /// </summary>
+    public int MaxOcorrenciasPorEmpresa { get; set; } = 2_000;
 }
 
 /// <summary>O formulário público de pedido de demonstração (seção <c>Demonstracoes</c>).</summary>

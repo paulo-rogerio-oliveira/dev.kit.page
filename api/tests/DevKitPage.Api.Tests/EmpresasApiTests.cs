@@ -245,11 +245,41 @@ public sealed class EmpresasApiTests : IDisposable
         Assert.Equal(new[] { "Alguém" }, (await admin.GetFromJsonAsync<ColaboradorResumo[]>("/api/dashboard/colaboradores"))!.Select(c => c.Colaborador));
     }
 
+    /// <summary>Registra (ou registra de novo, com a chave atual, como o dev.kit) e devolve a resposta.</summary>
     private async Task<MachineRegistrationResponseV1> Registrar(string maquinaId, string codigoEmpresa)
     {
-        var resposta = await _api.CreateClient().PostAsJsonAsync("/api/maquinas/registrar",
+        var cliente = _api.CreateClient();
+        if (_api.Chaves.TryGetValue(maquinaId, out var atual))
+            cliente.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, atual);
+        var resposta = await cliente.PostAsJsonAsync("/api/maquinas/registrar",
             new MachineRegistrationV1(maquinaId, "1.4.0", ApiDeTeste.CodigoDeRegistro, codigoEmpresa, "Alguém"));
         resposta.EnsureSuccessStatusCode();
-        return (await resposta.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!;
+        var corpo = (await resposta.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!;
+        _api.Chaves[maquinaId] = corpo.Chave;
+        return corpo;
+    }
+
+    [Fact]
+    public async Task Registrar_de_novo_uma_maquina_existente_sem_a_chave_atual_e_409_e_nao_mexe_na_adesao()
+    {
+        var (admin, gestorA, _, _, b) = await CenarioAsync();
+
+        // Quem só tem o código de registro (que vai no instalador) tenta tirar a maq-a da empresa A e pô-la na B.
+        var intruso = await _api.CreateClient().PostAsJsonAsync("/api/maquinas/registrar",
+            new MachineRegistrationV1("maq-a", "1.4.0", ApiDeTeste.CodigoDeRegistro, b.CodigoDeAdesao, "Intruso"));
+        var comChaveErrada = _api.CreateClient();
+        comChaveErrada.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, "chave-de-outra-maquina");
+        var errada = await comChaveErrada.PostAsJsonAsync("/api/maquinas/registrar",
+            new MachineRegistrationV1("maq-a", "1.4.0", ApiDeTeste.CodigoDeRegistro, string.Empty, null));
+
+        Assert.Equal(HttpStatusCode.Conflict, intruso.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, errada.StatusCode);
+        Assert.Equal(("Ana", "Empresa A"), ((await gestorA.GetFromJsonAsync<ColaboradorResumo[]>("/api/dashboard/colaboradores"))!.Single().Colaborador, "Empresa A"));
+        // A chave antiga da maq-a continua valendo: ninguém a girou.
+        var maquina = _api.CreateClient();
+        maquina.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, _api.Chaves["maq-a"]);
+        Assert.Equal(HttpStatusCode.Accepted, (await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-a", Turno("ainda-vale")))).StatusCode);
+        // O admin registra de novo sem a chave (a máquina recuperada pelo suporte).
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/maquinas/registrar", new MachineRegistrationV1("maq-a", "1.4.0", string.Empty))).StatusCode);
     }
 }

@@ -15,7 +15,10 @@ rota própria — há máquinas instaladas falando v1.
 - Aceita quem apresenta o `Telemetria:CodigoDeRegistro` configurado, **ou** um JWT de admin (sem
   troca de senha pendente). Sem nenhum dos dois: **401**.
 - Resposta **200** `{ "chave": "…" }` — a chave é devolvida UMA vez; a API guarda só o hash.
-- Registrar de novo a mesma máquina **gira** a chave (o dev.kit faz isso quando a dele deixa de valer).
+- Registrar de novo a mesma máquina **gira** a chave — e só vale com a **chave atual** no cabeçalho
+  `X-Machine-Key` (ou com o JWT do admin). Sem ela, **409**: o código de registro é público, e sem
+  isto qualquer um giraria a chave de outra máquina ou mexeria na adesão dela (US #381). O dev.kit que
+  perdeu a chave recebe o 409, gera outro id anônimo e se registra como máquina nova.
 - **Adesão a uma empresa (US #381, campos opcionais):** `codigoEmpresa` e `colaborador`, que o
   dev.kit só manda depois de o colaborador aceitar o aviso de coleta. Ausentes (o dev.kit antigo), o
   vínculo fica como está; `codigoEmpresa` vazio o desfaz. A resposta ganha `empresa` (a empresa

@@ -44,8 +44,10 @@ public static class Endpoints
     {
         // Anônimo NA ROTA, e conferido no corpo: registra quem tem o código de registro configurado,
         // ou o admin autenticado (sem troca pendente).
+        // A máquina que JÁ existe só se registra de novo apresentando a chave atual (X-Machine-Key) ou pelo
+        // admin; sem ela, 409 — o dev.kit que perdeu a chave se registra como máquina nova, com outro id.
         app.MapPost("/api/maquinas/registrar", async (
-            MachineRegistrationV1 pedido, ClaimsPrincipal quem, IOptions<OpcoesDeTelemetria> opcoes, IMaquinas maquinas, CancellationToken ct) =>
+            MachineRegistrationV1 pedido, HttpContext http, ClaimsPrincipal quem, IOptions<OpcoesDeTelemetria> opcoes, IMaquinas maquinas, CancellationToken ct) =>
         {
             var maquinaId = (pedido.MaquinaId ?? string.Empty).Trim();
             if (maquinaId.Length is 0 or > 64)
@@ -57,7 +59,11 @@ public static class Endpoints
             if (!admin && !porCodigo)
                 return Results.Problem("Registro recusado: informe o código de registro (ou use um token de admin).", statusCode: StatusCodes.Status401Unauthorized);
 
-            var registro = await maquinas.RegistrarAsync(maquinaId, pedido.VersaoDevKit, pedido.CodigoEmpresa, pedido.Colaborador, ct);
+            var chaveAtual = http.Request.Headers[ContratoV1.CabecalhoDaChave].ToString();
+            if (await maquinas.RegistrarAsync(maquinaId, pedido.VersaoDevKit, pedido.CodigoEmpresa, pedido.Colaborador, chaveAtual, admin, ct) is not { } registro)
+                return Results.Problem(
+                    "Esta máquina já está registrada: registre de novo com a chave atual (X-Machine-Key), ou registre-se com outro id.",
+                    statusCode: StatusCodes.Status409Conflict);
             return Results.Ok(new MachineRegistrationResponseV1(registro.Chave, registro.Empresa, registro.Adesao));
         }).AllowAnonymous().WithTags("Máquinas");
     }

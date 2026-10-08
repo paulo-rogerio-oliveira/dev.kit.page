@@ -349,7 +349,8 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         });
 
         // A minha registra de novo (com o código): a conferência depois de gravar a tira do assento excedente.
-        var registro = await _base.ComAsync(sp => sp.GetRequiredService<IMaquinas>().RegistrarAsync("m-1", "1.4.0", empresa.CodigoDeAdesao, "Ana", default));
+        var registro = (await _base.ComAsync(sp => sp.GetRequiredService<IMaquinas>()
+            .RegistrarAsync("m-1", "1.4.0", empresa.CodigoDeAdesao, "Ana", _base.Chaves["m-1"], peloAdmin: false, default)))!;
 
         Assert.Null(registro.Empresa);
         Assert.Contains("não tem assento livre", registro.Adesao);
@@ -380,6 +381,49 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         Assert.Contains("x44", guardadas);
         Assert.Equal(3, grupos.Total); // os grupos e as contagens ficam
         Assert.Equal(45L, grupos.Itens.Sum(g => g.Ocorrencias));
+    }
+
+    [Fact]
+    public async Task Maquina_ja_registrada_so_registra_de_novo_com_a_chave_atual_ou_pelo_admin()
+    {
+        var empresa = await _base.ComAsync(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("A", "Empresarial", 5), default));
+        var id = await _base.MaquinaAsync("m-1", empresa.CodigoDeAdesao, "Ana");
+        var registrar = (string? chave, bool admin) => _base.ComAsync(sp => sp.GetRequiredService<IMaquinas>()
+            .RegistrarAsync("m-1", "1.4.0", string.Empty, null, chave, admin, default));
+
+        // Quem só tem o código de registro (público) não gira a chave nem desfaz a adesão de outra máquina.
+        Assert.Null(await registrar(null, false));
+        Assert.Null(await registrar("chave-de-outra-maquina", false));
+        var intacta = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.AsNoTracking().SingleAsync(m => m.Id == id));
+        Assert.Equal(empresa.Id, intacta.EmpresaId);
+        Assert.Equal(ChaveDeMaquina.Hash(_base.Chaves["m-1"]), intacta.ChaveHash);
+
+        // A própria máquina (com a chave atual) e o admin, sim.
+        Assert.NotNull(await registrar(_base.Chaves["m-1"], false));
+        Assert.NotNull(await registrar(null, true));
+    }
+
+    [Fact]
+    public async Task Teto_por_empresa_descarta_as_ocorrencias_da_propria_empresa_e_preserva_as_das_outras()
+    {
+        await using var pequena = new BaseDeTeste(new() { ["Telemetria:MaxOcorrenciasPorEmpresa"] = "25" });
+        await pequena.InicializarAsync();
+        var empresas = (IServiceProvider sp) => sp.GetRequiredService<IEmpresas>();
+        var a = await pequena.ComAsync(sp => empresas(sp).CriarAsync(new EmpresaNova("A", "Empresarial", 5), default));
+        var b = await pequena.ComAsync(sp => empresas(sp).CriarAsync(new EmpresaNova("B", "Empresarial", 5), default));
+        var deA = await pequena.MaquinaAsync("m-a", a.CodigoDeAdesao, "Ana");
+        var deB = await pequena.MaquinaAsync("m-b", b.CodigoDeAdesao, "Bruno");
+        var enviar = (int maquina, TelemetryEventV1[] eventos) => pequena.ComAsync(sp => sp.GetRequiredService<IIngestaoDeTelemetria>()
+            .RegistrarAsync(maquina, new TelemetryBatchV1("v1", "x", "1.4.0", eventos), default));
+
+        await enviar(deB, Enumerable.Range(0, 10).Select(i => BaseDeTeste.Excecao($"b{i}", Hoje.AddMinutes(i), "erro-de-b", TraceDoDevKit)).ToArray());
+        // A empresa A em laço: 3 assinaturas × 15 = 45 ocorrências, todas DEPOIS das de B.
+        await enviar(deA, Enumerable.Range(0, 45).Select(i => BaseDeTeste.Excecao($"a{i}", Hoje.AddHours(1).AddMinutes(i), $"erro-de-a-{i / 15}", TraceDoDevKit)).ToArray());
+
+        var guardadas = await pequena.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync());
+        Assert.Equal(25, guardadas.Count(e => e.StartsWith('a')));
+        Assert.Equal(10, guardadas.Count(e => e.StartsWith('b'))); // as de B ficam, mesmo sendo as mais antigas
+        Assert.DoesNotContain("a0", guardadas);
     }
 
     [Fact]
