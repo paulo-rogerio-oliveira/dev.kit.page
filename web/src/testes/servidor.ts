@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
   ColaboradorResumo, DemonstracaoResumo, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina,
-  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
+  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RoiResposta,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -92,6 +92,24 @@ export const erroDetalhe: GrupoDeErroDetalhe = {
   maquinas: ['máquina a1b2c3d4', 'máquina f6g7h8i9'],
 };
 
+/** O ROI por work item (US #387): uma US encerrada e um Bug aberto (sem turno: horas/turno nulo). */
+export const roi: RoiResposta = {
+  de: '2026-09-04', ate: '2026-10-03',
+  itens: [
+    {
+      maquinaId: 1, apelido: 'máquina a1b2c3d4', colaborador: 'Ana Souza', workItem: 387, tipo: 'User Story', estado: 'Closed',
+      de: '2026-10-01', ate: '2026-10-04', turnosDoAgente: 42, sessoes: 3, horas: 31.5, horasNoBoard: 30, horasNoTimesheet: 31.5,
+      horasPorTurno: 0.75, leadTimeDias: 3.5, aberto: false, pullRequests: 2, pullRequestsMergeadas: 1, atualizadoEm: '2026-10-03T13:01:07Z',
+    },
+    {
+      maquinaId: 2, apelido: 'máquina f6g7h8i9', colaborador: '', workItem: 401, tipo: 'Bug', estado: 'Active',
+      de: '2026-10-02', ate: '2026-10-03', turnosDoAgente: 0, sessoes: 1, horas: 2, horasNoBoard: 2, horasNoTimesheet: null,
+      horasPorTurno: null, leadTimeDias: null, aberto: true, pullRequests: 0, pullRequestsMergeadas: 0, atualizadoEm: '2026-10-02T10:00:00Z',
+    },
+  ],
+  totais: { itens: 2, turnos: 42, horas: 33.5, leadTimeMedioDias: 3.5, pullRequests: 2, pullRequestsMergeadas: 1 },
+};
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -133,6 +151,10 @@ export const handlersPadrao = [
   http.get(`${API}/api/dashboard/erros/:id/exportar`, () => new HttpResponse(JSON.stringify(erroDetalhe), {
     headers: { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename=excecao-abc123.json; filename*=UTF-8\'\'excecao-abc123.json' },
   })),
+  http.get(`${API}/api/dashboard/roi`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(roi);
+  }),
   http.get(`${API}/api/dashboard/colaboradores`, () => HttpResponse.json(colaboradores)),
   http.get(`${API}/api/dashboard/exportar`, ({ request }) => {
     requisicoes.push(new URL(request.url));

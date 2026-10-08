@@ -131,6 +131,25 @@ servidor põe esse estado). Para coletar, `GET /api/dashboard/erros/{id}/exporta
 JSON (trace, ocorrências, linha do tempo, versões e máquinas). O ciclo fecha no dev.kit: um detector
 novo em `TurnFailures.Padrao` tira a falha de "não classificada", e o grupo para de crescer.
 
+**ROI por work item (US #387).** O dev.kit manda, na mesma ingestão do v1, o evento `RoiCalculado`
+(o `devcli roi --id N`) com o campo opcional `roi`: horas (do dev.kit, do board e do timesheet), turnos
+do agente, sessões, lead time e pull requests de um work item. Na ingestão, na MESMA transação:
+- o evento vai para `EventosDeUso` e `TotaisDiarios` como os outros (o recorte é o id do item) — conta
+  "quantos ROIs foram calculados";
+- a foto vai para `RoisDeWorkItem`, UMA por (máquina, work item) pelo índice único, num upsert em que
+  **o mais recente vence** (pelo `em` do evento): o evento antigo que chega atrasado não volta a foto
+  para trás, e o reenvio nem chega ao upsert (é duplicado pelo `eventId`). Textos cortados e números
+  trazidos para a faixa da coluna (`RegrasDeRoi.Foto`); sem `roi`, não há foto.
+- a foto não é expurgada com os brutos: é o estado atual do item, e não um histórico.
+
+`GET /api/dashboard/roi?de=&ate=&maquina=` devolve as fotos calculadas no período, das mais recentes
+para as mais antigas (no máximo 200 na lista), com horas por turno (nula sem turno) e os totais de todas
+— itens, turnos, horas, lead time médio dos ENCERRADOS e PRs. O escopo é o das outras consultas
+(`ConsultasDoPainel.Rois`): o gestor vê só as máquinas da empresa que consentiram, e delas só as fotos
+calculadas depois do instante do consentimento. Na web, a seção "ROI por work item" do dashboard mostra
+os KPIs, o gráfico de horas lançadas × turnos do agente (pequenos múltiplos, uma escala por medida — sem
+eixo duplo) e a tabela.
+
 **Venda empresarial (US #381).** O gestor de uma empresa vê e coleta o uso dos colaboradores dela:
 - **Empresa e gestor.** O admin cria a `Empresa` (nome, plano, assentos e um código de adesão
   aleatório, `DK-XXXX-XXXX`) e convida o gestor (`POST /api/empresas/{id}/gestores`). O gestor é um
@@ -169,7 +188,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`). Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -185,7 +204,7 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | Suíte | O que prova |
 |---|---|
 | `api/tests/DevKitPage.Core.Tests` | validação do lote (inclusive o v1 antigo, sem os campos novos) e do pedido de demonstração (obrigatórios, e-mail, limites, consentimento), qualidade com divisor zero, chave, senha, período; a máscara e o limite do trace, as transições e a regressão por versão |
-| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login, máquinas ativas e registradas; grupos de exceção (mesma assinatura = um grupo com as ocorrências e as máquinas, reenvio sem duplicar, trace mascarado na gravação, regressão, só as últimas ocorrências, expurgo mantendo o grupo); pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e os scripts do Azure SQL contra o modelo |
-| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; `EmpresasApiTests`: o gestor da empresa A não lê máquinas, erros nem a exportação da B (403 pelo id), a máquina sem consentimento só nos totais, o CSV auditado e sem fórmula, o 429 da exportação em laço, a adesão recusada sem assento ou com código desconhecido, o admin vê tudo e o gestor não administra; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário |
-| `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin) |
+| `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login, máquinas ativas e registradas; grupos de exceção (mesma assinatura = um grupo com as ocorrências e as máquinas, reenvio sem duplicar, trace mascarado na gravação, regressão, só as últimas ocorrências, expurgo mantendo o grupo); pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e os scripts do Azure SQL contra o modelo; `RoiTests`: a foto do ROI (o mais recente vence, o atrasado e o reenvio não mudam nada, sem `roi` não há foto, corte dos textos e números), horas por turno, totais, filtro e o escopo do gestor |
+| `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; `EmpresasApiTests`: o gestor da empresa A não lê máquinas, erros nem a exportação da B (403 pelo id), a máquina sem consentimento só nos totais, o CSV auditado e sem fórmula, o 429 da exportação em laço, a adesão recusada sem assento ou com código desconhecido, o admin vê tudo e o gestor não administra; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário; `RoiApiTests`: o `RoiCalculado` no JSON exato do dev.kit vira a foto no painel, o envio mais novo substitui e o mais antigo não, o evento sem `roi` não cria foto, o gestor não lê o ROI de outra empresa (403 pelo id) |
+| `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin); o ROI por work item (KPIs, gráfico com a dica do lead time, tabela, traço sem turno, estado vazio com o `devcli roi`, os filtros) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e vídeo do hero → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard |

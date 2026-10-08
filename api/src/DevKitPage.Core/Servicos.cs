@@ -87,6 +87,12 @@ public interface IConsultasDoPainel
 
     /// <summary>O uso por colaborador (máquina que consentiu) e dia — o corpo da exportação em CSV ou JSON.</summary>
     Task<IReadOnlyList<LinhaExportada>> ExportarAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
+
+    /// <summary>
+    /// O ROI por work item (US #387): a foto mais recente de cada (máquina, item) calculada no período, no
+    /// escopo (e da máquina, quando filtrada), das mais recentes para as mais antigas, com os totais.
+    /// </summary>
+    Task<RoiResposta> RoiAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
 }
 
 /// <summary>As empresas do plano empresarial e os gestores delas (US #381) — só o admin.</summary>

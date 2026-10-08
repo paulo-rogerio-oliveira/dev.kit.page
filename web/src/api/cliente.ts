@@ -1,7 +1,7 @@
 import type {
   ArquivoBaixado, ColaboradorResumo, DemonstracaoResumo, EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro,
   GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
-  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta,
+  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, RoiResposta,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -102,6 +102,10 @@ export const api = {
 
   eventos: (token: string, filtro: Filtro, pagina: number, tamanho = 20) =>
     chamar<Pagina<EventoDoLog>>(`/api/dashboard/eventos?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+
+  // O ROI por work item (US #387): a foto mais recente de cada (máquina, item) no período.
+  roi: (token: string, filtro: Filtro) =>
+    chamar<RoiResposta>(`/api/dashboard/roi?${consulta(filtro)}`, { token }),
 
   pedirDemonstracao: (pedido: PedidoDeDemonstracao) =>
     chamar<PedidoDeDemonstracaoCriado>('/api/demonstracoes', { metodo: 'POST', corpo: pedido }),

@@ -67,6 +67,7 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
         db.Eventos.AddRange(eventos);
         await ConsolidarAsync(maquinaId, eventos, ct);
         var grupos = await AgruparErrosAsync(maquinaId, versao, novos.Where(n => n.Evento.Tipo == TiposDeEvento.ExcecaoNaoClassificada).ToList(), ct);
+        await AtualizarRoisAsync(maquinaId, novos.Where(n => n.Evento.Tipo == TiposDeEvento.RoiCalculado).ToList(), ct);
 
         var maquina = await db.Maquinas.FirstAsync(m => m.Id == maquinaId, ct);
         maquina.UltimoEnvioEmUtc = agora;
@@ -145,6 +146,61 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
         }
 
         return grupos.Values;
+    }
+
+    /// <summary>
+    /// O upsert das fotos do ROI (US #387), na MESMA transação do evento: a foto é uma por (máquina, work
+    /// item), e só um evento MAIS NOVO (pelo <c>em</c>) a substitui — o evento antigo que chega atrasado
+    /// (a fila de outra instância do dev.kit, um reenvio fora de ordem) conta no total diário, mas não
+    /// volta a foto para trás. Só os eventos NOVOS passam aqui: o reenvio (o mesmo eventId) nem chega.
+    /// O evento sem <c>roi</c> (um cliente com defeito) ou com a foto inválida não cria foto nenhuma.
+    /// </summary>
+    private async Task AtualizarRoisAsync(
+        int maquinaId, IReadOnlyCollection<(TelemetryEventV1 Fonte, EventoDeUso Evento)> rois, CancellationToken ct)
+    {
+        var fotos = rois
+            .Select(x => (Foto: RegrasDeRoi.Foto(x.Fonte.Roi), x.Evento))
+            .Where(x => x.Foto is not null)
+            .ToList();
+        if (fotos.Count == 0)
+            return;
+
+        var itens = fotos.Select(x => x.Foto!.WorkItemId).Distinct().ToList();
+        var existentes = await db.RoisDeWorkItem
+            .Where(r => r.MaquinaId == maquinaId && itens.Contains(r.WorkItemId))
+            .ToDictionaryAsync(r => r.WorkItemId, ct);
+
+        // Em ordem de instante: dentro do mesmo lote, o último também vence.
+        foreach (var (foto, evento) in fotos.OrderBy(x => x.Evento.EmUtc))
+        {
+            if (existentes.TryGetValue(foto!.WorkItemId, out var atual))
+            {
+                if (evento.EmUtc < atual.EmUtc)
+                    continue;
+            }
+            else
+            {
+                atual = new RoiDeWorkItem { MaquinaId = maquinaId, WorkItemId = foto.WorkItemId };
+                db.RoisDeWorkItem.Add(atual);
+                existentes[foto.WorkItemId] = atual;
+            }
+
+            atual.Tipo = foto.Tipo;
+            atual.Estado = foto.Estado;
+            atual.De = foto.De;
+            atual.Ate = foto.Ate;
+            atual.TurnosDoAgente = foto.TurnosDoAgente;
+            atual.Sessoes = foto.Sessoes;
+            atual.Horas = foto.Horas;
+            atual.HorasNoBoard = foto.HorasNoBoard;
+            atual.HorasNoTimesheet = foto.HorasNoTimesheet;
+            atual.LeadTimeDias = foto.LeadTimeDias;
+            atual.Aberto = foto.Aberto;
+            atual.PullRequests = foto.PullRequests;
+            atual.PullRequestsMergeadas = foto.PullRequestsMergeadas;
+            atual.EmUtc = evento.EmUtc;
+            atual.EventId = evento.EventId;
+        }
     }
 
     /// <summary>

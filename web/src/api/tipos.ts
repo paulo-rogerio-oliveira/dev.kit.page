@@ -194,6 +194,54 @@ export interface ColaboradorResumo {
   ultimoEnvioEm: string | null;
 }
 
+/**
+ * O ROI de um work item numa máquina (US #387): a foto MAIS RECENTE que o dev.kit dela calculou
+ * (`devcli roi`). O mesmo item em duas máquinas são duas linhas.
+ */
+export interface RoiDoWorkItem {
+  maquinaId: number;
+  apelido: string;
+  /** O nome que o colaborador informou no dev.kit; vazio na máquina anônima. */
+  colaborador: string;
+  workItem: number;
+  tipo: string;
+  estado: string;
+  de: string;
+  ate: string;
+  turnosDoAgente: number;
+  sessoes: number;
+  horas: number;
+  horasNoBoard: number;
+  horasNoTimesheet: number | null;
+  /** Horas sobre turnos; nulo sem turno (a tela mostra um traço). */
+  horasPorTurno: number | null;
+  /** Da criação ao encerramento; nulo enquanto o item está aberto. */
+  leadTimeDias: number | null;
+  aberto: boolean;
+  pullRequests: number;
+  pullRequestsMergeadas: number;
+  /** Quando o dev.kit calculou a foto. */
+  atualizadoEm: string;
+}
+
+/** Os totais do ROI no período (de todas as fotos, não só das da lista). */
+export interface RoiTotais {
+  itens: number;
+  turnos: number;
+  horas: number;
+  /** A média dos ENCERRADOS; nula sem nenhum. */
+  leadTimeMedioDias: number | null;
+  pullRequests: number;
+  pullRequestsMergeadas: number;
+}
+
+export interface RoiResposta {
+  de: string;
+  ate: string;
+  itens: RoiDoWorkItem[];
+  totais: RoiTotais;
+}
+
 /** Um arquivo baixado da API: o conteúdo e o nome sugerido. */
 export interface ArquivoBaixado {
   conteudo: Blob;

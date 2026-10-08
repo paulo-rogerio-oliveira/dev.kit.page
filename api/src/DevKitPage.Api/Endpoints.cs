@@ -169,6 +169,10 @@ public static class Endpoints
                     : Results.File(JsonSerializer.SerializeToUtf8Bytes(linhas, Exportacao), "application/json", nome + ".json");
             }, ct)).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
 
+        // O ROI por work item (US #387): a foto mais recente de cada (máquina, item) que o dev.kit calculou.
+        grupo.MapGet("/roi", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.RoiAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct));
+
         // Os pedidos de demonstração: ler e excluir (eliminação a pedido do titular) — contatos de
         // venda, só do admin (o gestor de uma empresa cliente não os vê).
         grupo.MapGet("/demonstracoes", (int? pagina, int? tamanho, IPedidosDeDemonstracao pedidos, CancellationToken ct)

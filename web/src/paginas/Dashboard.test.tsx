@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
 import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
-import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, servidor, tokenDoGestor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, roi, servidor, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
@@ -239,6 +239,64 @@ describe('Dashboard', () => {
     renderizar('/dashboard', tokenDoGestor());
 
     expect(await screen.findByText(/Nenhum colaborador aderiu ainda/)).toBeInTheDocument();
+  });
+
+  it('mostra o ROI por work item: totais, gráfico e tabela (US #387)', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    const secao = await screen.findByRole('region', { name: 'ROI por work item' });
+    const tabela = await within(secao).findByRole('table', { name: 'ROI por work item' });
+    const us = within(tabela).getByText('#387').closest('tr')!;
+    expect(within(us).getByText('User Story')).toBeInTheDocument();
+    expect(within(us).getByText('Closed')).toBeInTheDocument();
+    expect(within(us).getByText('Ana Souza')).toBeInTheDocument();
+    expect(within(us).getByText('42')).toBeInTheDocument();
+    expect(within(us).getByText('31,5')).toBeInTheDocument();
+    expect(within(us).getByText('0,8')).toBeInTheDocument(); // 0,75 h por turno, com uma casa
+    expect(within(us).getByText('3,5 dias')).toBeInTheDocument();
+    expect(within(us).getByText('1/2')).toBeInTheDocument();
+
+    // O Bug aberto: sem turno, horas/turno é traço (nunca NaN); sem colaborador, o apelido.
+    const bug = within(tabela).getByText('#401').closest('tr')!;
+    expect(within(bug).getByText('em aberto')).toBeInTheDocument();
+    expect(within(bug).getByText('máquina f6g7h8i9')).toBeInTheDocument();
+    expect(within(bug).getByText('—')).toBeInTheDocument();
+
+    expect(within(secao).getByTestId('kpi-Work items')).toHaveTextContent('2');
+    expect(within(secao).getByTestId('kpi-Turnos do agente')).toHaveTextContent('42');
+    expect(within(secao).getByTestId('kpi-Lead time médio')).toHaveTextContent('3,5 dias');
+    expect(within(secao).getByTestId('kpi-PRs mergeadas')).toHaveTextContent('1 / 2');
+
+    const grafico = within(secao).getByRole('figure', { name: /Horas lançadas × turnos do agente/ });
+    expect(within(grafico).getAllByRole('listitem')).toHaveLength(2);
+    await userEvent.hover(within(grafico).getByRole('listitem', { name: /#387 User Story/ }));
+    expect(within(grafico).getByRole('tooltip')).toHaveTextContent('lead time 3,5 dias');
+    expect(document.body).not.toHaveTextContent('NaN');
+  });
+
+  it('sem ROI calculado, ensina a rodar o devcli roi', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/roi`, () => HttpResponse.json({ ...roi, itens: [], totais: { itens: 0, turnos: 0, horas: 0, leadTimeMedioDias: null, pullRequests: 0, pullRequestsMergeadas: 0 } })));
+
+    renderizar('/dashboard', tokenValido());
+
+    const secao = await screen.findByRole('region', { name: 'ROI por work item' });
+    expect(await within(secao).findByText(/Nenhum ROI calculado/)).toBeInTheDocument();
+    expect(within(secao).getByText('devcli roi --id N')).toBeInTheDocument();
+    expect(within(secao).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('o ROI segue os filtros de máquina e de período', async () => {
+    renderizar('/dashboard', tokenValido());
+    await screen.findByRole('region', { name: 'ROI por work item' });
+    await screen.findByRole('option', { name: /máquina a1b2c3d4/ });
+
+    await userEvent.selectOptions(screen.getByLabelText('Máquina'), '2');
+
+    await waitFor(() => {
+      const doRoi = requisicoes.filter((r) => r.pathname === '/api/dashboard/roi').at(-1)!;
+      expect(doRoi.searchParams.get('maquina')).toBe('2');
+      expect(doRoi.searchParams.get('de')).toBeTruthy();
+    });
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {

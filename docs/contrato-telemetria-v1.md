@@ -65,6 +65,7 @@ novo não quebra uma API mais velha.
 | `ObjetivoAvaliado` | — | nota 0–100 | nota média dos avaliadores |
 | `ObjetivoCumprido` / `ObjetivoRecusado` | — | — | objetivos aceitos × recusados |
 | `ExcecaoNaoClassificada` (US #381) | a assinatura (a API a usa como recorte) | — | exceções sem causa conhecida, agrupadas por assinatura |
+| `RoiCalculado` (US #387) | o id do work item (texto) | turnos do agente | quantos ROIs foram calculados; a foto do ROI vai no campo opcional `roi` |
 
 ### Os campos opcionais da exceção (US #381)
 
@@ -86,6 +87,35 @@ muda de versão, porque acrescentar campo opcional não quebra ninguém:
 - Um dev.kit antigo não manda os campos (nem o tipo), e uma API antiga ignora o tipo desconhecido.
 
 São enviados só com o MESMO opt-in de *Configurações → Telemetria de uso*: não há chave nova.
+
+### Os campos opcionais do ROI (US #387)
+
+O `RoiCalculado` (o `devcli roi --id N` do dev.kit) leva, além dos campos de todo evento, o objeto
+**opcional** `roi` — de novo sem mudar o v1:
+
+```json
+{ "eventId": "…", "tipo": "RoiCalculado", "sessaoId": "", "quantidade": 1, "valor": 42,
+  "detalhe": "387", "em": "2026-10-07T13:01:07Z",
+  "roi": { "workItem": 387, "tipo": "User Story", "estado": "Closed", "de": "2026-10-01", "ate": "2026-10-04",
+           "turnosDoAgente": 42, "sessoes": 3, "horas": 31.5, "horasNoBoard": 30, "horasNoTimesheet": 31.5,
+           "leadTimeDias": 3.5, "aberto": false, "pullRequests": 2, "pullRequestsMergeadas": 1 } }
+```
+
+- `detalhe` é o id do work item e `valor`, os turnos do agente: no total diário o evento conta "quantos
+  ROIs foram calculados", como qualquer outro tipo.
+- `de`/`ate` são datas (`AAAA-MM-DD`); as horas são decimais; `horasNoTimesheet` (sem timesheet
+  configurado) e `leadTimeDias` (item ainda aberto) podem vir `null`.
+- **O ROI é uma FOTO, não uma soma.** A mesma máquina pode mandar o mesmo work item várias vezes; a
+  API guarda UMA foto por (máquina, work item) e só a substitui por um evento **mais recente** (pelo
+  `em`). Um evento mais antigo que chegue depois conta no total diário, mas não volta a foto para
+  trás; o reenvio (o mesmo `eventId`) é descartado como os demais.
+- Sem `roi` (um dev.kit com defeito) ou com `workItem` inválido, o evento é aceito e contado, mas não
+  cria foto. Textos (`tipo`, `estado`) são cortados em 50 caracteres e números negativos viram zero —
+  o lote não é recusado por isso.
+- O painel lê as fotos em `GET /api/dashboard/roi?de=&ate=&maquina=` (as calculadas no período, as mais
+  recentes primeiro, com os totais), com o mesmo escopo das outras consultas: o gestor vê só as
+  máquinas da empresa que consentiram, a partir do consentimento.
+- Um dev.kit antigo não manda o tipo nem o campo, e uma API antiga ignora o tipo desconhecido.
 
 ## O que NÃO é coletado
 

@@ -201,6 +201,57 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
             .ToArray();
     }
 
+    public async Task<RoiResposta> RoiAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct)
+    {
+        var de = periodo.De.ToDateTime(TimeOnly.MinValue);
+        var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        // Uma foto por (máquina, item): o volume é o de work items trabalhados, e não o de eventos — cabe
+        // trazer tudo e somar aqui (o SQLite não soma decimal no SQL, e os totais são de todas as fotos).
+        var fotos = await Rois(escopo)
+            .Where(r => r.EmUtc >= de && r.EmUtc < ate && (maquina == null || r.MaquinaId == maquina))
+            .Select(r => new { Foto = r, r.Maquina!.Apelido, r.Maquina.Colaborador })
+            .ToListAsync(ct);
+
+        var itens = fotos
+            .OrderByDescending(x => x.Foto.EmUtc).ThenByDescending(x => x.Foto.Id)
+            .Take(RoiMaximosNaLista)
+            .Select(x =>
+            {
+                var r = x.Foto;
+                return new RoiDoWorkItem(
+                    r.MaquinaId, x.Apelido, x.Colaborador, r.WorkItemId, r.Tipo, r.Estado, r.De, r.Ate, r.TurnosDoAgente, r.Sessoes,
+                    r.Horas, r.HorasNoBoard, r.HorasNoTimesheet, RegrasDeRoi.HorasPorTurno(r.Horas, r.TurnosDoAgente), r.LeadTimeDias,
+                    r.Aberto, r.PullRequests, r.PullRequestsMergeadas, DevKitPageDb.Utc(r.EmUtc));
+            })
+            .ToArray();
+
+        // O lead time médio é dos ENCERRADOS: o item aberto não tem lead time, e contá-lo como zero mentiria.
+        var leads = fotos.Where(x => !x.Foto.Aberto && x.Foto.LeadTimeDias is not null).Select(x => x.Foto.LeadTimeDias!.Value).ToList();
+        var totais = new RoiTotais(
+            fotos.Count, fotos.Sum(x => (long)x.Foto.TurnosDoAgente), fotos.Sum(x => x.Foto.Horas),
+            leads.Count == 0 ? null : Math.Round(leads.Average(), 2),
+            fotos.Sum(x => (long)x.Foto.PullRequests), fotos.Sum(x => (long)x.Foto.PullRequestsMergeadas));
+        return new RoiResposta(periodo.De, periodo.Ate, itens, totais);
+    }
+
+    /// <summary>Quantas fotos de ROI a lista devolve (as mais recentes); os totais são de todas.</summary>
+    public const int RoiMaximosNaLista = 200;
+
+    /// <summary>
+    /// As fotos do ROI do escopo (US #387), com o recorte do log: tudo para o admin; para o gestor, as das
+    /// máquinas que consentiram e calculadas a partir do INSTANTE do consentimento.
+    /// </summary>
+    private IQueryable<RoiDeWorkItem> Rois(EscopoDoPainel escopo)
+    {
+        var rois = db.RoisDeWorkItem.AsNoTracking();
+        if (escopo.EhAdmin)
+            return rois;
+
+        var empresa = escopo.EmpresaId;
+        return rois.Where(r => db.Maquinas.Any(m =>
+            m.Id == r.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && r.EmUtc >= m.ConsentiuEmUtc));
+    }
+
     /// <summary>Ocorrências e máquinas distintas por assinatura, somadas no banco a partir dos totais diários.</summary>
     private static async Task<Dictionary<string, (long Ocorrencias, int Maquinas)>> ContagensDeErroAsync(IQueryable<TotalDiario> totais, CancellationToken ct)
         => (await totais

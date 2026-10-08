@@ -104,6 +104,73 @@ export function BarrasHorizontais({ titulo, pontos, vazio }: { titulo: string; p
   );
 }
 
+/** Uma medida das barras lado a lado: o cabeçalho da coluna e como o valor é escrito. */
+export interface Medida {
+  rotulo: string;
+  formatar: (valor: number) => string;
+}
+
+/** Uma categoria das barras lado a lado: o rótulo, a linha de apoio, um valor por medida e a dica do hover. */
+export interface LinhaDeBarras {
+  chave: string;
+  rotulo: string;
+  apoio?: string;
+  valores: number[];
+  dica: string;
+}
+
+/**
+ * Barras horizontais de DUAS (ou mais) medidas por categoria, em colunas lado a lado — pequenos múltiplos
+ * com a MESMA ordem de linhas (o ROI: horas lançadas × turnos do agente por work item). Cada coluna tem a
+ * sua escala e o seu cabeçalho: horas e turnos não dividem eixo (nada de eixo duplo), e a comparação é
+ * entre os itens de uma coluna. Uma cor só (a série de dado): o cabeçalho nomeia a medida, o valor vai
+ * rotulado na barra, e o hover da linha inteira mostra a dica (com o que não cabe na barra, como o lead time).
+ */
+export function BarrasLadoALado({ titulo, medidas, linhas, vazio }: { titulo: string; medidas: Medida[]; linhas: LinhaDeBarras[]; vazio: string }) {
+  const [foco, setFoco] = useState<string | null>(null);
+  const maximos = medidas.map((_, i) => Math.max(1, ...linhas.map((l) => l.valores[i] ?? 0)));
+  const colunas = `minmax(140px, 220px) ${medidas.map(() => 'minmax(0, 1fr)').join(' ')}`;
+
+  return (
+    <figure className="grafico" aria-label={titulo}>
+      <figcaption>{titulo}</figcaption>
+      {linhas.length === 0 ? (
+        <p className="vazio">{vazio}</p>
+      ) : (
+        <div className="barras-lado-a-lado" role="list">
+          <div className="cabecalho" aria-hidden="true" style={{ gridTemplateColumns: colunas }}>
+            <span />
+            {medidas.map((m) => <span key={m.rotulo}>{m.rotulo}</span>)}
+          </div>
+          {linhas.map((linha) => (
+            <div
+              key={linha.chave}
+              role="listitem"
+              aria-label={linha.dica}
+              className={`linha${foco === linha.chave ? ' em-foco' : ''}`}
+              style={{ gridTemplateColumns: colunas }}
+              onMouseEnter={() => setFoco(linha.chave)}
+              onMouseLeave={() => setFoco(null)}
+            >
+              <span className="rotulo">
+                {linha.rotulo}
+                {linha.apoio && <small>{linha.apoio}</small>}
+              </span>
+              {medidas.map((m, i) => (
+                <span key={m.rotulo} className="celula">
+                  <span className="trilho"><span className="barra" style={{ width: `${((linha.valores[i] ?? 0) / maximos[i]) * 100}%` }} /></span>
+                  <span className="numero">{m.formatar(linha.valores[i] ?? 0)}</span>
+                </span>
+              ))}
+              {foco === linha.chave && <span className="dica" role="tooltip">{linha.dica}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </figure>
+  );
+}
+
 /** Um bloco de número (KPI): o rótulo, o valor e, quando há, a nota de rodapé. */
 export function Kpi({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?: string }) {
   return (

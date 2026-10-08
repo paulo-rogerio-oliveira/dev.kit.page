@@ -124,6 +124,58 @@ public static class ValidadorDeDemonstracao
     }
 }
 
+/// <summary>
+/// As regras da foto do ROI (US #387). A foto que vem torta (item sem id) é DESCARTADA, e não recusa o
+/// lote: o evento continua contando no total diário, e o dev.kit não fica reenviando um lote que a API
+/// nunca aceitaria. Os textos são cortados e os números, trazidos para a faixa que a coluna guarda — o
+/// mesmo espírito do <see cref="ValidadorDeLote.Cortar"/>.
+/// </summary>
+public static class RegrasDeRoi
+{
+    /// <summary>O tamanho máximo do tipo e do estado do work item.</summary>
+    public const int TamanhoMaximoDoTexto = 50;
+
+    /// <summary>A precisão das horas (decimal(10,2)): o maior valor que a coluna guarda.</summary>
+    public const decimal HorasMaximas = 99_999_999.99m;
+
+    /// <summary>A foto pronta para gravar (ainda sem máquina, evento e instante), ou nula quando não há foto válida.</summary>
+    public static RoiDeWorkItem? Foto(RoiV1? roi)
+    {
+        if (roi is null || roi.WorkItem <= 0)
+            return null;
+
+        return new RoiDeWorkItem
+        {
+            WorkItemId = roi.WorkItem,
+            Tipo = Cortar(roi.Tipo),
+            Estado = Cortar(roi.Estado),
+            De = roi.De <= roi.Ate ? roi.De : roi.Ate,
+            Ate = roi.De <= roi.Ate ? roi.Ate : roi.De,
+            TurnosDoAgente = Math.Max(0, roi.TurnosDoAgente),
+            Sessoes = Math.Max(0, roi.Sessoes),
+            Horas = Horas(roi.Horas),
+            HorasNoBoard = Horas(roi.HorasNoBoard),
+            HorasNoTimesheet = roi.HorasNoTimesheet is { } timesheet ? Horas(timesheet) : null,
+            LeadTimeDias = roi.LeadTimeDias is { } lead && double.IsFinite(lead) && lead >= 0 ? Math.Round(lead, 2) : null,
+            Aberto = roi.Aberto,
+            PullRequests = Math.Max(0, roi.PullRequests),
+            // A mergeada é uma das PRs: nunca mais que o total.
+            PullRequestsMergeadas = Math.Clamp(roi.PullRequestsMergeadas, 0, Math.Max(0, roi.PullRequests)),
+        };
+    }
+
+    /// <summary>Horas por turno do agente, com duas casas; nula sem turno (o divisor zero vira traço na tela).</summary>
+    public static decimal? HorasPorTurno(decimal horas, int turnos) => turnos <= 0 ? null : Math.Round(horas / turnos, 2);
+
+    private static decimal Horas(decimal horas) => Math.Round(Math.Clamp(horas, 0m, HorasMaximas), 2);
+
+    private static string Cortar(string? texto)
+    {
+        var limpo = (texto ?? string.Empty).Trim();
+        return limpo.Length <= TamanhoMaximoDoTexto ? limpo : limpo[..TamanhoMaximoDoTexto];
+    }
+}
+
 /// <summary>A política de senha do dashboard.</summary>
 public static class PoliticaDeSenha
 {

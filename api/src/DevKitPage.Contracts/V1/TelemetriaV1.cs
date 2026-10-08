@@ -27,9 +27,36 @@ public static class ContratoV1
 /// — o tipo e os quadros, sem caminhos, e-mails nem URLs. Até <c>8 KB</c>; o cliente antigo não manda.
 /// </param>
 /// <param name="Assinatura">Opcional (US #381): a impressão digital da exceção, que agrupa as ocorrências.</param>
+/// <param name="Roi">
+/// Opcional (US #387): a FOTO do ROI de um work item, que só vem no <see cref="TiposDeEvento.RoiCalculado"/>.
+/// Um dev.kit antigo nunca o manda — campo novo opcional, sem v2.
+/// </param>
 public sealed record TelemetryEventV1(
     string EventId, string Tipo, string SessaoId, int Quantidade, long? Valor, string Detalhe, DateTimeOffset Em,
-    string? Trace = null, string? Assinatura = null);
+    string? Trace = null, string? Assinatura = null, RoiV1? Roi = null);
+
+/// <summary>
+/// O ROI de um work item como o dev.kit o calculou (US #387, <c>devcli roi</c>): é uma FOTO, e não uma
+/// soma — a mesma máquina manda o mesmo item várias vezes, e vale a mais recente (pelo <c>em</c> do evento).
+/// </summary>
+/// <param name="WorkItem">O id do work item no board.</param>
+/// <param name="Tipo">O tipo do item (User Story, Bug, Task…).</param>
+/// <param name="Estado">O estado no board quando a foto foi tirada.</param>
+/// <param name="De">O primeiro dia com trabalho no item.</param>
+/// <param name="Ate">O último dia com trabalho no item.</param>
+/// <param name="TurnosDoAgente">Os turnos do agente nas tasks do item.</param>
+/// <param name="Sessoes">As sessões (tasks) do dev.kit que trabalharam no item.</param>
+/// <param name="Horas">As horas que o dev.kit apurou para o item.</param>
+/// <param name="HorasNoBoard">As horas lançadas no board (Completed Work).</param>
+/// <param name="HorasNoTimesheet">As horas no timesheet corporativo; nulo quando não há timesheet configurado.</param>
+/// <param name="LeadTimeDias">Da criação ao encerramento, em dias; nulo enquanto o item não fechou.</param>
+/// <param name="Aberto">O item ainda está aberto no board.</param>
+/// <param name="PullRequests">As pull requests vinculadas ao item.</param>
+/// <param name="PullRequestsMergeadas">Delas, as concluídas (mergeadas).</param>
+public sealed record RoiV1(
+    int WorkItem, string Tipo, string Estado, DateOnly De, DateOnly Ate, int TurnosDoAgente, int Sessoes,
+    decimal Horas, decimal HorasNoBoard, decimal? HorasNoTimesheet, double? LeadTimeDias, bool Aberto,
+    int PullRequests, int PullRequestsMergeadas);
 
 /// <summary>Um lote de eventos de uma máquina.</summary>
 public sealed record TelemetryBatchV1(string Versao, string MaquinaId, string VersaoDevKit, IReadOnlyList<TelemetryEventV1> Eventos);
@@ -79,10 +106,18 @@ public static class TiposDeEvento
     /// </summary>
     public const string ExcecaoNaoClassificada = "ExcecaoNaoClassificada";
 
+    /// <summary>
+    /// O ROI de um work item calculado no dev.kit (US #387): o <see cref="TelemetryEventV1.Detalhe"/> é o id
+    /// do item, o <see cref="TelemetryEventV1.Valor"/> os turnos do agente, e o <see cref="TelemetryEventV1.Roi"/>
+    /// a foto completa. No total diário ele conta "quantos ROIs foram calculados"; a foto vai para a tabela própria.
+    /// </summary>
+    public const string RoiCalculado = "RoiCalculado";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         ArquivoAlterado, FluxoExecutado, FerramentaAcionada, ComandoDelegado, TurnoExecutado,
         TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada, ExcecaoNaoClassificada,
+        RoiCalculado,
     };
 }
