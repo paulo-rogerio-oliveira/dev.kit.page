@@ -74,11 +74,18 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 /// </summary>
 public sealed class Maquinas(DevKitPageDb db, TimeProvider relogio) : IMaquinas
 {
-    public async Task<RegistroDaMaquina> RegistrarAsync(string maquinaId, string versaoDevKit, string? codigoEmpresa, string? colaborador, CancellationToken ct)
+    public async Task<RegistroDaMaquina?> RegistrarAsync(
+        string maquinaId, string versaoDevKit, string? codigoEmpresa, string? colaborador, string? chaveAtual, bool peloAdmin, CancellationToken ct)
     {
         var id = (maquinaId ?? string.Empty).Trim();
         var (chave, hash) = ChaveDeMaquina.Gerar();
         var maquina = await db.Maquinas.FirstOrDefaultAsync(m => m.MaquinaId == id, ct);
+
+        // A máquina que já existe: só ela mesma (a chave atual) ou o admin a registram de novo.
+        if (maquina is not null && !peloAdmin
+            && (string.IsNullOrWhiteSpace(chaveAtual) || !ChaveDeMaquina.Iguais(ChaveDeMaquina.Hash(chaveAtual.Trim()), maquina.ChaveHash)))
+            return null;
+
         if (maquina is null)
         {
             maquina = new Maquina
@@ -90,7 +97,8 @@ public sealed class Maquinas(DevKitPageDb db, TimeProvider relogio) : IMaquinas
             db.Maquinas.Add(maquina);
         }
 
-        // Registrar de novo GIRA a chave: o dev.kit só pede outra quando perdeu a dele (401, URL trocada).
+        // Registrar de novo GIRA a chave (com a atual, ou pelo admin). O dev.kit que PERDEU a dele recebe
+        // a recusa e se registra como máquina nova, com outro id anônimo.
         maquina.ChaveHash = hash;
         maquina.VersaoDevKit = ValidadorDeLote.Cortar(versaoDevKit);
         // Sem o campo (o dev.kit antigo, ou só a chave girando), o vínculo fica como está.

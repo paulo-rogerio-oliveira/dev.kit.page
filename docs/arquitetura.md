@@ -118,8 +118,10 @@ distintas com total no período — a mesma fonte dos outros números, então o 
   ao expurgo como o resto do histórico;
 - o `GrupoDeErro` (um por assinatura, nunca expurgado) guarda o tipo, o estado da reação, a primeira
   e a última versão e quando foi visto; a `OcorrenciaDeErro` guarda o trace das últimas 20 de cada
-  grupo e, somando todos, no máximo `Telemetria:MaxOcorrenciasGuardadas` (padrão 10.000 — saem as
-  mais antigas), expurgadas além de `Telemetria:RetencaoDias` pelo `ExpurgoDiario`;
+  grupo, no máximo `Telemetria:MaxOcorrenciasPorEmpresa` por empresa (padrão 2.000; as anônimas são um
+  grupo só — quem gera exceção em laço descarta as próprias, nunca as de outra empresa) e, somando
+  todas, no máximo `Telemetria:MaxOcorrenciasGuardadas` (padrão 10.000 — saem as mais antigas),
+  expurgadas além de `Telemetria:RetencaoDias` pelo `ExpurgoDiario`;
 - o trace é mascarado DE NOVO (`RegrasDeErro.Mascarar`: caminhos Windows, UNC e Unix, e-mails, URLs e
   GUIDs) e cortado em 8 KB — defesa em profundidade, caso um dev.kit com defeito escape do sanitizador.
   O `Detalhe` continua com 200 caracteres: é chave do total diário, e texto livre ali explodiria a
@@ -170,6 +172,9 @@ eixo duplo) e a tabela.
   fora do escopo é 403, não uma lista vazia; um token sem escopo válido nunca vira "ver tudo".
 - **Assentos.** A adesão é contada antes de gravar e conferida DEPOIS: na corrida pelo último
   assento, fica quem consentiu primeiro (e o id, no empate), e a excedente desfaz o próprio vínculo.
+- **Só a própria máquina muda a adesão dela.** Registrar de novo uma máquina que já existe exige a chave
+  atual (`X-Machine-Key`) ou o admin — senão 409. O código de registro vai no instalador (é público),
+  e sem isto qualquer um tiraria a máquina de uma empresa ou a poria em outra.
 - **Coleta auditada.** `GET /api/dashboard/exportar?formato=csv|json` devolve o uso por colaborador e
   dia; cada exportação — e a do grupo de erro em JSON, que leva os nomes das máquinas — grava uma linha em `AcessosAosDados` (quem, quando, o quê e quantas linhas),
   expurgada com `Telemetria:RetencaoDias`. O CSV usa `;` e neutraliza a célula que começa com

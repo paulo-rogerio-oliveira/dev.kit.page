@@ -75,7 +75,7 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
             maquina.VersaoDevKit = ValidadorDeLote.Cortar(lote.VersaoDevKit);
 
         await db.SaveChangesAsync(ct);
-        await ManterSoAsUltimasOcorrenciasAsync(grupos, ct);
+        await ManterSoAsUltimasOcorrenciasAsync(maquinaId, grupos, ct);
         await transacao.CommitAsync(ct);
 
         return new BatchResultV1(lote.Eventos.Count, novos.Count, conhecidos.Count - novos.Count, lote.Eventos.Count - conhecidos.Count);
@@ -205,9 +205,10 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
 
     /// <summary>
     /// Cada grupo guarda só as <see cref="RegrasDeErro.OcorrenciasGuardadasPorGrupo"/> ocorrências mais
-    /// recentes, e a base inteira no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasGuardadas"/>.
+    /// recentes, cada empresa no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasPorEmpresa"/> e a base
+    /// inteira no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasGuardadas"/>.
     /// </summary>
-    private async Task ManterSoAsUltimasOcorrenciasAsync(IReadOnlyCollection<GrupoDeErro> grupos, CancellationToken ct)
+    private async Task ManterSoAsUltimasOcorrenciasAsync(int maquinaId, IReadOnlyCollection<GrupoDeErro> grupos, CancellationToken ct)
     {
         foreach (var grupo in grupos)
         {
@@ -221,10 +222,27 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
                 await db.OcorrenciasDeErro.Where(o => sobrando.Contains(o.Id)).ExecuteDeleteAsync(ct);
         }
 
-        // O teto GLOBAL: uma máquina que gere assinaturas sem fim (cada uma no teto por grupo) não enche a
-        // base. Saem as mais antigas de todas; os grupos e as contagens nos totais diários ficam.
         if (grupos.Count == 0)
             return;
+
+        // O teto POR EMPRESA primeiro (as máquinas anônimas são um grupo só): quem gera exceção em laço
+        // descarta as próprias ocorrências mais antigas, nunca as de outra empresa.
+        var empresa = await db.Maquinas.Where(m => m.Id == maquinaId).Select(m => m.EmpresaId).FirstAsync(ct);
+        var daEmpresa = db.OcorrenciasDeErro.Where(o => o.Maquina!.EmpresaId == empresa);
+        var tetoDaEmpresa = Math.Max(RegrasDeErro.OcorrenciasGuardadasPorGrupo, opcoes.Value.MaxOcorrenciasPorEmpresa);
+        var excedentesDaEmpresa = await daEmpresa.CountAsync(ct) - tetoDaEmpresa;
+        if (excedentesDaEmpresa > 0)
+        {
+            var antigasDaEmpresa = await daEmpresa
+                .OrderBy(o => o.EmUtc).ThenBy(o => o.Id)
+                .Take(excedentesDaEmpresa)
+                .Select(o => o.Id)
+                .ToListAsync(ct);
+            await db.OcorrenciasDeErro.Where(o => antigasDaEmpresa.Contains(o.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        // O teto GLOBAL: muitas empresas juntas também não enchem a base. Saem as mais antigas de todas;
+        // os grupos e as contagens nos totais diários ficam.
         var teto = Math.Max(RegrasDeErro.OcorrenciasGuardadasPorGrupo, opcoes.Value.MaxOcorrenciasGuardadas);
         var excedentes = await db.OcorrenciasDeErro.CountAsync(ct) - teto;
         if (excedentes <= 0)

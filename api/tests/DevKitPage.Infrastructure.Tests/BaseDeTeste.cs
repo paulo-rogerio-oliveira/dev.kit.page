@@ -58,10 +58,19 @@ public sealed class BaseDeTeste : IAsyncDisposable
         return await acao(escopo.ServiceProvider);
     }
 
-    /// <summary>Registra uma máquina (com a adesão à empresa, quando há código) e devolve o id interno.</summary>
+    /// <summary>A chave atual de cada máquina registrada aqui — o registro de novo a apresenta, como o dev.kit.</summary>
+    public Dictionary<string, string> Chaves { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Registra uma máquina (com a adesão à empresa, quando há código) e devolve o id interno. A que já
+    /// foi registrada aqui se registra de novo com a chave atual.
+    /// </summary>
     public async Task<int> MaquinaAsync(string maquinaId, string? codigoEmpresa = null, string? colaborador = null)
     {
-        await ComAsync(sp => sp.GetRequiredService<IMaquinas>().RegistrarAsync(maquinaId, "1.4.0", codigoEmpresa, colaborador, default));
+        // (o registro devolve nulo quando recusado: a máquina existe e a chave não confere)
+        var registro = await ComAsync(sp => sp.GetRequiredService<IMaquinas>()
+            .RegistrarAsync(maquinaId, "1.4.0", codigoEmpresa, colaborador, Chaves.GetValueOrDefault(maquinaId), peloAdmin: false, default));
+        Chaves[maquinaId] = registro?.Chave ?? throw new InvalidOperationException($"O registro de {maquinaId} foi recusado.");
         return await ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas
             .Where(m => m.MaquinaId == maquinaId).Select(m => m.Id).SingleAsync());
     }

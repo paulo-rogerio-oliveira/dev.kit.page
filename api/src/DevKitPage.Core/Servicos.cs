@@ -35,8 +35,14 @@ public interface IMaquinas
     /// <paramref name="codigoEmpresa"/> (US #381) vincula a máquina à empresa — nulo não mexe no
     /// vínculo (o dev.kit antigo), vazio o desfaz, e o código desconhecido ou sem assento livre deixa a
     /// máquina anônima.
+    /// <para>
+    /// A máquina que JÁ existe só é registrada de novo por quem prova ser ela — a
+    /// <paramref name="chaveAtual"/> — ou pelo admin: o código de registro é público (vai no instalador),
+    /// e sem isto qualquer um giraria a chave de outra máquina e mexeria na adesão dela. Recusado, nulo.
+    /// </para>
     /// </summary>
-    Task<RegistroDaMaquina> RegistrarAsync(string maquinaId, string versaoDevKit, string? codigoEmpresa, string? colaborador, CancellationToken ct);
+    Task<RegistroDaMaquina?> RegistrarAsync(
+        string maquinaId, string versaoDevKit, string? codigoEmpresa, string? colaborador, string? chaveAtual, bool peloAdmin, CancellationToken ct);
 
     /// <summary>A máquina dona da chave, ou nula.</summary>
     Task<Maquina?> AutenticarAsync(string chave, CancellationToken ct);
