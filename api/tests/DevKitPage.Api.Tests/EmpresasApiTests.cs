@@ -110,7 +110,58 @@ public sealed class EmpresasApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Maquina_da_empresa_sem_consentimento_entra_so_nos_totais()
+    public async Task Gestor_nao_ve_o_uso_anterior_ao_consentimento()
+    {
+        var admin = await _api.AdminAsync();
+        var a = await ApiDeTeste.EmpresaAsync(admin, "Empresa A");
+        var gestorA = await _api.GestorAsync(admin, a.Id, "gestor.a");
+
+        // Antes de aderir: o uso de ONTEM e o de hoje, anônimos.
+        var maquina = await _api.MaquinaAsync("maq-a");
+        (await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-a",
+            new TelemetryEventV1("ontem", TiposDeEvento.TurnoExecutado, "s1", 1, 1000, "claude", Hoje.AddDays(-1)),
+            new TelemetryEventV1("antes", TiposDeEvento.TurnoExecutado, "s1", 1, 1000, "claude", Hoje.AddMinutes(-5)),
+            Excecao("erro-antes", "erro-da-ana")))).EnsureSuccessStatusCode();
+
+        // Aderiu (o registro de novo, com o código): só o uso daqui em diante é da empresa.
+        var aderida = await _api.MaquinaAsync("maq-a", a.CodigoDeAdesao, "Ana");
+        var depois = new TelemetryEventV1("depois", TiposDeEvento.TurnoExecutado, "s1", 1, 1000, "claude", DateTimeOffset.UtcNow.AddSeconds(1));
+        (await aderida.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-a", depois))).EnsureSuccessStatusCode();
+
+        var quantidade = (await gestorA.GetFromJsonAsync<QuantidadeResposta>("/api/dashboard/quantidade"))!;
+        var eventos = (await gestorA.GetFromJsonAsync<Pagina<EventoDoLog>>("/api/dashboard/eventos"))!;
+        var exportado = (await gestorA.GetFromJsonAsync<LinhaExportada[]>("/api/dashboard/exportar?formato=json"))!;
+        var erros = (await gestorA.GetFromJsonAsync<Pagina<GrupoDeErroResumo>>("/api/dashboard/erros"))!;
+
+        // Os totais são por dia: o de ontem fica de fora; o de hoje parte do dia do consentimento.
+        Assert.DoesNotContain(quantidade.SerieDiaria, d => d.Dia == DateOnly.FromDateTime(Hoje.AddDays(-1).UtcDateTime) && d.Turnos > 0);
+        Assert.Equal(new[] { "depois" }, eventos.Itens.Select(e => e.EventId)); // o log bruto, pelo instante exato
+        Assert.DoesNotContain(exportado, l => l.Dia < DateOnly.FromDateTime(Hoje.UtcDateTime));
+        var grupo = Assert.Single(erros.Itens); // o erro é do dia do consentimento...
+        var detalhe = (await gestorA.GetFromJsonAsync<GrupoDeErroDetalhe>($"/api/dashboard/erros/{grupo.Id}"))!;
+        Assert.Empty(detalhe.Ocorrencias); // ...mas a ocorrência, com o trace, é de antes: não aparece
+        Assert.Equal(string.Empty, detalhe.Trace);
+
+        // O admin continua vendo tudo.
+        Assert.Equal(4, (await admin.GetFromJsonAsync<Pagina<EventoDoLog>>("/api/dashboard/eventos"))!.Total); // 3 turnos e o erro
+    }
+
+    [Fact]
+    public async Task Exportacao_do_grupo_de_erro_tambem_vai_para_a_trilha_de_auditoria()
+    {
+        var (_, gestorA, _, _, _) = await CenarioAsync();
+        var grupo = Assert.Single((await gestorA.GetFromJsonAsync<Pagina<GrupoDeErroResumo>>("/api/dashboard/erros"))!.Itens);
+
+        (await gestorA.GetAsync($"/api/dashboard/erros/{grupo.Id}/exportar")).EnsureSuccessStatusCode();
+
+        using var escopo = _api.Services.CreateScope();
+        var acesso = Assert.Single(await escopo.ServiceProvider.GetRequiredService<DevKitPageDb>().AcessosAosDados.AsNoTracking().ToListAsync());
+        Assert.Equal("gestor.a", acesso.Login);
+        Assert.StartsWith("exportar json do grupo de exceção erro-de-a", acesso.OQue);
+    }
+
+    [Fact]
+    public async Task Maquina_da_empresa_sem_consentimento_nao_aparece_nem_nos_totais()
     {
         var (_, gestorA, _, a, _) = await CenarioAsync();
         var semConsentimento = await _api.MaquinaAsync("maq-sem");
@@ -129,7 +180,8 @@ public sealed class EmpresasApiTests : IDisposable
         var eventos = (await gestorA.GetFromJsonAsync<Pagina<EventoDoLog>>("/api/dashboard/eventos"))!;
         var exportado = (await gestorA.GetFromJsonAsync<LinhaExportada[]>("/api/dashboard/exportar?formato=json"))!;
 
-        Assert.Equal(4L, quantidade.Turnos); // 1 da Ana + 3 da máquina sem consentimento
+        Assert.Equal(1L, quantidade.Turnos); // só o da Ana: sem consentimento, nada vai para a empresa
+        Assert.Equal(1L, quantidade.MaquinasRegistradas);
         Assert.Equal("maq-a", Assert.Single(maquinas).MaquinaId);
         Assert.All(eventos.Itens, e => Assert.Equal("máquina maq-a", e.Apelido));
         Assert.Equal(1L, exportado.Sum(l => l.Turnos));

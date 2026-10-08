@@ -55,10 +55,17 @@ public sealed class Maquina
     public string Colaborador { get; set; } = string.Empty;
 
     /// <summary>
-    /// Quando o colaborador consentiu. Sem ele, a máquina da empresa entra SÓ nos totais — nada
-    /// individual (lista, filtro, log, exportação) aparece para o gestor.
+    /// Quando o colaborador consentiu. Sem ele, NADA da máquina aparece para o gestor — nem nos totais:
+    /// o consentimento é a condição de todo dado que a empresa vê (US #381).
     /// </summary>
     public DateTime? ConsentiuEmUtc { get; set; }
+
+    /// <summary>
+    /// O primeiro dia cujos totais o gestor vê (o dia do consentimento): o uso ANTERIOR à adesão é da
+    /// pessoa, e não da empresa. O log bruto e as ocorrências de erro usam o instante exato
+    /// (<see cref="ConsentiuEmUtc"/>); os totais, que são por dia, partem daqui. Nulo: nada visível.
+    /// </summary>
+    public DateOnly? DadosDesde { get; set; }
 }
 
 /// <summary>

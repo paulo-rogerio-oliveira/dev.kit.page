@@ -330,6 +330,59 @@ public sealed class InfraestruturaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Na_corrida_pelo_ultimo_assento_fica_quem_consentiu_primeiro()
+    {
+        var empresa = await _base.ComAsync(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("A", "Empresarial", 1), default));
+        var minha = await _base.MaquinaAsync("m-1", empresa.CodigoDeAdesao, "Ana");
+
+        // A outra adesão passou na contagem ao mesmo tempo e gravou ANTES (consentimento mais antigo).
+        await _base.ComAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<DevKitPageDb>();
+            db.Maquinas.Add(new Maquina
+            {
+                MaquinaId = "m-2", Apelido = "máquina m-2", ChaveHash = "h2", RegistradaEmUtc = _base.Relogio.Agora.UtcDateTime,
+                EmpresaId = empresa.Id, Colaborador = "Bruno", ConsentiuEmUtc = _base.Relogio.Agora.UtcDateTime.AddMinutes(-1),
+                DadosDesde = DateOnly.FromDateTime(_base.Relogio.Agora.UtcDateTime),
+            });
+            return await db.SaveChangesAsync();
+        });
+
+        // A minha registra de novo (com o código): a conferência depois de gravar a tira do assento excedente.
+        var registro = await _base.ComAsync(sp => sp.GetRequiredService<IMaquinas>().RegistrarAsync("m-1", "1.4.0", empresa.CodigoDeAdesao, "Ana", default));
+
+        Assert.Null(registro.Empresa);
+        Assert.Contains("não tem assento livre", registro.Adesao);
+        var vinculadas = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.Where(m => m.EmpresaId == empresa.Id).Select(m => m.MaquinaId).ToListAsync());
+        Assert.Equal(new[] { "m-2" }, vinculadas);
+        var anonima = await _base.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Maquinas.AsNoTracking().SingleAsync(m => m.Id == minha));
+        Assert.Equal(((DateTime?)null, (DateOnly?)null), (anonima.ConsentiuEmUtc, anonima.DadosDesde));
+    }
+
+    [Fact]
+    public async Task Teto_global_de_ocorrencias_tira_as_mais_antigas_de_todos_os_grupos()
+    {
+        await using var pequena = new BaseDeTeste(new() { ["Telemetria:MaxOcorrenciasGuardadas"] = "30" });
+        await pequena.InicializarAsync();
+        var maquina = await pequena.MaquinaAsync("m-1");
+
+        // Três assinaturas com 15 ocorrências cada (abaixo do teto por grupo), 45 no total.
+        var eventos = Enumerable.Range(0, 45)
+            .Select(i => BaseDeTeste.Excecao($"x{i}", Hoje.AddMinutes(i), $"grupo-{i / 15}", TraceDoDevKit)).ToArray();
+        await pequena.ComAsync(sp => sp.GetRequiredService<IIngestaoDeTelemetria>()
+            .RegistrarAsync(maquina, new TelemetryBatchV1("v1", "x", "1.4.0", eventos), default));
+
+        var guardadas = await pequena.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().OcorrenciasDeErro.Select(o => o.EventId).ToListAsync());
+        var grupos = await pequena.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(EscopoDoPainel.Tudo, Outubro, null, 1, 20, default));
+
+        Assert.Equal(30, guardadas.Count);
+        Assert.DoesNotContain("x0", guardadas);
+        Assert.Contains("x44", guardadas);
+        Assert.Equal(3, grupos.Total); // os grupos e as contagens ficam
+        Assert.Equal(45L, grupos.Itens.Sum(g => g.Ocorrencias));
+    }
+
+    [Fact]
     public async Task Expurgo_da_trilha_de_acesso_remove_so_o_que_passou_da_retencao()
     {
         var auditoria = (IServiceProvider sp) => sp.GetRequiredService<IAuditoriaDeAcesso>();
@@ -361,7 +414,7 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         var maquinas = BaseDeTeste.ColunasNoSqlServer("Maquinas");
         foreach (var coluna in new[] { "[EmpresaId]", "[Papel]" })
             Assert.Contains(usuarios.Single(c => c.StartsWith(coluna, StringComparison.Ordinal)).Replace(" NOT NULL", string.Empty, StringComparison.Ordinal), script);
-        foreach (var coluna in new[] { "[EmpresaId]", "[Colaborador]", "[ConsentiuEmUtc]" })
+        foreach (var coluna in new[] { "[EmpresaId]", "[Colaborador]", "[ConsentiuEmUtc]", "[DadosDesde]" })
             Assert.Contains(maquinas.Single(c => c.StartsWith(coluna, StringComparison.Ordinal)).Replace(" NOT NULL", string.Empty, StringComparison.Ordinal), script);
     }
 

@@ -8,10 +8,11 @@ namespace DevKitPage.Infrastructure;
 /// As consultas do dashboard. Os números saem dos TOTAIS DIÁRIOS, somados no banco (o
 /// <c>GroupBy</c> vira SQL); só o log de eventos e as ocorrências de erro leem os brutos.
 /// <para>
-/// O <see cref="EscopoDoPainel"/> (US #381) é aplicado AQUI, e só aqui, em dois níveis: os TOTAIS
-/// (<see cref="Totais"/>) contam todas as máquinas da empresa do gestor; o dado INDIVIDUAL — a lista
-/// de máquinas, o filtro, o log, os nomes nas ocorrências, os colaboradores e a exportação
-/// (<see cref="Visiveis"/>) — só as que consentiram. O admin vê tudo.
+/// O <see cref="EscopoDoPainel"/> (US #381) é aplicado AQUI, e só aqui: o gestor vê só as máquinas da
+/// empresa dele que CONSENTIRAM, e delas só o uso a partir do consentimento — os totais diários desde o
+/// dia dele (<see cref="TodosOsTotais"/>), o log e as ocorrências de erro desde o instante
+/// (<see cref="Eventos"/>, <see cref="Ocorrencias"/>). O admin vê tudo; a exportação dos colaboradores
+/// corta no consentimento também para ele.
 /// </para>
 /// </summary>
 public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
@@ -22,9 +23,7 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
     public async Task<IReadOnlyList<MaquinaResumo>> MaquinasAsync(EscopoDoPainel escopo, CancellationToken ct)
     {
         var visiveis = Visiveis(escopo);
-        var ids = visiveis.Select(m => m.Id);
-        var eventos = await db.TotaisDiarios
-            .Where(t => ids.Contains(t.MaquinaId))
+        var eventos = await TodosOsTotais(escopo)
             .GroupBy(t => t.MaquinaId)
             .Select(g => new { MaquinaId = g.Key, Eventos = g.Sum(t => t.Eventos) })
             .ToDictionaryAsync(x => x.MaquinaId, x => x.Eventos, ct);
@@ -84,10 +83,8 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         tamanho = Math.Clamp(tamanho, 1, 200);
         var de = periodo.De.ToDateTime(TimeOnly.MinValue);
         var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-        var visiveis = Visiveis(escopo).Select(m => m.Id);
-
-        var consulta = db.Eventos.AsNoTracking()
-            .Where(e => e.EmUtc >= de && e.EmUtc < ate && (maquina == null || e.MaquinaId == maquina) && visiveis.Contains(e.MaquinaId));
+        var consulta = Eventos(escopo)
+            .Where(e => e.EmUtc >= de && e.EmUtc < ate && (maquina == null || e.MaquinaId == maquina));
         var total = await consulta.CountAsync(ct);
         var linhas = await consulta
             .OrderByDescending(e => e.EmUtc).ThenByDescending(e => e.Id)
@@ -126,9 +123,7 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         if (escopo.EhAdmin)
             return true;
 
-        var daEmpresa = DoEscopo(escopo).Select(m => m.Id);
-        return await db.TotaisDiarios.AnyAsync(
-            t => t.Tipo == TiposDeEvento.ExcecaoNaoClassificada && t.Detalhe == assinatura && daEmpresa.Contains(t.MaquinaId), ct);
+        return await TodosOsTotais(escopo).AnyAsync(t => t.Tipo == TiposDeEvento.ExcecaoNaoClassificada && t.Detalhe == assinatura, ct);
     }
 
     public async Task<GrupoDeErroDetalhe?> ErroAsync(EscopoDoPainel escopo, long id, Periodo periodo, CancellationToken ct)
@@ -146,13 +141,12 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
 
         // Os NOMES das máquinas e as ocorrências (com o trace) são dado individual: só as visíveis.
         var visiveis = Visiveis(escopo);
-        var idsVisiveis = visiveis.Select(m => m.Id);
         var maquinas = await visiveis.AsNoTracking()
             .Where(m => totais.Select(t => t.MaquinaId).Contains(m.Id))
             .OrderBy(m => m.Apelido).Select(m => m.Apelido)
             .ToListAsync(ct);
-        var ocorrencias = (await db.OcorrenciasDeErro.AsNoTracking()
-                .Where(o => o.GrupoId == id && idsVisiveis.Contains(o.MaquinaId))
+        var ocorrencias = (await Ocorrencias(escopo)
+                .Where(o => o.GrupoId == id)
                 .OrderByDescending(o => o.EmUtc).ThenByDescending(o => o.Id)
                 .Take(RegrasDeErro.OcorrenciasGuardadasPorGrupo)
                 .Select(o => new { o.EventId, Apelido = o.Maquina!.Apelido, o.VersaoDevKit, o.Trace, o.EmUtc })
@@ -185,10 +179,8 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
             .Where(m => maquina == null || m.Id == maquina)
             .Select(m => new { m.Id, m.Colaborador, m.Apelido, Empresa = m.Empresa!.Nome })
             .ToDictionaryAsync(m => m.Id, ct);
-        var ids = colaboradores.Keys.ToList();
-
-        var porDia = await db.TotaisDiarios.AsNoTracking()
-            .Where(t => t.Dia >= periodo.De && t.Dia <= periodo.Ate && ids.Contains(t.MaquinaId))
+        // Só o uso a partir do dia do consentimento — também quando é o admin quem exporta.
+        var porDia = await TotaisDosColaboradores(escopo, periodo, maquina)
             .GroupBy(t => new { t.MaquinaId, t.Dia, t.Tipo })
             .Select(g => new { g.Key.MaquinaId, g.Key.Dia, g.Key.Tipo, Quantidade = g.Sum(t => t.Quantidade), Eventos = g.Sum(t => t.Eventos) })
             .ToListAsync(ct);
@@ -222,30 +214,76 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         => new(g.Id, g.Assinatura, g.Tipo, g.Estado, g.ResolvidoNaVersao, contagem.Ocorrencias, contagem.Maquinas,
             g.PrimeiraVersao, g.UltimaVersao, DevKitPageDb.Utc(g.PrimeiroVistoEmUtc), DevKitPageDb.Utc(g.UltimoVistoEmUtc));
 
-    /// <summary>As máquinas do escopo para os TOTAIS: todas para o admin; as da empresa, para o gestor.</summary>
+    /// <summary>
+    /// As máquinas do escopo: todas para o admin; para o gestor, as da empresa que CONSENTIRAM — sem o
+    /// consentimento, nada da máquina vai para a empresa, nem nos totais.
+    /// </summary>
     private IQueryable<Maquina> DoEscopo(EscopoDoPainel escopo)
     {
         var empresa = escopo.EmpresaId;
-        return escopo.EhAdmin ? db.Maquinas : db.Maquinas.Where(m => m.EmpresaId == empresa);
+        return escopo.EhAdmin ? db.Maquinas : db.Maquinas.Where(m => m.EmpresaId == empresa && m.ConsentiuEmUtc != null);
     }
 
-    /// <summary>As máquinas do escopo para o dado INDIVIDUAL: todas para o admin; para o gestor, as da empresa que consentiram.</summary>
-    private IQueryable<Maquina> Visiveis(EscopoDoPainel escopo)
-        => escopo.EhAdmin ? db.Maquinas : DoEscopo(escopo).Where(m => m.ConsentiuEmUtc != null);
+    /// <summary>As máquinas que quem consulta pode ver uma a uma (a lista, o filtro, os nomes): as mesmas do escopo.</summary>
+    private IQueryable<Maquina> Visiveis(EscopoDoPainel escopo) => DoEscopo(escopo);
 
     /// <summary>Os colaboradores: as máquinas vinculadas a uma empresa, com consentimento, no escopo.</summary>
     private IQueryable<Maquina> Colaboradores(EscopoDoPainel escopo)
         => DoEscopo(escopo).Where(m => m.EmpresaId != null && m.ConsentiuEmUtc != null);
 
     private IQueryable<TotalDiario> Totais(EscopoDoPainel escopo, Periodo periodo, int? maquina)
+        => TodosOsTotais(escopo).Where(t => t.Dia >= periodo.De && t.Dia <= periodo.Ate && (maquina == null || t.MaquinaId == maquina));
+
+    /// <summary>
+    /// Os totais diários do escopo, de qualquer período: tudo para o admin; para o gestor, os das máquinas
+    /// que consentiram e SÓ a partir do dia do consentimento (<see cref="Maquina.DadosDesde"/>) — o uso de
+    /// antes da adesão é da pessoa, e não da empresa.
+    /// </summary>
+    private IQueryable<TotalDiario> TodosOsTotais(EscopoDoPainel escopo)
     {
-        var totais = db.TotaisDiarios.AsNoTracking()
-            .Where(t => t.Dia >= periodo.De && t.Dia <= periodo.Ate && (maquina == null || t.MaquinaId == maquina));
+        var totais = db.TotaisDiarios.AsNoTracking();
         if (escopo.EhAdmin)
             return totais;
 
-        var daEmpresa = DoEscopo(escopo).Select(m => m.Id);
-        return totais.Where(t => daEmpresa.Contains(t.MaquinaId));
+        var empresa = escopo.EmpresaId;
+        return totais.Where(t => db.Maquinas.Any(m =>
+            m.Id == t.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && m.DadosDesde != null && t.Dia >= m.DadosDesde));
+    }
+
+    /// <summary>Os colaboradores com o primeiro dia visível de cada um — o recorte da exportação, para o admin também.</summary>
+    private IQueryable<TotalDiario> TotaisDosColaboradores(EscopoDoPainel escopo, Periodo periodo, int? maquina)
+    {
+        var colaboradores = Colaboradores(escopo);
+        return db.TotaisDiarios.AsNoTracking()
+            .Where(t => t.Dia >= periodo.De && t.Dia <= periodo.Ate && (maquina == null || t.MaquinaId == maquina))
+            .Where(t => colaboradores.Any(m => m.Id == t.MaquinaId && m.DadosDesde != null && t.Dia >= m.DadosDesde));
+    }
+
+    /// <summary>
+    /// Os eventos BRUTOS do escopo (o log): tudo para o admin; para o gestor, os das máquinas que
+    /// consentiram e só a partir do INSTANTE do consentimento.
+    /// </summary>
+    private IQueryable<EventoDeUso> Eventos(EscopoDoPainel escopo)
+    {
+        var eventos = db.Eventos.AsNoTracking();
+        if (escopo.EhAdmin)
+            return eventos;
+
+        var empresa = escopo.EmpresaId;
+        return eventos.Where(e => db.Maquinas.Any(m =>
+            m.Id == e.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && e.EmUtc >= m.ConsentiuEmUtc));
+    }
+
+    /// <summary>As ocorrências de erro do escopo, com o mesmo recorte do log: depois do instante do consentimento.</summary>
+    private IQueryable<OcorrenciaDeErro> Ocorrencias(EscopoDoPainel escopo)
+    {
+        var ocorrencias = db.OcorrenciasDeErro.AsNoTracking();
+        if (escopo.EhAdmin)
+            return ocorrencias;
+
+        var empresa = escopo.EmpresaId;
+        return ocorrencias.Where(o => db.Maquinas.Any(m =>
+            m.Id == o.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && o.EmUtc >= m.ConsentiuEmUtc));
     }
 
     private async Task<IReadOnlyList<SomaPorTipo>> SomasAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct)

@@ -11,7 +11,7 @@ namespace DevKitPage.Infrastructure;
 /// O total diário é consolidado NA MESMA transação do evento bruto — por isso o expurgo dos brutos
 /// nunca muda o histórico do dashboard.
 /// </summary>
-public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) : IIngestaoDeTelemetria
+public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDeTelemetria> opcoes) : IIngestaoDeTelemetria
 {
     public async Task<BatchResultV1> RegistrarAsync(int maquinaId, TelemetryBatchV1 lote, CancellationToken ct)
     {
@@ -147,7 +147,10 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
         return grupos.Values;
     }
 
-    /// <summary>Cada grupo guarda só as <see cref="RegrasDeErro.OcorrenciasGuardadasPorGrupo"/> ocorrências mais recentes.</summary>
+    /// <summary>
+    /// Cada grupo guarda só as <see cref="RegrasDeErro.OcorrenciasGuardadasPorGrupo"/> ocorrências mais
+    /// recentes, e a base inteira no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasGuardadas"/>.
+    /// </summary>
     private async Task ManterSoAsUltimasOcorrenciasAsync(IReadOnlyCollection<GrupoDeErro> grupos, CancellationToken ct)
     {
         foreach (var grupo in grupos)
@@ -161,6 +164,21 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
             if (sobrando.Count > 0)
                 await db.OcorrenciasDeErro.Where(o => sobrando.Contains(o.Id)).ExecuteDeleteAsync(ct);
         }
+
+        // O teto GLOBAL: uma máquina que gere assinaturas sem fim (cada uma no teto por grupo) não enche a
+        // base. Saem as mais antigas de todas; os grupos e as contagens nos totais diários ficam.
+        if (grupos.Count == 0)
+            return;
+        var teto = Math.Max(RegrasDeErro.OcorrenciasGuardadasPorGrupo, opcoes.Value.MaxOcorrenciasGuardadas);
+        var excedentes = await db.OcorrenciasDeErro.CountAsync(ct) - teto;
+        if (excedentes <= 0)
+            return;
+        var maisAntigas = await db.OcorrenciasDeErro
+            .OrderBy(o => o.EmUtc).ThenBy(o => o.Id)
+            .Take(excedentes)
+            .Select(o => o.Id)
+            .ToListAsync(ct);
+        await db.OcorrenciasDeErro.Where(o => maisAntigas.Contains(o.Id)).ExecuteDeleteAsync(ct);
     }
 
     /// <summary>Soma os eventos NOVOS nos totais diários da máquina (cria a linha do dia que falta).</summary>

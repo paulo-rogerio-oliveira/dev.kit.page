@@ -4,7 +4,8 @@
 --
 -- Por que um script: com Banco:Provider=SqlServer a API sobe com EnsureCreated, que cria o esquema
 -- só numa base VAZIA — numa base que já existe ele não cria tabela nem coluna nova. Este script é
--- idempotente (pode rodar de novo sem efeito) e espelha a migration 20261007221204_Empresas do SQLite.
+-- idempotente (pode rodar de novo sem efeito) e espelha as migrations 20261007221204_Empresas e
+-- 20261007235607_ConsentimentoPorDia do SQLite.
 -- Rode-o ANTES de publicar a versão da API com o painel empresarial (ver docs/publicacao-azure.md).
 
 IF OBJECT_ID(N'[dbo].[Empresas]', N'U') IS NULL
@@ -70,6 +71,15 @@ GO
 
 IF COL_LENGTH(N'dbo.Maquinas', N'ConsentiuEmUtc') IS NULL
     ALTER TABLE [dbo].[Maquinas] ADD [ConsentiuEmUtc] datetime2 NULL;
+GO
+
+-- O primeiro dia cujos totais o gestor vê (migration 20261007235607_ConsentimentoPorDia): o uso
+-- anterior ao consentimento não vai para a empresa.
+IF COL_LENGTH(N'dbo.Maquinas', N'DadosDesde') IS NULL
+    ALTER TABLE [dbo].[Maquinas] ADD [DadosDesde] date NULL;
+GO
+
+UPDATE [dbo].[Maquinas] SET [DadosDesde] = CAST([ConsentiuEmUtc] AS date) WHERE [ConsentiuEmUtc] IS NOT NULL AND [DadosDesde] IS NULL;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_Maquinas_EmpresaId' AND object_id = OBJECT_ID(N'[dbo].[Maquinas]'))

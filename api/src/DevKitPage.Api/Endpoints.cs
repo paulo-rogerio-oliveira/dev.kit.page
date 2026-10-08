@@ -130,11 +130,17 @@ public static class Endpoints
             return await reacao.AlterarEstadoAsync(id, pedido!, ct) ? Results.NoContent() : Results.NotFound();
         }).RequireAuthorization(Seguranca.PoliticaAdmin);
 
-        grupo.MapGet("/erros/{id:long}/exportar", (long id, DateOnly? de, DateOnly? ate, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+        grupo.MapGet("/erros/{id:long}/exportar", (long id, DateOnly? de, DateOnly? ate, ClaimsPrincipal quem, IConsultasDoPainel consultas,
+                IAuditoriaDeAcesso auditoria, TimeProvider relogio, CancellationToken ct)
             => ComErroVisivel(quem, consultas, id, async escopo =>
             {
-                if (await consultas.ErroAsync(escopo, id, Periodo.Pedido(de, ate, Hoje(relogio)), ct) is not { } detalhe)
+                var periodo = Periodo.Pedido(de, ate, Hoje(relogio));
+                if (await consultas.ErroAsync(escopo, id, periodo, ct) is not { } detalhe)
                     return Results.NotFound();
+
+                // A exportação leva os nomes das máquinas e as ocorrências: é acesso a dado, e fica na trilha como a do uso.
+                await auditoria.RegistrarAsync(Seguranca.UsuarioId(quem) ?? 0, quem.FindFirstValue(JwtRegisteredClaimNames.Name) ?? string.Empty, escopo,
+                    $"exportar json do grupo de exceção {detalhe.Grupo.Assinatura} de {periodo.De:yyyy-MM-dd} a {periodo.Ate:yyyy-MM-dd}", detalhe.Ocorrencias.Count, ct);
                 var json = JsonSerializer.SerializeToUtf8Bytes(detalhe, Exportacao);
                 return Results.File(json, "application/json", $"excecao-{detalhe.Grupo.Assinatura}.json");
             }, ct)).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);

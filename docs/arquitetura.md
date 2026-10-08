@@ -118,7 +118,8 @@ distintas com total no período — a mesma fonte dos outros números, então o 
   ao expurgo como o resto do histórico;
 - o `GrupoDeErro` (um por assinatura, nunca expurgado) guarda o tipo, o estado da reação, a primeira
   e a última versão e quando foi visto; a `OcorrenciaDeErro` guarda o trace das últimas 20 de cada
-  grupo, expurgadas além de `Telemetria:RetencaoDias` pelo `ExpurgoDiario`;
+  grupo e, somando todos, no máximo `Telemetria:MaxOcorrenciasGuardadas` (padrão 10.000 — saem as
+  mais antigas), expurgadas além de `Telemetria:RetencaoDias` pelo `ExpurgoDiario`;
 - o trace é mascarado DE NOVO (`RegrasDeErro.Mascarar`: caminhos Windows, UNC e Unix, e-mails, URLs e
   GUIDs) e cortado em 8 KB — defesa em profundidade, caso um dev.kit com defeito escape do sanitizador.
   O `Detalhe` continua com 200 caracteres: é chave do total diário, e texto livre ali explodiria a
@@ -142,12 +143,16 @@ novo em `TurnFailures.Padrao` tira a falha de "não classificada", e o grupo par
   assento livre deixam a máquina anônima, e a resposta (`adesao`) diz por quê; código vazio desfaz o
   vínculo; o dev.kit antigo (sem o campo) não mexe nele.
 - **Isolamento num ponto só.** Toda rota do painel lê o `EscopoDoPainel` das claims
-  (`Seguranca.Escopo`) e o passa às consultas, que o aplicam em `ConsultasDoPainel` — e só lá. Os
-  TOTAIS contam todas as máquinas da empresa; o dado INDIVIDUAL (lista de máquinas, filtro, log, nomes
-  nas ocorrências de erro, colaboradores, exportação) só as que consentiram. O filtro de uma máquina
+  (`Seguranca.Escopo`) e o passa às consultas, que o aplicam em `ConsultasDoPainel` — e só lá. O
+  gestor vê só as máquinas da empresa que CONSENTIRAM, e delas só o uso a partir do consentimento: os
+  totais diários desde o dia dele (`Maquinas.DadosDesde`), o log bruto e as ocorrências de erro desde o
+  instante (`ConsentiuEmUtc`). Sem consentimento, nada da máquina vai para a empresa, nem nos totais; a
+  exportação dos colaboradores corta no consentimento também para o admin. O filtro de uma máquina
   fora do escopo é 403, não uma lista vazia; um token sem escopo válido nunca vira "ver tudo".
+- **Assentos.** A adesão é contada antes de gravar e conferida DEPOIS: na corrida pelo último
+  assento, fica quem consentiu primeiro (e o id, no empate), e a excedente desfaz o próprio vínculo.
 - **Coleta auditada.** `GET /api/dashboard/exportar?formato=csv|json` devolve o uso por colaborador e
-  dia; cada exportação grava uma linha em `AcessosAosDados` (quem, quando, o quê e quantas linhas),
+  dia; cada exportação — e a do grupo de erro em JSON, que leva os nomes das máquinas — grava uma linha em `AcessosAosDados` (quem, quando, o quê e quantas linhas),
   expurgada com `Telemetria:RetencaoDias`. O CSV usa `;` e neutraliza a célula que começa com
   `= + - @` (o nome é texto do colaborador). A exportação e os cadastros têm limite por usuário
   (`Painel:ExportacoesPorMinuto`, padrão 10).

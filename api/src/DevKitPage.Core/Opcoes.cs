@@ -41,6 +41,13 @@ public sealed class OpcoesDeTelemetria
     /// registro por código (só o admin registra). Segredo: fora do repositório, como o JWT.
     /// </summary>
     public string CodigoDeRegistro { get; set; } = string.Empty;
+
+    /// <summary>
+    /// O teto GLOBAL de ocorrências de exceção guardadas (com o trace), somando todos os grupos (US #381):
+    /// além das 20 por grupo, uma máquina que gere assinaturas sem fim não enche a base. Passou, saem as
+    /// mais antigas; os grupos e as contagens (nos totais diários) ficam.
+    /// </summary>
+    public int MaxOcorrenciasGuardadas { get; set; } = 10_000;
 }
 
 /// <summary>O formulário público de pedido de demonstração (seção <c>Demonstracoes</c>).</summary>

@@ -101,7 +101,33 @@ public sealed class Maquinas(DevKitPageDb db, TimeProvider relogio) : IMaquinas
             (empresa, adesao) = await AderirAsync(maquina, codigoEmpresa, colaborador, ct);
 
         await db.SaveChangesAsync(ct);
+
+        // O ÚLTIMO assento disputado por duas adesões ao mesmo tempo: as duas passaram na contagem antes
+        // de gravar. Depois de gravar, a ordem de consentimento decide — fica quem chegou primeiro, e a
+        // que passou do teto desfaz o próprio vínculo (a regra é a mesma nos dois processos, então só
+        // a excedente sai).
+        if (maquina.EmpresaId is { } vinculada && codigoEmpresa is not null && !await DentroDosAssentosAsync(maquina, vinculada, ct))
+        {
+            var nome = empresa;
+            Desvincular(maquina);
+            await db.SaveChangesAsync(ct);
+            (empresa, adesao) = (null, $"A empresa {nome} não tem assento livre: a máquina continua anônima. Fale com o gestor.");
+        }
+
         return new RegistroDaMaquina(chave, empresa, adesao);
+    }
+
+    /// <summary>A máquina está entre as N primeiras da empresa pela ordem de consentimento (e o id, no empate)?</summary>
+    private async Task<bool> DentroDosAssentosAsync(Maquina maquina, int empresaId, CancellationToken ct)
+    {
+        var assentos = await db.Empresas.Where(e => e.Id == empresaId).Select(e => e.Assentos).FirstAsync(ct);
+        var primeiras = await db.Maquinas.AsNoTracking()
+            .Where(m => m.EmpresaId == empresaId && m.ConsentiuEmUtc != null)
+            .OrderBy(m => m.ConsentiuEmUtc).ThenBy(m => m.Id)
+            .Take(assentos)
+            .Select(m => m.Id)
+            .ToListAsync(ct);
+        return primeiras.Contains(maquina.Id);
     }
 
     /// <summary>
@@ -133,7 +159,12 @@ public sealed class Maquinas(DevKitPageDb db, TimeProvider relogio) : IMaquinas
         }
 
         if (maquina.EmpresaId != empresa.Id || maquina.ConsentiuEmUtc is null)
+        {
+            // O consentimento vale daqui em diante: o uso anterior não vai para o gestor.
             maquina.ConsentiuEmUtc = relogio.GetUtcNow().UtcDateTime;
+            maquina.DadosDesde = DateOnly.FromDateTime(maquina.ConsentiuEmUtc.Value);
+        }
+
         maquina.EmpresaId = empresa.Id;
         maquina.Colaborador = ValidadorDeEmpresa.Colaborador(colaborador);
         return (empresa.Nome, $"Vinculada à empresa {empresa.Nome}: o gestor vê o uso desta máquina.");
@@ -144,6 +175,7 @@ public sealed class Maquinas(DevKitPageDb db, TimeProvider relogio) : IMaquinas
         maquina.EmpresaId = null;
         maquina.Colaborador = string.Empty;
         maquina.ConsentiuEmUtc = null;
+        maquina.DadosDesde = null;
     }
 
     public Task<Maquina?> AutenticarAsync(string chave, CancellationToken ct)
