@@ -8,12 +8,19 @@ import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, s
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
-/** O texto de um arquivo baixado (o Blob do jsdom não tem `text()`). */
-const lerTexto = (blob: Blob) => new Promise<string>((pronto) => {
-  const leitor = new FileReader();
-  leitor.onload = () => pronto(String(leitor.result));
-  leitor.readAsText(blob);
-});
+/**
+ * O texto de um arquivo baixado. O Blob pode vir de dois lugares conforme o Node: o do `fetch`
+ * (undici, que tem `text()` mas o FileReader do jsdom recusa) ou o do jsdom (sem `text()`, lido pelo
+ * FileReader) — no CI (Linux) é o primeiro, no Windows já foi o segundo.
+ */
+const lerTexto = (blob: Blob): Promise<string> => {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise<string>((pronto) => {
+    const leitor = new FileReader();
+    leitor.onload = () => pronto(String(leitor.result));
+    leitor.readAsText(blob);
+  });
+};
 
 /** Abre o dashboard e o detalhe do grupo de exceção da fixture. */
 async function abrirOGrupo(sessao = tokenValido()) {
