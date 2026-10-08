@@ -101,3 +101,28 @@ public sealed record GrupoDeErroDetalhe(
 
 /// <summary>A reação a um grupo: o estado novo e, ao resolver, a versão da correção.</summary>
 public sealed record AlterarEstadoDoGrupo(string Estado, string? Versao);
+
+/// <summary>
+/// O ROI de um work item numa máquina (US #387): a foto MAIS RECENTE que o dev.kit dela mandou. O mesmo
+/// item calculado em duas máquinas são duas linhas — cada uma é o trabalho daquela máquina.
+/// </summary>
+/// <param name="MaquinaId">O id interno da máquina (o do filtro).</param>
+/// <param name="Apelido">O apelido da máquina.</param>
+/// <param name="Colaborador">O nome que o colaborador informou no dev.kit (vazio na máquina anônima).</param>
+/// <param name="HorasPorTurno">Horas sobre turnos do agente; nulo sem turno (a tela mostra um traço).</param>
+/// <param name="LeadTimeDias">Da criação ao encerramento; nulo enquanto o item está aberto.</param>
+/// <param name="AtualizadoEm">O <c>em</c> do evento que trouxe a foto — quando o dev.kit calculou.</param>
+public sealed record RoiDoWorkItem(
+    int MaquinaId, string Apelido, string Colaborador, int WorkItem, string Tipo, string Estado, DateOnly De, DateOnly Ate,
+    int TurnosDoAgente, int Sessoes, decimal Horas, decimal HorasNoBoard, decimal? HorasNoTimesheet, decimal? HorasPorTurno,
+    double? LeadTimeDias, bool Aberto, int PullRequests, int PullRequestsMergeadas, DateTimeOffset AtualizadoEm);
+
+/// <summary>Os totais do ROI no período e no escopo (de TODAS as fotos, e não só das devolvidas na lista).</summary>
+/// <param name="Itens">Fotos (máquina, work item) no período.</param>
+/// <param name="LeadTimeMedioDias">A média do lead time dos itens ENCERRADOS; nula sem nenhum.</param>
+public sealed record RoiTotais(
+    int Itens, long Turnos, decimal Horas, double? LeadTimeMedioDias, long PullRequests, long PullRequestsMergeadas);
+
+/// <summary>O painel de ROI por work item (US #387): as fotos mais recentes primeiro, e os totais.</summary>
+/// <param name="Itens">No máximo as <c>ConsultasDoPainel.RoiMaximosNaLista</c> mais recentes.</param>
+public sealed record RoiResposta(DateOnly De, DateOnly Ate, IReadOnlyList<RoiDoWorkItem> Itens, RoiTotais Totais);

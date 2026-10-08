@@ -6,6 +6,7 @@ import { salvarArquivo } from '../arquivos';
 import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
+import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
 import { formatar, ultimosDias } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -27,7 +28,7 @@ interface OpcaoDoFiltro {
 /**
  * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo, os KPIs
  * de QUANTIDADE (com as máquinas ativas e registradas) e de QUALIDADE, a série diária, as falhas por
- * causa, as exceções não classificadas com o trace e a reação (US #381), o log paginado e os pedidos
+ * causa, o ROI por work item (US #387), as exceções não classificadas com o trace e a reação (US #381), o log paginado e os pedidos
  * de demonstração da landing (fora do filtro: não são telemetria). Um 401 da
  * API (token vencido) encerra a sessão e volta ao login.
  */
@@ -166,6 +167,8 @@ export function Dashboard() {
                 pontos={ql.falhasPorCausa.map((c) => ({ rotulo: c.causa, valor: c.quantidade }))}
               />
             </section>
+
+            <RoiPorWorkItem token={token} filtro={filtro} aoFalhar={tratar} />
 
             <ExcecoesNaoClassificadas token={token} filtro={filtro} podeReagir={ehAdmin} aoFalhar={tratar} />
 

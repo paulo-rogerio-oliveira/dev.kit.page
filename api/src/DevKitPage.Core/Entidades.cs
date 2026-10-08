@@ -202,6 +202,39 @@ public sealed class OcorrenciaDeErro
 }
 
 /// <summary>
+/// A FOTO do ROI de um work item numa máquina (US #387): uma linha por (<see cref="MaquinaId"/>,
+/// <see cref="WorkItemId"/>), substituída na ingestão só por um <c>RoiCalculado</c> MAIS NOVO
+/// (<see cref="EmUtc"/>) — o reenvio ou um evento antigo que chegue atrasado não a volta para trás.
+/// Não é expurgada com os brutos: é o estado atual do item, e não um histórico.
+/// </summary>
+public sealed class RoiDeWorkItem
+{
+    public long Id { get; set; }
+    public int MaquinaId { get; set; }
+    public Maquina? Maquina { get; set; }
+    public int WorkItemId { get; set; }
+    public string Tipo { get; set; } = string.Empty;
+    public string Estado { get; set; } = string.Empty;
+    public DateOnly De { get; set; }
+    public DateOnly Ate { get; set; }
+    public int TurnosDoAgente { get; set; }
+    public int Sessoes { get; set; }
+    public decimal Horas { get; set; }
+    public decimal HorasNoBoard { get; set; }
+    public decimal? HorasNoTimesheet { get; set; }
+    public double? LeadTimeDias { get; set; }
+    public bool Aberto { get; set; }
+    public int PullRequests { get; set; }
+    public int PullRequestsMergeadas { get; set; }
+
+    /// <summary>O <c>em</c> do evento que trouxe a foto: é por ele que "o mais recente vence".</summary>
+    public DateTime EmUtc { get; set; }
+
+    /// <summary>O evento que trouxe a foto (para conferir de onde ela veio).</summary>
+    public string EventId { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// O total CONSOLIDADO de um tipo (e recorte) por máquina e dia. Atualizado na ingestão, junto com
 /// o evento bruto, e nunca tocado pelo expurgo: é por isso que o histórico do dashboard sobrevive à
 /// retenção dos eventos.

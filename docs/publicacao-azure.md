@@ -122,6 +122,12 @@ Rode também `api/scripts/sqlserver/Empresas.sql` (idempotente): cria `Empresas`
 acrescenta as colunas de papel/empresa em `Usuarios` e de adesão em `Maquinas`. O limite das
 exportações por usuário é `Painel__ExportacoesPorMinuto` (padrão 10).
 
+### ROI por work item (US #387)
+
+Rode também `api/scripts/sqlserver/RoiDeWorkItem.sql` (idempotente): cria `RoisDeWorkItem`, a foto do
+ROI por (máquina, work item). Sem a tabela, o lote que traz um `RoiCalculado` com o campo `roi` falha
+com 500 — e o dev.kit o reenvia até ela existir, sem perder nada da fila local.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

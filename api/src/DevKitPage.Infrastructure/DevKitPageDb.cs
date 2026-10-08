@@ -5,7 +5,7 @@ namespace DevKitPage.Infrastructure;
 
 /// <summary>
 /// A base do dev.kit.page: usuários, máquinas, eventos brutos, totais diários, grupos e ocorrências de
-/// exceção não classificada e pedidos de demonstração. As datas vão em
+/// exceção não classificada, fotos do ROI por work item e pedidos de demonstração. As datas vão em
 /// UTC (<see cref="DateTime"/>) — o SQLite não compara <see cref="DateTimeOffset"/> no SQL, e a
 /// API converte na borda.
 /// </summary>
@@ -20,6 +20,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<OcorrenciaDeErro> OcorrenciasDeErro => Set<OcorrenciaDeErro>();
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<AcessoAosDados> AcessosAosDados => Set<AcessoAosDados>();
+    public DbSet<RoiDeWorkItem> RoisDeWorkItem => Set<RoiDeWorkItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -115,6 +116,23 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(o => o.EmUtc);
             e.HasOne(o => o.Grupo).WithMany().HasForeignKey(o => o.GrupoId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(o => o.Maquina).WithMany().HasForeignKey(o => o.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A foto do ROI por work item (US #387): UMA por (máquina, item) — o índice único é o que garante
+        // que o upsert da ingestão nunca deixa duas. No Azure SQL a tabela vem de
+        // api/scripts/sqlserver/RoiDeWorkItem.sql.
+        modelBuilder.Entity<RoiDeWorkItem>(e =>
+        {
+            e.ToTable("RoisDeWorkItem");
+            e.Property(r => r.Tipo).HasMaxLength(RegrasDeRoi.TamanhoMaximoDoTexto);
+            e.Property(r => r.Estado).HasMaxLength(RegrasDeRoi.TamanhoMaximoDoTexto);
+            e.Property(r => r.Horas).HasPrecision(10, 2);
+            e.Property(r => r.HorasNoBoard).HasPrecision(10, 2);
+            e.Property(r => r.HorasNoTimesheet).HasPrecision(10, 2);
+            e.Property(r => r.EventId).HasMaxLength(64);
+            e.HasIndex(r => new { r.MaquinaId, r.WorkItemId }).IsUnique();
+            e.HasIndex(r => r.EmUtc);
+            e.HasOne(r => r.Maquina).WithMany().HasForeignKey(r => r.MaquinaId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Sem relação com a telemetria. No Azure SQL a tabela nasce do script

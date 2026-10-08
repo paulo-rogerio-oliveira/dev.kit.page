@@ -214,6 +214,22 @@ input, select {
 .barras-horizontais .trilho { height: 12px; }
 .barras-horizontais .barra { display: block; height: 100%; background: var(--serie-1); border-radius: 0 4px 4px 0; min-width: 2px; }
 
+/* ROI por work item (US #387): uma coluna por medida, com a sua escala; a linha inteira é o alvo do hover. */
+.barras-lado-a-lado { display: flex; flex-direction: column; gap: 6px; }
+.barras-lado-a-lado .cabecalho, .barras-lado-a-lado .linha { display: grid; gap: 16px; align-items: center; }
+.barras-lado-a-lado .cabecalho { color: var(--texto-2); font-size: 0.8rem; font-weight: 600; }
+.barras-lado-a-lado .linha { position: relative; padding: 4px 0; border-radius: 6px; }
+.barras-lado-a-lado .linha.em-foco { background: var(--grade); }
+.barras-lado-a-lado .rotulo { color: var(--texto); font-size: 0.9rem; font-weight: 600; display: flex; flex-direction: column; }
+.barras-lado-a-lado .rotulo small { color: var(--texto-mudo); font-weight: 400; font-size: 0.75rem; }
+.barras-lado-a-lado .celula { display: grid; grid-template-columns: 1fr 64px; gap: 8px; align-items: center; }
+.barras-lado-a-lado .trilho { height: 12px; }
+.barras-lado-a-lado .barra { display: block; height: 100%; background: var(--serie-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.barras-lado-a-lado .numero { color: var(--texto-2); font-size: 0.85rem; }
+.barras-lado-a-lado .dica { top: auto; bottom: calc(100% + 2px); left: 50%; z-index: 1; }
+.estado-encerrado { color: var(--texto-2); }
+.estado-aberto { font-weight: 600; }
+
 .tabela { width: 100%; border-collapse: collapse; background: var(--superficie); font-size: 0.9rem; }
 .tabela th, .tabela td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grade); }
 .tabela th { color: var(--texto-2); font-weight: 600; }
