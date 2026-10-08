@@ -15,7 +15,18 @@ rota própria — há máquinas instaladas falando v1.
 - Aceita quem apresenta o `Telemetria:CodigoDeRegistro` configurado, **ou** um JWT de admin (sem
   troca de senha pendente). Sem nenhum dos dois: **401**.
 - Resposta **200** `{ "chave": "…" }` — a chave é devolvida UMA vez; a API guarda só o hash.
-- Registrar de novo a mesma máquina **gira** a chave (o dev.kit faz isso quando a dele deixa de valer).
+- Registrar de novo a mesma máquina **gira** a chave — e só vale com a **chave atual** no cabeçalho
+  `X-Machine-Key` (ou com o JWT do admin). Sem ela, **409**: o código de registro é público, e sem
+  isto qualquer um giraria a chave de outra máquina ou mexeria na adesão dela (US #381). O dev.kit que
+  perdeu a chave recebe o 409, gera outro id anônimo e se registra como máquina nova.
+- **Adesão a uma empresa (US #381, campos opcionais):** `codigoEmpresa` e `colaborador`, que o
+  dev.kit só manda depois de o colaborador aceitar o aviso de coleta. Ausentes (o dev.kit antigo), o
+  vínculo fica como está; `codigoEmpresa` vazio o desfaz. A resposta ganha `empresa` (a empresa
+  vinculada, ou nulo) e `adesao` (o que aconteceu com o código: vinculada, desconhecido, sem assento).
+
+```json
+{ "maquinaId": "3f2b…", "versaoDevKit": "1.5.0", "codigoRegistro": "…", "codigoEmpresa": "DK-7QH4-M2XA", "colaborador": "Ana Souza" }
+```
 
 ## 2. Enviar um lote — `POST /api/telemetria/lote`
 
@@ -56,11 +67,34 @@ novo não quebra uma API mais velha.
 | `ArquivoAlterado` | — | — | arquivos (quantidade = arquivos) |
 | `ObjetivoAvaliado` | — | nota 0–100 | nota média dos avaliadores |
 | `ObjetivoCumprido` / `ObjetivoRecusado` | — | — | objetivos aceitos × recusados |
+| `ExcecaoNaoClassificada` (US #381) | a assinatura (a API a usa como recorte) | — | exceções sem causa conhecida, agrupadas por assinatura |
+
+### Os campos opcionais da exceção (US #381)
+
+O `ExcecaoNaoClassificada` leva, além dos campos de todo evento, dois campos **opcionais** — o v1 não
+muda de versão, porque acrescentar campo opcional não quebra ninguém:
+
+```json
+{ "eventId": "…", "tipo": "ExcecaoNaoClassificada", "sessaoId": "a7d0…", "quantidade": 1,
+  "valor": null, "detalhe": "9f2c41d0a7b3e816", "em": "2026-10-07T13:01:07Z",
+  "trace": "System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.X.Y() linha 42",
+  "assinatura": "9f2c41d0a7b3e816" }
+```
+
+- `trace`: o tipo da exceção (ou o texto da falha do turno) e os quadros `Namespace.Tipo.Metodo` com a
+  linha, **já sanitizado no dev.kit** (`TraceSanitizado`): sem caminhos, e-mails, URLs nem GUIDs. Até
+  8 KB — o que passar é cortado. A API mascara de novo antes de gravar (defesa em profundidade).
+- `assinatura`: a impressão digital (o tipo e os primeiros quadros do dev.kit, sem a linha) que agrupa
+  as ocorrências. Ausente, a API deriva uma do trace.
+- Um dev.kit antigo não manda os campos (nem o tipo), e uma API antiga ignora o tipo desconhecido.
+
+São enviados só com o MESMO opt-in de *Configurações → Telemetria de uso*: não há chave nova.
 
 ## O que NÃO é coletado
 
 Caminhos de pasta, nomes de repositório ou de cliente, argumentos de comando, o texto do prompt e
-das respostas, código, e-mail e o usuário do Windows. A máquina é um GUID gerado no dev.kit, nunca o
+das respostas, código, e-mail e o usuário do Windows. O trace da exceção não classificada vai sem
+caminhos, e-mails, URLs nem GUIDs — só o tipo, a mensagem mascarada e os quadros com a linha. A máquina é um GUID gerado no dev.kit, nunca o
 hostname. A sessão é o id interno da task no dev.kit.
 
 ## No dev.kit

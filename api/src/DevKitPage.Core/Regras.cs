@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using DevKitPage.Contracts.V1;
 
 namespace DevKitPage.Core;
@@ -152,6 +153,273 @@ public readonly record struct Periodo(DateOnly De, DateOnly Ate)
         var fim = ate ?? hoje;
         var inicio = de ?? fim.AddDays(-(DiasPadrao - 1));
         return inicio <= fim ? new Periodo(inicio, fim) : new Periodo(fim, inicio);
+    }
+}
+
+/// <summary>
+/// As regras das exceções não classificadas (US #381): o limite e a máscara do trace, a assinatura,
+/// as transições de estado e a regressão por versão.
+/// <para>
+/// O trace chega JÁ sanitizado pelo dev.kit (<c>TraceSanitizado</c>, no git.kit); a máscara daqui é
+/// a DEFESA EM PROFUNDIDADE — um dev.kit com defeito no sanitizador não grava caminho, e-mail nem
+/// URL no banco do dashboard. O <see cref="ValidadorDeLote.TamanhoMaximoDoTexto"/> do recorte não
+/// muda: o trace tem campo e limite próprios.
+/// </para>
+/// </summary>
+public static partial class RegrasDeErro
+{
+    /// <summary>O tamanho máximo do trace guardado (8 KB); o que passar é cortado, não recusado.</summary>
+    public const int TamanhoMaximoDoTrace = 8192;
+
+    /// <summary>O tamanho máximo da assinatura.</summary>
+    public const int TamanhoMaximoDaAssinatura = 64;
+
+    /// <summary>O tamanho máximo da versão informada ao resolver.</summary>
+    public const int TamanhoMaximoDaVersao = 50;
+
+    /// <summary>Quantas ocorrências (com o trace) cada grupo guarda: as mais recentes.</summary>
+    public const int OcorrenciasGuardadasPorGrupo = 20;
+
+    /// <summary>O trace mascarado e cortado no tamanho que o banco guarda.</summary>
+    public static string Mascarar(string? trace)
+    {
+        var texto = (trace ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Trim();
+        texto = Url().Replace(texto, "<url>");
+        texto = RemotoSsh().Replace(texto, "<url>");
+        texto = Email().Replace(texto, "<email>");
+        texto = CaminhoUnc().Replace(texto, "<caminho>");
+        texto = CaminhoWindows().Replace(texto, "<caminho>");
+        texto = CaminhoGitBash().Replace(texto, "<caminho>");
+        texto = CaminhoUnix().Replace(texto, "<caminho>");
+        texto = UsuarioDeDominio().Replace(texto, "<usuario>");
+        texto = Guid().Replace(texto, "<guid>");
+        return texto.Length <= TamanhoMaximoDoTrace ? texto : texto[..TamanhoMaximoDoTrace];
+    }
+
+    /// <summary>
+    /// A assinatura do evento — a que o dev.kit mandou ou, sem ela (um cliente com defeito), a
+    /// derivada do trace: o grupo nunca fica sem chave.
+    /// </summary>
+    public static string Assinatura(string? assinatura, string trace)
+    {
+        var informada = (assinatura ?? string.Empty).Trim();
+        if (informada.Length > 0)
+            return informada.Length <= TamanhoMaximoDaAssinatura ? informada : informada[..TamanhoMaximoDaAssinatura];
+
+        var base_ = string.Join('\n', trace.Split('\n').Take(6));
+        return "t" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(base_)))[..15];
+    }
+
+    /// <summary>O tipo da exceção: a primeira linha do trace até os dois-pontos.</summary>
+    public static string Tipo(string trace)
+    {
+        var primeira = trace.Split('\n', 2)[0].Trim();
+        var doisPontos = primeira.IndexOf(": ", StringComparison.Ordinal);
+        var tipo = doisPontos > 0 ? primeira[..doisPontos] : primeira;
+        tipo = tipo.Length == 0 ? "Exceção sem trace" : tipo;
+        return tipo.Length <= ValidadorDeLote.TamanhoMaximoDoTexto ? tipo : tipo[..ValidadorDeLote.TamanhoMaximoDoTexto];
+    }
+
+    /// <summary>O problema da reação pedida, ou vazio quando ela pode seguir.</summary>
+    public static string Validar(AlterarEstadoDoGrupo? pedido)
+    {
+        if (pedido is null || !EstadosDoGrupo.Escolhiveis.Contains(pedido.Estado ?? string.Empty))
+            return $"Estado inválido: use {string.Join(", ", EstadosDoGrupo.Escolhiveis)}.";
+        if ((pedido.Versao ?? string.Empty).Trim().Length > TamanhoMaximoDaVersao)
+            return $"A versão tem até {TamanhoMaximoDaVersao} caracteres.";
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// O estado do grupo quando chega uma ocorrência nova: o grupo RESOLVIDO que volta numa versão
+    /// igual ou maior que a da correção (ou resolvido sem versão) REGREDIU; os outros ficam como estão
+    /// — o ignorado continua ignorado, e é para isso que ele existe.
+    /// </summary>
+    public static string EstadoAoReceber(string estado, string? resolvidoNaVersao, string versaoDaOcorrencia)
+    {
+        if (estado != EstadosDoGrupo.Resolvido)
+            return estado;
+        if (string.IsNullOrWhiteSpace(resolvidoNaVersao))
+            return EstadosDoGrupo.Regrediu;
+        return CompararVersoes(versaoDaOcorrencia, resolvidoNaVersao) >= 0 ? EstadosDoGrupo.Regrediu : estado;
+    }
+
+    /// <summary>
+    /// Compara duas versões do dev.kit (<c>1.4.0</c>, <c>v1.10.2-beta</c>): numérica por parte, sem o
+    /// prefixo <c>v</c> e sem o sufixo; o que não é versão compara como texto.
+    /// </summary>
+    public static int CompararVersoes(string a, string b)
+    {
+        static Version? Ler(string texto)
+        {
+            var limpo = (texto ?? string.Empty).Trim().TrimStart('v', 'V').Split('-', '+', ' ')[0];
+            return Version.TryParse(limpo.Contains('.', StringComparison.Ordinal) ? limpo : limpo + ".0", out var versao) ? versao : null;
+        }
+
+        return Ler(a) is { } va && Ler(b) is { } vb ? va.CompareTo(vb) : string.CompareOrdinal(a, b);
+    }
+
+    [GeneratedRegex(@"\b(?:https?|ftp|ssh|git|file)://[^\s""'<>]+", RegexOptions.IgnoreCase)]
+    private static partial Regex Url();
+
+    [GeneratedRegex(@"\b[\w.\-]+@[\w.\-]+:[^\s""'<>]+")]
+    private static partial Regex RemotoSsh();
+
+    [GeneratedRegex(@"(?<![\w.<>])/[A-Za-z]/[^\s:""'<>|]*")]
+    private static partial Regex CaminhoGitBash();
+
+    [GeneratedRegex(@"\b[A-Za-z][\w.\-]*\\[A-Za-z][\w.$\-]*")]
+    private static partial Regex UsuarioDeDominio();
+
+    [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")]
+    private static partial Regex Email();
+
+    [GeneratedRegex(@"\\\\[^\s\\""'<>|]+[^\n""'<>|]*?(?=:line\b|:\d|[""'<>|\n]|$)", RegexOptions.Multiline)]
+    private static partial Regex CaminhoUnc();
+
+    [GeneratedRegex(@"\b[A-Za-z]:[\\/][^\n""'<>|]*?(?=:line\b|:\d|[""'<>|\n]|$)", RegexOptions.Multiline)]
+    private static partial Regex CaminhoWindows();
+
+    [GeneratedRegex(@"(?<![\w.<>])/(?:home|Users|usr|var|tmp|opt|mnt|root|etc|srv|private|Volumes)/[^\s:""'<>|]*")]
+    private static partial Regex CaminhoUnix();
+
+    [GeneratedRegex(@"\b[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}\b")]
+    private static partial Regex Guid();
+}
+
+/// <summary>
+/// O ESCOPO de quem consulta o painel (US #381) — o filtro ÚNICO de isolamento entre empresas. Toda
+/// consulta do painel o recebe e o aplica num ponto só (<c>ConsultasDoPainel</c>), em vez de cada
+/// rota repetir a regra por papel: o admin vê tudo; o gestor, só as máquinas da empresa dele — e,
+/// delas, o dado INDIVIDUAL só das que consentiram.
+/// </summary>
+/// <param name="EmpresaId">A empresa do gestor; nula é o admin (todas as máquinas).</param>
+public sealed record EscopoDoPainel(int? EmpresaId)
+{
+    /// <summary>O escopo do admin.</summary>
+    public static EscopoDoPainel Tudo { get; } = new((int?)null);
+
+    /// <summary>O admin vê tudo, inclusive as máquinas anônimas.</summary>
+    public bool EhAdmin => EmpresaId is null;
+
+    /// <summary>
+    /// O escopo das claims do token: <c>admin</c> é tudo; <c>gestor</c> com a empresa é ela. Qualquer
+    /// outra combinação (gestor sem empresa, papel desconhecido) é NULO — a rota responde 403, e um
+    /// token malformado nunca vira "ver tudo".
+    /// </summary>
+    public static EscopoDoPainel? DasClaims(string? papel, string? empresa)
+        => papel switch
+        {
+            Papeis.Admin => Tudo,
+            Papeis.Gestor when int.TryParse(empresa, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) && id > 0
+                => new EscopoDoPainel(id),
+            _ => null,
+        };
+}
+
+/// <summary>A validação de uma empresa nova e do convite de gestor, antes do banco.</summary>
+public static class ValidadorDeEmpresa
+{
+    public const int TamanhoMaximoDoNome = 100;
+    public const int TamanhoMaximoDoPlano = 50;
+    public const int TamanhoMaximoDoLogin = 100;
+    public const int TamanhoMaximoDoColaborador = 100;
+    public const int AssentosMaximos = 10_000;
+
+    /// <summary>Os erros por campo; vazio quando a empresa pode ser criada.</summary>
+    public static Dictionary<string, string[]> Validar(EmpresaNova? empresa)
+    {
+        var erros = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (empresa is null)
+        {
+            erros["empresa"] = ["O corpo do pedido é obrigatório."];
+            return erros;
+        }
+
+        var nome = (empresa.Nome ?? string.Empty).Trim();
+        if (nome.Length is 0 or > TamanhoMaximoDoNome)
+            erros["nome"] = [$"Informe o nome da empresa (até {TamanhoMaximoDoNome} caracteres)."];
+        if ((empresa.Plano ?? string.Empty).Trim().Length is 0 or > TamanhoMaximoDoPlano)
+            erros["plano"] = [$"Informe o plano (até {TamanhoMaximoDoPlano} caracteres)."];
+        if (empresa.Assentos is < 1 or > AssentosMaximos)
+            erros["assentos"] = [$"Os assentos vão de 1 a {AssentosMaximos}."];
+        return erros;
+    }
+
+    /// <summary>O problema do login do gestor, ou vazio.</summary>
+    public static string ValidarLogin(string? login)
+    {
+        var limpo = (login ?? string.Empty).Trim();
+        if (limpo.Length is 0 or > TamanhoMaximoDoLogin || limpo.Any(char.IsWhiteSpace))
+            return $"Informe o login do gestor, sem espaços (até {TamanhoMaximoDoLogin} caracteres).";
+        return string.Empty;
+    }
+
+    /// <summary>O nome do colaborador como o banco o guarda.</summary>
+    public static string Colaborador(string? nome)
+    {
+        var limpo = (nome ?? string.Empty).Trim();
+        return limpo.Length <= TamanhoMaximoDoColaborador ? limpo : limpo[..TamanhoMaximoDoColaborador];
+    }
+}
+
+/// <summary>O código de adesão de uma empresa: curto para ditar, sem letras que se confundem.</summary>
+public static class CodigoDeAdesao
+{
+    private const string Alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    /// <summary>Um código novo, como <c>DK-7QH4-M2XA</c>.</summary>
+    public static string Gerar()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(8);
+        var letras = bytes.Select(b => Alfabeto[b % Alfabeto.Length]).ToArray();
+        return $"DK-{new string(letras, 0, 4)}-{new string(letras, 4, 4)}";
+    }
+
+    /// <summary>O código como se compara: sem espaços e em maiúsculas (o colaborador digita de qualquer jeito).</summary>
+    public static string Normalizar(string? codigo) => (codigo ?? string.Empty).Trim().ToUpperInvariant();
+}
+
+/// <summary>
+/// A exportação em CSV (US #381): separador ponto e vírgula (o Excel em pt-BR abre direto), aspas
+/// quando preciso e a célula que começa com <c>= + - @</c> neutralizada com apóstrofo — o nome do
+/// colaborador é texto dele, e uma planilha não pode executar fórmula vinda dali.
+/// </summary>
+public static class ExportacaoCsv
+{
+    public static readonly string[] Cabecalho =
+    [
+        "colaborador", "maquina", "empresa", "dia", "sessoes", "turnos", "turnos_com_falha", "ferramentas",
+        "comandos_delegados", "arquivos_alterados", "objetivos_cumpridos", "objetivos_recusados",
+    ];
+
+    public static string Gerar(IEnumerable<LinhaExportada> linhas)
+    {
+        var texto = new StringBuilder();
+        texto.Append(string.Join(';', Cabecalho)).Append("\r\n");
+        foreach (var l in linhas)
+        {
+            string[] celulas =
+            [
+                Celula(l.Colaborador), Celula(l.Apelido), Celula(l.Empresa), l.Dia.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                Numero(l.Sessoes), Numero(l.Turnos), Numero(l.TurnosComFalha), Numero(l.Ferramentas),
+                Numero(l.ComandosDelegados), Numero(l.ArquivosAlterados), Numero(l.ObjetivosCumpridos), Numero(l.ObjetivosRecusados),
+            ];
+            texto.Append(string.Join(';', celulas)).Append("\r\n");
+        }
+
+        return texto.ToString();
+    }
+
+    private static string Numero(long valor) => valor.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A célula de texto: neutraliza fórmula e põe aspas quando há separador, aspas ou quebra.</summary>
+    public static string Celula(string? valor)
+    {
+        var texto = valor ?? string.Empty;
+        if (texto.Length > 0 && "=+-@\t\r".Contains(texto[0], StringComparison.Ordinal))
+            texto = "'" + texto;
+        return texto.IndexOfAny([';', '"', '\n', '\r']) >= 0 ? $"\"{texto.Replace("\"", "\"\"", StringComparison.Ordinal)}\"" : texto;
     }
 }
 

@@ -45,6 +45,11 @@ public static class Composicao
         servicos.AddScoped<IIngestaoDeTelemetria, IngestaoDeTelemetria>();
         servicos.AddScoped<IConsultasDoPainel, ConsultasDoPainel>();
         servicos.AddScoped<IExpurgoDeEventos, ExpurgoDeEventos>();
+        servicos.AddScoped<IReacaoAErros, ReacaoAErros>();
+        servicos.AddScoped<IExpurgoDeOcorrencias, ExpurgoDeOcorrencias>();
+        servicos.AddScoped<IEmpresas, Empresas>();
+        servicos.AddScoped<IAuditoriaDeAcesso, AuditoriaDeAcesso>();
+        servicos.AddScoped<IExpurgoDeAcessos, ExpurgoDeAcessos>();
         servicos.AddScoped<IPedidosDeDemonstracao, PedidosDeDemonstracao>();
         servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
         servicos.AddScoped<InicializadorDaBase>();
@@ -93,6 +98,7 @@ public sealed class InicializadorDaBase(
         {
             Login = login,
             EhAdmin = true,
+            Papel = Contracts.V1.Papeis.Admin,
             DeveTrocarSenha = true,
             CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
         };

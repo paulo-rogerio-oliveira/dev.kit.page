@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
-import type { EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import type { ColaboradorResumo, EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import { salvarArquivo } from '../arquivos';
+import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { formatar, ultimosDias } from '../formatar';
-import { useSessao } from '../sessao';
+import { papelDa, useSessao } from '../sessao';
 
 /** Os períodos oferecidos no filtro. */
 export const PERIODOS = [7, 30, 90] as const;
@@ -15,21 +18,31 @@ interface Dados {
   eventos: Pagina<EventoDoLog>;
 }
 
+/** Uma opção do filtro: a máquina (admin) ou o colaborador (gestor) — o valor é o id interno da máquina. */
+interface OpcaoDoFiltro {
+  id: number;
+  rotulo: string;
+}
+
 /**
  * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo, os KPIs
- * de QUANTIDADE e de QUALIDADE, a série diária, as falhas por causa, o log paginado e os pedidos
+ * de QUANTIDADE (com as máquinas ativas e registradas) e de QUALIDADE, a série diária, as falhas por
+ * causa, as exceções não classificadas com o trace e a reação (US #381), o log paginado e os pedidos
  * de demonstração da landing (fora do filtro: não são telemetria). Um 401 da
  * API (token vencido) encerra a sessão e volta ao login.
  */
 export function Dashboard() {
   const { sessao, sair } = useSessao();
   const token = sessao!.token;
+  const ehAdmin = papelDa(sessao!) === 'admin';
   const [dias, setDias] = useState<number>(30);
   const [maquina, setMaquina] = useState<number | null>(null);
+  const filtro = useMemo<Filtro>(() => ({ ...ultimosDias(dias), maquina }), [dias, maquina]);
   const [pagina, setPagina] = useState(1);
-  const [maquinas, setMaquinas] = useState<MaquinaResumo[]>([]);
+  const [opcoes, setOpcoes] = useState<OpcaoDoFiltro[] | null>(null);
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState('');
+  const [aviso, setAviso] = useState('');
   const [carregando, setCarregando] = useState(true);
 
   const tratar = useCallback((falha: unknown) => {
@@ -40,13 +53,27 @@ export function Dashboard() {
     setErro(falha instanceof Error ? falha.message : 'Falha ao consultar a API.');
   }, [sair]);
 
+  // O filtro do admin são as máquinas; o do gestor, os colaboradores que consentiram (US #381) —
+  // a API devolve ao gestor só a empresa dele, e o nome vem do que o colaborador informou no dev.kit.
   useEffect(() => {
-    api.maquinas(token).then(setMaquinas).catch(tratar);
-  }, [token, tratar]);
+    const carregar: Promise<OpcaoDoFiltro[]> = ehAdmin
+      ? api.maquinas(token).then((lista: MaquinaResumo[]) => lista.map((m) => ({ id: m.id, rotulo: `${m.apelido} (dev.kit ${m.versaoDevKit || '?'})` })))
+      : api.colaboradores(token).then((lista: ColaboradorResumo[]) => lista.map((c) => ({ id: c.maquinaId, rotulo: c.colaborador || c.apelido })));
+    carregar.then(setOpcoes).catch(tratar);
+  }, [token, ehAdmin, tratar]);
+
+  async function exportar() {
+    setAviso('');
+    try {
+      salvarArquivo(await api.exportar(token, filtro, 'csv'));
+      setAviso('Exportação baixada (CSV). O acesso fica registrado na trilha de auditoria.');
+    } catch (falha) {
+      tratar(falha);
+    }
+  }
 
   useEffect(() => {
     let vivo = true;
-    const filtro: Filtro = { ...ultimosDias(dias), maquina };
     setCarregando(true);
     setErro('');
     Promise.all([api.quantidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina)])
@@ -56,7 +83,7 @@ export function Dashboard() {
     return () => {
       vivo = false;
     };
-  }, [token, dias, maquina, pagina, tratar]);
+  }, [token, filtro, pagina, tratar]);
 
   const q = dados?.quantidade;
   const ql = dados?.qualidade;
@@ -67,7 +94,8 @@ export function Dashboard() {
       <header className="topo">
         <span className="marca">dev<span className="marca-ponto">.</span>kit <small>uso</small></span>
         <nav>
-          <span className="usuario">{sessao!.login}</span>
+          {ehAdmin && <Link className="botao botao-fantasma" to="/empresas">Empresas</Link>}
+          <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>
           <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
         </nav>
       </header>
@@ -75,10 +103,10 @@ export function Dashboard() {
       <main className="painel">
         <div className="filtros" role="search">
           <label>
-            Máquina
+            {ehAdmin ? 'Máquina' : 'Colaborador'}
             <select value={maquina ?? ''} onChange={(e) => { setPagina(1); setMaquina(e.target.value ? Number(e.target.value) : null); }}>
-              <option value="">Todas as máquinas</option>
-              {maquinas.map((m) => <option key={m.id} value={m.id}>{m.apelido} (dev.kit {m.versaoDevKit || '?'})</option>)}
+              <option value="">{ehAdmin ? 'Todas as máquinas' : 'Todos os colaboradores'}</option>
+              {(opcoes ?? []).map((o) => <option key={o.id} value={o.id}>{o.rotulo}</option>)}
             </select>
           </label>
           <label>
@@ -87,15 +115,18 @@ export function Dashboard() {
               {PERIODOS.map((p) => <option key={p} value={p}>Últimos {p} dias</option>)}
             </select>
           </label>
+          <button className="botao botao-fantasma" type="button" onClick={() => void exportar()}>Exportar uso (CSV)</button>
           {carregando && <span className="carregando" role="status">Carregando…</span>}
         </div>
 
         {erro && <p className="erro" role="alert">{erro}</p>}
+        {aviso && <p className="aviso" role="status">{aviso}</p>}
 
-        {!carregando && !erro && maquinas.length === 0 && (
+        {!carregando && !erro && opcoes?.length === 0 && (
           <p className="vazio" role="status">
-            Nenhuma máquina enviou telemetria ainda. No dev.kit, confira em Configurações → Telemetria de uso que o
-            envio está ligado, com a URL desta API e o código de registro.
+            {ehAdmin
+              ? 'Nenhuma máquina enviou telemetria ainda. No dev.kit, confira em Configurações → Telemetria de uso que o envio está ligado, com a URL desta API e o código de registro.'
+              : 'Nenhum colaborador aderiu ainda. Entregue ao time o código de adesão da empresa: no dev.kit, Configurações → Telemetria de uso → Código da empresa, com o aceite do aviso de coleta.'}
           </p>
         )}
 
@@ -104,6 +135,8 @@ export function Dashboard() {
             <section aria-labelledby="titulo-quantidade">
               <h2 id="titulo-quantidade">Quantidade de uso</h2>
               <div className="kpis">
+                <Kpi rotulo="Máquinas ativas" valor={formatar.inteiro(q.maquinasAtivas)} nota="com uso no período" />
+                <Kpi rotulo="Máquinas registradas" valor={formatar.inteiro(q.maquinasRegistradas)} />
                 <Kpi rotulo="Sessões" valor={formatar.inteiro(q.sessoes)} />
                 <Kpi rotulo="Turnos" valor={formatar.inteiro(q.turnos)} />
                 <Kpi rotulo="Fluxos" valor={formatar.inteiro(q.fluxos)} />
@@ -133,6 +166,8 @@ export function Dashboard() {
                 pontos={ql.falhasPorCausa.map((c) => ({ rotulo: c.causa, valor: c.quantidade }))}
               />
             </section>
+
+            <ExcecoesNaoClassificadas token={token} filtro={filtro} podeReagir={ehAdmin} aoFalhar={tratar} />
 
             <section aria-labelledby="titulo-eventos">
               <h2 id="titulo-eventos">Eventos recentes</h2>
@@ -168,7 +203,8 @@ export function Dashboard() {
           </>
         )}
 
-        <PedidosDeDemonstracao token={token} aoFalhar={tratar} />
+        {/* Contatos de venda da landing: só do admin (a API recusa ao gestor). */}
+        {ehAdmin && <PedidosDeDemonstracao token={token} aoFalhar={tratar} />}
       </main>
     </div>
   );

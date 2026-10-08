@@ -1,5 +1,6 @@
 import type {
-  DemonstracaoResumo, EventoDoLog, Filtro, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
+  ArquivoBaixado, ColaboradorResumo, DemonstracaoResumo, EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro,
+  GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
   PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta,
 } from './tipos';
 
@@ -18,8 +19,16 @@ export class ErroDaApi extends Error {
   }
 }
 
-async function chamar<T>(caminho: string, opcoes: { metodo?: string; corpo?: unknown; token?: string } = {}): Promise<T> {
-  const cabecalhos: Record<string, string> = { Accept: 'application/json' };
+interface Opcoes {
+  metodo?: string;
+  corpo?: unknown;
+  token?: string;
+  aceita?: string;
+}
+
+/** A requisição: o 2xx volta como está; o resto vira {@link ErroDaApi} com a mensagem do ProblemDetails. */
+async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
+  const cabecalhos: Record<string, string> = { Accept: opcoes.aceita ?? 'application/json' };
   if (opcoes.corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
 
@@ -42,9 +51,32 @@ async function chamar<T>(caminho: string, opcoes: { metodo?: string; corpo?: unk
     throw new ErroDaApi(resposta.status, mensagem, erros);
   }
 
-  // 204 (a exclusão): sem corpo.
+  return resposta;
+}
+
+async function chamar<T>(caminho: string, opcoes: Opcoes = {}): Promise<T> {
+  const resposta = await requisitar(caminho, opcoes);
+  // 204 (a exclusão, a reação ao erro): sem corpo.
   if (resposta.status === 204) return undefined as T;
   return (await resposta.json()) as T;
+}
+
+/**
+ * O nome do arquivo do Content-Disposition (o `filename*` UTF-8 primeiro). A API o expõe ao CORS;
+ * sem ele (um proxy que o tira), vale o nome padrão de quem pediu.
+ */
+export function nomeDoArquivo(disposicao: string | null, padrao: string): string {
+  if (!disposicao) return padrao;
+  const estendido = /filename\*=UTF-8''([^;]+)/i.exec(disposicao);
+  if (estendido) return decodeURIComponent(estendido[1].trim());
+  const simples = /filename="?([^";]+)"?/i.exec(disposicao);
+  return simples ? simples[1].trim() : padrao;
+}
+
+/** Baixa um arquivo da API (a exportação): o conteúdo e o nome que ela sugeriu. */
+async function baixar(caminho: string, token: string, padrao: string): Promise<ArquivoBaixado> {
+  const resposta = await requisitar(caminho, { token, aceita: '*/*' });
+  return { conteudo: await resposta.blob(), nome: nomeDoArquivo(resposta.headers.get('Content-Disposition'), padrao) };
 }
 
 function consulta(filtro: Filtro, extra: Record<string, string> = {}): string {
@@ -79,4 +111,31 @@ export const api = {
 
   excluirDemonstracao: (token: string, id: number) =>
     chamar<void>(`/api/dashboard/demonstracoes/${id}`, { metodo: 'DELETE', token }),
+
+  // As exceções não classificadas (US #381).
+  erros: (token: string, filtro: Filtro, pagina: number, tamanho = 10) =>
+    chamar<Pagina<GrupoDeErroResumo>>(`/api/dashboard/erros?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+
+  erro: (token: string, id: number, filtro: Filtro) =>
+    chamar<GrupoDeErroDetalhe>(`/api/dashboard/erros/${id}?${new URLSearchParams({ de: filtro.de, ate: filtro.ate })}`, { token }),
+
+  alterarEstado: (token: string, id: number, estado: Exclude<EstadoDoGrupo, 'Regrediu'>, versao: string | null = null) =>
+    chamar<void>(`/api/dashboard/erros/${id}/estado`, { metodo: 'PUT', corpo: { estado, versao }, token }),
+
+  exportarErro: (token: string, id: number, filtro: Filtro) =>
+    baixar(`/api/dashboard/erros/${id}/exportar?${new URLSearchParams({ de: filtro.de, ate: filtro.ate })}`, token, `excecao-${id}.json`),
+
+  // O plano empresarial (US #381).
+  colaboradores: (token: string) => chamar<ColaboradorResumo[]>('/api/dashboard/colaboradores', { token }),
+
+  exportar: (token: string, filtro: Filtro, formato: 'csv' | 'json' = 'csv') =>
+    baixar(`/api/dashboard/exportar?${consulta(filtro, { formato })}`, token, `uso-dos-colaboradores.${formato}`),
+
+  empresas: (token: string) => chamar<EmpresaResumo[]>('/api/empresas', { token }),
+
+  criarEmpresa: (token: string, empresa: EmpresaNova) =>
+    chamar<EmpresaResumo>('/api/empresas', { metodo: 'POST', corpo: empresa, token }),
+
+  convidarGestor: (token: string, empresa: number, login: string) =>
+    chamar<GestorCriado>(`/api/empresas/${empresa}/gestores`, { metodo: 'POST', corpo: { login }, token }),
 };

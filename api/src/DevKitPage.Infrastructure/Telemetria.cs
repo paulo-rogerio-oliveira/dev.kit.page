@@ -11,7 +11,7 @@ namespace DevKitPage.Infrastructure;
 /// O total diário é consolidado NA MESMA transação do evento bruto — por isso o expurgo dos brutos
 /// nunca muda o histórico do dashboard.
 /// </summary>
-public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) : IIngestaoDeTelemetria
+public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDeTelemetria> opcoes) : IIngestaoDeTelemetria
 {
     public async Task<BatchResultV1> RegistrarAsync(int maquinaId, TelemetryBatchV1 lote, CancellationToken ct)
     {
@@ -39,9 +39,12 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
         var existentes = (await db.Eventos.Where(e => ids.Contains(e.EventId)).Select(e => e.EventId).ToListAsync(ct))
             .ToHashSet(StringComparer.Ordinal);
 
+        // A exceção não classificada (US #381) é recortada pela ASSINATURA: é ela que vira o Detalhe,
+        // e o total diário por (dia, tipo, assinatura) dá as ocorrências e as máquinas de cada grupo
+        // sem tabela de contagem nova — e sobrevive ao expurgo, como o resto do histórico.
         var novos = unicos
             .Where(e => !existentes.Contains(e.EventId.Trim()))
-            .Select(e => new EventoDeUso
+            .Select(e => (Fonte: e, Evento: new EventoDeUso
             {
                 EventId = e.EventId.Trim(),
                 MaquinaId = maquinaId,
@@ -49,16 +52,21 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
                 SessaoId = ValidadorDeLote.Cortar(e.SessaoId),
                 Quantidade = e.Quantidade,
                 Valor = e.Valor,
-                Detalhe = ValidadorDeLote.Cortar(e.Detalhe),
+                Detalhe = e.Tipo == TiposDeEvento.ExcecaoNaoClassificada
+                    ? RegrasDeErro.Assinatura(e.Assinatura, RegrasDeErro.Mascarar(e.Trace))
+                    : ValidadorDeLote.Cortar(e.Detalhe),
                 EmUtc = e.Em.UtcDateTime,
                 Dia = DateOnly.FromDateTime(e.Em.UtcDateTime),
                 RecebidoEmUtc = agora,
-            })
+            }))
             .ToList();
+        var eventos = novos.Select(n => n.Evento).ToList();
+        var versao = Versao(lote.VersaoDevKit);
 
         await using var transacao = await db.Database.BeginTransactionAsync(ct);
-        db.Eventos.AddRange(novos);
-        await ConsolidarAsync(maquinaId, novos, ct);
+        db.Eventos.AddRange(eventos);
+        await ConsolidarAsync(maquinaId, eventos, ct);
+        var grupos = await AgruparErrosAsync(maquinaId, versao, novos.Where(n => n.Evento.Tipo == TiposDeEvento.ExcecaoNaoClassificada).ToList(), ct);
 
         var maquina = await db.Maquinas.FirstAsync(m => m.Id == maquinaId, ct);
         maquina.UltimoEnvioEmUtc = agora;
@@ -66,9 +74,129 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
             maquina.VersaoDevKit = ValidadorDeLote.Cortar(lote.VersaoDevKit);
 
         await db.SaveChangesAsync(ct);
+        await ManterSoAsUltimasOcorrenciasAsync(maquinaId, grupos, ct);
         await transacao.CommitAsync(ct);
 
         return new BatchResultV1(lote.Eventos.Count, novos.Count, conhecidos.Count - novos.Count, lote.Eventos.Count - conhecidos.Count);
+    }
+
+    /// <summary>A versão do dev.kit no tamanho da coluna dos grupos e das ocorrências.</summary>
+    private static string Versao(string? versao)
+    {
+        var limpa = (versao ?? string.Empty).Trim();
+        return limpa.Length <= 50 ? limpa : limpa[..50];
+    }
+
+    /// <summary>
+    /// O upsert dos grupos de exceção (US #381), na MESMA transação do evento: o grupo novo nasce
+    /// <c>Novo</c>; o que já existe avança o último visto e, se estava resolvido e voltou numa versão
+    /// igual ou maior que a da correção, REGRIDE. Cada ocorrência guarda o trace mascarado de novo
+    /// (<see cref="RegrasDeErro.Mascarar"/> — a defesa em profundidade).
+    /// </summary>
+    private async Task<IReadOnlyCollection<GrupoDeErro>> AgruparErrosAsync(
+        int maquinaId, string versao, IReadOnlyCollection<(TelemetryEventV1 Fonte, EventoDeUso Evento)> excecoes, CancellationToken ct)
+    {
+        if (excecoes.Count == 0)
+            return Array.Empty<GrupoDeErro>();
+
+        var assinaturas = excecoes.Select(x => x.Evento.Detalhe).Distinct().ToList();
+        var grupos = await db.GruposDeErro.Where(g => assinaturas.Contains(g.Assinatura)).ToDictionaryAsync(g => g.Assinatura, StringComparer.Ordinal, ct);
+
+        foreach (var (fonte, evento) in excecoes.OrderBy(x => x.Evento.EmUtc))
+        {
+            var trace = RegrasDeErro.Mascarar(fonte.Trace);
+            if (!grupos.TryGetValue(evento.Detalhe, out var grupo))
+            {
+                grupo = new GrupoDeErro
+                {
+                    Assinatura = evento.Detalhe,
+                    Tipo = RegrasDeErro.Tipo(trace),
+                    Estado = EstadosDoGrupo.Novo,
+                    PrimeiraVersao = versao,
+                    UltimaVersao = versao,
+                    PrimeiroVistoEmUtc = evento.EmUtc,
+                    UltimoVistoEmUtc = evento.EmUtc,
+                };
+                db.GruposDeErro.Add(grupo);
+                grupos[grupo.Assinatura] = grupo;
+            }
+            else
+            {
+                grupo.Estado = RegrasDeErro.EstadoAoReceber(grupo.Estado, grupo.ResolvidoNaVersao, versao);
+                if (evento.EmUtc >= grupo.UltimoVistoEmUtc)
+                {
+                    grupo.UltimoVistoEmUtc = evento.EmUtc;
+                    grupo.UltimaVersao = versao;
+                }
+
+                if (evento.EmUtc < grupo.PrimeiroVistoEmUtc)
+                    grupo.PrimeiroVistoEmUtc = evento.EmUtc;
+            }
+
+            db.OcorrenciasDeErro.Add(new OcorrenciaDeErro
+            {
+                Grupo = grupo,
+                MaquinaId = maquinaId,
+                EventId = evento.EventId,
+                VersaoDevKit = versao,
+                Trace = trace,
+                EmUtc = evento.EmUtc,
+            });
+        }
+
+        return grupos.Values;
+    }
+
+    /// <summary>
+    /// Cada grupo guarda só as <see cref="RegrasDeErro.OcorrenciasGuardadasPorGrupo"/> ocorrências mais
+    /// recentes, cada empresa no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasPorEmpresa"/> e a base
+    /// inteira no máximo <see cref="OpcoesDeTelemetria.MaxOcorrenciasGuardadas"/>.
+    /// </summary>
+    private async Task ManterSoAsUltimasOcorrenciasAsync(int maquinaId, IReadOnlyCollection<GrupoDeErro> grupos, CancellationToken ct)
+    {
+        foreach (var grupo in grupos)
+        {
+            var sobrando = await db.OcorrenciasDeErro
+                .Where(o => o.GrupoId == grupo.Id)
+                .OrderByDescending(o => o.EmUtc).ThenByDescending(o => o.Id)
+                .Skip(RegrasDeErro.OcorrenciasGuardadasPorGrupo)
+                .Select(o => o.Id)
+                .ToListAsync(ct);
+            if (sobrando.Count > 0)
+                await db.OcorrenciasDeErro.Where(o => sobrando.Contains(o.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        if (grupos.Count == 0)
+            return;
+
+        // O teto POR EMPRESA primeiro (as máquinas anônimas são um grupo só): quem gera exceção em laço
+        // descarta as próprias ocorrências mais antigas, nunca as de outra empresa.
+        var empresa = await db.Maquinas.Where(m => m.Id == maquinaId).Select(m => m.EmpresaId).FirstAsync(ct);
+        var daEmpresa = db.OcorrenciasDeErro.Where(o => o.Maquina!.EmpresaId == empresa);
+        var tetoDaEmpresa = Math.Max(RegrasDeErro.OcorrenciasGuardadasPorGrupo, opcoes.Value.MaxOcorrenciasPorEmpresa);
+        var excedentesDaEmpresa = await daEmpresa.CountAsync(ct) - tetoDaEmpresa;
+        if (excedentesDaEmpresa > 0)
+        {
+            var antigasDaEmpresa = await daEmpresa
+                .OrderBy(o => o.EmUtc).ThenBy(o => o.Id)
+                .Take(excedentesDaEmpresa)
+                .Select(o => o.Id)
+                .ToListAsync(ct);
+            await db.OcorrenciasDeErro.Where(o => antigasDaEmpresa.Contains(o.Id)).ExecuteDeleteAsync(ct);
+        }
+
+        // O teto GLOBAL: muitas empresas juntas também não enchem a base. Saem as mais antigas de todas;
+        // os grupos e as contagens nos totais diários ficam.
+        var teto = Math.Max(RegrasDeErro.OcorrenciasGuardadasPorGrupo, opcoes.Value.MaxOcorrenciasGuardadas);
+        var excedentes = await db.OcorrenciasDeErro.CountAsync(ct) - teto;
+        if (excedentes <= 0)
+            return;
+        var maisAntigas = await db.OcorrenciasDeErro
+            .OrderBy(o => o.EmUtc).ThenBy(o => o.Id)
+            .Take(excedentes)
+            .Select(o => o.Id)
+            .ToListAsync(ct);
+        await db.OcorrenciasDeErro.Where(o => maisAntigas.Contains(o.Id)).ExecuteDeleteAsync(ct);
     }
 
     /// <summary>Soma os eventos NOVOS nos totais diários da máquina (cria a linha do dia que falta).</summary>
@@ -98,95 +226,6 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio) 
 }
 
 /// <summary>
-/// As consultas do dashboard. Os números saem dos TOTAIS DIÁRIOS, somados no banco (o
-/// <c>GroupBy</c> vira SQL); só o log de eventos lê os brutos.
-/// </summary>
-public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
-{
-    /// <summary>O teto de dias preenchidos na série (um período maior é cortado no início).</summary>
-    public const int DiasMaximosDaSerie = 400;
-
-    public async Task<IReadOnlyList<MaquinaResumo>> MaquinasAsync(CancellationToken ct)
-    {
-        var eventos = await db.TotaisDiarios
-            .GroupBy(t => t.MaquinaId)
-            .Select(g => new { MaquinaId = g.Key, Eventos = g.Sum(t => t.Eventos) })
-            .ToDictionaryAsync(x => x.MaquinaId, x => x.Eventos, ct);
-
-        var maquinas = await db.Maquinas.AsNoTracking().OrderBy(m => m.Apelido).ToListAsync(ct);
-        return maquinas
-            .Select(m => new MaquinaResumo(
-                m.Id, m.MaquinaId, m.Apelido, m.VersaoDevKit, DevKitPageDb.Utc(m.RegistradaEmUtc),
-                m.UltimoEnvioEmUtc is { } ultimo ? DevKitPageDb.Utc(ultimo) : null,
-                eventos.GetValueOrDefault(m.Id)))
-            .ToArray();
-    }
-
-    public async Task<QuantidadeResposta> QuantidadeAsync(Periodo periodo, int? maquina, CancellationToken ct)
-    {
-        var somas = await SomasAsync(periodo, maquina, ct);
-        long Quantidade(string tipo) => somas.Where(s => s.Tipo == tipo).Sum(s => s.Quantidade);
-        long Eventos(string tipo) => somas.Where(s => s.Tipo == tipo).Sum(s => s.Eventos);
-
-        var porDia = await Totais(periodo, maquina)
-            .GroupBy(t => new { t.Dia, t.Tipo })
-            .Select(g => new { g.Key.Dia, g.Key.Tipo, Quantidade = g.Sum(t => t.Quantidade), Eventos = g.Sum(t => t.Eventos) })
-            .ToListAsync(ct);
-
-        var inicio = periodo.Ate.AddDays(-(DiasMaximosDaSerie - 1)) > periodo.De ? periodo.Ate.AddDays(-(DiasMaximosDaSerie - 1)) : periodo.De;
-        var serie = new List<DiaDeUso>();
-        for (var dia = inicio; dia <= periodo.Ate; dia = dia.AddDays(1))
-        {
-            var doDia = porDia.Where(x => x.Dia == dia).ToList();
-            long Q(string tipo) => doDia.Where(x => x.Tipo == tipo).Sum(x => x.Quantidade);
-            long E(string tipo) => doDia.Where(x => x.Tipo == tipo).Sum(x => x.Eventos);
-            serie.Add(new DiaDeUso(dia, E(TiposDeEvento.SessaoIniciada), E(TiposDeEvento.TurnoExecutado), Q(TiposDeEvento.FluxoExecutado),
-                Q(TiposDeEvento.FerramentaAcionada), Q(TiposDeEvento.ComandoDelegado), Q(TiposDeEvento.ArquivoAlterado)));
-        }
-
-        return new QuantidadeResposta(
-            periodo.De, periodo.Ate, Eventos(TiposDeEvento.SessaoIniciada), Eventos(TiposDeEvento.TurnoExecutado),
-            Quantidade(TiposDeEvento.FluxoExecutado), Quantidade(TiposDeEvento.FerramentaAcionada),
-            Quantidade(TiposDeEvento.ComandoDelegado), Quantidade(TiposDeEvento.ArquivoAlterado), serie);
-    }
-
-    public async Task<QualidadeResposta> QualidadeAsync(Periodo periodo, int? maquina, CancellationToken ct)
-        => CalculoDeQualidade.Calcular(periodo, await SomasAsync(periodo, maquina, ct));
-
-    public async Task<Pagina<EventoDoLog>> EventosAsync(Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
-    {
-        pagina = Math.Max(1, pagina);
-        tamanho = Math.Clamp(tamanho, 1, 200);
-        var de = periodo.De.ToDateTime(TimeOnly.MinValue);
-        var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
-
-        var consulta = db.Eventos.AsNoTracking()
-            .Where(e => e.EmUtc >= de && e.EmUtc < ate && (maquina == null || e.MaquinaId == maquina));
-        var total = await consulta.CountAsync(ct);
-        var linhas = await consulta
-            .OrderByDescending(e => e.EmUtc).ThenByDescending(e => e.Id)
-            .Skip((pagina - 1) * tamanho).Take(tamanho)
-            .Select(e => new { e.EventId, e.MaquinaId, Apelido = e.Maquina!.Apelido, e.Tipo, e.SessaoId, e.Quantidade, e.Valor, e.Detalhe, e.EmUtc })
-            .ToListAsync(ct);
-
-        var itens = linhas
-            .Select(e => new EventoDoLog(e.EventId, e.MaquinaId, e.Apelido, e.Tipo, e.SessaoId, e.Quantidade, e.Valor, e.Detalhe, DevKitPageDb.Utc(e.EmUtc)))
-            .ToArray();
-        return new Pagina<EventoDoLog>(itens, total, pagina, tamanho);
-    }
-
-    private IQueryable<TotalDiario> Totais(Periodo periodo, int? maquina)
-        => db.TotaisDiarios.AsNoTracking()
-            .Where(t => t.Dia >= periodo.De && t.Dia <= periodo.Ate && (maquina == null || t.MaquinaId == maquina));
-
-    private async Task<IReadOnlyList<SomaPorTipo>> SomasAsync(Periodo periodo, int? maquina, CancellationToken ct)
-        => await Totais(periodo, maquina)
-            .GroupBy(t => new { t.Tipo, t.Detalhe })
-            .Select(g => new SomaPorTipo(g.Key.Tipo, g.Key.Detalhe, g.Sum(t => t.Quantidade), g.Sum(t => t.Eventos), g.Sum(t => t.Valor)))
-            .ToListAsync(ct);
-}
-
-/// <summary>
 /// O expurgo dos eventos brutos além de <see cref="OpcoesDeTelemetria.RetencaoDias"/>. Os totais
 /// diários não são tocados: já foram consolidados na ingestão.
 /// </summary>
@@ -196,5 +235,38 @@ public sealed class ExpurgoDeEventos(DevKitPageDb db, IOptions<OpcoesDeTelemetri
     {
         var corte = relogio.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, opcoes.Value.RetencaoDias));
         return db.Eventos.Where(e => e.EmUtc < corte).ExecuteDeleteAsync(ct);
+    }
+}
+
+/// <summary>
+/// A reação a um grupo de exceção (US #381). Resolver guarda a versão da correção — a base da
+/// regressão na ingestão —; qualquer outro estado a esquece.
+/// </summary>
+public sealed class ReacaoAErros(DevKitPageDb db) : IReacaoAErros
+{
+    public async Task<bool> AlterarEstadoAsync(long id, AlterarEstadoDoGrupo pedido, CancellationToken ct)
+    {
+        var grupo = await db.GruposDeErro.FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (grupo is null)
+            return false;
+
+        var versao = (pedido.Versao ?? string.Empty).Trim();
+        grupo.Estado = pedido.Estado;
+        grupo.ResolvidoNaVersao = pedido.Estado == EstadosDoGrupo.Resolvido && versao.Length > 0 ? versao : null;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+}
+
+/// <summary>
+/// O expurgo das ocorrências de erro (o trace de cada uma) além de <see cref="OpcoesDeTelemetria.RetencaoDias"/>.
+/// O grupo fica — com o estado da reação —, e as contagens vêm dos totais diários.
+/// </summary>
+public sealed class ExpurgoDeOcorrencias(DevKitPageDb db, IOptions<OpcoesDeTelemetria> opcoes, TimeProvider relogio) : IExpurgoDeOcorrencias
+{
+    public Task<int> ExpurgarAsync(CancellationToken ct)
+    {
+        var corte = relogio.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, opcoes.Value.RetencaoDias));
+        return db.OcorrenciasDeErro.Where(o => o.EmUtc < corte).ExecuteDeleteAsync(ct);
     }
 }

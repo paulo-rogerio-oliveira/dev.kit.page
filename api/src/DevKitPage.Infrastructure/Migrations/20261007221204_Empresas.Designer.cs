@@ -3,6 +3,7 @@ using System;
 using DevKitPage.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DevKitPage.Infrastructure.Migrations
 {
     [DbContext(typeof(DevKitPageDb))]
-    partial class DevKitPageDbModelSnapshot : ModelSnapshot
+    [Migration("20261007221204_Empresas")]
+    partial class Empresas
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -216,9 +219,6 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("ConsentiuEmUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("DadosDesde")
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("EmpresaId")

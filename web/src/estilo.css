@@ -139,6 +139,19 @@ input[aria-invalid='true'], textarea[aria-invalid='true'] { border-color: var(--
 
 .rodape { text-align: center; padding: 32px; color: var(--texto-2); border-top: 1px solid var(--borda); }
 
+/* Comparativo (US #381): a tabela rola no celular em vez de espremer as colunas. */
+.tabela-rolavel { overflow-x: auto; border: 1px solid var(--borda); border-radius: 12px; background: var(--superficie); }
+.comparativo { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.95rem; }
+.comparativo caption { caption-side: bottom; text-align: left; padding: 10px 16px; color: var(--texto-mudo); font-size: 0.85rem; }
+.comparativo th, .comparativo td { padding: 12px 16px; border-bottom: 1px solid var(--grade); text-align: center; }
+.comparativo th[scope='row'] { text-align: left; font-weight: 500; color: var(--texto); }
+.comparativo thead th { font-weight: 700; }
+.comparativo thead th:nth-child(2), .comparativo td:nth-child(2) { background: var(--primaria-tinta); }
+.comparativo .valor-sim { font-weight: 700; }
+.comparativo .valor-nao { color: var(--texto-mudo); }
+.comparativo .valor-parcial { color: var(--texto-2); font-style: italic; }
+.ctas-da-secao { margin-top: 24px; }
+
 @media (min-width: 760px) {
   .landing .topo { padding: 14px 32px; }
   .hero { grid-template-columns: 1fr 1.15fr; padding: 64px 32px; }
@@ -206,6 +219,29 @@ input, select {
 .tabela th { color: var(--texto-2); font-weight: 600; }
 .numero { text-align: right !important; font-variant-numeric: tabular-nums; }
 .paginacao { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-top: 10px; color: var(--texto-2); }
+
+/* Exceções não classificadas (US #381): a lista, o detalhe com o trace e as ações de reação. */
+.nota-da-secao { margin: -6px 0 12px; color: var(--texto-2); font-size: 0.9rem; }
+.link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--primaria); cursor: pointer; text-align: left; }
+.link:hover { text-decoration: underline; }
+.assinatura { display: block; color: var(--texto-mudo); font-family: ui-monospace, Consolas, monospace; font-size: 0.75rem; }
+.linha-aberta td { background: var(--primaria-tinta); }
+.estado { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; border: 1px solid var(--borda); }
+.estado-novo, .estado-regrediu { background: var(--primaria-tinta); color: var(--primaria-botao-hover); font-weight: 600; }
+.estado-resolvido { color: var(--texto-2); }
+.estado-ignorado { color: var(--texto-mudo); }
+.detalhe-do-erro { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; }
+.detalhe-do-erro h3 { margin: 0 0 4px; font-size: 1.05rem; }
+.detalhe-do-erro h4 { margin: 0; font-size: 0.95rem; }
+.detalhe-do-erro header p { margin: 0; color: var(--texto-2); font-size: 0.9rem; }
+.trace {
+  margin: 0; max-height: 320px; overflow: auto; padding: 12px 14px; border-radius: 8px;
+  background: #0d0d0d; color: #f1f1ee; font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre;
+}
+.trace:focus { outline: 2px solid var(--serie-1); outline-offset: 2px; }
+.acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.acoes .resolver { flex-direction: row; align-items: center; gap: 8px; }
+.acoes .resolver input { width: 110px; }
 
 @media (max-width: 760px) {
   .topo, .painel { padding-left: 16px; padding-right: 16px; }

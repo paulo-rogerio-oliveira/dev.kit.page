@@ -165,6 +165,78 @@ public sealed class ApiTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace((await peloAdmin.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!.Chave));
     }
 
+    private static TelemetryEventV1 Excecao(string id, string assinatura = "abc123")
+        => new(id, TiposDeEvento.ExcecaoNaoClassificada, "s1", 1, null, assinatura, Hoje,
+            "System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.Planejador.Escolher() linha 42", assinatura);
+
+    [Fact]
+    public async Task Lote_no_formato_antigo_continua_aceito_e_o_novo_tipo_entra_nos_grupos()
+    {
+        var maquina = await _api.MaquinaAsync("maq-1");
+
+        // O JSON de um dev.kit antigo: sem trace nem assinatura em evento nenhum.
+        var antigo = await maquina.PostAsync("/api/telemetria/lote", new StringContent(
+            """{"versao":"v1","maquinaId":"maq-1","versaoDevKit":"1.3.0","eventos":[{"eventId":"v1","tipo":"TurnoFalhou","sessaoId":"s","quantidade":1,"valor":null,"detalhe":"nao-classificada","em":"2026-10-03T10:00:00Z"}]}""",
+            System.Text.Encoding.UTF8, "application/json"));
+        var novo = await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-1", Excecao("x1")));
+
+        Assert.Equal(HttpStatusCode.Accepted, antigo.StatusCode);
+        Assert.Equal(new BatchResultV1(1, 1, 0, 0), await novo.Content.ReadFromJsonAsync<BatchResultV1>());
+        var admin = await _api.AdminAsync();
+        var erros = (await admin.GetFromJsonAsync<Pagina<GrupoDeErroResumo>>("/api/dashboard/erros"))!;
+        Assert.Equal("abc123", Assert.Single(erros.Itens).Assinatura);
+        var quantidade = (await admin.GetFromJsonAsync<QuantidadeResposta>("/api/dashboard/quantidade"))!;
+        Assert.Equal((1L, 1L), (quantidade.MaquinasAtivas, quantidade.MaquinasRegistradas));
+    }
+
+    [Fact]
+    public async Task Chave_de_maquina_nao_le_nem_altera_os_erros()
+    {
+        var maquina = await _api.MaquinaAsync("maq-1");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await maquina.GetAsync("/api/dashboard/erros")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await maquina.PutAsJsonAsync("/api/dashboard/erros/1/estado", new AlterarEstadoDoGrupo(EstadosDoGrupo.Visto, null))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Jwt_altera_o_estado_e_o_detalhe_mostra_o_trace()
+    {
+        var maquina = await _api.MaquinaAsync("maq-1");
+        await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-1", Excecao("x1")));
+        var admin = await _api.AdminAsync();
+        var id = Assert.Single((await admin.GetFromJsonAsync<Pagina<GrupoDeErroResumo>>("/api/dashboard/erros"))!.Itens).Id;
+
+        var resolver = await admin.PutAsJsonAsync($"/api/dashboard/erros/{id}/estado", new AlterarEstadoDoGrupo(EstadosDoGrupo.Resolvido, "1.5.0"));
+        var invalido = await admin.PutAsJsonAsync($"/api/dashboard/erros/{id}/estado", new AlterarEstadoDoGrupo(EstadosDoGrupo.Regrediu, null));
+        var inexistente = await admin.PutAsJsonAsync("/api/dashboard/erros/999/estado", new AlterarEstadoDoGrupo(EstadosDoGrupo.Visto, null));
+        var detalhe = (await admin.GetFromJsonAsync<GrupoDeErroDetalhe>($"/api/dashboard/erros/{id}"))!;
+
+        Assert.Equal(HttpStatusCode.NoContent, resolver.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, invalido.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, inexistente.StatusCode);
+        Assert.Equal((EstadosDoGrupo.Resolvido, "1.5.0"), (detalhe.Grupo.Estado, detalhe.Grupo.ResolvidoNaVersao));
+        Assert.Contains("Planejador.Escolher()", detalhe.Trace);
+    }
+
+    [Fact]
+    public async Task Exportacao_do_grupo_devolve_o_json_como_arquivo()
+    {
+        var maquina = await _api.MaquinaAsync("maq-1");
+        await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-1", Excecao("x1"), Excecao("x2")));
+        var admin = await _api.AdminAsync();
+        var id = Assert.Single((await admin.GetFromJsonAsync<Pagina<GrupoDeErroResumo>>("/api/dashboard/erros"))!.Itens).Id;
+
+        var resposta = await admin.GetAsync($"/api/dashboard/erros/{id}/exportar");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        Assert.Equal("application/json", resposta.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("excecao-abc123.json", resposta.Content.Headers.ContentDisposition!.FileName);
+        var exportado = (await resposta.Content.ReadFromJsonAsync<GrupoDeErroDetalhe>())!;
+        Assert.Equal(2, exportado.Ocorrencias.Count);
+        Assert.Equal(new[] { "máquina maq-1" }, exportado.Maquinas);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/api/dashboard/erros/999/exportar")).StatusCode);
+    }
+
     [Fact]
     public async Task Health_responde_com_o_banco()
     {

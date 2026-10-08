@@ -3,6 +3,7 @@ using System;
 using DevKitPage.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,82 +11,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DevKitPage.Infrastructure.Migrations
 {
     [DbContext(typeof(DevKitPageDb))]
-    partial class DevKitPageDbModelSnapshot : ModelSnapshot
+    [Migration("20261007215156_GruposDeErro")]
+    partial class GruposDeErro
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
-
-            modelBuilder.Entity("DevKitPage.Core.AcessoAosDados", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("EmUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("EmpresaId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Linhas")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Login")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("OQue")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("UsuarioId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmUtc");
-
-                    b.ToTable("AcessosAosDados", (string)null);
-                });
-
-            modelBuilder.Entity("DevKitPage.Core.Empresa", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Assentos")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("CodigoDeAdesao")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CriadaEmUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Nome")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Plano")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CodigoDeAdesao")
-                        .IsUnique();
-
-                    b.ToTable("Empresas", (string)null);
-                });
 
             modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>
                 {
@@ -210,20 +143,6 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Colaborador")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("ConsentiuEmUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("DadosDesde")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("EmpresaId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("MaquinaId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -244,8 +163,6 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.HasIndex("ChaveHash")
                         .IsUnique();
-
-                    b.HasIndex("EmpresaId");
 
                     b.HasIndex("MaquinaId")
                         .IsUnique();
@@ -392,9 +309,6 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<bool>("EhAdmin")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("EmpresaId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("FalhasSeguidas")
                         .HasColumnType("INTEGER");
 
@@ -403,19 +317,12 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Papel")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("SenhaHash")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EmpresaId");
 
                     b.HasIndex("Login")
                         .IsUnique();
@@ -432,16 +339,6 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Maquina");
-                });
-
-            modelBuilder.Entity("DevKitPage.Core.Maquina", b =>
-                {
-                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
-                        .WithMany()
-                        .HasForeignKey("EmpresaId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Empresa");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.OcorrenciaDeErro", b =>
@@ -470,16 +367,6 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasForeignKey("MaquinaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("DevKitPage.Core.Usuario", b =>
-                {
-                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
-                        .WithMany()
-                        .HasForeignKey("EmpresaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Empresa");
                 });
 #pragma warning restore 612, 618
         }

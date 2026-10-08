@@ -41,6 +41,20 @@ public sealed class OpcoesDeTelemetria
     /// registro por código (só o admin registra). Segredo: fora do repositório, como o JWT.
     /// </summary>
     public string CodigoDeRegistro { get; set; } = string.Empty;
+
+    /// <summary>
+    /// O teto GLOBAL de ocorrências de exceção guardadas (com o trace), somando todos os grupos (US #381):
+    /// além das 20 por grupo, uma máquina que gere assinaturas sem fim não enche a base. Passou, saem as
+    /// mais antigas; os grupos e as contagens (nos totais diários) ficam.
+    /// </summary>
+    public int MaxOcorrenciasGuardadas { get; set; } = 10_000;
+
+    /// <summary>
+    /// O teto de ocorrências guardadas POR EMPRESA (as máquinas anônimas contam como um grupo só), antes
+    /// do global: uma empresa — ou uma máquina — que gere exceções em laço descarta as dela, e não o
+    /// trace das outras.
+    /// </summary>
+    public int MaxOcorrenciasPorEmpresa { get; set; } = 2_000;
 }
 
 /// <summary>O formulário público de pedido de demonstração (seção <c>Demonstracoes</c>).</summary>
@@ -53,6 +67,18 @@ public sealed class OpcoesDeDemonstracao
 
     /// <summary>Quantos pedidos um mesmo IP de cliente envia por minuto; acima disto, 429.</summary>
     public int LimitePorMinuto { get; set; } = 5;
+}
+
+/// <summary>O painel empresarial (seção <c>Painel</c>, US #381).</summary>
+public sealed class OpcoesDoPainel
+{
+    public const string Secao = "Painel";
+
+    /// <summary>
+    /// Quantas exportações (e criações de empresa ou gestor) um mesmo usuário faz por minuto; acima
+    /// disto, 429. Coletar os dados dos colaboradores é legítimo, mas não em laço.
+    /// </summary>
+    public int ExportacoesPorMinuto { get; set; } = 10;
 }
 
 /// <summary>

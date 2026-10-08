@@ -3,16 +3,19 @@ import { Cta } from '../componentes/Cta';
 import { FormularioDeDemonstracao } from '../componentes/FormularioDeDemonstracao';
 import { Midia } from '../componentes/Midia';
 import { Secao } from '../componentes/Secao';
-import { BENEFICIOS, HERO, INTEGRACOES, PASSOS, PERGUNTAS, RECURSOS, SECOES, SEGURANCA } from '../conteudo/landing';
+import {
+  BENEFICIOS, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, PASSOS, PERGUNTAS, PRODUTOS_COMPARADOS, RECURSOS, ROTULO_DA_DISPONIBILIDADE, SECOES, SEGURANCA,
+} from '../conteudo/landing';
 
 /** As seções que aparecem no menu do topo (o início e o fechamento ficam de fora). */
 const NO_MENU = SECOES.filter((s) => s.id !== 'inicio' && s.id !== 'comecar' && s.id !== 'contato');
 
 /**
- * A landing pública — a página de venda do dev.kit, na ordem do critério 1 da US #283 (a lista
- * SECOES): hero com a mídia em movimento → benefícios → como funciona → recursos → integrações →
- * segurança → contato (o pedido de demonstração) → FAQ → CTA final. O texto e as mídias vêm de
- * conteudo/landing.ts; o login e o dashboard continuam pelo link "Entrar".
+ * A landing pública — a página de venda do dev.kit, na ordem da lista SECOES: hero com a mídia em
+ * movimento → benefícios → como funciona (o fluxo em etapas nomeadas) → recursos → comparativo →
+ * integrações → segurança → para empresas → contato (o pedido de demonstração) → FAQ → CTA final. O
+ * texto e as mídias vêm de conteudo/landing.ts. A página vende o produto e NÃO explica a área logada
+ * (US #381): quem tem acesso entra pelo link "Entrar".
  */
 export function Landing() {
   return (
@@ -50,7 +53,7 @@ export function Landing() {
           </ul>
         </Secao>
 
-        <Secao id="como-funciona" titulo="Como funciona" subtitulo="Do work item à Pull Request, em quatro passos.">
+        <Secao id="como-funciona" titulo="Como funciona" subtitulo="Do work item à Pull Request, em sete etapas — e a decisão final é sua.">
           <ol className="passos">
             {PASSOS.map((p) => (
               <li key={p.titulo} className="cartao"><h3>{p.titulo}</h3><p>{p.texto}</p></li>
@@ -72,6 +75,30 @@ export function Landing() {
           </div>
         </Secao>
 
+        <Secao id="comparativo" titulo="dev.kit e as alternativas" subtitulo="O que pesa para quem trabalha no Azure DevOps, lado a lado.">
+          <div className="tabela-rolavel">
+            <table className="comparativo">
+              <caption>Comparativo do dev.kit com Copilot coding agent + Azure Boards, Devin e Cursor, conforme as páginas públicas de cada produto.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Recurso</th>
+                  {PRODUTOS_COMPARADOS.map((p) => <th key={p.id} scope="col">{p.nome}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARATIVO.map((linha) => (
+                  <tr key={linha.recurso}>
+                    <th scope="row">{linha.recurso}</th>
+                    {PRODUTOS_COMPARADOS.map((p) => (
+                      <td key={p.id} className={`valor-${linha.valores[p.id]}`}>{ROTULO_DA_DISPONIBILIDADE[linha.valores[p.id]]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Secao>
+
         <Secao id="integracoes" titulo="Integrações" subtitulo="Com as ferramentas que o time já usa.">
           <ul className="grade-cartoes integracoes">
             {INTEGRACOES.map((i) => (
@@ -86,6 +113,17 @@ export function Landing() {
               <li key={s.titulo} className="cartao"><h3>{s.titulo}</h3><p>{s.texto}</p></li>
             ))}
           </ul>
+        </Secao>
+
+        <Secao id="empresas" titulo={EMPRESAS.titulo} subtitulo={EMPRESAS.subtitulo}>
+          <ul className="grade-cartoes">
+            {EMPRESAS.itens.map((item) => (
+              <li key={item.titulo} className="cartao"><h3>{item.titulo}</h3><p>{item.texto}</p></li>
+            ))}
+          </ul>
+          <div className="ctas ctas-da-secao">
+            <Cta para="#contato">Falar sobre o plano para empresas</Cta>
+          </div>
         </Secao>
 
         <Secao id="contato" titulo="Quero uma demonstração" subtitulo="Conte quem você é e o que quer ver: mostramos o dev.kit sobre um work item como os seus.">
@@ -106,14 +144,13 @@ export function Landing() {
         <Secao id="comecar" titulo="Ponha um agente na sua próxima task" className="cta-final">
           <div className="ctas">
             <Cta para="#contato">Quero uma demonstração</Cta>
-            <Cta para="/login" variante="secundario">Entrar no dashboard</Cta>
+            <Cta para="/login" variante="secundario">Entrar</Cta>
           </div>
         </Secao>
       </main>
 
       <footer className="rodape">
-        <p>O dashboard mostra, por máquina, a quantidade e a qualidade de uso do dev.kit — o envio vem ligado e se desliga em Configurações → Telemetria de uso.</p>
-        <Link to="/login">Entrar no dashboard</Link>
+        <Link to="/login">Entrar</Link>
       </footer>
     </div>
   );

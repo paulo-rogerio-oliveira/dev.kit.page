@@ -19,9 +19,17 @@ public static class LimiteDeTaxa
     /// <summary>A política do formulário de demonstração.</summary>
     public const string PoliticaDoFormulario = "Formulario";
 
+    /// <summary>
+    /// A política das rotas que COLETAM ou cadastram (US #381): a exportação dos colaboradores e do
+    /// grupo de erro, e a criação de empresa e de gestor. Por USUÁRIO do token (todos chegam
+    /// autenticados), com <see cref="OpcoesDoPainel.ExportacoesPorMinuto"/>.
+    /// </summary>
+    public const string PoliticaDaExportacao = "Exportacao";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
+        servicos.Configure<OpcoesDoPainel>(configuracao.GetSection(OpcoesDoPainel.Secao));
         servicos.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<OpcoesDoProxy>>((encaminhados, proxy) =>
         {
             encaminhados.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -36,6 +44,17 @@ public static class LimiteDeTaxa
             {
                 var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDeDemonstracao>>().Value.LimitePorMinuto);
                 return RateLimitPartition.GetFixedWindowLimiter(IpDoCliente(http), _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaExportacao, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoPainel>>().Value.ExportacoesPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("usuario:" + usuario, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),

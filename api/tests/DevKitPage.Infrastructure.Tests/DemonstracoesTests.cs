@@ -98,33 +98,13 @@ public sealed class DemonstracoesTests : IAsyncLifetime
     [Fact]
     public void Script_do_azure_sql_cria_a_tabela_com_as_mesmas_colunas_do_modelo()
     {
-        // O CREATE TABLE que o EnsureCreated faria no SQL Server, a partir do MESMO modelo.
-        var opcoes = new DbContextOptionsBuilder<DevKitPageDb>().UseSqlServer("Server=.;Database=modelo").Options;
-        using var db = new DevKitPageDb(opcoes);
-        var doModelo = db.Database.GenerateCreateScript();
-        var bloco = doModelo[doModelo.IndexOf("CREATE TABLE [PedidosDeDemonstracao]", StringComparison.Ordinal)..];
-        bloco = bloco[..bloco.IndexOf(");", StringComparison.Ordinal)];
-        var colunas = bloco.Split('\n').Select(l => l.Trim().TrimEnd(',')).Where(l => l.StartsWith('[')).ToList();
-
-        var script = File.ReadAllText(ScriptDoAzureSql());
+        var colunas = BaseDeTeste.ColunasNoSqlServer("PedidosDeDemonstracao");
+        var script = BaseDeTeste.ScriptDoAzureSql("PedidosDeDemonstracao.sql");
 
         Assert.Equal(7, colunas.Count);
         foreach (var coluna in colunas)
             Assert.Contains(coluna, script);
         Assert.Contains("IF OBJECT_ID(N'[dbo].[PedidosDeDemonstracao]', N'U') IS NULL", script);
         Assert.Contains("IX_PedidosDeDemonstracao_RecebidoEmUtc", script);
-    }
-
-    /// <summary>O script versionado, achado subindo da pasta do teste até a raiz da API.</summary>
-    private static string ScriptDoAzureSql()
-    {
-        for (var pasta = new DirectoryInfo(AppContext.BaseDirectory); pasta is not null; pasta = pasta.Parent)
-        {
-            var arquivo = Path.Combine(pasta.FullName, "scripts", "sqlserver", "PedidosDeDemonstracao.sql");
-            if (File.Exists(arquivo))
-                return arquivo;
-        }
-
-        throw new FileNotFoundException("api/scripts/sqlserver/PedidosDeDemonstracao.sql não encontrado.");
     }
 }

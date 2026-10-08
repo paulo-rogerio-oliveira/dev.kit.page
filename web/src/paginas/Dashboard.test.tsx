@@ -1,10 +1,34 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
+import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
-import { API, demonstracao, qualidadeVazia, requisicoes, servidor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, servidor, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
+
+/**
+ * O texto de um arquivo baixado. O Blob pode vir de dois lugares conforme o Node: o do `fetch`
+ * (undici, que tem `text()` mas o FileReader do jsdom recusa) ou o do jsdom (sem `text()`, lido pelo
+ * FileReader) — no CI (Linux) é o primeiro, no Windows já foi o segundo.
+ */
+const lerTexto = (blob: Blob): Promise<string> => {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise<string>((pronto) => {
+    const leitor = new FileReader();
+    leitor.onload = () => pronto(String(leitor.result));
+    leitor.readAsText(blob);
+  });
+};
+
+/** Abre o dashboard e o detalhe do grupo de exceção da fixture. */
+async function abrirOGrupo(sessao = tokenValido()) {
+  renderizar('/dashboard', sessao);
+  const secao = await screen.findByRole('region', { name: 'Exceções não classificadas' });
+  await userEvent.click(await within(secao).findByRole('button', { name: 'System.InvalidOperationException' }));
+  return within(await screen.findByRole('article', { name: 'Detalhe da exceção' }));
+}
 
 describe('Dashboard', () => {
   it('mostra os KPIs de quantidade e qualidade com os valores da API', async () => {
@@ -113,6 +137,115 @@ describe('Dashboard', () => {
     expect(await within(secao).findByText('Pessoa 2')).toBeInTheDocument();
     expect(within(secao).getByText(/Página 2 de 2 · 15 pedido/)).toBeInTheDocument();
     expect(paginas).toEqual(['1', '2']);
+  });
+
+  it('mostra a quantidade de máquinas ativas e registradas (US #381)', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    expect(kpi('Máquinas ativas')).toHaveTextContent('1');
+    expect(kpi('Máquinas registradas')).toHaveTextContent('2');
+  });
+
+  it('sem exceção no período, diz que não há nenhuma', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/erros`, () => HttpResponse.json({ itens: [], total: 0, numeroDaPagina: 1, tamanho: 10 })));
+
+    renderizar('/dashboard', tokenValido());
+
+    const secao = await screen.findByRole('region', { name: 'Exceções não classificadas' });
+    expect(await within(secao).findByText('Nenhuma exceção não classificada no período.')).toBeInTheDocument();
+  });
+
+  it('lista os grupos e, ao abrir um, mostra o trace sem caminhos e as ocorrências', async () => {
+    const detalhe = await abrirOGrupo();
+
+    const trace = detalhe.getByLabelText('Trace da exceção');
+    expect(trace).toHaveTextContent('GitKit.Core.Services.Planejador.Escolher() linha 42');
+    expect(trace.textContent).not.toMatch(/[A-Za-z]:\\|\/home\//);
+    expect(detalhe.getByRole('figure', { name: 'Ocorrências por dia' })).toBeInTheDocument();
+    expect(detalhe.getByText('máquina a1b2c3d4')).toBeInTheDocument();
+    const linha = screen.getByRole('button', { name: 'System.InvalidOperationException' }).closest('tr')!;
+    expect(within(linha).getByText('1.4.0 → 1.4.2')).toBeInTheDocument();
+    expect(within(linha).getByText('Novo')).toBeInTheDocument();
+  });
+
+  it('resolver envia o PUT com a versão da correção', async () => {
+    const detalhe = await abrirOGrupo();
+
+    expect(detalhe.getByRole('button', { name: 'Resolver na versão' })).toBeDisabled();
+    await userEvent.type(detalhe.getByLabelText('Versão da correção'), '1.5.0');
+    await userEvent.click(detalhe.getByRole('button', { name: 'Resolver na versão' }));
+    await userEvent.click(detalhe.getByRole('button', { name: 'Marcar visto' }));
+    await userEvent.click(detalhe.getByRole('button', { name: 'Ignorar' }));
+
+    await waitFor(() => expect(reacoes).toEqual([
+      { id: '5', estado: 'Resolvido', versao: '1.5.0' },
+      { id: '5', estado: 'Visto', versao: null },
+      { id: '5', estado: 'Ignorado', versao: null },
+    ]));
+    expect(await detalhe.findByText('Marcado como ignorado.')).toBeInTheDocument();
+  });
+
+  it('exportar baixa o JSON do grupo e copiar leva o texto do Bug', async () => {
+    const detalhe = await abrirOGrupo();
+
+    await userEvent.click(detalhe.getByRole('button', { name: 'Exportar JSON' }));
+    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
+    expect(entregues.arquivos[0].nome).toBe('excecao-abc123.json');
+    expect(JSON.parse(await lerTexto(entregues.arquivos[0].conteudo))).toMatchObject({ grupo: { assinatura: 'abc123' } });
+
+    await userEvent.click(detalhe.getByRole('button', { name: 'Copiar para Bug' }));
+    await waitFor(() => expect(entregues.copiado).toBe(textoDoBug(erroDetalhe)));
+    expect(entregues.copiado).toContain('Assinatura: abc123');
+    expect(entregues.copiado).toContain('TurnFailures.Padrao');
+  });
+
+  it('o gestor vê o trace e exporta, mas não reage', async () => {
+    const detalhe = await abrirOGrupo({ ...tokenValido(), papel: 'gestor', ehAdmin: false, empresa: 'Empresa A' });
+
+    expect(detalhe.getByLabelText('Trace da exceção')).toBeInTheDocument();
+    expect(detalhe.getByRole('button', { name: 'Exportar JSON' })).toBeInTheDocument();
+    expect(detalhe.queryByRole('button', { name: 'Marcar visto' })).not.toBeInTheDocument();
+    expect(detalhe.queryByRole('button', { name: 'Ignorar' })).not.toBeInTheDocument();
+  });
+
+  it('o gestor filtra por colaborador, exporta o CSV e não vê os pedidos de demonstração nem Empresas', async () => {
+    renderizar('/dashboard', tokenDoGestor());
+
+    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    expect(screen.getByText('gestor.a · Empresa A')).toBeInTheDocument();
+    const filtro = screen.getByLabelText('Colaborador');
+    expect(await within(filtro).findByRole('option', { name: 'Ana Souza' })).toBeInTheDocument();
+    expect(within(filtro).getByRole('option', { name: 'máquina k1l2m3n4' })).toBeInTheDocument(); // sem nome informado: o apelido
+    expect(screen.queryByRole('region', { name: 'Pedidos de demonstração' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Empresas' })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(filtro, '1');
+    await userEvent.click(screen.getByRole('button', { name: 'Exportar uso (CSV)' }));
+
+    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
+    expect(entregues.arquivos[0].nome).toBe('uso-dos-colaboradores-20260904-20261003.csv');
+    expect(await lerTexto(entregues.arquivos[0].conteudo)).toContain('Ana Souza');
+    const exportacao = requisicoes.find((r) => r.pathname === '/api/dashboard/exportar')!;
+    expect(exportacao.searchParams.get('maquina')).toBe('1');
+    expect(exportacao.searchParams.get('formato')).toBe('csv');
+    expect(screen.getByText(/registrado na trilha de auditoria/)).toBeInTheDocument();
+  });
+
+  it('o admin vê o link de Empresas e o filtro por máquina', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    expect(await screen.findByRole('link', { name: 'Empresas' })).toHaveAttribute('href', '/empresas');
+    expect(screen.getByLabelText('Máquina')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Pedidos de demonstração' })).toBeInTheDocument();
+  });
+
+  it('o gestor sem colaboradores recebe a instrução de adesão', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/colaboradores`, () => HttpResponse.json([])));
+
+    renderizar('/dashboard', tokenDoGestor());
+
+    expect(await screen.findByText(/Nenhum colaborador aderiu ainda/)).toBeInTheDocument();
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {

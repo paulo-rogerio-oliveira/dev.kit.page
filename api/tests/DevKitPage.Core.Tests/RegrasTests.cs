@@ -99,6 +99,148 @@ public sealed class RegrasTests
         => Assert.Equal(valida, PoliticaDeSenha.Validar(senha).Length == 0);
 
     [Fact]
+    public void Lote_v1_sem_os_campos_novos_continua_valido_e_com_eles_tambem()
+    {
+        var antigo = new TelemetryBatchV1("v1", "m1", "1.4.0", new[] { new TelemetryEventV1("e1", TiposDeEvento.TurnoFalhou, "s", 1, null, "nao-classificada", Em) });
+        var novo = new TelemetryBatchV1("v1", "m1", "1.5.0", new[]
+        {
+            new TelemetryEventV1("e2", TiposDeEvento.ExcecaoNaoClassificada, "s", 1, null, "abc", Em, "System.Exception: x", "abc"),
+        });
+
+        Assert.Null(ValidadorDeLote.Validar(antigo, "m1", 10));
+        Assert.Null(ValidadorDeLote.Validar(novo, "m1", 10));
+        Assert.Contains(TiposDeEvento.ExcecaoNaoClassificada, TiposDeEvento.Conhecidos);
+    }
+
+    [Fact]
+    public void Trace_e_cortado_em_8_kb_e_o_recorte_continua_em_200()
+    {
+        var trace = RegrasDeErro.Mascarar("System.Exception: x\n" + new string('a', 20_000));
+
+        Assert.Equal(RegrasDeErro.TamanhoMaximoDoTrace, trace.Length);
+        Assert.Equal(8192, RegrasDeErro.TamanhoMaximoDoTrace);
+        Assert.Equal(200, ValidadorDeLote.TamanhoMaximoDoTexto);
+    }
+
+    [Theory]
+    [InlineData(@"at X.Y() in C:\Users\ana\src\Y.cs:line 9", "ana")]
+    [InlineData(@"at X.Y() in C:\Program Files\dev kit\Y.cs:line 9", "Program Files")]
+    [InlineData(@"falhou em \\servidor\share\pasta\a.txt", "servidor")]
+    [InlineData("ENOENT /home/ana/projeto/a.json", "ana")]
+    [InlineData("mande para ana.souza@cliente.com.br", "cliente")]
+    [InlineData("GET https://cliente.visualstudio.com/_apis?token=abc falhou", "token")]
+    [InlineData("sessão 3f2b8c1e-9d4a-4c6e-8f00-123456789abc", "3f2b8c1e")]
+    [InlineData("fatal: '/c/Users/ana/repos/cliente' is not a git repository", "ana")]
+    [InlineData("git@ssh.dev.azure.com:v3/acme/erp/erp: Permission denied (publickey)", "acme")]
+    [InlineData("fatal: unable to access 'ssh://git@github.com/acme/erp.git'", "acme")]
+    [InlineData(@"Acesso negado para ACME\ana.souza ao abrir o serviço", "ana.souza")]
+    public void Mascara_de_defesa_tira_caminho_email_url_e_guid(string texto, string vazado)
+    {
+        var mascarado = RegrasDeErro.Mascarar(texto);
+
+        Assert.DoesNotContain(vazado, mascarado);
+        Assert.Matches("<(caminho|email|url|guid|usuario)>", mascarado);
+    }
+
+    [Fact]
+    public void Mascara_mantem_os_quadros_e_a_linha()
+        => Assert.Equal("at GitKit.Core.A.B() in <caminho>:line 42", RegrasDeErro.Mascarar(@"at GitKit.Core.A.B() in C:\gtk\5\src\A.cs:line 42"));
+
+    [Fact]
+    public void Tipo_e_a_primeira_linha_ate_os_dois_pontos_e_a_assinatura_nunca_fica_vazia()
+    {
+        Assert.Equal("System.IO.IOException", RegrasDeErro.Tipo("System.IO.IOException: disco cheio\n   at A.B()"));
+        Assert.Equal("abc", RegrasDeErro.Assinatura(" abc ", "x"));
+        Assert.StartsWith("t", RegrasDeErro.Assinatura(null, "System.Exception: x"));
+        Assert.Equal(RegrasDeErro.Assinatura(null, "System.Exception: x"), RegrasDeErro.Assinatura("", "System.Exception: x"));
+    }
+
+    [Theory]
+    [InlineData(EstadosDoGrupo.Novo, null, "2.0.0", EstadosDoGrupo.Novo)]
+    [InlineData(EstadosDoGrupo.Visto, null, "2.0.0", EstadosDoGrupo.Visto)]
+    [InlineData(EstadosDoGrupo.Ignorado, null, "2.0.0", EstadosDoGrupo.Ignorado)]
+    [InlineData(EstadosDoGrupo.Resolvido, "1.5.0", "1.4.9", EstadosDoGrupo.Resolvido)]
+    [InlineData(EstadosDoGrupo.Resolvido, "1.5.0", "1.5.0", EstadosDoGrupo.Regrediu)]
+    [InlineData(EstadosDoGrupo.Resolvido, "1.5.0", "1.10.0", EstadosDoGrupo.Regrediu)]
+    [InlineData(EstadosDoGrupo.Resolvido, "v1.5.0", "1.5.1-beta", EstadosDoGrupo.Regrediu)]
+    [InlineData(EstadosDoGrupo.Resolvido, null, "1.0.0", EstadosDoGrupo.Regrediu)]
+    public void Ocorrencia_nova_so_muda_o_grupo_resolvido_que_volta_na_versao_da_correcao(string estado, string? resolvidoNa, string versao, string esperado)
+        => Assert.Equal(esperado, RegrasDeErro.EstadoAoReceber(estado, resolvidoNa, versao));
+
+    [Theory]
+    [InlineData(EstadosDoGrupo.Visto, null, true)]
+    [InlineData(EstadosDoGrupo.Resolvido, "1.5.0", true)]
+    [InlineData(EstadosDoGrupo.Ignorado, null, true)]
+    [InlineData(EstadosDoGrupo.Novo, null, true)]
+    [InlineData(EstadosDoGrupo.Regrediu, null, false)]
+    [InlineData("Apagado", null, false)]
+    public void So_os_estados_escolhiveis_sao_aceitos_na_reacao(string estado, string? versao, bool aceito)
+        => Assert.Equal(aceito, RegrasDeErro.Validar(new AlterarEstadoDoGrupo(estado, versao)).Length == 0);
+
+    [Theory]
+    [InlineData("admin", null, true, null)]
+    [InlineData("admin", "7", true, null)] // o admin é tudo, mesmo com uma empresa na claim
+    [InlineData("gestor", "7", false, 7)]
+    public void Escopo_sai_do_papel_e_da_empresa(string papel, string? empresa, bool ehAdmin, int? empresaId)
+    {
+        var escopo = EscopoDoPainel.DasClaims(papel, empresa)!;
+
+        Assert.Equal((ehAdmin, empresaId), (escopo.EhAdmin, escopo.EmpresaId));
+    }
+
+    [Theory]
+    [InlineData("gestor", null)]
+    [InlineData("gestor", "")]
+    [InlineData("gestor", "abc")]
+    [InlineData("gestor", "-1")]
+    [InlineData("gestor", "0")]
+    [InlineData(null, null)]
+    [InlineData("visitante", "7")]
+    public void Token_sem_escopo_valido_nunca_vira_ver_tudo(string? papel, string? empresa)
+        => Assert.Null(EscopoDoPainel.DasClaims(papel, empresa));
+
+    [Fact]
+    public void Empresa_valida_nome_plano_e_assentos_e_o_login_do_gestor()
+    {
+        Assert.Empty(ValidadorDeEmpresa.Validar(new EmpresaNova("Empresa A", "Empresarial", 10)));
+        Assert.Equal(new[] { "assentos", "nome", "plano" }, ValidadorDeEmpresa.Validar(new EmpresaNova(" ", "", 0)).Keys.Order());
+        Assert.Empty(ValidadorDeEmpresa.ValidarLogin("gestor.a"));
+        Assert.NotEmpty(ValidadorDeEmpresa.ValidarLogin("gestor a"));
+        Assert.Equal(100, ValidadorDeEmpresa.Colaborador(new string('x', 300)).Length);
+    }
+
+    [Fact]
+    public void Codigo_de_adesao_e_aleatorio_e_compara_sem_caixa_nem_espaco()
+    {
+        var codigo = CodigoDeAdesao.Gerar();
+
+        Assert.Matches("^DK-[A-Z2-9]{4}-[A-Z2-9]{4}$", codigo);
+        Assert.NotEqual(codigo, CodigoDeAdesao.Gerar());
+        Assert.Equal(codigo, CodigoDeAdesao.Normalizar($"  {codigo.ToLowerInvariant()} "));
+    }
+
+    [Theory]
+    [InlineData("Ana", "Ana")]
+    [InlineData("=1+1", "'=1+1")]
+    [InlineData("+cmd", "'+cmd")]
+    [InlineData("-2", "'-2")]
+    [InlineData("@SUM(A1)", "'@SUM(A1)")]
+    [InlineData("Silva; Ana", "\"Silva; Ana\"")]
+    [InlineData("O \"Ana\"", "\"O \"\"Ana\"\"\"")]
+    public void Celula_do_csv_neutraliza_formula_e_escapa_o_separador(string valor, string esperado)
+        => Assert.Equal(esperado, ExportacaoCsv.Celula(valor));
+
+    [Fact]
+    public void Csv_tem_o_cabecalho_e_uma_linha_por_colaborador_e_dia()
+    {
+        var csv = ExportacaoCsv.Gerar([new LinhaExportada("Ana", "máquina a1", "Empresa A", new DateOnly(2026, 10, 3), 1, 2, 0, 5, 1, 3, 1, 0)]);
+
+        var linhas = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(string.Join(';', ExportacaoCsv.Cabecalho), linhas[0]);
+        Assert.Equal("Ana;máquina a1;Empresa A;2026-10-03;1;2;0;5;1;3;1;0", linhas[1]);
+    }
+
+    [Fact]
     public void Periodo_padrao_sao_os_ultimos_30_dias_e_a_ordem_e_garantida()
     {
         var hoje = new DateOnly(2026, 10, 3);

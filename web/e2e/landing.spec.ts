@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { API, NOVA_SENHA, SENHA_INICIAL } from './ambiente';
 
-/** As seções da landing, na ordem do critério 1 da US #283 (a lista SECOES de conteudo/landing.ts). */
-const ORDEM = ['inicio', 'beneficios', 'como-funciona', 'recursos', 'integracoes', 'seguranca', 'contato', 'faq', 'comecar'];
+/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (US #283, com o comparativo e as empresas da US #381). */
+const ORDEM = ['inicio', 'beneficios', 'como-funciona', 'recursos', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'contato', 'faq', 'comecar'];
 
 /**
  * O admin com a senha definitiva. Os cenários dividem a mesma base: se o fluxo.spec.ts já trocou a
@@ -31,7 +31,19 @@ test('landing → seções e vídeo do hero → pedido de demonstração → o a
   await expect(videoDoHero).toHaveAttribute('poster', '/midia/hero.jpg');
   await expect(videoDoHero.locator('source[type="video/webm"]')).toHaveAttribute('src', '/midia/hero.webm');
   await expect(page.locator('#recursos video')).toHaveCount(7);
+  await expect(page.locator('body')).not.toContainText(/dashboard/i);
   await page.screenshot({ path: 'test-results/capturas/10-landing.png', fullPage: true });
+
+  // 1b. (US #381) O menu chega ao comparativo e às empresas; o fluxo novo em etapas nomeadas.
+  await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Comparativo' }).click();
+  await expect(page).toHaveURL(/#comparativo$/);
+  await expect(page.locator('#comparativo table')).toBeVisible();
+  await page.locator('#comparativo').screenshot({ path: 'test-results/capturas/13-comparativo.png' });
+  await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Empresas' }).click();
+  await expect(page).toHaveURL(/#empresas$/);
+  await page.locator('#empresas').screenshot({ path: 'test-results/capturas/14-para-empresas.png' });
+  await page.locator('#como-funciona').screenshot({ path: 'test-results/capturas/15-como-funciona.png' });
+  await page.goto('/');
 
   // 2. O CTA leva ao contato e o formulário valida antes de enviar.
   await page.locator('#inicio').getByRole('link', { name: 'Quero uma demonstração' }).click();

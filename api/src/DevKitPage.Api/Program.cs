@@ -15,7 +15,9 @@ builder.Services.AddHostedService<ExpurgoDiario>();
 builder.Services.AddCors(opcoes => opcoes.AddDefaultPolicy(politica =>
     politica.WithOrigins(builder.Configuration.GetSection("Cors:Origens").Get<string[]>() ?? Array.Empty<string>())
         .AllowAnyHeader()
-        .AllowAnyMethod()));
+        .AllowAnyMethod()
+        // O nome do arquivo das exportações (US #381): sem isto o navegador de outra origem não o lê.
+        .WithExposedHeaders("Content-Disposition")));
 
 var app = builder.Build();
 
@@ -37,6 +39,7 @@ app.MapearAutenticacao();
 app.MapearMaquinas();
 app.MapearTelemetria();
 app.MapearPainel();
+app.MapearEmpresas();
 app.MapearDemonstracoes();
 
 await app.RunAsync();
