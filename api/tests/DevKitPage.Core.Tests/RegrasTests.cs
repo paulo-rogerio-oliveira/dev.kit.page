@@ -112,6 +112,23 @@ public sealed class RegrasTests
         Assert.Contains(TiposDeEvento.ExcecaoNaoClassificada, TiposDeEvento.Conhecidos);
     }
 
+    // US #399: os tipos novos entram nos totais desde já — fora de Conhecidos, a API os contaria como
+    // "ignorados" e o histórico se perderia até o painel existir.
+    [Theory]
+    [InlineData(TiposDeEvento.EntregaAvaliada)]
+    [InlineData(TiposDeEvento.EntregaPronta)]
+    [InlineData(TiposDeEvento.RevisaoHumana)]
+    [InlineData(TiposDeEvento.TokensConsumidos)]
+    [InlineData(TiposDeEvento.CustoEstimado)]
+    [InlineData(TiposDeEvento.AgenteTrocado)]
+    [InlineData(TiposDeEvento.ComandoNegado)]
+    public void Os_tipos_da_us_399_sao_gravados(string tipo)
+    {
+        Assert.Contains(tipo, TiposDeEvento.Conhecidos);
+        var lote = new TelemetryBatchV1("v1", "m1", "1.6.0", new[] { new TelemetryEventV1("e399", tipo, "s", 1, 1, "detalhe", Em) });
+        Assert.Null(ValidadorDeLote.Validar(lote, "m1", 10));
+    }
+
     [Fact]
     public void Trace_e_cortado_em_8_kb_e_o_recorte_continua_em_200()
     {

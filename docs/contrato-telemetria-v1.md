@@ -69,6 +69,17 @@ novo não quebra uma API mais velha.
 | `ObjetivoCumprido` / `ObjetivoRecusado` | — | — | objetivos aceitos × recusados |
 | `ExcecaoNaoClassificada` (US #381) | a assinatura (a API a usa como recorte) | — | exceções sem causa conhecida, agrupadas por assinatura |
 | `RoiCalculado` (US #387) | o id do work item (texto) | turnos do agente | quantos ROIs foram calculados; a foto do ROI vai no campo opcional `roi` |
+| `EntregaAvaliada` (US #399) | o motivo, da lista fechada (`nao-atendeu-o-pedido`, `quebrou-build-ou-teste`, `fora-do-padrao`, `arquitetura`, `seguranca`, `escopo-alem-do-pedido`, `inventou-api-ou-arquivo`, `retrabalho-manual-alto`, `outro`; vazio na boa sem motivo) | 1 = boa, 0 = ruim | aprovação humana e motivos de reprovação |
+| `EntregaPronta` (US #399) | a origem (`objetivo`, `resumo`, `turno`) | — | entregas declaradas prontas (o começo do tempo de revisão) |
+| `RevisaoHumana` (US #399) | a decisão (`aprovada`, `commit`, `devolvida`) | ms desde a entrega pronta | tempo médio de revisão humana e rodadas de devolução |
+| `TokensConsumidos` (US #399) | CLI (claude, glm…) | tokens de entrada + saída | consumo de tokens (só o CLI que mede envia) |
+| `CustoEstimado` (US #399) | CLI | micro-dólares (custo EQUIVALENTE de API) | custo dos turnos |
+| `AgenteTrocado` (US #399) | `de→para` (ex.: `claude→glm`) | — | trocas automáticas de agente no limite de uso |
+| `ComandoNegado` (US #399) | a classe (`proibido`, `nao-aprovado`) | — | comandos negados ao agente (a trilha de auditoria) |
+
+Nenhum tipo da US #399 leva campo novo: o texto livre da avaliação, o comando negado, o modelo efetivo e o
+detalhamento dos tokens (cache) ficam na máquina do dev. Os indicadores desses tipos no painel são a fase 2;
+os totais diários já acumulam desde a primeira versão que os envia.
 
 ### Os campos opcionais da exceção (US #381)
 

@@ -113,11 +113,37 @@ public static class TiposDeEvento
     /// </summary>
     public const string RoiCalculado = "RoiCalculado";
 
+    // ----- US #399: a avaliação humana, a revisão, o custo e as falhas sem ninguém na frente -----
+    // Gravados desde já nos totais diários (por tipo e detalhe), para o histórico acumular; os
+    // indicadores do painel ficam para a fase 2. Nenhum leva campo novo: só Valor e Detalhe.
+
+    /// <summary>O desenvolvedor avaliou a entrega: <see cref="TelemetryEventV1.Detalhe"/> = o motivo (lista fechada), valor 1 = boa, 0 = ruim.</summary>
+    public const string EntregaAvaliada = "EntregaAvaliada";
+
+    /// <summary>A entrega ficou pronta (o começo do tempo de revisão): detalhe = a origem (<c>objetivo</c>, <c>resumo</c>, <c>turno</c>).</summary>
+    public const string EntregaPronta = "EntregaPronta";
+
+    /// <summary>A decisão do desenvolvedor: detalhe = <c>aprovada</c>, <c>commit</c> ou <c>devolvida</c>; valor = ms desde a entrega pronta.</summary>
+    public const string RevisaoHumana = "RevisaoHumana";
+
+    /// <summary>Os tokens de um turno: detalhe = o CLI; valor = entrada + saída.</summary>
+    public const string TokensConsumidos = "TokensConsumidos";
+
+    /// <summary>O custo equivalente de API de um turno: detalhe = o CLI; valor em micro-dólares.</summary>
+    public const string CustoEstimado = "CustoEstimado";
+
+    /// <summary>A troca automática de agente no limite de uso: detalhe = <c>de→para</c>.</summary>
+    public const string AgenteTrocado = "AgenteTrocado";
+
+    /// <summary>Um comando negado ao agente: detalhe = a classe (<c>proibido</c> ou <c>nao-aprovado</c>).</summary>
+    public const string ComandoNegado = "ComandoNegado";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         ArquivoAlterado, FluxoExecutado, FerramentaAcionada, ComandoDelegado, TurnoExecutado,
         TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada, ExcecaoNaoClassificada,
         RoiCalculado,
+        EntregaAvaliada, EntregaPronta, RevisaoHumana, TokensConsumidos, CustoEstimado, AgenteTrocado, ComandoNegado,
     };
 }
