@@ -132,6 +132,12 @@ Rode também `api/scripts/sqlserver/RoiDeWorkItem.sql` (idempotente): cria `Rois
 ROI por (máquina, work item). Sem a tabela, o lote que traz um `RoiCalculado` com o campo `roi` falha
 com 500 — e o dev.kit o reenvia até ela existir, sem perder nada da fila local.
 
+### Feedback das entregas (US #417)
+
+Rode também `api/scripts/sqlserver/AvaliacoesDeEntrega.sql` (idempotente): cria `AvaliacoesDeEntrega`, o
+joinha mais recente por (máquina, sessão, turno). Sem a tabela, o lote que traz um `EntregaAvaliada` com o
+campo `avaliacao` falha com 500 — e o dev.kit o reenvia até ela existir, sem perder nada da fila local.
+
 ### Gestão de usuários e atualização do dev.kit (US #405)
 
 Rode também `api/scripts/sqlserver/Usuarios.sql` (idempotente): acrescenta a `Usuarios` o nome de exibição

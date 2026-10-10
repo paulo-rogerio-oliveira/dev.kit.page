@@ -156,6 +156,18 @@ calculadas depois do instante do consentimento. Na web, a seção "ROI por work 
 os KPIs, o gráfico de horas lançadas × turnos do agente (pequenos múltiplos, uma escala por medida — sem
 eixo duplo) e a tabela.
 
+**Feedback das entregas (US #417).** O joinha que o desenvolvedor dá na janela da task segue no
+`EntregaAvaliada` com o campo opcional `avaliacao` (agente, modelo, fluxo, work item e turno). Na ingestão,
+na MESMA transação, o evento vai aos totais diários como os outros, e a avaliação vai para
+`AvaliacoesDeEntrega`, UMA por (máquina, sessão, turno) pelo índice único — o upsert do ROI: o mais recente
+(pelo `em`) vence, o atrasado não volta para trás e o reenvio nem chega (`RegrasDeAvaliacao.Avaliacao` corta
+os textos e descarta a avaliação sem sessão). `GET /api/dashboard/feedback` lista as avaliações do período
+(paginadas, `Pagina<FeedbackV1>`) e `GET /api/dashboard/feedback/metricas` agrega total, positivos e
+negativos por fluxo, por agente e por dia, com o vazio sob `(sem fluxo)`/`(sem agente)` — no escopo das outras
+consultas (`ConsultasDoPainel.Avaliacoes`: o gestor, só as máquinas da empresa a partir do consentimento). As
+duas rotas recusam `de` depois de `ate` com 400, em vez de inverter como as da tela: quem as lê é a ferramenta
+de análise do dev.kit, e o período invertido é defeito dela.
+
 **Venda empresarial (US #381).** O gestor de uma empresa vê e coleta o uso dos colaboradores dela:
 - **Empresa e gestor.** O admin cria a `Empresa` (nome, plano, assentos e um código de adesão
   aleatório, `DK-XXXX-XXXX`) e convida o gestor (`POST /api/empresas/{id}/gestores`). O gestor é um
@@ -243,7 +255,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de

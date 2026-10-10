@@ -234,6 +234,76 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         return new RoiResposta(periodo.De, periodo.Ate, itens, totais);
     }
 
+    public async Task<Pagina<FeedbackV1>> FeedbackAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
+    {
+        pagina = Math.Max(1, pagina);
+        tamanho = Math.Clamp(tamanho, 1, 200);
+        var consulta = AvaliacoesNoPeriodo(escopo, periodo, maquina);
+        var total = await consulta.CountAsync(ct);
+        var linhas = await consulta
+            .OrderByDescending(a => a.EmUtc).ThenByDescending(a => a.Id)
+            .Skip((pagina - 1) * tamanho).Take(tamanho)
+            .ToListAsync(ct);
+
+        var itens = linhas
+            .Select(a => new FeedbackV1(
+                DevKitPageDb.Utc(a.EmUtc), a.MaquinaId, a.SessaoId, a.Turno, a.Boa, a.Motivo, a.Agente, a.Modelo, a.Fluxo, a.WorkItemId))
+            .ToArray();
+        return new Pagina<FeedbackV1>(itens, total, pagina, tamanho);
+    }
+
+    public async Task<MetricasDeFeedbackV1> MetricasDeFeedbackAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct)
+    {
+        // Somado no banco por (dia, fluxo, agente): o volume é o de combinações, e não o de avaliações. As
+        // chaves vazias viram "(sem fluxo)"/"(sem agente)" só aqui, na borda.
+        var grupos = await AvaliacoesNoPeriodo(escopo, periodo, maquina)
+            .GroupBy(a => new { a.Dia, a.Fluxo, a.Agente })
+            .Select(g => new { g.Key.Dia, g.Key.Fluxo, g.Key.Agente, Total = g.Count(), Positivos = g.Count(a => a.Boa) })
+            .ToListAsync(ct);
+
+        IReadOnlyList<FeedbackPorChaveV1> PorChave(Func<string, string, string> chave)
+            => grupos
+                .GroupBy(x => chave(x.Fluxo, x.Agente), StringComparer.Ordinal)
+                .Select(g => new FeedbackPorChaveV1(g.Key, g.Sum(x => x.Total), g.Sum(x => x.Positivos), g.Sum(x => x.Total - x.Positivos)))
+                .OrderByDescending(x => x.Total).ThenBy(x => x.Chave, StringComparer.Ordinal)
+                .ToArray();
+
+        var total = grupos.Sum(x => x.Total);
+        var positivos = grupos.Sum(x => x.Positivos);
+        var porDia = grupos
+            .GroupBy(x => x.Dia)
+            .OrderBy(g => g.Key)
+            .Select(g => new FeedbackPorDiaV1(g.Key, g.Sum(x => x.Positivos), g.Sum(x => x.Total - x.Positivos)))
+            .ToArray();
+
+        return new MetricasDeFeedbackV1(
+            periodo.De, periodo.Ate, total, positivos, total - positivos,
+            PorChave((fluxo, _) => RegrasDeAvaliacao.ChaveDoFluxo(fluxo)), PorChave((_, agente) => RegrasDeAvaliacao.ChaveDoAgente(agente)), porDia);
+    }
+
+    /// <summary>As avaliações do escopo com o <c>em</c> no período (os dois dias inclusive) e da máquina, quando filtrada.</summary>
+    private IQueryable<AvaliacaoDeEntrega> AvaliacoesNoPeriodo(EscopoDoPainel escopo, Periodo periodo, int? maquina)
+    {
+        var de = periodo.De.ToDateTime(TimeOnly.MinValue);
+        var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        return Avaliacoes(escopo).Where(a => a.EmUtc >= de && a.EmUtc < ate && (maquina == null || a.MaquinaId == maquina));
+    }
+
+    /// <summary>
+    /// As avaliações de entrega do escopo (US #417), com o recorte do log: tudo para o admin; para o gestor, as
+    /// das máquinas que consentiram e dadas a partir do INSTANTE do consentimento.
+    /// </summary>
+    private IQueryable<AvaliacaoDeEntrega> Avaliacoes(EscopoDoPainel escopo)
+    {
+        var avaliacoes = db.AvaliacoesDeEntrega.AsNoTracking();
+        if (escopo.EhAdmin)
+            return avaliacoes;
+
+        var empresa = escopo.EmpresaId;
+        return avaliacoes.Where(a => db.Maquinas.Any(m =>
+            m.Id == a.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && a.EmUtc >= m.ConsentiuEmUtc));
+    }
+
     /// <summary>Quantas fotos de ROI a lista devolve (as mais recentes); os totais são de todas.</summary>
     public const int RoiMaximosNaLista = 200;
 

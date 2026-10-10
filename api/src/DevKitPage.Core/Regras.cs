@@ -176,6 +176,69 @@ public static class RegrasDeRoi
     }
 }
 
+/// <summary>
+/// As regras da avaliação de entrega (US #417), no espírito das do ROI: a avaliação torta (sem sessão, turno
+/// negativo) é DESCARTADA, e não recusa o lote — o evento continua contando no total diário. Os textos são
+/// cortados no tamanho das colunas, e o work item inválido vira nulo.
+/// </summary>
+public static class RegrasDeAvaliacao
+{
+    /// <summary>O tamanho máximo da sessão (o mesmo do evento bruto).</summary>
+    public const int TamanhoMaximoDaSessao = 100;
+
+    /// <summary>O tamanho máximo do agente (o CLI).</summary>
+    public const int TamanhoMaximoDoAgente = 50;
+
+    /// <summary>O tamanho máximo do modelo.</summary>
+    public const int TamanhoMaximoDoModelo = 100;
+
+    /// <summary>
+    /// A avaliação pronta para gravar (ainda sem máquina, evento e instante), ou nula quando não há avaliação
+    /// válida. A <paramref name="sessaoId"/> é a do evento: sem ela a chave (máquina, sessão, turno) juntaria
+    /// tasks diferentes.
+    /// </summary>
+    public static AvaliacaoDeEntrega? Avaliacao(AvaliacaoV1? avaliacao, string? sessaoId)
+    {
+        var sessao = Cortar(sessaoId, TamanhoMaximoDaSessao);
+        if (avaliacao is null || sessao.Length == 0 || avaliacao.Turno < 0)
+            return null;
+
+        return new AvaliacaoDeEntrega
+        {
+            SessaoId = sessao,
+            Turno = avaliacao.Turno,
+            Boa = avaliacao.Boa,
+            Motivo = Cortar(avaliacao.Motivo, ValidadorDeLote.TamanhoMaximoDoTexto),
+            Agente = Cortar(avaliacao.Agente, TamanhoMaximoDoAgente),
+            Modelo = Cortar(avaliacao.Modelo, TamanhoMaximoDoModelo),
+            Fluxo = Cortar(avaliacao.Fluxo, ValidadorDeLote.TamanhoMaximoDoTexto),
+            WorkItemId = avaliacao.WorkItem is > 0 ? avaliacao.WorkItem : null,
+        };
+    }
+
+    /// <summary>A chave do fluxo nas métricas: o vazio vira <see cref="ChavesDoFeedback.SemFluxo"/>.</summary>
+    public static string ChaveDoFluxo(string? fluxo) => string.IsNullOrWhiteSpace(fluxo) ? ChavesDoFeedback.SemFluxo : fluxo;
+
+    /// <summary>A chave do agente nas métricas: o vazio vira <see cref="ChavesDoFeedback.SemAgente"/>.</summary>
+    public static string ChaveDoAgente(string? agente) => string.IsNullOrWhiteSpace(agente) ? ChavesDoFeedback.SemAgente : agente;
+
+    /// <summary>
+    /// O problema do período pedido às rotas do feedback, ou vazio: <c>de</c> depois de <c>ate</c> é 400 —
+    /// a ferramenta de análise do dev.kit lê a API, e um período invertido é defeito dela, não algo a corrigir
+    /// em silêncio. Ausentes, valem os padrões de <see cref="Periodo.Pedido"/>.
+    /// </summary>
+    public static string ValidarPeriodo(DateOnly? de, DateOnly? ate)
+        => de is { } inicio && ate is { } fim && inicio > fim
+            ? $"Período inválido: de ({inicio:yyyy-MM-dd}) é depois de ate ({fim:yyyy-MM-dd})."
+            : string.Empty;
+
+    private static string Cortar(string? texto, int tamanho)
+    {
+        var limpo = (texto ?? string.Empty).Trim();
+        return limpo.Length <= tamanho ? limpo : limpo[..tamanho];
+    }
+}
+
 /// <summary>A política de senha do dashboard.</summary>
 public static class PoliticaDeSenha
 {

@@ -245,6 +245,36 @@ public sealed class RoiDeWorkItem
 }
 
 /// <summary>
+/// A avaliação (o joinha) de um turno do agente (US #417): uma linha por (<see cref="MaquinaId"/>,
+/// <see cref="SessaoId"/>, <see cref="Turno"/>), substituída na ingestão só por um <c>EntregaAvaliada</c>
+/// igual ou MAIS NOVO (<see cref="EmUtc"/>) — avaliar de novo o mesmo turno troca a nota, não soma outra.
+/// Não é expurgada com os brutos: é o dado das métricas de feedback.
+/// </summary>
+public sealed class AvaliacaoDeEntrega
+{
+    public long Id { get; set; }
+    public int MaquinaId { get; set; }
+    public Maquina? Maquina { get; set; }
+    public string SessaoId { get; set; } = string.Empty;
+    public int Turno { get; set; }
+    public bool Boa { get; set; }
+    public string Motivo { get; set; } = string.Empty;
+    public string Agente { get; set; } = string.Empty;
+    public string Modelo { get; set; } = string.Empty;
+    public string Fluxo { get; set; } = string.Empty;
+    public int? WorkItemId { get; set; }
+
+    /// <summary>O <c>em</c> do evento que trouxe a avaliação: é por ele que "o mais recente vence".</summary>
+    public DateTime EmUtc { get; set; }
+
+    /// <summary>O dia (UTC) do <see cref="EmUtc"/> — a chave da série por dia.</summary>
+    public DateOnly Dia { get; set; }
+
+    /// <summary>O evento que trouxe a avaliação (para conferir de onde ela veio).</summary>
+    public string EventId { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// O total CONSOLIDADO de um tipo (e recorte) por máquina e dia. Atualizado na ingestão, junto com
 /// o evento bruto, e nunca tocado pelo expurgo: é por isso que o histórico do dashboard sobrevive à
 /// retenção dos eventos.

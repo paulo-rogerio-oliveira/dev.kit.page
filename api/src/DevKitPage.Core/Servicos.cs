@@ -109,6 +109,15 @@ public interface IConsultasDoPainel
     /// escopo (e da máquina, quando filtrada), das mais recentes para as mais antigas, com os totais.
     /// </summary>
     Task<RoiResposta> RoiAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
+
+    /// <summary>
+    /// As avaliações de entrega (US #417) do período, no escopo (e da máquina, quando filtrada): a mais recente
+    /// de cada (máquina, sessão, turno), das mais novas para as mais antigas, paginadas.
+    /// </summary>
+    Task<Pagina<FeedbackV1>> FeedbackAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct);
+
+    /// <summary>As métricas do feedback (US #417) no período e no escopo: total, positivos e negativos, por fluxo, por agente e por dia.</summary>
+    Task<MetricasDeFeedbackV1> MetricasDeFeedbackAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
 }
 
 /// <summary>As empresas do plano empresarial e os gestores delas (US #381) — só o admin.</summary>

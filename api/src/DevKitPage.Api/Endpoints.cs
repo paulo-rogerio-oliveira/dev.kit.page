@@ -193,6 +193,17 @@ public static class Endpoints
         grupo.MapGet("/roi", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.RoiAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct));
 
+        // O feedback das entregas (US #417): o joinha de cada turno avaliado e as métricas dele — o que a
+        // ferramenta de análise do dev.kit lê (nunca o banco). O período invertido é 400, e não trocado em
+        // silêncio como nas rotas da tela.
+        grupo.MapGet("/feedback", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComPeriodoValido(de, ate, () => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.FeedbackAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 50, ct)), ct)));
+
+        grupo.MapGet("/feedback/metricas", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComPeriodoValido(de, ate, () => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.MetricasDeFeedbackAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct)));
+
         // Os pedidos de demonstração: ler e excluir (eliminação a pedido do titular) — contatos de
         // venda, só do admin (o gestor de uma empresa cliente não os vê).
         grupo.MapGet("/demonstracoes", (int? pagina, int? tamanho, IPedidosDeDemonstracao pedidos, CancellationToken ct)
@@ -346,6 +357,15 @@ public static class Endpoints
         if (maquina is { } id && !await consultas.MaquinaVisivelAsync(escopo, id, ct))
             return Results.Forbid();
         return await consulta(escopo);
+    }
+
+    /// <summary>Roda a consulta só com o período válido (<see cref="RegrasDeAvaliacao.ValidarPeriodo"/>); senão 400 com o ProblemDetails.</summary>
+    private static Task<IResult> ComPeriodoValido(DateOnly? de, DateOnly? ate, Func<Task<IResult>> consulta)
+    {
+        var problema = RegrasDeAvaliacao.ValidarPeriodo(de, ate);
+        return problema.Length > 0
+            ? Task.FromResult(Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest))
+            : consulta();
     }
 
     /// <summary>Roda a consulta de um grupo de erro só se ele tiver ocorrência no escopo — senão 403 para o gestor, 404 para o admin.</summary>

@@ -31,9 +31,27 @@ public static class ContratoV1
 /// Opcional (US #387): a FOTO do ROI de um work item, que só vem no <see cref="TiposDeEvento.RoiCalculado"/>.
 /// Um dev.kit antigo nunca o manda — campo novo opcional, sem v2.
 /// </param>
+/// <param name="Avaliacao">
+/// Opcional (US #417): o joinha do desenvolvedor sobre um turno do agente, que só vem no
+/// <see cref="TiposDeEvento.EntregaAvaliada"/>. Um dev.kit antigo não o manda — campo novo opcional, sem v2.
+/// </param>
 public sealed record TelemetryEventV1(
     string EventId, string Tipo, string SessaoId, int Quantidade, long? Valor, string Detalhe, DateTimeOffset Em,
-    string? Trace = null, string? Assinatura = null, RoiV1? Roi = null);
+    string? Trace = null, string? Assinatura = null, RoiV1? Roi = null, AvaliacaoV1? Avaliacao = null);
+
+/// <summary>
+/// A avaliação (o joinha) que o desenvolvedor deu à entrega de um turno do agente (US #417). É uma
+/// por (máquina, <see cref="TelemetryEventV1.SessaoId"/>, <see cref="Turno"/>): o mesmo turno avaliado de
+/// novo SUBSTITUI a avaliação anterior — vale a mais recente pelo <c>em</c> do evento —, nunca soma.
+/// </summary>
+/// <param name="Boa">O joinha: verdadeiro = positivo, falso = negativo.</param>
+/// <param name="Motivo">O motivo, da lista fechada do <see cref="TiposDeEvento.EntregaAvaliada"/>; vazio na boa sem motivo.</param>
+/// <param name="Agente">O agente (CLI) que fez o turno: claude, kiro, kimi, glm… Vazio quando não se sabe.</param>
+/// <param name="Modelo">O modelo efetivo do agente no turno; vazio quando não se sabe.</param>
+/// <param name="Fluxo">O id do fluxo da task; vazio na task sem fluxo.</param>
+/// <param name="WorkItem">O work item vinculado à task, quando há.</param>
+/// <param name="Turno">O número do turno do agente avaliado na sessão (a chave da substituição).</param>
+public sealed record AvaliacaoV1(bool Boa, string Motivo, string Agente, string Modelo, string Fluxo, int? WorkItem, int Turno);
 
 /// <summary>
 /// O ROI de um work item como o dev.kit o calculou (US #387, <c>devcli roi</c>): é uma FOTO, e não uma
@@ -117,7 +135,11 @@ public static class TiposDeEvento
     // Gravados desde já nos totais diários (por tipo e detalhe), para o histórico acumular; os
     // indicadores do painel ficam para a fase 2. Nenhum leva campo novo: só Valor e Detalhe.
 
-    /// <summary>O desenvolvedor avaliou a entrega: <see cref="TelemetryEventV1.Detalhe"/> = o motivo (lista fechada), valor 1 = boa, 0 = ruim.</summary>
+    /// <summary>
+    /// O desenvolvedor avaliou a entrega: <see cref="TelemetryEventV1.Detalhe"/> = o motivo (lista fechada), valor 1 = boa, 0 = ruim.
+    /// Desde a US #417 leva a <see cref="TelemetryEventV1.Avaliacao"/> (agente, modelo, fluxo, work item e turno),
+    /// que a ingestão grava na tabela própria do feedback; sem ela o evento só conta no total diário.
+    /// </summary>
     public const string EntregaAvaliada = "EntregaAvaliada";
 
     /// <summary>A entrega ficou pronta (o começo do tempo de revisão): detalhe = a origem (<c>objetivo</c>, <c>resumo</c>, <c>turno</c>).</summary>
