@@ -24,6 +24,22 @@ export function papelDa(sessao: LoginResponse): Papel {
   return sessao.papel ?? (sessao.ehAdmin ? 'admin' : 'gestor');
 }
 
+/** O painel é do admin e do gestor (US #405): o dev entra para baixar o dev.kit, mas a API o recusa no painel. */
+export function entraNoPainel(sessao: LoginResponse): boolean {
+  return papelDa(sessao) !== 'dev';
+}
+
+/**
+ * Para onde a sessão vai depois do login (e da troca de senha): a troca pendente primeiro; depois o
+ * painel — ou, para o dev, a página inicial, onde fica o "Baixar o dev.kit". `de` é a página que pediu
+ * o login (a landing, ao baixar), e vale quando a sessão pode abri-la.
+ */
+export function destinoDa(sessao: LoginResponse, de?: string | null): string {
+  if (sessao.deveTrocarSenha) return '/trocar-senha';
+  if (de && de !== '/login' && de !== '/trocar-senha' && (entraNoPainel(sessao) || de === '/')) return de;
+  return entraNoPainel(sessao) ? '/dashboard' : '/';
+}
+
 /** A sessão gravada, se ainda não venceu. */
 export function sessaoGravada(agora = Date.now()): LoginResponse | null {
   try {

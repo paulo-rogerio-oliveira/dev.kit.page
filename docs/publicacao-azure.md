@@ -51,6 +51,10 @@ No App Service, além das variáveis da tabela abaixo:
 | `Telemetria__RetencaoDias` | 180 (ou o que a política pedir) |
 | `Demonstracoes__RetencaoDias` | 365 — por quanto tempo o pedido de demonstração fica guardado (LGPD) |
 | `Demonstracoes__LimitePorMinuto` | 5 — pedidos por minuto por IP de cliente no formulário (429 acima) |
+| `REPO_KEY` | **Segredo** (US #405): o PAT do GitHub com leitura do repositório do dev.kit (fine-grained, *Contents: Read-only* no `git.kit`), para a API ler as Releases e fazer o proxy do zip. Referência ao Key Vault (`repo-key`). É lido SÓ desta variável — um `Atualizacao:Token` no appsettings é ignorado. Sem ele, `GET /api/versoes/ultima` e o download respondem **503** (e a landing mostra "Download indisponível") |
+| `Atualizacao__Repositorio` | `owner/nome` das releases — padrão `paulo-rogerio-oliveira/git.kit` |
+| `Atualizacao__CacheMinutos` | 5 — por quanto tempo a lista de releases fica em memória (o GitHub limita as chamadas por token) |
+| `DEVKIT_LOGIN_OBRIGATORIO` | `true` (ou `1`) liga a política de login do app (US #405), devolvida em `GET /api/auth/politica` e no `loginObrigatorio` da última versão; ausente, desligada |
 | `Proxy__RedesConfiaveis__0` | A rede (CIDR) do proxy na frente da API — no Container Apps, a sub-rede do ambiente (ex.: `100.100.0.0/16`, confira em *Networking* do ambiente). Sem ela o `X-Forwarded-For` é ignorado e todos os visitantes dividem a cota do IP do proxy |
 
 Dê à identidade gerenciada da API o papel **Key Vault Secrets User** no cofre.
@@ -127,6 +131,24 @@ exportações por usuário é `Painel__ExportacoesPorMinuto` (padrão 10).
 Rode também `api/scripts/sqlserver/RoiDeWorkItem.sql` (idempotente): cria `RoisDeWorkItem`, a foto do
 ROI por (máquina, work item). Sem a tabela, o lote que traz um `RoiCalculado` com o campo `roi` falha
 com 500 — e o dev.kit o reenvia até ela existir, sem perder nada da fila local.
+
+### Feedback das entregas (US #417)
+
+Rode também `api/scripts/sqlserver/AvaliacoesDeEntrega.sql` (idempotente): cria `AvaliacoesDeEntrega`, o
+joinha mais recente por (máquina, sessão, turno). Sem a tabela, o lote que traz um `EntregaAvaliada` com o
+campo `avaliacao` falha com 500 — e o dev.kit o reenvia até ela existir, sem perder nada da fila local.
+
+### Gestão de usuários e atualização do dev.kit (US #405)
+
+Rode também `api/scripts/sqlserver/Usuarios.sql` (idempotente): acrescenta a `Usuarios` o nome de exibição
+(`Nome`) e o bloqueio pelo admin (`BloqueadoPeloAdmin`). Sem as colunas, o login falha com 500. O papel
+`dev` não precisa de nada no banco (a coluna `Papel` já é texto).
+
+Para o "Baixar o dev.kit" e a atualização do app, configure o `REPO_KEY` (tabela acima). O zip passa pela
+API em streaming (sem bufferizar a memória), então o tempo do download conta no *timeout* de requisição do
+proxy da plataforma — confira o da sua opção (App Service ou Container Apps) para o tamanho do pacote.
+O workflow `release.yml` do git.kit publica o zip e o `<zip>.sha256` em cada release; prerelease e
+rascunho não são oferecidos.
 
 ## Web
 

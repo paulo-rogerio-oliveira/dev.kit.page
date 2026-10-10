@@ -67,6 +67,7 @@ export function Empresas() {
         <span className="marca">dev<span className="marca-ponto">.</span>kit <small>empresas</small></span>
         <nav>
           <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
+          <Link className="botao botao-fantasma" to="/usuarios">Usuários</Link>
           <span className="usuario">{sessao!.login}</span>
           <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
         </nav>

@@ -52,6 +52,70 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("AcessosAosDados", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.AvaliacaoDeEntrega", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Agente")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Boa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Dia")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fluxo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaquinaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Modelo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SessaoId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Turno")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("WorkItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmUtc");
+
+                    b.HasIndex("MaquinaId", "SessaoId", "Turno")
+                        .IsUnique();
+
+                    b.ToTable("AvaliacoesDeEntrega", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Empresa", b =>
                 {
                     b.Property<int>("Id")
@@ -459,6 +523,9 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime?>("BloqueadoAteUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("BloqueadoPeloAdmin")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
 
@@ -475,6 +542,11 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Login")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -497,6 +569,17 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Usuarios", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.AvaliacaoDeEntrega", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Maquina", "Maquina")
+                        .WithMany()
+                        .HasForeignKey("MaquinaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Maquina");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>

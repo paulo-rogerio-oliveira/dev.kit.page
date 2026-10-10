@@ -36,6 +36,13 @@ public static class Seguranca
     /// </summary>
     public const string PoliticaAdmin = "Admin";
 
+    /// <summary>
+    /// A política do painel (<c>/api/dashboard</c>, US #405): o admin e o gestor, sem troca pendente. O dev
+    /// (o usuário do dev.kit) entra no app e baixa a versão, mas recebe 403 aqui — a regra mora no
+    /// <see cref="Papeis.EntraNoPainel"/>, e o <see cref="EscopoDoPainel"/> dele também é nulo (defesa em dobro).
+    /// </summary>
+    public const string PoliticaPainel = "Painel";
+
     /// <summary>A claim da empresa do gestor (US #381) — o <see cref="EscopoDoPainel"/> sai dela e do papel.</summary>
     public const string ClaimEmpresa = "empresa";
 
@@ -71,6 +78,9 @@ public static class Seguranca
                 .RequireAuthenticatedUser()
                 .RequireRole(Papeis.Admin)
                 .RequireAssertion(c => !c.User.HasClaim(ClaimTrocaPendente, "true")))
+            .AddPolicy(PoliticaPainel, p => p.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
+                .RequireAuthenticatedUser()
+                .RequireAssertion(c => !c.User.HasClaim(ClaimTrocaPendente, "true") && Papeis.EntraNoPainel(c.User.FindFirstValue("role"))))
             .AddPolicy(PoliticaMaquina, p => p.AddAuthenticationSchemes(AutenticacaoDeMaquina.Esquema).RequireClaim(AutenticacaoDeMaquina.ClaimDaMaquina));
 
         servicos.AddSingleton<EmissorDeToken>();

@@ -5,7 +5,7 @@ namespace DevKitPage.Infrastructure;
 
 /// <summary>
 /// A base do dev.kit.page: usuários, máquinas, eventos brutos, totais diários, grupos e ocorrências de
-/// exceção não classificada, fotos do ROI por work item e pedidos de demonstração. As datas vão em
+/// exceção não classificada, fotos do ROI por work item, avaliações de entrega e pedidos de demonstração. As datas vão em
 /// UTC (<see cref="DateTime"/>) — o SQLite não compara <see cref="DateTimeOffset"/> no SQL, e a
 /// API converte na borda.
 /// </summary>
@@ -21,6 +21,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<Empresa> Empresas => Set<Empresa>();
     public DbSet<AcessoAosDados> AcessosAosDados => Set<AcessoAosDados>();
     public DbSet<RoiDeWorkItem> RoisDeWorkItem => Set<RoiDeWorkItem>();
+    public DbSet<AvaliacaoDeEntrega> AvaliacoesDeEntrega => Set<AvaliacaoDeEntrega>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(u => u.Login).HasMaxLength(100);
             e.Property(u => u.SenhaHash).HasMaxLength(500);
             e.Property(u => u.Papel).HasMaxLength(20);
+            // A gestão de usuários (US #405). No Azure SQL as colunas vêm de api/scripts/sqlserver/Usuarios.sql.
+            e.Property(u => u.Nome).HasMaxLength(ValidadorDeUsuario.TamanhoMaximoDoNome);
             e.HasIndex(u => u.Login).IsUnique();
             e.HasOne(u => u.Empresa).WithMany().HasForeignKey(u => u.EmpresaId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -133,6 +136,23 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(r => new { r.MaquinaId, r.WorkItemId }).IsUnique();
             e.HasIndex(r => r.EmUtc);
             e.HasOne(r => r.Maquina).WithMany().HasForeignKey(r => r.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A avaliação de entrega (US #417): UMA por (máquina, sessão, turno) — o índice único é o que garante
+        // que avaliar de novo o mesmo turno substitui, e nunca duplica. No Azure SQL a tabela vem de
+        // api/scripts/sqlserver/AvaliacoesDeEntrega.sql.
+        modelBuilder.Entity<AvaliacaoDeEntrega>(e =>
+        {
+            e.ToTable("AvaliacoesDeEntrega");
+            e.Property(a => a.SessaoId).HasMaxLength(RegrasDeAvaliacao.TamanhoMaximoDaSessao);
+            e.Property(a => a.Motivo).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(a => a.Agente).HasMaxLength(RegrasDeAvaliacao.TamanhoMaximoDoAgente);
+            e.Property(a => a.Modelo).HasMaxLength(RegrasDeAvaliacao.TamanhoMaximoDoModelo);
+            e.Property(a => a.Fluxo).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(a => a.EventId).HasMaxLength(64);
+            e.HasIndex(a => new { a.MaquinaId, a.SessaoId, a.Turno }).IsUnique();
+            e.HasIndex(a => a.EmUtc);
+            e.HasOne(a => a.Maquina).WithMany().HasForeignKey(a => a.MaquinaId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // Sem relação com a telemetria. No Azure SQL a tabela nasce do script

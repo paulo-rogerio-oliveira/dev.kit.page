@@ -69,6 +69,38 @@ novo não quebra uma API mais velha.
 | `ObjetivoCumprido` / `ObjetivoRecusado` | — | — | objetivos aceitos × recusados |
 | `ExcecaoNaoClassificada` (US #381) | a assinatura (a API a usa como recorte) | — | exceções sem causa conhecida, agrupadas por assinatura |
 | `RoiCalculado` (US #387) | o id do work item (texto) | turnos do agente | quantos ROIs foram calculados; a foto do ROI vai no campo opcional `roi` |
+| `EntregaAvaliada` (US #399) | o motivo, da lista fechada (`nao-atendeu-o-pedido`, `quebrou-build-ou-teste`, `fora-do-padrao`, `arquitetura`, `seguranca`, `escopo-alem-do-pedido`, `inventou-api-ou-arquivo`, `retrabalho-manual-alto`, `outro`; vazio na boa sem motivo) | 1 = boa, 0 = ruim | aprovação humana e motivos de reprovação; desde a US #417 o joinha do turno vai no campo opcional `avaliacao` |
+| `EntregaPronta` (US #399) | a origem (`objetivo`, `resumo`, `turno`) | — | entregas declaradas prontas (o começo do tempo de revisão) |
+| `RevisaoHumana` (US #399) | a decisão (`aprovada`, `commit`, `devolvida`) | ms desde a entrega pronta | tempo médio de revisão humana e rodadas de devolução |
+| `TokensConsumidos` (US #399) | CLI (claude, glm…) | tokens de entrada + saída | consumo de tokens (só o CLI que mede envia) |
+| `CustoEstimado` (US #399) | CLI | micro-dólares (custo EQUIVALENTE de API) | custo dos turnos |
+| `AgenteTrocado` (US #399) | `de→para` (ex.: `claude→glm`) | — | trocas automáticas de agente no limite de uso |
+| `ComandoNegado` (US #399) | a classe (`proibido`, `nao-aprovado`) | — | comandos negados ao agente (a trilha de auditoria) |
+
+| `ImpasseDetectado` (US #405) | a origem (`mensagem-parada`, `objetivo-parado`) | minutos parado até a detecção | impasses do fluxo e o tempo parado |
+| `ImpasseResolvido` (US #405) | como destravou (`nota`, `mensagem-entregue`, `objetivo-cumprido`, `dev-falou`, `agente-pediu-avaliacao`, `cancelado`, `arbitro-reagiu`) | minutos entre a detecção e o desfecho | como e em quanto tempo os impasses destravam |
+| `ArbitroAgiu` (US #405) | `<acao>` ou `<acao>\|<seção da regra>` (ação: `cobrou`, `escalou-ao-dev`, `aprovou`, `corrigido`, `teto-de-rodadas`, `teto-de-custo`, `falha-de-comunicacao`, `reencaminhou-resposta`, `pediu-avaliacao`, `turno-no-dono`, `turno-no-leitor`) | a rodada (ou o nº da reação) | cobranças por regra, taxa de correção e escaladas ao dev |
+
+### O impasse e o árbitro (US #405)
+
+Os três tipos não levam campo novo: o recorte vai no `detalhe` e a medida no `valor`, e entram nos
+totais diários como os outros. No `ArbitroAgiu`, a seção é o **título** da seção do CLAUDE.md (ex.:
+`Arquivos alterados no turno`) — nunca texto de conversa —, e o painel separa a ação da seção pelo
+**primeiro** `|` (a seção pode conter outros). O painel de qualidade (`GET /api/dashboard/qualidade`,
+campos opcionais `impasses` e `arbitro` da `QualidadeResposta`) agrega:
+
+- **Impasses**: detectados (e por origem), a média dos minutos parado na detecção, os destravados, a média
+  dos minutos até destravar e como destravaram;
+- **Árbitro**: as ações, as cobranças (`cobrou`) por seção da regra, as correções (`corrigido`), a **taxa de
+  correção** = corrigidas ÷ cobranças (**nula sem cobrança** — a tela mostra um traço) e as escaladas ao dev
+  (`escalou-ao-dev`).
+
+Tudo no escopo de quem consulta (o gestor, só a empresa dele) e no período do filtro. Um dev.kit antigo não
+manda os tipos, e uma API antiga os ignora (`ignorados`).
+
+Nenhum tipo da US #399 leva campo novo: o texto livre da avaliação, o comando negado, o modelo efetivo e o
+detalhamento dos tokens (cache) ficam na máquina do dev. Os indicadores desses tipos no painel são a fase 2;
+os totais diários já acumulam desde a primeira versão que os envia.
 
 ### Os campos opcionais da exceção (US #381)
 
@@ -119,6 +151,32 @@ O `RoiCalculado` (o `devcli roi --id N` do dev.kit) leva, além dos campos de to
   recentes primeiro, com os totais), com o mesmo escopo das outras consultas: o gestor vê só as
   máquinas da empresa que consentiram, a partir do consentimento.
 - Um dev.kit antigo não manda o tipo nem o campo, e uma API antiga ignora o tipo desconhecido.
+
+### O campo opcional da avaliação de entrega (US #417)
+
+O `EntregaAvaliada` (o joinha da janela da task) leva, além dos campos de todo evento, o objeto
+**opcional** `avaliacao` — de novo sem mudar o v1:
+
+```json
+{ "eventId": "…", "tipo": "EntregaAvaliada", "sessaoId": "a7d0…", "quantidade": 1, "valor": 0,
+  "detalhe": "quebrou-build-ou-teste", "em": "2026-10-10T13:01:07Z",
+  "avaliacao": { "boa": false, "motivo": "quebrou-build-ou-teste", "agente": "claude", "modelo": "opus-5",
+                 "fluxo": "revisao", "workItem": 417, "turno": 3 } }
+```
+
+- `turno` é o número do turno do agente avaliado na sessão; `workItem` pode vir `null`; `agente`, `modelo`
+  e `fluxo` podem vir vazios (a task sem fluxo).
+- **Uma avaliação por (máquina, `sessaoId`, `turno`).** Avaliar de novo o mesmo turno SUBSTITUI a anterior
+  — vale a mais recente pelo `em` —, nunca soma. Um evento mais antigo que chegue depois conta no total
+  diário, mas não volta a avaliação para trás; o reenvio (o mesmo `eventId`) é descartado como os demais.
+- Sem `avaliacao` (o dev.kit anterior), sem `sessaoId` ou com `turno` negativo, o evento é aceito e contado,
+  mas não entra no feedback. Textos são cortados no tamanho das colunas.
+- A leitura (para a ferramenta de análise do dev.kit, que nunca lê o banco) fica em
+  `GET /api/dashboard/feedback?de=&ate=&maquina=&pagina=&tamanho=` (as avaliações, uma `Pagina<FeedbackV1>`:
+  `itens`, `total`, `numeroDaPagina`, `tamanho`) e `GET /api/dashboard/feedback/metricas?de=&ate=&maquina=`
+  (`MetricasDeFeedbackV1`: total, positivos e negativos, `porFluxo`, `porAgente` e `porDia`). O fluxo e o
+  agente vazios agregam sob `(sem fluxo)` e `(sem agente)`. Mesmo escopo e mesma autorização das outras
+  consultas do painel; `de` depois de `ate` é **400** (ProblemDetails), e a base vazia devolve tudo zerado.
 
 ## O que NÃO é coletado
 

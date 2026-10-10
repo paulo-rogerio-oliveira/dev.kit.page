@@ -2,8 +2,11 @@
 // O documento OpenAPI da API (/openapi/v1.json) é a fonte: `npm run gerar:tipos` gera o
 // openapi.d.ts a partir dele para conferir este arquivo quando o contrato mudar.
 
-/** O papel do usuário do dashboard (US #381): o gestor vê só a empresa dele. */
-export type Papel = 'admin' | 'gestor';
+/**
+ * O papel do usuário (US #381, US #405): o gestor vê só a empresa dele; o dev é o usuário do dev.kit —
+ * entra no app e baixa a versão, mas não no painel.
+ */
+export type Papel = 'admin' | 'gestor' | 'dev';
 
 export interface LoginResponse {
   token: string;
@@ -72,6 +75,86 @@ export interface QualidadeResposta {
   objetivosRecusados: number;
   razaoCumpridosRecusados: number | null;
   turnosPorObjetivoCumprido: number | null;
+  /** O cartão Impasses (US #405); ausente numa API anterior a ele. */
+  impasses?: ImpassesResumo | null;
+  /** O cartão Árbitro (US #405); ausente numa API anterior a ele. */
+  arbitro?: ArbitroResumo | null;
+}
+
+/** Quantas vezes um recorte (origem, desfecho, ação, regra) aparece no período. */
+export interface ContagemPorRecorte {
+  recorte: string;
+  quantidade: number;
+}
+
+/** Os impasses do fluxo no período (US #405): as médias são nulas sem evento. */
+export interface ImpassesResumo {
+  detectados: number;
+  porOrigem: ContagemPorRecorte[];
+  minutosParadoNaDeteccao: number | null;
+  destravados: number;
+  minutosAteDestravar: number | null;
+  comoDestravaram: ContagemPorRecorte[];
+}
+
+/** O árbitro no período (US #405): a taxa de correção é nula sem cobrança. */
+export interface ArbitroResumo {
+  acoes: number;
+  cobrancas: number;
+  /** A regra é o título da seção do CLAUDE.md; vazia é a cobrança sem seção. */
+  cobrancasPorRegra: ContagemPorRecorte[];
+  corrigidas: number;
+  taxaDeCorrecao: number | null;
+  escaladasAoDev: number;
+  porAcao: ContagemPorRecorte[];
+}
+
+/** A última versão estável do dev.kit (US #405, GET /api/versoes/ultima — anônima). */
+export interface VersaoDoDevKit {
+  versao: number;
+  tag: string;
+  nome: string;
+  publicadaEm: string;
+  destaques: string[];
+  tamanhoBytes: number;
+  sha256: string | null;
+  /** A rota da API que entrega o zip — autenticada (Bearer). */
+  urlDownload: string;
+  loginObrigatorio: boolean;
+}
+
+/** Um usuário na lista do admin (US #405). A senha nunca vem aqui. */
+export interface UsuarioResumo {
+  id: number;
+  login: string;
+  nome: string;
+  papel: Papel;
+  empresaId: number | null;
+  empresa: string | null;
+  bloqueado: boolean;
+  /** O bloqueio temporário por falhas de login, quando vale. */
+  bloqueadoAte: string | null;
+  deveTrocarSenha: boolean;
+  criadoEm: string;
+}
+
+export interface UsuarioNovo {
+  login: string;
+  nome: string;
+  papel: Papel;
+  empresaId: number | null;
+}
+
+export interface UsuarioEditado {
+  nome: string;
+  papel: Papel;
+  empresaId: number | null;
+}
+
+/** A resposta da criação e da redefinição: a senha temporária vem UMA vez. */
+export interface UsuarioComSenha {
+  usuario: UsuarioResumo;
+  senhaTemporaria: string;
 }
 
 export interface EventoDoLog {

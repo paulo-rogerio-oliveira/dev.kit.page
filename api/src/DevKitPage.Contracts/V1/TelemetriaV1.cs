@@ -31,9 +31,27 @@ public static class ContratoV1
 /// Opcional (US #387): a FOTO do ROI de um work item, que só vem no <see cref="TiposDeEvento.RoiCalculado"/>.
 /// Um dev.kit antigo nunca o manda — campo novo opcional, sem v2.
 /// </param>
+/// <param name="Avaliacao">
+/// Opcional (US #417): o joinha do desenvolvedor sobre um turno do agente, que só vem no
+/// <see cref="TiposDeEvento.EntregaAvaliada"/>. Um dev.kit antigo não o manda — campo novo opcional, sem v2.
+/// </param>
 public sealed record TelemetryEventV1(
     string EventId, string Tipo, string SessaoId, int Quantidade, long? Valor, string Detalhe, DateTimeOffset Em,
-    string? Trace = null, string? Assinatura = null, RoiV1? Roi = null);
+    string? Trace = null, string? Assinatura = null, RoiV1? Roi = null, AvaliacaoV1? Avaliacao = null);
+
+/// <summary>
+/// A avaliação (o joinha) que o desenvolvedor deu à entrega de um turno do agente (US #417). É uma
+/// por (máquina, <see cref="TelemetryEventV1.SessaoId"/>, <see cref="Turno"/>): o mesmo turno avaliado de
+/// novo SUBSTITUI a avaliação anterior — vale a mais recente pelo <c>em</c> do evento —, nunca soma.
+/// </summary>
+/// <param name="Boa">O joinha: verdadeiro = positivo, falso = negativo.</param>
+/// <param name="Motivo">O motivo, da lista fechada do <see cref="TiposDeEvento.EntregaAvaliada"/>; vazio na boa sem motivo.</param>
+/// <param name="Agente">O agente (CLI) que fez o turno: claude, kiro, kimi, glm… Vazio quando não se sabe.</param>
+/// <param name="Modelo">O modelo efetivo do agente no turno; vazio quando não se sabe.</param>
+/// <param name="Fluxo">O id do fluxo da task; vazio na task sem fluxo.</param>
+/// <param name="WorkItem">O work item vinculado à task, quando há.</param>
+/// <param name="Turno">O número do turno do agente avaliado na sessão (a chave da substituição).</param>
+public sealed record AvaliacaoV1(bool Boa, string Motivo, string Agente, string Modelo, string Fluxo, int? WorkItem, int Turno);
 
 /// <summary>
 /// O ROI de um work item como o dev.kit o calculou (US #387, <c>devcli roi</c>): é uma FOTO, e não uma
@@ -113,11 +131,99 @@ public static class TiposDeEvento
     /// </summary>
     public const string RoiCalculado = "RoiCalculado";
 
+    // ----- US #399: a avaliação humana, a revisão, o custo e as falhas sem ninguém na frente -----
+    // Gravados desde já nos totais diários (por tipo e detalhe), para o histórico acumular; os
+    // indicadores do painel ficam para a fase 2. Nenhum leva campo novo: só Valor e Detalhe.
+
+    /// <summary>
+    /// O desenvolvedor avaliou a entrega: <see cref="TelemetryEventV1.Detalhe"/> = o motivo (lista fechada), valor 1 = boa, 0 = ruim.
+    /// Desde a US #417 leva a <see cref="TelemetryEventV1.Avaliacao"/> (agente, modelo, fluxo, work item e turno),
+    /// que a ingestão grava na tabela própria do feedback; sem ela o evento só conta no total diário.
+    /// </summary>
+    public const string EntregaAvaliada = "EntregaAvaliada";
+
+    /// <summary>A entrega ficou pronta (o começo do tempo de revisão): detalhe = a origem (<c>objetivo</c>, <c>resumo</c>, <c>turno</c>).</summary>
+    public const string EntregaPronta = "EntregaPronta";
+
+    /// <summary>A decisão do desenvolvedor: detalhe = <c>aprovada</c>, <c>commit</c> ou <c>devolvida</c>; valor = ms desde a entrega pronta.</summary>
+    public const string RevisaoHumana = "RevisaoHumana";
+
+    /// <summary>Os tokens de um turno: detalhe = o CLI; valor = entrada + saída.</summary>
+    public const string TokensConsumidos = "TokensConsumidos";
+
+    /// <summary>O custo equivalente de API de um turno: detalhe = o CLI; valor em micro-dólares.</summary>
+    public const string CustoEstimado = "CustoEstimado";
+
+    /// <summary>A troca automática de agente no limite de uso: detalhe = <c>de→para</c>.</summary>
+    public const string AgenteTrocado = "AgenteTrocado";
+
+    /// <summary>Um comando negado ao agente: detalhe = a classe (<c>proibido</c> ou <c>nao-aprovado</c>).</summary>
+    public const string ComandoNegado = "ComandoNegado";
+
+    // ----- US #405 (#411): o impasse do fluxo e o árbitro que reage a ele -----
+    // Wire v1 sem campo novo: o recorte vai no Detalhe e a medida no Valor. O painel de qualidade os
+    // agrega nos cartões Impasses e Árbitro (CalculoDeQualidade).
+
+    /// <summary>
+    /// O fluxo parou à espera de algo que não chega: <see cref="TelemetryEventV1.Detalhe"/> = a origem
+    /// (<see cref="OrigensDoImpasse"/>); <see cref="TelemetryEventV1.Valor"/> = os minutos parado até a detecção.
+    /// </summary>
+    public const string ImpasseDetectado = "ImpasseDetectado";
+
+    /// <summary>
+    /// O impasse destravou: detalhe = como (<c>nota</c>, <c>mensagem-entregue</c>, <c>objetivo-cumprido</c>,
+    /// <c>dev-falou</c>, <c>agente-pediu-avaliacao</c>, <c>cancelado</c>, <c>arbitro-reagiu</c>); valor = os
+    /// minutos entre a detecção e o desfecho.
+    /// </summary>
+    public const string ImpasseResolvido = "ImpasseResolvido";
+
+    /// <summary>
+    /// O árbitro agiu: detalhe = <c>&lt;acao&gt;</c> ou <c>&lt;acao&gt;|&lt;seção da regra&gt;</c> (a ação em
+    /// <see cref="AcoesDoArbitro"/>; a seção é o TÍTULO da seção do CLAUDE.md, nunca texto de conversa);
+    /// valor = a rodada (ou o número da reação).
+    /// </summary>
+    public const string ArbitroAgiu = "ArbitroAgiu";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         ArquivoAlterado, FluxoExecutado, FerramentaAcionada, ComandoDelegado, TurnoExecutado,
         TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada, ExcecaoNaoClassificada,
         RoiCalculado,
+        EntregaAvaliada, EntregaPronta, RevisaoHumana, TokensConsumidos, CustoEstimado, AgenteTrocado, ComandoNegado,
+        ImpasseDetectado, ImpasseResolvido, ArbitroAgiu,
     };
+}
+
+/// <summary>As origens de um <see cref="TiposDeEvento.ImpasseDetectado"/> (o recorte do evento).</summary>
+public static class OrigensDoImpasse
+{
+    /// <summary>Uma mensagem entre tasks ficou sem resposta.</summary>
+    public const string MensagemParada = "mensagem-parada";
+
+    /// <summary>O objetivo do fluxo não andou (nenhuma nota, nenhum envio).</summary>
+    public const string ObjetivoParado = "objetivo-parado";
+}
+
+/// <summary>
+/// As ações de um <see cref="TiposDeEvento.ArbitroAgiu"/> — a parte do detalhe antes do primeiro <c>|</c>.
+/// O painel conta as cobranças por regra, a taxa de correção (<see cref="Corrigido"/> sobre
+/// <see cref="Cobrou"/>) e as escaladas ao desenvolvedor.
+/// </summary>
+public static class AcoesDoArbitro
+{
+    /// <summary>O separador entre a ação e a seção da regra no detalhe.</summary>
+    public const char Separador = '|';
+
+    public const string Cobrou = "cobrou";
+    public const string EscalouAoDev = "escalou-ao-dev";
+    public const string Aprovou = "aprovou";
+    public const string Corrigido = "corrigido";
+    public const string TetoDeRodadas = "teto-de-rodadas";
+    public const string TetoDeCusto = "teto-de-custo";
+    public const string FalhaDeComunicacao = "falha-de-comunicacao";
+    public const string ReencaminhouResposta = "reencaminhou-resposta";
+    public const string PediuAvaliacao = "pediu-avaliacao";
+    public const string TurnoNoDono = "turno-no-dono";
+    public const string TurnoNoLeitor = "turno-no-leitor";
 }

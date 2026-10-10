@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  BENEFICIOS, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, PASSOS, PERGUNTAS, PRODUTOS_COMPARADOS, RECURSOS, ROTULO_DA_DISPONIBILIDADE, SECOES, SEGURANCA,
+  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PRODUTOS_COMPARADOS, RECURSOS, RODAPE,
+  ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA,
 } from './landing';
 
 // Relativo a este arquivo (src/conteudo), e não à pasta de onde o Vitest foi chamado.
@@ -9,24 +10,31 @@ const PUBLICO = join(__dirname, '..', '..', 'public');
 const arquivo = (url: string) => join(PUBLICO, ...url.split('/').filter(Boolean));
 
 describe('conteúdo da landing', () => {
-  it('as seções seguem a ordem da US #283, com o comparativo e as empresas da US #381', () => {
+  it('as seções seguem a proposta da US #405 e mantêm as da US #283 e da US #381', () => {
     expect(SECOES.map((s) => s.id)).toEqual([
-      'inicio', 'beneficios', 'como-funciona', 'recursos', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'contato', 'faq', 'comecar',
+      'inicio', 'como-funciona', 'beneficios', 'recursos', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'contato', 'faq', 'comecar',
     ]);
+    // O menu e o rodapé só apontam para seções que existem.
+    for (const id of [...MENU, ...RODAPE]) expect(SECOES.map((s) => s.id)).toContain(id);
+    expect(MENU.map(rotuloDaSecao)).toEqual(['Como funciona', 'Recursos', 'Integrações', 'Segurança', 'Perguntas']);
+  });
+
+  it('o hero destaca "Pull Request" no título e a amostra do Board traz a nota aceita', () => {
+    expect(HERO.titulo.endsWith(HERO.destaque)).toBe(true);
+    expect(HERO.selo).toBe('Para times no Azure DevOps');
+    expect(AMOSTRA_DO_BOARD.nota).toEqual({ valor: 'Nota 92/100', texto: 'Aceito: acima da nota mínima' });
   });
 
   it('nenhum texto da página explica o dashboard nem fala em métricas (US #381)', () => {
-    const textos = JSON.stringify([HERO, BENEFICIOS, PASSOS, RECURSOS, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PERGUNTAS]);
+    const textos = JSON.stringify([HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PERGUNTAS]);
 
     expect(textos).not.toMatch(/dashboard/i);
     expect(textos).not.toMatch(/m[ée]tricas?/i);
     expect(BENEFICIOS.map((b) => b.titulo)).not.toContain('Uso e qualidade medidos');
   });
 
-  it('o fluxo é contado em etapas nomeadas, com avaliadores, gatilhos, objetivo, aprovação e fechamento', () => {
-    expect(PASSOS.map((p) => p.titulo)).toEqual([
-      'Work item', 'Executor', 'Avaliadores com nota mínima', 'Gatilhos entre agentes', 'Objetivo cumprido', 'Sua aprovação', 'Fechamento com a PR',
-    ]);
+  it('o fluxo é contado nas sete etapas da proposta, e o recurso Fluxos explica avaliadores, gatilhos e impasse', () => {
+    expect(PASSOS.map((p) => p.titulo)).toEqual(['Clona', 'Implementa', 'Compila', 'Testa', 'Avalia', 'Commit e push', 'Pull Request']);
     const fluxos = RECURSOS.find((r) => r.id === 'fluxos')!.texto;
     for (const termo of ['ao enviar', 'ao revisar', 'ao cumprir o objetivo', 'ao aprovar', 'teto de rodadas', 'impasse', 'parâmetros', 'Exporte e importe'])
       expect(fluxos).toContain(termo);

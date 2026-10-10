@@ -21,10 +21,23 @@ public static class Endpoints
             return resultado switch
             {
                 ResultadoDoLogin.Ok => Results.Ok(emissor.Emitir(usuario!)),
-                ResultadoDoLogin.Bloqueado => Results.Problem("Usuário bloqueado por excesso de tentativas. Tente de novo mais tarde.", statusCode: StatusCodes.Status423Locked),
+                // O bloqueio temporário diz ATÉ quando (US #405): o app mostra a hora de tentar de novo.
+                ResultadoDoLogin.Bloqueado => Results.Problem(
+                    "Usuário bloqueado por excesso de tentativas. Tente de novo mais tarde.", statusCode: StatusCodes.Status423Locked,
+                    extensions: usuario?.BloqueadoAteUtc is { } ate
+                        ? new Dictionary<string, object?> { ["bloqueadoAte"] = new DateTimeOffset(DateTime.SpecifyKind(ate, DateTimeKind.Utc)) }
+                        : null),
+                // O bloqueio do admin não vence sozinho: sem bloqueadoAte.
+                ResultadoDoLogin.BloqueadoPeloAdmin => Results.Problem(
+                    "Usuário bloqueado pelo administrador. Fale com ele para voltar a entrar.", statusCode: StatusCodes.Status423Locked),
                 _ => Results.Problem("Login ou senha inválidos.", statusCode: StatusCodes.Status401Unauthorized),
             };
         }).AllowAnonymous();
+
+        // A política de login do app (US #405), num ponto que NÃO depende do GitHub: o app a lê daqui, e o
+        // GitHub fora do ar não muda quem precisa entrar.
+        grupo.MapGet("/politica", (IOptions<OpcoesDeLogin> login) => Results.Ok(new PoliticaDeLoginV1(login.Value.Obrigatorio)))
+            .AllowAnonymous();
 
         grupo.MapPost("/trocar-senha", async (TrocarSenhaRequest pedido, ClaimsPrincipal quem, IUsuarios usuarios, EmissorDeToken emissor, CancellationToken ct) =>
         {
@@ -101,11 +114,12 @@ public static class Endpoints
     /// O painel. Toda rota lê o <see cref="EscopoDoPainel"/> do token (US #381) e o passa às consultas,
     /// que o aplicam num ponto só; o filtro de máquina fora do escopo é 403, e não uma lista vazia — o
     /// gestor não sonda outra empresa pelo id. O que é só do admin (a reação aos erros, os pedidos de
-    /// demonstração) está sob a <see cref="Seguranca.PoliticaAdmin"/>.
+    /// demonstração) está sob a <see cref="Seguranca.PoliticaAdmin"/>. O grupo inteiro exige a
+    /// <see cref="Seguranca.PoliticaPainel"/> (US #405): o dev entra no app, mas não aqui.
     /// </summary>
     public static void MapearPainel(this IEndpointRouteBuilder app)
     {
-        var grupo = app.MapGroup("/api/dashboard").WithTags("Dashboard");
+        var grupo = app.MapGroup("/api/dashboard").WithTags("Dashboard").RequireAuthorization(Seguranca.PoliticaPainel);
 
         grupo.MapGet("/maquinas", (ClaimsPrincipal quem, IConsultasDoPainel consultas, CancellationToken ct)
             => ComEscopo(quem, consultas, null, async escopo => Results.Ok(await consultas.MaquinasAsync(escopo, ct)), ct));
@@ -179,6 +193,17 @@ public static class Endpoints
         grupo.MapGet("/roi", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.RoiAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct));
 
+        // O feedback das entregas (US #417): o joinha de cada turno avaliado e as métricas dele — o que a
+        // ferramenta de análise do dev.kit lê (nunca o banco). O período invertido é 400, e não trocado em
+        // silêncio como nas rotas da tela.
+        grupo.MapGet("/feedback", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComPeriodoValido(de, ate, () => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.FeedbackAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 50, ct)), ct)));
+
+        grupo.MapGet("/feedback/metricas", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComPeriodoValido(de, ate, () => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.MetricasDeFeedbackAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct)));
+
         // Os pedidos de demonstração: ler e excluir (eliminação a pedido do titular) — contatos de
         // venda, só do admin (o gestor de uma empresa cliente não os vê).
         grupo.MapGet("/demonstracoes", (int? pagina, int? tamanho, IPedidosDeDemonstracao pedidos, CancellationToken ct)
@@ -218,6 +243,109 @@ public static class Endpoints
     }
 
     /// <summary>
+    /// A gestão de usuários (US #405): só o admin. A senha TEMPORÁRIA sai UMA vez — na criação e na
+    /// redefinição —, e a lista nunca a traz. Criar e redefinir têm o limite por usuário das outras rotas
+    /// que cadastram.
+    /// </summary>
+    public static void MapearUsuarios(this IEndpointRouteBuilder app)
+    {
+        var grupo = app.MapGroup("/api/usuarios").WithTags("Usuários").RequireAuthorization(Seguranca.PoliticaAdmin);
+
+        grupo.MapGet("/", (IGestaoDeUsuarios usuarios, CancellationToken ct) => usuarios.ListarAsync(ct));
+
+        grupo.MapPost("/", async (UsuarioNovo? novo, IGestaoDeUsuarios usuarios, CancellationToken ct) =>
+        {
+            var erros = ValidadorDeUsuario.Validar(novo);
+            if (erros.Count > 0)
+                return Results.ValidationProblem(erros, "Confira os dados do usuário.");
+            var criado = await usuarios.CriarAsync(novo!, ct);
+            return criado.Valor is { } valor ? Results.Created($"/api/usuarios/{valor.Usuario.Id}", valor) : Falha(criado);
+        }).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
+
+        grupo.MapPut("/{id:int}", async (int id, UsuarioEditado? edicao, ClaimsPrincipal quem, IGestaoDeUsuarios usuarios, CancellationToken ct) =>
+        {
+            var erros = ValidadorDeUsuario.Validar(edicao);
+            if (erros.Count > 0)
+                return Results.ValidationProblem(erros, "Confira os dados do usuário.");
+            var editado = await usuarios.EditarAsync(id, edicao!, Seguranca.UsuarioId(quem) ?? 0, ct);
+            return editado.Valor is { } valor ? Results.Ok(valor) : Falha(editado);
+        });
+
+        grupo.MapPut("/{id:int}/bloqueio", async (int id, BloqueioDoUsuario? pedido, ClaimsPrincipal quem, IGestaoDeUsuarios usuarios, CancellationToken ct) =>
+        {
+            if (pedido is null)
+                return Results.Problem("Informe se o usuário fica bloqueado.", statusCode: StatusCodes.Status400BadRequest);
+            var alterado = await usuarios.BloquearAsync(id, pedido.Bloqueado, Seguranca.UsuarioId(quem) ?? 0, ct);
+            return alterado.Valor is { } valor ? Results.Ok(valor) : Falha(alterado);
+        });
+
+        grupo.MapPost("/{id:int}/senha", async (int id, IGestaoDeUsuarios usuarios, CancellationToken ct) =>
+        {
+            var redefinido = await usuarios.RedefinirSenhaAsync(id, ct);
+            return redefinido.Valor is { } valor ? Results.Ok(valor) : Falha(redefinido);
+        }).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
+    }
+
+    /// <summary>A falha da gestão de usuários no status HTTP: 404, 409 ou 400, sempre com a mensagem.</summary>
+    private static IResult Falha<T>(ResultadoDaGestao<T> resultado) where T : class
+        => Results.Problem(resultado.Mensagem, statusCode: resultado.Falha switch
+        {
+            FalhaNaGestao.NaoEncontrado => StatusCodes.Status404NotFound,
+            FalhaNaGestao.Conflito => StatusCodes.Status409Conflict,
+            _ => StatusCodes.Status400BadRequest,
+        });
+
+    /// <summary>
+    /// As versões do dev.kit (US #405), lidas das GitHub Releases pelo <see cref="IReleasesDoDevKit"/>. A
+    /// última é anônima (a landing e o app a mostram antes do login); o download exige o usuário — a política
+    /// padrão: autenticado e sem troca pendente — e é um PROXY em streaming do zip: o app e a landing nunca
+    /// veem o token do GitHub, nem o endereço do asset.
+    /// </summary>
+    public static void MapearVersoes(this IEndpointRouteBuilder app)
+    {
+        var grupo = app.MapGroup("/api/versoes").WithTags("Versões");
+
+        grupo.MapGet("/ultima", async (IReleasesDoDevKit releases, IOptions<OpcoesDeLogin> login, CancellationToken ct) =>
+        {
+            if (await releases.EstaveisAsync(ct) is not [var ultima, ..])
+                return Indisponivel();
+            return Results.Ok(new VersaoV1(
+                ultima.Versao, ultima.Tag, ultima.Nome, ultima.PublicadaEm, ultima.Destaques, ultima.TamanhoBytes, ultima.Sha256,
+                $"/api/versoes/{ultima.Versao}/download", login.Value.Obrigatorio));
+        }).AllowAnonymous();
+
+        grupo.MapGet("/{versao:int}/download", async (int versao, HttpContext http, ClaimsPrincipal quem, IUsuarios usuarios, IReleasesDoDevKit releases, CancellationToken ct) =>
+        {
+            // O token vale até vencer: o usuário que o admin bloqueou depois não baixa mais.
+            if (Seguranca.UsuarioId(quem) is not { } id || await usuarios.ObterAsync(id, ct) is not { BloqueadoPeloAdmin: false })
+                return Results.Forbid();
+
+            if (await releases.EstaveisAsync(ct) is not { Count: > 0 } estaveis)
+                return Indisponivel();
+            if (estaveis.FirstOrDefault(r => r.Versao == versao) is not { } release)
+                return Results.Problem($"A versão {versao} do dev.kit não existe (ou não é estável).", statusCode: StatusCodes.Status404NotFound);
+
+            await using var pacote = await releases.AbrirPacoteAsync(release, ct);
+            if (pacote is null)
+                return Indisponivel();
+
+            // Os cabeçalhos são NOSSOS (nada do GitHub passa adiante) e o corpo é copiado em streaming:
+            // o zip nunca é bufferizado na API.
+            http.Response.StatusCode = StatusCodes.Status200OK;
+            http.Response.ContentType = "application/zip";
+            http.Response.Headers.ContentDisposition = $"attachment; filename=devkit-{versao}.zip";
+            if (pacote.Tamanho is { } tamanho)
+                http.Response.ContentLength = tamanho;
+            await pacote.Conteudo.CopyToAsync(http.Response.Body, ct);
+            return Results.Empty;
+        }).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
+    }
+
+    /// <summary>O 503 das versões: genérico, sem nada do GitHub (nem o corpo, nem o motivo, nem o token).</summary>
+    private static IResult Indisponivel()
+        => Results.Problem("A atualização do dev.kit está indisponível no momento. Tente de novo em alguns minutos.", statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    /// <summary>
     /// Roda a consulta com o escopo do token: sem escopo válido, 403; com filtro de máquina fora do
     /// escopo (outra empresa, ou sem consentimento), 403.
     /// </summary>
@@ -229,6 +357,15 @@ public static class Endpoints
         if (maquina is { } id && !await consultas.MaquinaVisivelAsync(escopo, id, ct))
             return Results.Forbid();
         return await consulta(escopo);
+    }
+
+    /// <summary>Roda a consulta só com o período válido (<see cref="RegrasDeAvaliacao.ValidarPeriodo"/>); senão 400 com o ProblemDetails.</summary>
+    private static Task<IResult> ComPeriodoValido(DateOnly? de, DateOnly? ate, Func<Task<IResult>> consulta)
+    {
+        var problema = RegrasDeAvaliacao.ValidarPeriodo(de, ate);
+        return problema.Length > 0
+            ? Task.FromResult(Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest))
+            : consulta();
     }
 
     /// <summary>Roda a consulta de um grupo de erro só se ele tiver ocorrência no escopo — senão 403 para o gestor, 404 para o admin.</summary>

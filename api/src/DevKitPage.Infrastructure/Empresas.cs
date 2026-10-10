@@ -1,6 +1,5 @@
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -9,9 +8,11 @@ namespace DevKitPage.Infrastructure;
 /// <summary>
 /// As empresas do plano empresarial e os gestores delas (US #381). O gestor é um <see cref="Usuario"/>
 /// com o papel <c>gestor</c> — o MESMO login, o mesmo JWT e a mesma troca obrigatória de senha do
-/// admin, sem um segundo fluxo de autenticação.
+/// admin, sem um segundo fluxo de autenticação. Desde a US #405 o convite é a criação de usuário da
+/// <see cref="IGestaoDeUsuarios"/> com o papel <c>gestor</c>: um caminho só para criar usuário e gerar a
+/// senha temporária.
 /// </summary>
-public sealed class Empresas(DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio) : IEmpresas
+public sealed class Empresas(DevKitPageDb db, IGestaoDeUsuarios usuarios, TimeProvider relogio) : IEmpresas
 {
     public async Task<EmpresaResumo> CriarAsync(EmpresaNova empresa, CancellationToken ct)
     {
@@ -51,24 +52,10 @@ public sealed class Empresas(DevKitPageDb db, IPasswordHasher<Usuario> hasher, T
         if (!await db.Empresas.AnyAsync(e => e.Id == empresaId, ct))
             return (null, string.Empty);
 
-        var limpo = login.Trim();
-        if (await db.Usuarios.AnyAsync(u => u.Login == limpo, ct))
-            return (null, $"Já existe um usuário '{limpo}'.");
-
-        var senha = InicializadorDaBase.SenhaAleatoria();
-        var gestor = new Usuario
-        {
-            Login = limpo,
-            EhAdmin = false,
-            Papel = Papeis.Gestor,
-            EmpresaId = empresaId,
-            DeveTrocarSenha = true,
-            CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
-        };
-        gestor.SenhaHash = hasher.HashPassword(gestor, senha);
-        db.Usuarios.Add(gestor);
-        await db.SaveChangesAsync(ct);
-        return (new GestorCriado(gestor.Id, gestor.Login, senha), string.Empty);
+        var criado = await usuarios.CriarAsync(new UsuarioNovo(login, string.Empty, Papeis.Gestor, empresaId), ct);
+        return criado.Valor is { } gestor
+            ? (new GestorCriado(gestor.Usuario.Id, gestor.Usuario.Login, gestor.SenhaTemporaria), string.Empty)
+            : (null, criado.Mensagem);
     }
 }
 

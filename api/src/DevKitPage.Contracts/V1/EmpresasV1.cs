@@ -1,13 +1,21 @@
 namespace DevKitPage.Contracts.V1;
 
 /// <summary>
-/// Os papéis do usuário do dashboard (US #381) — o valor da claim <c>role</c> do JWT. O admin vê tudo e
-/// administra as empresas; o gestor vê só a empresa dele.
+/// Os papéis do usuário (US #381, US #405) — o valor da claim <c>role</c> do JWT. O admin vê tudo e
+/// administra as empresas e os usuários; o gestor vê só a empresa dele; o dev é o usuário do dev.kit:
+/// entra no app (e baixa a versão), mas NÃO no painel.
 /// </summary>
 public static class Papeis
 {
     public const string Admin = "admin";
     public const string Gestor = "gestor";
+    public const string Dev = "dev";
+
+    /// <summary>Os papéis que o admin atribui na gestão de usuários.</summary>
+    public static IReadOnlyList<string> Todos { get; } = [Admin, Gestor, Dev];
+
+    /// <summary>Quem entra no painel (<c>/api/dashboard</c>): o admin e o gestor — o dev, não.</summary>
+    public static bool EntraNoPainel(string? papel) => papel is Admin or Gestor;
 }
 
 /// <summary>Uma empresa nova (só o admin cria): o nome, o plano contratado e os assentos.</summary>

@@ -23,9 +23,13 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 
 ## A landing (US #283)
 
-A landing é a página de venda: hero com a proposta e o vídeo do fluxo → benefícios → como funciona
-(o fluxo em sete etapas nomeadas) → recursos (um vídeo cada) → comparativo → integrações → segurança
-→ para empresas → contato (pedido de demonstração) → FAQ → CTA final. A ordem é a lista `SECOES` de
+A landing é a página de venda, repaginada na US #405 conforme a proposta visual: hero (selo "Para times no
+Azure DevOps", o título com "Pull Request" em destaque, a amostra do Board feita em HTML e o "Baixar o
+dev.kit") → como funciona (sete etapas, de Clona a Pull Request, com o vídeo do fluxo) → por que o dev.kit
+(três cartões) → recursos (um vídeo cada) → comparativo → integrações → segurança → para empresas →
+contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit" (`BaixarDevKit`) lê
+`/api/versoes/ultima` e baixa por `fetch` com o Bearer (o blob vira o arquivo); sem sessão, leva ao login,
+que volta para a landing. A ordem é a lista `SECOES` de
 `web/src/conteudo/landing.ts`, a mesma que o teste confere. Desde a US #381 a página **não explica a
 área logada** (o teste recusa "dashboard" e "métricas" no conteúdo), e a tabela comparativa e a seção
 "Para empresas" seguem a pesquisa de [landing-conteudo.md](landing-conteudo.md).
@@ -152,6 +156,18 @@ calculadas depois do instante do consentimento. Na web, a seção "ROI por work 
 os KPIs, o gráfico de horas lançadas × turnos do agente (pequenos múltiplos, uma escala por medida — sem
 eixo duplo) e a tabela.
 
+**Feedback das entregas (US #417).** O joinha que o desenvolvedor dá na janela da task segue no
+`EntregaAvaliada` com o campo opcional `avaliacao` (agente, modelo, fluxo, work item e turno). Na ingestão,
+na MESMA transação, o evento vai aos totais diários como os outros, e a avaliação vai para
+`AvaliacoesDeEntrega`, UMA por (máquina, sessão, turno) pelo índice único — o upsert do ROI: o mais recente
+(pelo `em`) vence, o atrasado não volta para trás e o reenvio nem chega (`RegrasDeAvaliacao.Avaliacao` corta
+os textos e descarta a avaliação sem sessão). `GET /api/dashboard/feedback` lista as avaliações do período
+(paginadas, `Pagina<FeedbackV1>`) e `GET /api/dashboard/feedback/metricas` agrega total, positivos e
+negativos por fluxo, por agente e por dia, com o vazio sob `(sem fluxo)`/`(sem agente)` — no escopo das outras
+consultas (`ConsultasDoPainel.Avaliacoes`: o gestor, só as máquinas da empresa a partir do consentimento). As
+duas rotas recusam `de` depois de `ate` com 400, em vez de inverter como as da tela: quem as lê é a ferramenta
+de análise do dev.kit, e o período invertido é defeito dela.
+
 **Venda empresarial (US #381).** O gestor de uma empresa vê e coleta o uso dos colaboradores dela:
 - **Empresa e gestor.** O admin cria a `Empresa` (nome, plano, assentos e um código de adesão
   aleatório, `DK-XXXX-XXXX`) e convida o gestor (`POST /api/empresas/{id}/gestores`). O gestor é um
@@ -183,6 +199,52 @@ eixo duplo) e a tabela.
 - **O que é só do admin** (`Seguranca.PoliticaAdmin`): as empresas, os pedidos de demonstração e a
   reação aos erros.
 
+**Versões do dev.kit pelas GitHub Releases (US #405).** O app (git.kit) e a landing perguntam pela última
+versão e baixam o pacote PELA API — nunca pelo GitHub —, porque o token do repositório não pode ir para o
+cliente:
+- `GET /api/versoes/ultima` (anônima) devolve a `VersaoV1`: o número do dev.kit, a tag, a data, até 5
+  destaques (os itens de lista do corpo da release, sem markdown), o tamanho e o SHA-256 do zip (o
+  `digest` do asset ou o `<zip>.sha256` publicado ao lado), a `urlDownload` e o `loginObrigatorio`.
+- `GET /api/versoes/{versao}/download` exige o usuário (a política padrão: autenticado, sem troca pendente;
+  o bloqueado pelo admin recebe 403) e é um **proxy em streaming**: o `ReleasesDoDevKit` pede
+  `releases/assets/{id}` com `Accept: application/octet-stream` e `HttpCompletionOption.ResponseHeadersRead`,
+  e a rota copia o stream para a resposta — o zip nunca é bufferizado. O HttpClient nasce **sem
+  redirecionamento automático**: o 302 do GitHub para o armazenamento (outro host, URL assinada) é seguido à
+  mão, SEM o `Authorization`, para o token não sair do api.github.com. Os cabeçalhos da resposta são da API
+  (`application/zip`, `attachment; filename=devkit-136.zip`, o `Content-Length`).
+- **A regra de versão é pura, no Core** (`RegrasDeVersao`): a tag `vNNN` é o número; a legada `vX.Y.Z`
+  vale X; prerelease, rascunho e tag ilegível ficam de fora; a ordem é numérica (v136 antes de v99), e duas
+  tags da mesma versão ficam uma só (a publicada por último).
+- **O token** (`OpcoesDeAtualizacao`) vem SÓ da variável `REPO_KEY` (o `PostConfigure` sobrescreve qualquer
+  valor do appsettings); o repositório (`Atualizacao:Repositorio`) e o cache (`Atualizacao:CacheMinutos`,
+  padrão 5) são configuração. A lista de releases fica no `IMemoryCache` (o GitHub limita as chamadas por
+  token), uma consulta por vez quando ele vence; só o sucesso entra no cache.
+- **Falha não vaza**: sem `REPO_KEY`, com o GitHub fora do ar ou sem release estável com zip, a resposta é
+  um 503 genérico — o log leva o status e o tipo da falha, nunca o corpo do GitHub nem o token. Versão
+  inexistente é 404.
+
+**Gestão de usuários e papel dev (US #405).** O admin administra os usuários em `/api/usuarios`
+(`Seguranca.PoliticaAdmin`): listar, criar, editar nome/papel/empresa, bloquear/desbloquear e redefinir a
+senha. A senha é **temporária**, gerada pelo `GeradorDeSenha` (Core) — o MESMO do admin semeado e do gestor
+convidado, que agora é uma criação da `IGestaoDeUsuarios` com o papel `gestor` —, devolvida **uma vez** (na
+criação e na redefinição) e com a troca obrigatória no primeiro acesso. O papel `dev` (o usuário do dev.kit)
+entra no app e baixa a versão, mas o grupo `/api/dashboard` exige a `Seguranca.PoliticaPainel`
+(`Papeis.EntraNoPainel`: admin e gestor) — e o `EscopoDoPainel` do dev também é nulo (403 em dobro). O
+bloqueio pelo admin (`BloqueadoPeloAdmin`) é diferente do temporário por falhas (`BloqueadoAteUtc`): só
+aparece para quem acertou a senha (sem ela, a resposta é a de sempre) e só sai ao desbloquear. O 423 do
+bloqueio temporário leva a extensão `bloqueadoAte` (ISO UTC) para o app dizer quando tentar de novo; o do
+admin, não. O admin não muda o próprio papel nem se bloqueia. A política de login do app
+(`OpcoesDeLogin`, variável `DEVKIT_LOGIN_OBRIGATORIO`) sai em `GET /api/auth/politica` — que não depende do
+GitHub — e no `loginObrigatorio` da última versão. Colunas novas: migration `GestaoDeUsuarios` e
+`api/scripts/sqlserver/Usuarios.sql`.
+
+**Impasses e árbitro na qualidade (US #405).** Os tipos `ImpasseDetectado`, `ImpasseResolvido` e
+`ArbitroAgiu` (ver o [contrato](contrato-telemetria-v1.md#o-impasse-e-o-árbitro-us-405)) entram nos totais
+diários como os outros; o `CalculoDeQualidade` monta os cartões Impasses e Árbitro a partir das MESMAS
+somas por tipo e recorte que o `ConsultasDoPainel.QualidadeAsync` já tira do banco no escopo e no período —
+nenhuma consulta a mais. A taxa de correção sem cobrança é nula. Na web, os cartões ficam na seção
+"Qualidade de uso" do dashboard.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -193,7 +255,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -212,4 +274,5 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | `api/tests/DevKitPage.Infrastructure.Tests` | SQLite de verdade: admin semeado uma vez, reenvio sem duplicar, eventId único, agregação e filtro, paginação, expurgo mantendo os totais, bloqueio do login, máquinas ativas e registradas; grupos de exceção (mesma assinatura = um grupo com as ocorrências e as máquinas, reenvio sem duplicar, trace mascarado na gravação, regressão, só as últimas ocorrências, expurgo mantendo o grupo); pedidos de demonstração (gravação, paginação, exclusão, expurgo além da retenção mantendo os recentes) e os scripts do Azure SQL contra o modelo; `RoiTests`: a foto do ROI (o mais recente vence, o atrasado e o reenvio não mudam nada, sem `roi` não há foto, corte dos textos e números), horas por turno, totais, filtro e o escopo do gestor |
 | `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; `EmpresasApiTests`: o gestor da empresa A não lê máquinas, erros nem a exportação da B (403 pelo id), a máquina sem consentimento só nos totais, o CSV auditado e sem fórmula, o 429 da exportação em laço, a adesão recusada sem assento ou com código desconhecido, o admin vê tudo e o gestor não administra; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário; `RoiApiTests`: o `RoiCalculado` no JSON exato do dev.kit vira a foto no painel, o envio mais novo substitui e o mais antigo não, o evento sem `roi` não cria foto, o gestor não lê o ROI de outra empresa (403 pelo id) |
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin); o ROI por work item (KPIs, gráfico com a dica do lead time, tabela, traço sem turno, estado vazio com o `devcli roi`, os filtros) |
+| US #405 | Core: `RegrasTests` (tag → versão, prerelease/rascunho/ilegível, ordem numérica, destaques, SHA-256, senha temporária, validação do usuário, papel dev sem escopo, os tipos novos e os cartões Impasses/Árbitro inclusive sem denominador); Infrastructure: `UsuariosTests` (senha temporária, redefinição, bloqueio pelo admin × temporário, dev sem painel, script do Azure SQL) e a qualidade com os eventos novos no escopo; Api: `VersoesApiTests` (GitHub de mentira: 200, cache, 401 anônimo, streaming do zip, o token só no api.github.com e nunca no armazenamento nem na resposta, 404, 503 sem REPO_KEY e com o GitHub fora do ar), `UsuariosApiTests` (401/403, senha só na criação/redefinição, `bloqueadoAte` no 423, dev 403 no painel) e `QualidadeDoFluxoApiTests`; web: `Landing.test.tsx` (proposta e download), `Usuarios.test.tsx`, os cartões em `Dashboard.test.tsx`; e2e: `usuarios.spec.ts` e `us405.spec.ts` |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e vídeo do hero → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard |

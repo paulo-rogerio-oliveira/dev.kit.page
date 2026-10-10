@@ -68,6 +68,7 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
         await ConsolidarAsync(maquinaId, eventos, ct);
         var grupos = await AgruparErrosAsync(maquinaId, versao, novos.Where(n => n.Evento.Tipo == TiposDeEvento.ExcecaoNaoClassificada).ToList(), ct);
         await AtualizarRoisAsync(maquinaId, novos.Where(n => n.Evento.Tipo == TiposDeEvento.RoiCalculado).ToList(), ct);
+        await AtualizarAvaliacoesAsync(maquinaId, novos.Where(n => n.Evento.Tipo == TiposDeEvento.EntregaAvaliada).ToList(), ct);
 
         var maquina = await db.Maquinas.FirstAsync(m => m.Id == maquinaId, ct);
         maquina.UltimoEnvioEmUtc = agora;
@@ -199,6 +200,57 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
             atual.PullRequests = foto.PullRequests;
             atual.PullRequestsMergeadas = foto.PullRequestsMergeadas;
             atual.EmUtc = evento.EmUtc;
+            atual.EventId = evento.EventId;
+        }
+    }
+
+    /// <summary>
+    /// O upsert das avaliações de entrega (US #417), na MESMA transação do evento e no padrão das fotos do
+    /// ROI: uma por (máquina, sessão, turno), e só um evento igual ou MAIS NOVO (pelo <c>em</c>) a substitui —
+    /// avaliar de novo o mesmo turno troca a nota, e o evento antigo que chega atrasado conta no total diário
+    /// sem voltar a avaliação para trás. O reenvio (o mesmo eventId) nem chega aqui; o evento sem
+    /// <c>avaliacao</c> (o dev.kit anterior à US #417) ou com ela torta não cria avaliação.
+    /// </summary>
+    private async Task AtualizarAvaliacoesAsync(
+        int maquinaId, IReadOnlyCollection<(TelemetryEventV1 Fonte, EventoDeUso Evento)> avaliadas, CancellationToken ct)
+    {
+        var avaliacoes = avaliadas
+            .Select(x => (Avaliacao: RegrasDeAvaliacao.Avaliacao(x.Fonte.Avaliacao, x.Fonte.SessaoId), x.Evento))
+            .Where(x => x.Avaliacao is not null)
+            .ToList();
+        if (avaliacoes.Count == 0)
+            return;
+
+        var sessoes = avaliacoes.Select(x => x.Avaliacao!.SessaoId).Distinct().ToList();
+        var existentes = (await db.AvaliacoesDeEntrega
+                .Where(a => a.MaquinaId == maquinaId && sessoes.Contains(a.SessaoId))
+                .ToListAsync(ct))
+            .ToDictionary(a => (a.SessaoId, a.Turno));
+
+        // Em ordem de instante: dentro do mesmo lote, o último também vence.
+        foreach (var (avaliacao, evento) in avaliacoes.OrderBy(x => x.Evento.EmUtc))
+        {
+            var chave = (avaliacao!.SessaoId, avaliacao.Turno);
+            if (existentes.TryGetValue(chave, out var atual))
+            {
+                if (evento.EmUtc < atual.EmUtc)
+                    continue;
+            }
+            else
+            {
+                atual = new AvaliacaoDeEntrega { MaquinaId = maquinaId, SessaoId = avaliacao.SessaoId, Turno = avaliacao.Turno };
+                db.AvaliacoesDeEntrega.Add(atual);
+                existentes[chave] = atual;
+            }
+
+            atual.Boa = avaliacao.Boa;
+            atual.Motivo = avaliacao.Motivo;
+            atual.Agente = avaliacao.Agente;
+            atual.Modelo = avaliacao.Modelo;
+            atual.Fluxo = avaliacao.Fluxo;
+            atual.WorkItemId = avaliacao.WorkItemId;
+            atual.EmUtc = evento.EmUtc;
+            atual.Dia = evento.Dia;
             atual.EventId = evento.EventId;
         }
     }

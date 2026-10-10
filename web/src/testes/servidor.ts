@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
   ColaboradorResumo, DemonstracaoResumo, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina,
-  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RoiResposta,
+  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RoiResposta, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -53,13 +53,49 @@ export const qualidade: QualidadeResposta = {
   de: '2026-09-04', ate: '2026-10-03', turnos: 8, turnosComFalha: 2, taxaDeFalha: 0.25, duracaoMediaDoTurnoMs: 42500,
   falhasPorCausa: [{ causa: 'limite-de-uso', quantidade: 2 }], avaliacoes: 2, notaMedia: 91.5,
   objetivosCumpridos: 1, objetivosRecusados: 1, razaoCumpridosRecusados: 1, turnosPorObjetivoCumprido: 8,
+  // US #405: os cartões Impasses e Árbitro.
+  impasses: {
+    detectados: 3, porOrigem: [{ recorte: 'mensagem-parada', quantidade: 2 }, { recorte: 'objetivo-parado', quantidade: 1 }],
+    minutosParadoNaDeteccao: 32.5, destravados: 2, minutosAteDestravar: 12,
+    comoDestravaram: [{ recorte: 'arbitro-reagiu', quantidade: 1 }, { recorte: 'dev-falou', quantidade: 1 }],
+  },
+  arbitro: {
+    acoes: 7, cobrancas: 4, cobrancasPorRegra: [{ recorte: 'Arquivos alterados no turno', quantidade: 3 }, { recorte: '', quantidade: 1 }],
+    corrigidas: 3, taxaDeCorrecao: 0.75, escaladasAoDev: 1,
+    porAcao: [{ recorte: 'cobrou', quantidade: 4 }, { recorte: 'corrigido', quantidade: 3 }],
+  },
 };
 
 /** A qualidade de um período sem turno, nota nem objetivo: todo divisor é zero. */
 export const qualidadeVazia: QualidadeResposta = {
   ...qualidade, turnos: 0, turnosComFalha: 0, taxaDeFalha: null, duracaoMediaDoTurnoMs: null, falhasPorCausa: [],
   avaliacoes: 0, notaMedia: null, objetivosCumpridos: 0, objetivosRecusados: 0, razaoCumpridosRecusados: null, turnosPorObjetivoCumprido: null,
+  impasses: { detectados: 0, porOrigem: [], minutosParadoNaDeteccao: null, destravados: 0, minutosAteDestravar: null, comoDestravaram: [] },
+  arbitro: { acoes: 0, cobrancas: 0, cobrancasPorRegra: [], corrigidas: 0, taxaDeCorrecao: null, escaladasAoDev: 0, porAcao: [] },
 };
+
+/** A última versão do dev.kit (US #405), como a API a devolve da GitHub Release. */
+export const versao: VersaoDoDevKit = {
+  versao: 136, tag: 'v136', nome: 'dev.kit 136', publicadaEm: '2026-10-09T18:00:00Z', destaques: ['"Precisa de você" no Board'],
+  tamanhoBytes: 52_428_800, sha256: 'ab'.repeat(32), urlDownload: '/api/versoes/136/download', loginObrigatorio: false,
+};
+
+/** O dev da gestão de usuários (US #405): entra no app, mas não no painel. */
+export const tokenDoDev = (): LoginResponse => ({
+  ...tokenValido(), token: 'token-dev', login: 'ana.dev', ehAdmin: false, papel: 'dev', empresa: null,
+});
+
+/** Os usuários da lista do admin (US #405). */
+export const usuarios: UsuarioResumo[] = [
+  { id: 1, login: 'admin', nome: '', papel: 'admin', empresaId: null, empresa: null, bloqueado: false, bloqueadoAte: null, deveTrocarSenha: false, criadoEm: '2026-10-01T10:00:00Z' },
+  { id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z' },
+];
+
+/** O que chegou às rotas de escrita da gestão de usuários (o corpo, ou a ação). */
+export const gestaoDeUsuarios: { metodo: string; caminho: string; corpo: unknown }[] = [];
+
+/** Os downloads do zip que chegaram ao servidor de mentira, com o Authorization de cada um. */
+export const downloads: (string | null)[] = [];
 
 export const eventos: Pagina<EventoDoLog> = {
   itens: [{ eventId: 'e1', maquinaId: 1, apelido: 'máquina a1b2c3d4', tipo: 'TurnoExecutado', sessaoId: 's1', quantidade: 1, valor: 42500, detalhe: 'claude', em: '2026-10-03T10:00:00Z' }],
@@ -125,6 +161,7 @@ export const handlersPadrao = [
     if (login === 'admin' && senha === 'certa') return HttpResponse.json(tokenValido());
     if (login === 'admin' && senha === 'inicial') return HttpResponse.json(tokenValido(true));
     if (login === 'gestor.a' && senha === 'certa') return HttpResponse.json(tokenDoGestor());
+    if (login === 'ana.dev' && senha === 'certa') return HttpResponse.json(tokenDoDev());
     return HttpResponse.json({ detail: 'Login ou senha inválidos.' }, { status: 401 });
   }),
   http.post(`${API}/api/auth/trocar-senha`, () => HttpResponse.json(tokenValido())),
@@ -172,6 +209,38 @@ export const handlersPadrao = [
     const { login } = (await request.json()) as { login: string };
     cadastros.gestores.push({ empresa: String(params.id), login });
     return HttpResponse.json({ id: 12, login, senhaInicial: 'DkSENHA1234a1' }, { status: 201 });
+  }),
+  // US #405: a versão do dev.kit e o download autenticado.
+  http.get(`${API}/api/versoes/ultima`, () => HttpResponse.json(versao)),
+  http.get(`${API}/api/versoes/:versao/download`, ({ request }) => {
+    const autorizacao = request.headers.get('Authorization');
+    downloads.push(autorizacao);
+    if (!autorizacao) return new HttpResponse(null, { status: 401 });
+    return new HttpResponse(new Uint8Array([80, 75, 3, 4]), {
+      headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=devkit-136.zip' },
+    });
+  }),
+  // US #405: a gestão de usuários.
+  http.get(`${API}/api/usuarios`, () => HttpResponse.json(usuarios)),
+  http.post(`${API}/api/usuarios`, async ({ request }) => {
+    const corpo = (await request.json()) as UsuarioNovo;
+    gestaoDeUsuarios.push({ metodo: 'POST', caminho: '/api/usuarios', corpo });
+    const criado: UsuarioResumo = { ...usuarios[1], id: 3, ...corpo, empresa: corpo.empresaId ? 'Empresa A' : null, deveTrocarSenha: true };
+    return HttpResponse.json({ usuario: criado, senhaTemporaria: 'DkTEMPORARIA99a1' }, { status: 201 });
+  }),
+  http.put(`${API}/api/usuarios/:id`, async ({ params, request }) => {
+    const corpo = (await request.json()) as UsuarioEditado;
+    gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}`, corpo });
+    return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, ...corpo });
+  }),
+  http.put(`${API}/api/usuarios/:id/bloqueio`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { bloqueado: boolean };
+    gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/bloqueio`, corpo });
+    return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, bloqueado: corpo.bloqueado });
+  }),
+  http.post(`${API}/api/usuarios/:id/senha`, ({ params }) => {
+    gestaoDeUsuarios.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/senha`, corpo: null });
+    return HttpResponse.json({ usuario: { ...usuarios.find((u) => String(u.id) === params.id)!, deveTrocarSenha: true }, senhaTemporaria: 'DkREDEFINIDA77a1' });
   }),
 ];
 

@@ -463,6 +463,52 @@ public sealed class InfraestruturaTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Qualidade_traz_os_impasses_e_o_arbitro_do_banco_no_periodo_e_no_escopo()
+    {
+        var a = await _base.ComAsync(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("A", "Empresarial", 5), default));
+        var deA = await _base.MaquinaAsync("m-a", a.CodigoDeAdesao, "Ana");
+        var anonima = await _base.MaquinaAsync("m-x");
+        await Enviar(deA,
+            BaseDeTeste.Evento("i1", TiposDeEvento.ImpasseDetectado, Hoje, valor: 40, detalhe: OrigensDoImpasse.MensagemParada),
+            BaseDeTeste.Evento("i2", TiposDeEvento.ImpasseDetectado, Hoje, valor: 20, detalhe: OrigensDoImpasse.ObjetivoParado),
+            BaseDeTeste.Evento("i3", TiposDeEvento.ImpasseResolvido, Hoje, valor: 10, detalhe: "arbitro-reagiu"),
+            BaseDeTeste.Evento("r1", TiposDeEvento.ArbitroAgiu, Hoje, valor: 1, detalhe: "cobrou|Arquivos alterados no turno"),
+            BaseDeTeste.Evento("r2", TiposDeEvento.ArbitroAgiu, Hoje, valor: 1, detalhe: "cobrou|Arquivos alterados no turno"),
+            BaseDeTeste.Evento("r3", TiposDeEvento.ArbitroAgiu, Hoje, valor: 2, detalhe: "corrigido|Arquivos alterados no turno"),
+            BaseDeTeste.Evento("r4", TiposDeEvento.ArbitroAgiu, Hoje, valor: 3, detalhe: "escalou-ao-dev"),
+            BaseDeTeste.Evento("velho", TiposDeEvento.ImpasseDetectado, Hoje.AddMonths(-2), valor: 999, detalhe: OrigensDoImpasse.MensagemParada)); // fora do período
+        // A máquina anônima tem os dela — o admin vê, o gestor da A não.
+        await Enviar(anonima,
+            BaseDeTeste.Evento("x1", TiposDeEvento.ImpasseDetectado, Hoje, valor: 100, detalhe: OrigensDoImpasse.MensagemParada),
+            BaseDeTeste.Evento("x2", TiposDeEvento.ArbitroAgiu, Hoje, valor: 1, detalhe: "cobrou|Idioma e fluxo"));
+
+        var consultas = (IServiceProvider sp) => sp.GetRequiredService<IConsultasDoPainel>();
+        var doAdmin = await _base.ComAsync(sp => consultas(sp).QualidadeAsync(EscopoDoPainel.Tudo, Outubro, null, default));
+        var doGestor = await _base.ComAsync(sp => consultas(sp).QualidadeAsync(new EscopoDoPainel(a.Id), Outubro, null, default));
+        var soAnonima = await _base.ComAsync(sp => consultas(sp).QualidadeAsync(EscopoDoPainel.Tudo, Outubro, anonima, default));
+
+        Assert.Equal((3L, 160.0 / 3), (doAdmin.Impasses!.Detectados, doAdmin.Impasses.MinutosParadoNaDeteccao!.Value), new ArredondaQuatro());
+        Assert.Equal((3L, 1L), (doAdmin.Arbitro!.Cobrancas, doAdmin.Arbitro.EscaladasAoDev));
+
+        Assert.Equal((2L, 30.0, 1L, 10.0), (doGestor.Impasses!.Detectados, doGestor.Impasses.MinutosParadoNaDeteccao, doGestor.Impasses.Destravados, doGestor.Impasses.MinutosAteDestravar));
+        Assert.Equal(new ContagemPorRecorte("arbitro-reagiu", 1), Assert.Single(doGestor.Impasses.ComoDestravaram));
+        Assert.Equal((2L, 1L, 0.5, 1L), (doGestor.Arbitro!.Cobrancas, doGestor.Arbitro.Corrigidas, doGestor.Arbitro.TaxaDeCorrecao, doGestor.Arbitro.EscaladasAoDev));
+        Assert.Equal(new ContagemPorRecorte("Arquivos alterados no turno", 2), Assert.Single(doGestor.Arbitro.CobrancasPorRegra));
+
+        Assert.Equal(1L, soAnonima.Impasses!.Detectados);
+        Assert.Null(soAnonima.Impasses.MinutosAteDestravar); // nenhum destravado: sem denominador
+        Assert.Equal(0.0, soAnonima.Arbitro!.TaxaDeCorrecao); // cobrou e ninguém corrigiu: zero, e não traço
+    }
+
+    /// <summary>Compara a tupla (quantidade, média) com a média em quatro casas — a precisão da razão.</summary>
+    private sealed class ArredondaQuatro : IEqualityComparer<(long, double)>
+    {
+        public bool Equals((long, double) x, (long, double) y) => x.Item1 == y.Item1 && Math.Round(x.Item2, 4) == Math.Round(y.Item2, 4);
+
+        public int GetHashCode((long, double) obj) => obj.Item1.GetHashCode();
+    }
+
+    [Fact]
     public async Task Login_bloqueia_depois_de_falhas_seguidas()
     {
         var usuarios = (IServiceProvider sp) => sp.GetRequiredService<IUsuarios>();

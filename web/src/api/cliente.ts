@@ -1,7 +1,8 @@
 import type {
   ArquivoBaixado, ColaboradorResumo, DemonstracaoResumo, EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro,
   GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
-  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, RoiResposta,
+  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, RoiResposta, UsuarioComSenha, UsuarioEditado, UsuarioNovo,
+  UsuarioResumo, VersaoDoDevKit,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -142,4 +143,26 @@ export const api = {
 
   convidarGestor: (token: string, empresa: number, login: string) =>
     chamar<GestorCriado>(`/api/empresas/${empresa}/gestores`, { metodo: 'POST', corpo: { login }, token }),
+
+  // A versão do dev.kit (US #405): a última é anônima; o zip exige o token — por isso é baixado com
+  // fetch + Bearer e entregue como blob, e não por um link direto (que não levaria o token).
+  ultimaVersao: () => chamar<VersaoDoDevKit>('/api/versoes/ultima'),
+
+  baixarVersao: (token: string, versao: VersaoDoDevKit) =>
+    baixar(versao.urlDownload, token, `devkit-${versao.versao}.zip`),
+
+  // A gestão de usuários (US #405) — só o admin.
+  usuarios: (token: string) => chamar<UsuarioResumo[]>('/api/usuarios', { token }),
+
+  criarUsuario: (token: string, usuario: UsuarioNovo) =>
+    chamar<UsuarioComSenha>('/api/usuarios', { metodo: 'POST', corpo: usuario, token }),
+
+  editarUsuario: (token: string, id: number, edicao: UsuarioEditado) =>
+    chamar<UsuarioResumo>(`/api/usuarios/${id}`, { metodo: 'PUT', corpo: edicao, token }),
+
+  bloquearUsuario: (token: string, id: number, bloqueado: boolean) =>
+    chamar<UsuarioResumo>(`/api/usuarios/${id}/bloqueio`, { metodo: 'PUT', corpo: { bloqueado }, token }),
+
+  redefinirSenha: (token: string, id: number) =>
+    chamar<UsuarioComSenha>(`/api/usuarios/${id}/senha`, { metodo: 'POST', token }),
 };
