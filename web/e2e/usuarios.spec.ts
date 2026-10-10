@@ -4,7 +4,7 @@ import { API, NOVA_SENHA } from './ambiente';
 
 /**
  * A gestão de usuários de ponta a ponta (US #405): o admin cria um dev com a senha temporária, o dev
- * entra com ela, é obrigado a trocá-la, cai na página inicial (onde fica o "Baixar o dev.kit") e não entra
+ * entra com ela, é obrigado a trocá-la, cai na página da conta (US #425; o link "Baixar o dev.kit" fica nela) e não entra
  * no painel; o admin vê a situação mudar na lista.
  */
 test('admin cria usuário → o usuário entra com a senha temporária → troca a senha → não entra no painel', async ({ page, request }) => {
@@ -52,11 +52,11 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await page.getByLabel('Confirme a nova senha').fill(senhaDoDev);
   await page.getByRole('button', { name: 'Trocar senha' }).click();
 
-  // 4. O dev cai na página inicial (o download), e o painel o devolve para lá.
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
-  await expect(page.getByRole('group', { name: 'Download do dev.kit' })).toBeVisible();
+  // 4. O dev cai na página da conta dele (US #425), e o painel o devolve para lá.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sua conta');
+  await expect(page.getByRole('link', { name: 'Baixar o dev.kit' })).toBeVisible();
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sua conta');
   await expect(page.getByRole('heading', { name: 'Quantidade de uso' })).toHaveCount(0);
 
   // A API confirma: a senha antiga não entra mais, a nova entra sem troca pendente, e o painel é 403.

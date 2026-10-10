@@ -1,8 +1,8 @@
 import type {
-  ArquivoBaixado, ColaboradorResumo, DemonstracaoResumo, EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro,
-  GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina, PedidoDeDemonstracao,
-  PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, RoiResposta, UsuarioComSenha, UsuarioEditado, UsuarioNovo,
-  UsuarioResumo, VersaoDoDevKit,
+  ArquivoBaixado, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaNova, EmpresaResumo, EstadoDoGrupo,
+  EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa, LoginResponse, MaquinaResumo, Mensagem, Pagina,
+  PedidoDeDemonstracao, PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
+  UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -74,8 +74,8 @@ export function nomeDoArquivo(disposicao: string | null, padrao: string): string
   return simples ? simples[1].trim() : padrao;
 }
 
-/** Baixa um arquivo da API (a exportação): o conteúdo e o nome que ela sugeriu. */
-async function baixar(caminho: string, token: string, padrao: string): Promise<ArquivoBaixado> {
+/** Baixa um arquivo da API (a exportação, o dev.kit): o conteúdo e o nome que ela sugeriu. Sem token, o pedido é anônimo. */
+async function baixar(caminho: string, token: string | undefined, padrao: string): Promise<ArquivoBaixado> {
   const resposta = await requisitar(caminho, { token, aceita: '*/*' });
   return { conteudo: await resposta.blob(), nome: nomeDoArquivo(resposta.headers.get('Content-Disposition'), padrao) };
 }
@@ -144,12 +144,48 @@ export const api = {
   convidarGestor: (token: string, empresa: number, login: string) =>
     chamar<GestorCriado>(`/api/empresas/${empresa}/gestores`, { metodo: 'POST', corpo: { login }, token }),
 
-  // A versão do dev.kit (US #405): a última é anônima; o zip exige o token — por isso é baixado com
-  // fetch + Bearer e entregue como blob, e não por um link direto (que não levaria o token).
+  // A versão do dev.kit (US #405): a última é anônima, e o zip também desde a US #425 (a reversão do login
+  // da US #405, com o trial de 14 dias). Segue por fetch e blob: o nome do arquivo vem da API.
   ultimaVersao: () => chamar<VersaoDoDevKit>('/api/versoes/ultima'),
 
-  baixarVersao: (token: string, versao: VersaoDoDevKit) =>
-    baixar(versao.urlDownload, token, `devkit-${versao.versao}.zip`),
+  baixarVersao: (versao: VersaoDoDevKit) =>
+    baixar(versao.urlDownload, undefined, `devkit-${versao.versao}.zip`),
+
+  // O catálogo (US #425): a vitrine pública do básico, as releases dele (admin) e o catálogo da empresa.
+  vitrine: () => chamar<Vitrine>('/api/catalogo/base/vitrine'),
+
+  releasesDoCatalogo: (token: string) => chamar<ReleaseDoCatalogo[]>('/api/catalogo/base/releases', { token }),
+
+  catalogoDaEmpresa: (token: string) => chamar<ItemDaEmpresa[]>('/api/catalogo/empresa', { token }),
+
+  retirarItem: (token: string, id: number) => chamar<ItemDaEmpresa>(`/api/catalogo/empresa/${id}`, { metodo: 'DELETE', token }),
+
+  // A conta do dev (US #425): adesão, link e senha são anônimos; a conta e a empresa do gestor, não.
+  aderir: (codigo: string, email: string, nome: string) =>
+    chamar<Mensagem>('/api/conta/adesao', { metodo: 'POST', corpo: { codigo, email, nome } }),
+
+  pedirLink: (email: string) => chamar<Mensagem>('/api/conta/link', { metodo: 'POST', corpo: { email } }),
+
+  definirSenha: (token: string, novaSenha: string) =>
+    chamar<void>('/api/conta/definir-senha', { metodo: 'POST', corpo: { token, novaSenha } }),
+
+  conta: (token: string) => chamar<Conta>('/api/conta', { token }),
+
+  empresaDoGestor: (token: string) => chamar<EmpresaDoGestor>('/api/empresa', { token }),
+
+  usuariosDaEmpresa: (token: string) => chamar<UsuarioDaEmpresa[]>('/api/empresa/usuarios', { token }),
+
+  bloquearNaEmpresa: (token: string, id: number, bloqueado: boolean) =>
+    chamar<UsuarioDaEmpresa>(`/api/empresa/usuarios/${id}/bloqueio`, { metodo: 'PUT', corpo: { bloqueado }, token }),
+
+  novoCodigo: (token: string) => chamar<{ codigoDeAdesao: string }>('/api/empresa/codigo', { metodo: 'POST', token }),
+
+  politicaDaEmpresa: (token: string, loginObrigatorio: boolean | null) =>
+    chamar<EmpresaDoGestor>('/api/empresa/politica', { metodo: 'PUT', corpo: { loginObrigatorio }, token }),
+
+  // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
+  checkout: (email: string, nome: string, plano: string) =>
+    chamar<CheckoutCriado>('/api/pagamentos/checkout', { metodo: 'POST', corpo: { email, nome, plano } }),
 
   // A gestão de usuários (US #405) — só o admin.
   usuarios: (token: string) => chamar<UsuarioResumo[]>('/api/usuarios', { token }),

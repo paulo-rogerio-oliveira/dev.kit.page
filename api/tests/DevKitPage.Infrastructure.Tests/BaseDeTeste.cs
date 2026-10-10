@@ -7,6 +7,27 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DevKitPage.Infrastructure.Tests;
 
+/// <summary>O envio de e-mail falso (US #425): guarda as mensagens para o teste ler o link.</summary>
+public sealed class EmailsGuardados : IEnvioDeEmail
+{
+    public List<MensagemDeEmail> Mensagens { get; } = [];
+
+    public Task EnviarAsync(MensagemDeEmail mensagem, CancellationToken ct)
+    {
+        Mensagens.Add(mensagem);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>O token do último link de definir a senha mandado ao e-mail.</summary>
+    public string TokenPara(string email)
+    {
+        var texto = Mensagens.Last(m => m.Para == email).Texto;
+        var inicio = texto.IndexOf("token=", StringComparison.Ordinal) + "token=".Length;
+        var fim = texto.IndexOfAny([' ', '\n', '\r'], inicio);
+        return Uri.UnescapeDataString(texto[inicio..(fim < 0 ? texto.Length : fim)]);
+    }
+}
+
 /// <summary>Um relógio que o teste move.</summary>
 public sealed class RelogioDeTeste(DateTimeOffset agora) : TimeProvider
 {
@@ -42,8 +63,13 @@ public sealed class BaseDeTeste : IAsyncDisposable
         var servicos = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(cfg);
         servicos.AddSingleton<TimeProvider>(Relogio);
         servicos.AdicionarInfraestrutura(cfg);
+        // O e-mail falso (US #425) depois da composição: o registro de verdade é TryAdd, e o último vale.
+        servicos.AddSingleton<IEnvioDeEmail>(Emails);
         Servicos = servicos.BuildServiceProvider();
     }
+
+    /// <summary>Os e-mails que a infraestrutura "mandou" (US #425).</summary>
+    public EmailsGuardados Emails { get; } = new();
 
     public async Task InicializarAsync()
     {

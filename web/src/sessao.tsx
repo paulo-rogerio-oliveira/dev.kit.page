@@ -29,15 +29,18 @@ export function entraNoPainel(sessao: LoginResponse): boolean {
   return papelDa(sessao) !== 'dev';
 }
 
+/** As páginas que o dev abre (US #425): a conta dele e as públicas — o painel e a administração, não. */
+const DO_DEV = ['/', '/conta', '/catalogo'];
+
 /**
  * Para onde a sessão vai depois do login (e da troca de senha): a troca pendente primeiro; depois o
- * painel — ou, para o dev, a página inicial, onde fica o "Baixar o dev.kit". `de` é a página que pediu
- * o login (a landing, ao baixar), e vale quando a sessão pode abri-la.
+ * painel — ou, para o dev, a página da conta (US #425). `de` é a página que pediu o login, e vale quando
+ * a sessão pode abri-la.
  */
 export function destinoDa(sessao: LoginResponse, de?: string | null): string {
   if (sessao.deveTrocarSenha) return '/trocar-senha';
-  if (de && de !== '/login' && de !== '/trocar-senha' && (entraNoPainel(sessao) || de === '/')) return de;
-  return entraNoPainel(sessao) ? '/dashboard' : '/';
+  if (de && de !== '/login' && de !== '/trocar-senha' && (entraNoPainel(sessao) || DO_DEV.includes(de))) return de;
+  return entraNoPainel(sessao) ? '/dashboard' : '/conta';
 }
 
 /** A sessão gravada, se ainda não venceu. */

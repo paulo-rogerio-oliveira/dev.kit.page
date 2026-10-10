@@ -7,26 +7,38 @@ import { TrocarSenha } from './paginas/TrocarSenha';
 import { Dashboard } from './paginas/Dashboard';
 import { Empresas } from './paginas/Empresas';
 import { Usuarios } from './paginas/Usuarios';
+import { Catalogo } from './paginas/Catalogo';
+import { Aderir } from './paginas/Aderir';
+import { DefinirSenha } from './paginas/DefinirSenha';
+import { Conta } from './paginas/Conta';
+import { Comprar } from './paginas/Comprar';
+import { CompraConcluida } from './paginas/CompraConcluida';
+import { EmpresaUsuarios } from './paginas/EmpresaUsuarios';
+import { EmpresaCatalogo } from './paginas/EmpresaCatalogo';
+import { CatalogoBase } from './paginas/CatalogoBase';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
  * pendente, só a troca é acessível — a mesma regra que a API aplica (403). `soAdmin` (US #381)
  * leva o gestor de volta ao dashboard da empresa dele; `doPainel` (US #405) leva o dev — que não
- * entra no painel — à página inicial, onde ele baixa o dev.kit.
+ * entra no painel — à conta dele (US #425); `soGestor` (US #425) é a administração da empresa: o admin
+ * (que não é de empresa nenhuma) volta ao dashboard, e o dev à conta.
  */
-export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin = false, doPainel = false }: {
+export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin = false, doPainel = false, soGestor = false }: {
   children: ReactNode;
   permiteTrocaPendente?: boolean;
   soAdmin?: boolean;
   doPainel?: boolean;
+  soGestor?: boolean;
 }) {
   const { sessao } = useSessao();
   const local = useLocation();
 
   if (!sessao) return <Navigate to="/login" replace state={{ de: local.pathname }} />;
   if (sessao.deveTrocarSenha && !permiteTrocaPendente) return <Navigate to="/trocar-senha" replace />;
-  if ((doPainel || soAdmin) && !entraNoPainel(sessao)) return <Navigate to="/" replace />;
+  if ((doPainel || soAdmin || soGestor) && !entraNoPainel(sessao)) return <Navigate to="/conta" replace />;
   if (soAdmin && papelDa(sessao) !== 'admin') return <Navigate to="/dashboard" replace />;
+  if (soGestor && papelDa(sessao) !== 'gestor') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -35,10 +47,19 @@ export function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/catalogo" element={<Catalogo />} />
+      <Route path="/aderir" element={<Aderir />} />
+      <Route path="/definir-senha" element={<DefinirSenha />} />
+      <Route path="/comprar" element={<Comprar />} />
+      <Route path="/compra-concluida" element={<CompraConcluida />} />
       <Route path="/trocar-senha" element={<RotaProtegida permiteTrocaPendente><TrocarSenha /></RotaProtegida>} />
+      <Route path="/conta" element={<RotaProtegida><Conta /></RotaProtegida>} />
       <Route path="/dashboard" element={<RotaProtegida doPainel><Dashboard /></RotaProtegida>} />
       <Route path="/empresas" element={<RotaProtegida soAdmin><Empresas /></RotaProtegida>} />
       <Route path="/usuarios" element={<RotaProtegida soAdmin><Usuarios /></RotaProtegida>} />
+      <Route path="/catalogo-base" element={<RotaProtegida soAdmin><CatalogoBase /></RotaProtegida>} />
+      <Route path="/empresa/usuarios" element={<RotaProtegida soGestor><EmpresaUsuarios /></RotaProtegida>} />
+      <Route path="/empresa/catalogo" element={<RotaProtegida soGestor><EmpresaCatalogo /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

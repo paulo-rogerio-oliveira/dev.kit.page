@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PRODUTOS_COMPARADOS, RECURSOS, RODAPE,
-  ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA,
+  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS, PRODUTOS_COMPARADOS,
+  RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA,
 } from './landing';
 
 // Relativo a este arquivo (src/conteudo), e não à pasta de onde o Vitest foi chamado.
@@ -10,13 +10,20 @@ const PUBLICO = join(__dirname, '..', '..', 'public');
 const arquivo = (url: string) => join(PUBLICO, ...url.split('/').filter(Boolean));
 
 describe('conteúdo da landing', () => {
-  it('as seções seguem a proposta da US #405 e mantêm as da US #283 e da US #381', () => {
+  it('as seções seguem a proposta da US #405, com o Catálogo e os Planos da US #425', () => {
     expect(SECOES.map((s) => s.id)).toEqual([
-      'inicio', 'como-funciona', 'beneficios', 'recursos', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'contato', 'faq', 'comecar',
+      'inicio', 'como-funciona', 'beneficios', 'recursos', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar',
     ]);
     // O menu e o rodapé só apontam para seções que existem.
     for (const id of [...MENU, ...RODAPE]) expect(SECOES.map((s) => s.id)).toContain(id);
-    expect(MENU.map(rotuloDaSecao)).toEqual(['Como funciona', 'Recursos', 'Integrações', 'Segurança', 'Perguntas']);
+    expect(MENU.map(rotuloDaSecao)).toEqual(['Como funciona', 'Recursos', 'Catálogo', 'Integrações', 'Segurança', 'Planos', 'Perguntas']);
+  });
+
+  it('os planos são o teste grátis, o individual e o de empresas, sem preço inventado na página (US #425)', () => {
+    expect(PLANOS.map((p) => p.id)).toEqual(['teste', 'individual', 'empresas']);
+    expect(PLANOS[0].resumo).toContain('14 dias');
+    expect(JSON.stringify(PLANOS)).not.toMatch(/R\$/);
+    expect(CATALOGO.itens).toHaveLength(3);
   });
 
   it('o hero destaca "Pull Request" no título e a amostra do Board traz a nota aceita', () => {
@@ -26,7 +33,7 @@ describe('conteúdo da landing', () => {
   });
 
   it('nenhum texto da página explica o dashboard nem fala em métricas (US #381)', () => {
-    const textos = JSON.stringify([HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PERGUNTAS]);
+    const textos = JSON.stringify([HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, CATALOGO, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PLANOS, PERGUNTAS]);
 
     expect(textos).not.toMatch(/dashboard/i);
     expect(textos).not.toMatch(/m[ée]tricas?/i);

@@ -43,6 +43,11 @@ app.MapearEmpresas();
 app.MapearUsuarios();
 app.MapearVersoes();
 app.MapearDemonstracoes();
+app.MapearCatalogoBase();
+app.MapearCatalogoDaEmpresa();
+app.MapearConta();
+app.MapearLicencas();
+app.MapearPagamentos();
 
 await app.RunAsync();
 

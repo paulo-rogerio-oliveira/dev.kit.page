@@ -399,3 +399,14 @@ input, select {
 
 /* ---------- Usuários (US #405) ---------- */
 .senha-temporaria code { font-size: 1rem; padding: 2px 6px; border-radius: 4px; background: var(--superficie); border: 1px solid var(--borda); }
+
+/* ---------- Catálogo, conta e planos (US #425) ---------- */
+.tipo-do-item { margin-bottom: 8px; color: var(--texto-2); }
+.grupo-do-catalogo { margin-top: 20px; }
+.grupo-do-catalogo .cartao small { display: block; margin-top: 10px; color: var(--texto-mudo); }
+.plano { display: flex; flex-direction: column; gap: 12px; }
+.plano ul { margin: 0; padding-left: 18px; color: var(--texto-2); line-height: 1.7; }
+.plano .baixar, .plano .cta { margin-top: auto; }
+.conta dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+.conta dt { color: var(--texto-2); }
+.conta dd { margin: 0; }

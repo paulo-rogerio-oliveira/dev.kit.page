@@ -353,10 +353,10 @@ describe('Dashboard', () => {
     expect(arbitro.getByTestId('kpi-Taxa de correção')).toHaveTextContent('—');
   });
 
-  it('o dev não entra no painel: o dashboard leva à página inicial (US #405)', async () => {
+  it('o dev não entra no painel: o dashboard leva à conta dele (US #405, US #425)', async () => {
     renderizar('/dashboard', tokenDoDev());
 
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('agente de IA');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Sua conta');
     expect(requisicoes.filter((r) => r.pathname.startsWith('/api/dashboard'))).toEqual([]);
   });
 

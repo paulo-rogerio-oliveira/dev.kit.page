@@ -22,6 +22,13 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AcessoAosDados> AcessosAosDados => Set<AcessoAosDados>();
     public DbSet<RoiDeWorkItem> RoisDeWorkItem => Set<RoiDeWorkItem>();
     public DbSet<AvaliacaoDeEntrega> AvaliacoesDeEntrega => Set<AvaliacaoDeEntrega>();
+    public DbSet<ItemDeCatalogo> ItensDeCatalogo => Set<ItemDeCatalogo>();
+    public DbSet<VersaoDeItem> VersoesDeItem => Set<VersaoDeItem>();
+    public DbSet<AssinaturaDeCatalogo> AssinaturasDeCatalogo => Set<AssinaturaDeCatalogo>();
+    public DbSet<LinkDeSenha> LinksDeSenha => Set<LinkDeSenha>();
+    public DbSet<TrialDeMaquina> TrialsDeMaquina => Set<TrialDeMaquina>();
+    public DbSet<LicencaEmitida> LicencasEmitidas => Set<LicencaEmitida>();
+    public DbSet<EventoDePagamento> EventosDePagamento => Set<EventoDePagamento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +40,10 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(u => u.Papel).HasMaxLength(20);
             // A gestão de usuários (US #405). No Azure SQL as colunas vêm de api/scripts/sqlserver/Usuarios.sql.
             e.Property(u => u.Nome).HasMaxLength(ValidadorDeUsuario.TamanhoMaximoDoNome);
+            // O e-mail da adesão (US #425): vazio nos usuários anteriores, então o índice não é único — a regra
+            // "um e-mail, uma empresa" é do serviço (Contas). No Azure SQL a coluna vem de api/scripts/sqlserver/Us425.sql.
+            e.Property(u => u.Email).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDoEmail);
+            e.HasIndex(u => u.Email);
             e.HasIndex(u => u.Login).IsUnique();
             e.HasOne(u => u.Empresa).WithMany().HasForeignKey(u => u.EmpresaId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -45,7 +56,74 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(x => x.Nome).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoNome);
             e.Property(x => x.Plano).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoPlano);
             e.Property(x => x.CodigoDeAdesao).HasMaxLength(20);
+            e.Property(x => x.AssinaturaExterna).HasMaxLength(100);
             e.HasIndex(x => x.CodigoDeAdesao).IsUnique();
+            e.HasIndex(x => x.AssinaturaExterna);
+        });
+
+        // O catálogo da empresa (US #425). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us425.sql.
+        modelBuilder.Entity<ItemDeCatalogo>(e =>
+        {
+            e.ToTable("ItensDeCatalogo");
+            e.Property(i => i.Tipo).HasMaxLength(10);
+            e.Property(i => i.Nome).HasMaxLength(RegrasDoCatalogoDaEmpresa.TamanhoMaximoDoNome);
+            e.Property(i => i.Descricao).HasMaxLength(RegrasDoCatalogoDaEmpresa.TamanhoMaximoDaDescricao);
+            e.Property(i => i.HashAtual).HasMaxLength(64);
+            e.Property(i => i.Dependencias).HasMaxLength(4000);
+            e.HasIndex(i => new { i.EmpresaId, i.Tipo, i.Nome }).IsUnique();
+            e.HasOne(i => i.Empresa).WithMany().HasForeignKey(i => i.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(i => i.Autor).WithMany().HasForeignKey(i => i.AutorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<VersaoDeItem>(e =>
+        {
+            e.ToTable("VersoesDeItem");
+            e.Property(v => v.Hash).HasMaxLength(64);
+            // Até 256 KB de UTF-8 (a regra do Core): no SQL Server é nvarchar(max), como o EF gera sem tamanho.
+            e.HasIndex(v => new { v.ItemId, v.Versao }).IsUnique();
+            e.HasOne(v => v.Item).WithMany().HasForeignKey(v => v.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AssinaturaDeCatalogo>(e =>
+        {
+            e.ToTable("AssinaturasDeCatalogo");
+            e.HasIndex(a => new { a.ItemId, a.UsuarioId }).IsUnique();
+            e.HasIndex(a => a.UsuarioId);
+            e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // A conta do dev, o trial, a licença e o pagamento (US #425): o mesmo script Us425.sql no Azure SQL.
+        modelBuilder.Entity<LinkDeSenha>(e =>
+        {
+            e.ToTable("LinksDeSenha");
+            e.Property(l => l.TokenHash).HasMaxLength(64);
+            e.HasIndex(l => l.TokenHash).IsUnique();
+            e.HasOne(l => l.Usuario).WithMany().HasForeignKey(l => l.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TrialDeMaquina>(e =>
+        {
+            e.ToTable("TrialsDeMaquina");
+            e.Property(t => t.Impressao).HasMaxLength(64);
+            e.HasIndex(t => t.Impressao).IsUnique();
+        });
+
+        modelBuilder.Entity<LicencaEmitida>(e =>
+        {
+            e.ToTable("LicencasEmitidas");
+            e.Property(l => l.Tipo).HasMaxLength(20);
+            e.HasIndex(l => new { l.MaquinaId, l.EmitidaEmUtc });
+            e.HasOne(l => l.Maquina).WithMany().HasForeignKey(l => l.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventoDePagamento>(e =>
+        {
+            e.ToTable("EventosDePagamento");
+            e.Property(p => p.EventoId).HasMaxLength(100);
+            e.Property(p => p.Tipo).HasMaxLength(50);
+            // O id do evento ÚNICO é o que torna o reenvio do gateway inofensivo, como o eventId da telemetria.
+            e.HasIndex(p => p.EventoId).IsUnique();
         });
 
         modelBuilder.Entity<AcessoAosDados>(e =>
@@ -64,6 +142,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(m => m.ChaveHash).HasMaxLength(64);
             e.Property(m => m.VersaoDevKit).HasMaxLength(50);
             e.Property(m => m.Colaborador).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoColaborador);
+            e.Property(m => m.Impressao).HasMaxLength(64);
             e.HasIndex(m => m.MaquinaId).IsUnique();
             e.HasIndex(m => m.ChaveHash).IsUnique();
             e.HasIndex(m => m.EmpresaId);

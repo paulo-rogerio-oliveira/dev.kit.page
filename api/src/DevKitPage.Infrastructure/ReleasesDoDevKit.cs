@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -28,18 +29,67 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
     /// <summary>O nome do HttpClient — o teste troca o handler do GitHub por ele.</summary>
     public const string NomeDoCliente = "github-releases";
 
-    /// <summary>Quantas releases a lista lê (as mais recentes): o download aceita qualquer uma delas.</summary>
-    public const int ReleasesLidas = 30;
+    /// <summary>
+    /// Quantas releases a lista lê (as mais recentes): o download aceita qualquer uma delas. Desde a US #425 as
+    /// do catálogo (<c>catalogo-vN</c>) dividem a lista com as do app — por isso 50, e não mais 30.
+    /// </summary>
+    public const int ReleasesLidas = 50;
 
     private const int SaltosMaximos = 5;
     private const string ChaveDoCache = "releases-do-devkit";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
+    /// <summary>O manifesto do catálogo é o JSON do git.kit: camelCase, e não o snake_case do GitHub.</summary>
+    private static readonly JsonSerializerOptions JsonDoManifesto = new(JsonSerializerDefaults.Web);
+
     /// <summary>Uma consulta ao GitHub por vez quando o cache vence: as visitas simultâneas esperam a mesma resposta.</summary>
     private static readonly SemaphoreSlim UmaConsulta = new(1, 1);
 
-    public async Task<IReadOnlyList<ReleaseDoDevKit>?> EstaveisAsync(CancellationToken ct)
+    /// <summary>A lista lida de uma vez: as releases do app e as do catálogo, cada uma pela sua regra de tag.</summary>
+    private sealed record Lidas(IReadOnlyList<ReleaseDoDevKit> Estaveis, IReadOnlyList<ReleaseDoCatalogo> Catalogos);
+
+    public async Task<IReadOnlyList<ReleaseDoDevKit>?> EstaveisAsync(CancellationToken ct) => (await LidasAsync(ct))?.Estaveis;
+
+    public async Task<IReadOnlyList<ReleaseDoCatalogo>?> CatalogosAsync(CancellationToken ct) => (await LidasAsync(ct))?.Catalogos;
+
+    public async Task<ManifestoDoCatalogoV1?> ManifestoAsync(ReleaseDoCatalogo release, CancellationToken ct)
+    {
+        var cfg = opcoes.Value;
+        if (cfg.Token.Length == 0)
+            return null;
+
+        // O manifesto de uma tag não muda: fica em cache como a lista, e só o válido entra.
+        var chave = $"{ChaveDoCache}:{cfg.Repositorio}:manifesto:{release.Tag}";
+        if (cache.TryGetValue(chave, out ManifestoDoCatalogoV1? guardado))
+            return guardado;
+
+        try
+        {
+            using var resposta = await AssetAsync(cfg, release.ManifestoAssetId, ct);
+            if (resposta is null)
+                return null;
+            var manifesto = await resposta.Content.ReadFromJsonAsync<ManifestoDoCatalogoV1>(JsonDoManifesto, ct);
+            if (!RegrasDoCatalogoBase.Valido(manifesto, release.Versao))
+            {
+                log.LogWarning("O manifesto da release {Tag} de {Repositorio} é inválido.", release.Tag, cfg.Repositorio);
+                return null;
+            }
+
+            cache.Set(chave, manifesto, TimeSpan.FromMinutes(Math.Max(1, cfg.CacheMinutos)));
+            return manifesto;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or NotSupportedException
+                                       || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            log.LogWarning("Falha ao ler o manifesto da release {Tag} de {Repositorio} ({Tipo}).", release.Tag, cfg.Repositorio, ex.GetType().Name);
+            return null;
+        }
+    }
+
+    public Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoCatalogo release, CancellationToken ct) => AbrirAssetAsync(release.AssetId, ct);
+
+    private async Task<Lidas?> LidasAsync(CancellationToken ct)
     {
         var cfg = opcoes.Value;
         if (cfg.Token.Length == 0)
@@ -49,7 +99,7 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
         }
 
         var chave = $"{ChaveDoCache}:{cfg.Repositorio}";
-        if (cache.TryGetValue(chave, out IReadOnlyList<ReleaseDoDevKit>? guardadas))
+        if (cache.TryGetValue(chave, out Lidas? guardadas))
             return guardadas;
 
         await UmaConsulta.WaitAsync(ct);
@@ -70,21 +120,27 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
         }
     }
 
-    public async Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoDevKit release, CancellationToken ct)
+    public Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoDevKit release, CancellationToken ct) => AbrirAssetAsync(release.AssetId, ct);
+
+    /// <summary>O asset aberto em streaming — o zip do app e o do catálogo pelo mesmo caminho.</summary>
+    private async Task<PacoteAberto?> AbrirAssetAsync(long assetId, CancellationToken ct)
     {
         var cfg = opcoes.Value;
         if (cfg.Token.Length == 0)
             return null;
 
-        var resposta = await AssetAsync(cfg, release.AssetId, ct);
+        var resposta = await AssetAsync(cfg, assetId, ct);
         if (resposta is null)
             return null;
         // ResponseHeadersRead: o corpo é o stream da conexão com o GitHub, copiado direto para o cliente.
         return new PacoteAberto(await resposta.Content.ReadAsStreamAsync(ct), resposta.Content.Headers.ContentLength, resposta);
     }
 
-    /// <summary>A lista do GitHub, já filtrada e ordenada pela <see cref="RegrasDeVersao"/>; nula na falha.</summary>
-    private async Task<IReadOnlyList<ReleaseDoDevKit>?> LerAsync(OpcoesDeAtualizacao cfg, CancellationToken ct)
+    /// <summary>
+    /// A lista do GitHub, já separada: as do app pela <see cref="RegrasDeVersao"/>, as do catálogo pela
+    /// <see cref="RegrasDoCatalogoBase"/> (com o zip E o manifesto). Nula na falha.
+    /// </summary>
+    private async Task<Lidas?> LerAsync(OpcoesDeAtualizacao cfg, CancellationToken ct)
     {
         try
         {
@@ -114,7 +170,7 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
                     RegrasDeVersao.Destaques(r.Body), zip.Id, zip.Name!, zip.Size, sha));
             }
 
-            return lista;
+            return new Lidas(lista, await CatalogosAsync(cfg, releases, ct));
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or NotSupportedException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -124,6 +180,36 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
             return null;
         }
     }
+
+    /// <summary>
+    /// As releases do catálogo (US #425): estáveis, com a tag <c>catalogo-vN</c>, o zip e o <c>manifesto.json</c>,
+    /// da versão mais nova para a mais velha. O hash do zip da ÚLTIMA vale uma chamada a mais, como no app.
+    /// </summary>
+    private async Task<IReadOnlyList<ReleaseDoCatalogo>> CatalogosAsync(OpcoesDeAtualizacao cfg, IEnumerable<ReleaseDoGitHub> releases, CancellationToken ct)
+    {
+        var candidatas = releases
+            .Where(r => !r.Draft && !r.Prerelease && Pacote(r) is not null && ManifestoDa(r) is not null)
+            .Select(r => (Release: r, Versao: RegrasDoCatalogoBase.Versao(r.TagName)))
+            .Where(x => x.Versao is not null)
+            .OrderByDescending(x => x.Versao)
+            .ToList();
+
+        var lista = new List<ReleaseDoCatalogo>(candidatas.Count);
+        foreach (var (r, versao) in candidatas)
+        {
+            var zip = Pacote(r)!;
+            var sha = RegrasDeVersao.Sha256DoDigest(zip.Digest) ?? (lista.Count == 0 ? await Sha256DoArquivoAsync(cfg, r, zip, ct) : null);
+            lista.Add(new ReleaseDoCatalogo(
+                versao!.Value, r.TagName!, string.IsNullOrWhiteSpace(r.Name) ? r.TagName! : r.Name.Trim(), r.PublishedAt ?? DateTimeOffset.MinValue,
+                zip.Id, zip.Name!, zip.Size, sha, ManifestoDa(r)!.Id));
+        }
+
+        return lista;
+    }
+
+    /// <summary>O <c>manifesto.json</c> anexado à release do catálogo; nulo sem ele.</summary>
+    private static AssetDoGitHub? ManifestoDa(ReleaseDoGitHub release)
+        => release.Assets?.FirstOrDefault(a => string.Equals(a.Name, RegrasDoCatalogoBase.Manifesto, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>O hash do <c>&lt;zip&gt;.sha256</c> que o release.yml do git.kit publica ao lado do zip; nulo sem ele.</summary>
     private async Task<string?> Sha256DoArquivoAsync(OpcoesDeAtualizacao cfg, ReleaseDoGitHub release, AssetDoGitHub zip, CancellationToken ct)

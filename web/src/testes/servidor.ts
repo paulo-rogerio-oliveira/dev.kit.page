@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  ColaboradorResumo, DemonstracaoResumo, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, LoginResponse, MaquinaResumo, Pagina,
-  EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RoiResposta, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
+  ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa, LoginResponse,
+  MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, ReleaseDoCatalogo, RoiResposta, UsuarioDaEmpresa,
+  UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -146,6 +147,63 @@ export const roi: RoiResposta = {
   totais: { itens: 2, turnos: 42, horas: 33.5, leadTimeMedioDias: 3.5, pullRequests: 2, pullRequestsMergeadas: 1 },
 };
 
+// ----- US #425: o catálogo, a conta e a compra -----
+
+/** A vitrine do catálogo básico. */
+export const vitrine: Vitrine = {
+  versao: 2, publicadaEm: '2026-10-08T12:00:00Z',
+  grupos: [
+    { tecnologia: 'Angular', itens: [{ tipo: 'skill', nome: 'compilar-angular', descricao: 'Compila o Angular', tecnologia: 'Angular', versao: 1 }] },
+    { tecnologia: 'Git', itens: [
+      { tipo: 'skill', nome: 'revisar-alteracoes', descricao: 'Revisa antes do commit', tecnologia: 'Git', versao: 2 },
+      { tipo: 'fluxo', nome: 'tarefa-avulsa', descricao: 'Uma tarefa sem work item', tecnologia: 'Git', versao: 1 },
+    ] },
+  ],
+};
+
+/** As releases do catálogo básico (a página do admin). */
+export const releasesDoCatalogo: ReleaseDoCatalogo[] = [
+  { versao: 2, tag: 'catalogo-v2', nome: 'Catálogo 2', publicadaEm: '2026-10-08T12:00:00Z', itens: 4, retirados: 1, tamanhoBytes: 3_145_728, sha256: 'b'.repeat(64) },
+  { versao: 1, tag: 'catalogo-v1', nome: 'Catálogo 1', publicadaEm: '2026-10-02T12:00:00Z', itens: 1, retirados: 0, tamanhoBytes: 1_048_576, sha256: null },
+];
+
+/** O catálogo da Empresa A: uma skill publicada e um fluxo retirado. */
+export const itensDaEmpresa: ItemDaEmpresa[] = [
+  {
+    id: 11, tipo: 'skill', nome: 'compilar-uau', descricao: 'Compila o UAU', versao: 3, hash: 'h3', autor: 'Ana Souza', assinantes: 4, assinado: false,
+    publicadoEm: '2026-10-09T10:00:00Z', retirado: null, dependencias: [],
+  },
+  {
+    id: 12, tipo: 'fluxo', nome: 'entrega-uau', descricao: 'A entrega do UAU', versao: 1, hash: 'f1', autor: 'Bia', assinantes: 0, assinado: false,
+    publicadoEm: '2026-10-05T10:00:00Z', retirado: '2026-10-06T10:00:00Z', dependencias: ['skill:compilar-uau'],
+  },
+];
+
+/** A conta da Ana (dev da Empresa A). */
+export const conta: Conta = {
+  login: 'ana.dev', nome: 'Ana Souza', email: 'ana@empresa.com', papel: 'dev', empresa: 'Empresa A', individual: false,
+  assinaturaAtiva: true, urlGerenciarAssinatura: null, loginObrigatorio: true,
+};
+
+/** A conta do Rui (a compra individual). */
+export const contaIndividual: Conta = {
+  ...conta, login: 'rui@solo.com', nome: 'Rui', email: 'rui@solo.com', empresa: 'Rui', individual: true, urlGerenciarAssinatura: 'https://gateway.test/portal',
+};
+
+/** A empresa do gestor e os usuários dela. */
+export const empresaDoGestor: EmpresaDoGestor = {
+  id: 4, nome: 'Empresa A', plano: 'Empresarial', assentos: 10, assentosOcupados: 3, codigoDeAdesao: 'DK-7QH4-M2XA', loginObrigatorio: null, loginObrigatorioEfetivo: false,
+};
+
+export const usuariosDaEmpresa: UsuarioDaEmpresa[] = [
+  { id: 2, login: 'ana@empresa.com', nome: 'Ana Souza', email: 'ana@empresa.com', papel: 'dev', bloqueado: false, criadoEm: '2026-10-02T10:00:00Z' },
+  { id: 3, login: 'bia@empresa.com', nome: '', email: 'bia@empresa.com', papel: 'dev', bloqueado: true, criadoEm: '2026-10-03T10:00:00Z' },
+  { id: 5, login: 'gestor.a', nome: '', email: '', papel: 'gestor', bloqueado: false, criadoEm: '2026-10-01T10:00:00Z' },
+];
+
+/** O que chegou às rotas de escrita da US #425 (o método, o caminho e o corpo). */
+export const escritas: { metodo: string; caminho: string; corpo: unknown }[] = [];
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -210,15 +268,60 @@ export const handlersPadrao = [
     cadastros.gestores.push({ empresa: String(params.id), login });
     return HttpResponse.json({ id: 12, login, senhaInicial: 'DkSENHA1234a1' }, { status: 201 });
   }),
-  // US #405: a versão do dev.kit e o download autenticado.
+  // US #405: a versão do dev.kit; o download é anônimo desde a US #425 (guarda o Authorization para o teste
+  // conferir que nenhum foi mandado).
   http.get(`${API}/api/versoes/ultima`, () => HttpResponse.json(versao)),
   http.get(`${API}/api/versoes/:versao/download`, ({ request }) => {
-    const autorizacao = request.headers.get('Authorization');
-    downloads.push(autorizacao);
-    if (!autorizacao) return new HttpResponse(null, { status: 401 });
+    downloads.push(request.headers.get('Authorization'));
     return new HttpResponse(new Uint8Array([80, 75, 3, 4]), {
       headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=devkit-136.zip' },
     });
+  }),
+  // US #425: o catálogo, a conta, a empresa do gestor e a compra.
+  http.get(`${API}/api/catalogo/base/vitrine`, () => HttpResponse.json(vitrine)),
+  http.get(`${API}/api/catalogo/base/releases`, () => HttpResponse.json(releasesDoCatalogo)),
+  http.get(`${API}/api/catalogo/empresa`, () => HttpResponse.json(itensDaEmpresa)),
+  http.delete(`${API}/api/catalogo/empresa/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/catalogo/empresa/${params.id}`, corpo: null });
+    return HttpResponse.json({ ...itensDaEmpresa.find((i) => String(i.id) === params.id)!, retirado: '2026-10-10T10:00:00Z' });
+  }),
+  http.post(`${API}/api/conta/adesao`, async ({ request }) => {
+    const corpo = (await request.json()) as { codigo: string; email: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/conta/adesao', corpo });
+    if (corpo.email === 'ana@outra.com') return HttpResponse.json({ detail: 'Este e-mail já está cadastrado em outra empresa. Fale com o gestor dela.' }, { status: 409 });
+    return HttpResponse.json({ mensagem: `Pronto: enviamos para ${corpo.email} o link para definir a senha (vale 24 horas).` }, { status: 202 });
+  }),
+  http.post(`${API}/api/conta/link`, async ({ request }) => {
+    escritas.push({ metodo: 'POST', caminho: '/api/conta/link', corpo: await request.json() });
+    return HttpResponse.json({ mensagem: 'Se o e-mail tiver uma conta, o link para definir a senha chega em instantes.' }, { status: 202 });
+  }),
+  http.post(`${API}/api/conta/definir-senha`, async ({ request }) => {
+    const corpo = (await request.json()) as { token: string; novaSenha: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/conta/definir-senha', corpo });
+    if (corpo.token === 'usado') return HttpResponse.json({ detail: 'Este link já foi usado. Peça um link novo.' }, { status: 400 });
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get(`${API}/api/conta`, () => HttpResponse.json(conta)),
+  http.get(`${API}/api/empresa`, () => HttpResponse.json(empresaDoGestor)),
+  http.get(`${API}/api/empresa/usuarios`, () => HttpResponse.json(usuariosDaEmpresa)),
+  http.put(`${API}/api/empresa/usuarios/:id/bloqueio`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { bloqueado: boolean };
+    escritas.push({ metodo: 'PUT', caminho: `/api/empresa/usuarios/${params.id}/bloqueio`, corpo });
+    return HttpResponse.json({ ...usuariosDaEmpresa.find((u) => String(u.id) === params.id)!, bloqueado: corpo.bloqueado });
+  }),
+  http.post(`${API}/api/empresa/codigo`, () => {
+    escritas.push({ metodo: 'POST', caminho: '/api/empresa/codigo', corpo: null });
+    return HttpResponse.json({ codigoDeAdesao: 'DK-NOVO-0002' });
+  }),
+  http.put(`${API}/api/empresa/politica`, async ({ request }) => {
+    const corpo = (await request.json()) as { loginObrigatorio: boolean | null };
+    escritas.push({ metodo: 'PUT', caminho: '/api/empresa/politica', corpo });
+    return HttpResponse.json({ ...empresaDoGestor, loginObrigatorio: corpo.loginObrigatorio, loginObrigatorioEfetivo: corpo.loginObrigatorio ?? false });
+  }),
+  http.post(`${API}/api/pagamentos/checkout`, async ({ request }) => {
+    const corpo = (await request.json()) as { plano: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/pagamentos/checkout', corpo });
+    return HttpResponse.json({ url: `/compra-concluida?simulado=1&plano=${corpo.plano}`, simulado: true });
   }),
   // US #405: a gestão de usuários.
   http.get(`${API}/api/usuarios`, () => HttpResponse.json(usuarios)),

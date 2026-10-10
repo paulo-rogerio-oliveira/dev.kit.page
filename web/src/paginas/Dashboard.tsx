@@ -98,6 +98,9 @@ export function Dashboard() {
         <nav>
           {ehAdmin && <Link className="botao botao-fantasma" to="/empresas">Empresas</Link>}
           {ehAdmin && <Link className="botao botao-fantasma" to="/usuarios">Usuários</Link>}
+          {ehAdmin && <Link className="botao botao-fantasma" to="/catalogo-base">Catálogo básico</Link>}
+          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
+          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
           <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>
           <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
         </nav>

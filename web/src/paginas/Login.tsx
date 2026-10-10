@@ -5,8 +5,9 @@ import { destinoDa, useSessao } from '../sessao';
 
 /**
  * O login: credencial inválida mostra o erro; a troca de senha pendente leva à troca. Depois dele a
- * sessão vai para a página que pediu o login (a landing, ao baixar o dev.kit) ou para o seu destino —
- * o painel, ou a página inicial para o dev (US #405).
+ * sessão vai para a página que pediu o login ou para o seu destino — o painel, ou a conta para o dev
+ * (US #425). O download do dev.kit não pede mais login (US #425, a reversão da US #405); daqui saem o
+ * link novo de senha e a adesão por código.
  */
 export function Login() {
   const { sessao, motivo, entrar } = useSessao();
@@ -40,7 +41,6 @@ export function Login() {
         <Link to="/" className="marca">dev<span className="marca-ponto">.</span>kit</Link>
         <h1 id="titulo-login">Entrar</h1>
         {motivo === 'expirou' && <p className="aviso" role="status">Sua sessão expirou. Entre de novo.</p>}
-        {motivo !== 'expirou' && de === '/' && <p className="aviso" role="status">Entre para baixar o dev.kit.</p>}
         <label>
           Login
           <input value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" required />
@@ -53,6 +53,8 @@ export function Login() {
         <button className="botao botao-primario" type="submit" disabled={enviando}>
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
+        <Link to="/definir-senha">Esqueci a senha</Link>
+        <Link to="/aderir">Tenho um código de adesão</Link>
       </form>
     </div>
   );

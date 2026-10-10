@@ -100,7 +100,7 @@ describe('Usuários (US #405)', () => {
     expect(await screen.findByRole('heading', { name: 'Novo usuário' })).toBeInTheDocument();
   });
 
-  it('o gestor que abre Usuários volta ao dashboard; o dev, à página inicial', async () => {
+  it('o gestor que abre Usuários volta ao dashboard; o dev, à conta dele (US #425)', async () => {
     const { unmount } = renderizar('/usuarios', tokenDoGestor());
     expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
@@ -108,6 +108,6 @@ describe('Usuários (US #405)', () => {
     sessionStorage.clear();
 
     renderizar('/usuarios', tokenDoDev());
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('agente de IA');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Sua conta');
   });
 });

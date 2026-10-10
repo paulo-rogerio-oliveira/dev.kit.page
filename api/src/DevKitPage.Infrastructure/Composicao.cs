@@ -23,6 +23,11 @@ public static class Composicao
         servicos.Configure<OpcoesDoBanco>(configuracao.GetSection(OpcoesDoBanco.Secao));
         servicos.Configure<OpcoesDaSemente>(configuracao.GetSection(OpcoesDaSemente.Secao));
         servicos.Configure<OpcoesDeDemonstracao>(configuracao.GetSection(OpcoesDeDemonstracao.Secao));
+        // A US #425: a conta do dev, o e-mail, a licença assinada e o gateway de pagamento.
+        servicos.Configure<OpcoesDaConta>(configuracao.GetSection(OpcoesDaConta.Secao));
+        servicos.Configure<OpcoesDeEmail>(configuracao.GetSection(OpcoesDeEmail.Secao));
+        servicos.Configure<OpcoesDeLicenca>(configuracao.GetSection(OpcoesDeLicenca.Secao));
+        servicos.Configure<OpcoesDePagamento>(configuracao.GetSection(OpcoesDePagamento.Secao));
 
         // A atualização pelas GitHub Releases (US #405): o token vem SÓ da variável REPO_KEY, lida da
         // configuração FINAL (a do host, com as variáveis de ambiente) — e sobrescreve qualquer
@@ -67,6 +72,13 @@ public static class Composicao
         servicos.AddScoped<IExpurgoDeAcessos, ExpurgoDeAcessos>();
         servicos.AddScoped<IPedidosDeDemonstracao, PedidosDeDemonstracao>();
         servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
+        servicos.AddScoped<ICatalogoDaEmpresa, CatalogoDaEmpresa>();
+        servicos.AddScoped<IContas, Contas>();
+        servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
+        servicos.AddScoped<ILicencas, Licencas>();
+        servicos.AddScoped<IPagamentos, Pagamentos>();
+        // O teste troca o envio por um falso que guarda as mensagens (o TryAdd deixa o dele valer).
+        servicos.TryAddSingleton<IEnvioDeEmail, EnvioDeEmail>();
         servicos.AddScoped<InicializadorDaBase>();
         return servicos;
     }

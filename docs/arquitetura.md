@@ -205,8 +205,9 @@ cliente:
 - `GET /api/versoes/ultima` (anônima) devolve a `VersaoV1`: o número do dev.kit, a tag, a data, até 5
   destaques (os itens de lista do corpo da release, sem markdown), o tamanho e o SHA-256 do zip (o
   `digest` do asset ou o `<zip>.sha256` publicado ao lado), a `urlDownload` e o `loginObrigatorio`.
-- `GET /api/versoes/{versao}/download` exige o usuário (a política padrão: autenticado, sem troca pendente;
-  o bloqueado pelo admin recebe 403) e é um **proxy em streaming**: o `ReleasesDoDevKit` pede
+- `GET /api/versoes/{versao}/download` exigia o usuário na US #405; **desde a US #425 é ANÔNIMO** (a
+  reversão: quem baixa começa o trial de 14 dias na primeira abertura), limitado por IP pela
+  `PoliticaDoDownload` (`Atualizacao:DownloadsPorHora`, padrão 20, 429 acima). Segue um **proxy em streaming**: o `ReleasesDoDevKit` pede
   `releases/assets/{id}` com `Accept: application/octet-stream` e `HttpCompletionOption.ResponseHeadersRead`,
   e a rota copia o stream para a resposta — o zip nunca é bufferizado. O HttpClient nasce **sem
   redirecionamento automático**: o 302 do GitHub para o armazenamento (outro host, URL assinada) é seguido à
@@ -245,6 +246,32 @@ somas por tipo e recorte que o `ConsultasDoPainel.QualidadeAsync` já tira do ba
 nenhuma consulta a mais. A taxa de correção sem cobrança é nula. Na web, os cartões ficam na seção
 "Qualidade de uso" do dashboard.
 
+**Catálogo, conta do dev e licença assinada (US #425).** Cinco grupos novos, em `EndpointsDaUs425.cs`:
+- **Catálogo básico** (`/api/catalogo/base`): as releases `catalogo-vN` do git.kit, lidas na MESMA consulta das
+  versões (`ReleasesDoDevKit`; a `RegrasDeVersao` recusa as tags `catalogo-`), com o manifesto em cache. O app
+  pede a DELTA desde a versão dele (`RegrasDoCatalogoBase.Delta`: os itens com `catalogo > desde`, mais os
+  retirados) e recebe 304 sem mudança; `/download` serve o zip; `/vitrine` é a página pública `/catalogo`,
+  agrupada por tecnologia; `/releases` é do admin.
+- **Catálogo da empresa** (`/api/catalogo/empresa`): o gestor e o dev publicam, listam, assinam e retiram
+  itens da empresa DELES — o isolamento entre empresas fica num ponto só (`CatalogoDaEmpresa.DaEmpresaAsync`).
+- **Conta** (`/api/conta`, `/api/empresa`): a adesão por código e e-mail cria o dev e manda o link de definir
+  a senha (uso único, 24 h, só o hash no banco) pelo `IEnvioDeEmail` (SMTP; sem SMTP, o log); o assento
+  conta por USUÁRIO (`Assentos.DentroAsync`: os primeiros devs ativos da empresa) e o login além dele é 403
+  `sem-assento`; o gestor bloqueia (libera o assento), gera código novo e define a política de login da
+  empresa, que sobrepõe o `DEVKIT_LOGIN_OBRIGATORIO` (agora só o padrão). Cada recusa do login leva o seu
+  `codigo` (`CodigosDeRecusa`), e `POST /api/auth/renovar` troca o token válido por um novo com as MESMAS
+  recusas — o app renova sozinho, e o corte do gestor vale também ali.
+- **Licenças** (`/api/licencas/renovar`): exige o JWT E o `X-Machine-Key`; emite a licença `DKL2` (Ed25519,
+  `LicencaAssinada`, chave privada `Licencas:ChavePrivada` do Key Vault) de 30 dias, a partir do 7º dia da
+  atual; bloqueado, sem assento ou assinatura cancelada não renovam (`RecusaDaRenovacao`). O registro da
+  máquina com a impressão (`/api/maquinas/registrar`) devolve o TRIAL assinado, contado do primeiro registro
+  daquela impressão.
+- **Pagamentos** (`/api/pagamentos`): o checkout da compra individual (simulado sem gateway configurado) e o
+  webhook assinado (`X-Gateway-Assinatura: t=..,v1=hmac`, `RegrasDoGateway`), que cria a empresa individual
+  ou marca a assinatura cancelada.
+
+Tabelas novas: migration `Us425CatalogoContaELicenca` e `api/scripts/sqlserver/Us425.sql`.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -255,7 +282,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -275,4 +302,5 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | `api/tests/DevKitPage.Api.Tests` | WebApplicationFactory: login, 401/403, token vencido, troca obrigatória, chave inválida, JWT na ingestão, 413, registro, `/health`, Production sem segredo; lote antigo aceito, chave da máquina sem acesso aos erros, reação pelo JWT, exportação do grupo; `EmpresasApiTests`: o gestor da empresa A não lê máquinas, erros nem a exportação da B (403 pelo id), a máquina sem consentimento só nos totais, o CSV auditado e sem fórmula, o 429 da exportação em laço, a adesão recusada sem assento ou com código desconhecido, o admin vê tudo e o gestor não administra; demonstração 201/400/401/404, 429 com `Retry-After`, `X-Forwarded-For` do proxy confiável (IPs diferentes não dividem a cota, o mesmo divide) e do não confiável (ignorado), o expurgo diário; `RoiApiTests`: o `RoiCalculado` no JSON exato do dev.kit vira a foto no painel, o envio mais novo substitui e o mais antigo não, o evento sem `roi` não cria foto, o gestor não lê o ROI de outra empresa (403 pelo id) |
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin); o ROI por work item (KPIs, gráfico com a dica do lead time, tabela, traço sem turno, estado vazio com o `devcli roi`, os filtros) |
 | US #405 | Core: `RegrasTests` (tag → versão, prerelease/rascunho/ilegível, ordem numérica, destaques, SHA-256, senha temporária, validação do usuário, papel dev sem escopo, os tipos novos e os cartões Impasses/Árbitro inclusive sem denominador); Infrastructure: `UsuariosTests` (senha temporária, redefinição, bloqueio pelo admin × temporário, dev sem painel, script do Azure SQL) e a qualidade com os eventos novos no escopo; Api: `VersoesApiTests` (GitHub de mentira: 200, cache, 401 anônimo, streaming do zip, o token só no api.github.com e nunca no armazenamento nem na resposta, 404, 503 sem REPO_KEY e com o GitHub fora do ar), `UsuariosApiTests` (401/403, senha só na criação/redefinição, `bloqueadoAte` no 423, dev 403 no painel) e `QualidadeDoFluxoApiTests`; web: `Landing.test.tsx` (proposta e download), `Usuarios.test.tsx`, os cartões em `Dashboard.test.tsx`; e2e: `usuarios.spec.ts` e `us405.spec.ts` |
+| US #425 | Core: `Ed25519Tests` (vetores do RFC 8032, adulterada, chave errada), `CatalogoTests` (tag, delta, vitrine, validação da publicação), `LicencasTests` (emitir/ler, janela do 7º dia, recusas, link, gateway); Infrastructure: `Us425Tests` (isolamento do catálogo por empresa, adesão, assento por usuário, link de uso único, trial pela impressão, licenças, webhook, script `Us425.sql`); Api: `CatalogoApiTests` (delta e 304, download, vitrine, admin), `ContaApiTests` (adesão, link, recusa com `codigo`, renovação do token cortada pelo bloqueio, política por empresa, gestor 403 na outra empresa), `LicencasApiTests` (renovação com JWT e chave, cada recusa, a janela) e `VersoesApiTests` (download anônimo com limite por IP); web: `Catalogo`, `Conta`, `Comprar` e `EmpresaDoGestor`; e2e: `us425.spec.ts` (as telas novas com as capturas) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e vídeo do hero → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard |

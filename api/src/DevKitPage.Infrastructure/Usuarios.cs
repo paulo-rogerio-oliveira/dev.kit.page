@@ -40,6 +40,11 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
         if (usuario.BloqueadoPeloAdmin)
             return (ResultadoDoLogin.BloqueadoPeloAdmin, null);
 
+        // O assento conta por usuário (US #425): o dev além dos assentos da empresa não entra — com a senha
+        // certa, como o bloqueio, para quem não a sabe não descobrir nada.
+        if (!await Assentos.DentroAsync(db, usuario, ct))
+            return (ResultadoDoLogin.SemAssento, null);
+
         if (conferencia == PasswordVerificationResult.SuccessRehashNeeded)
             usuario.SenhaHash = hasher.HashPassword(usuario, senha!);
         usuario.FalhasSeguidas = 0;
@@ -70,6 +75,19 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 
     public Task<Usuario?> ObterAsync(int usuarioId, CancellationToken ct)
         => db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstOrDefaultAsync(u => u.Id == usuarioId, ct);
+
+    public async Task<(ResultadoDoLogin Resultado, Usuario? Usuario)> RenovarAsync(int usuarioId, CancellationToken ct)
+    {
+        var usuario = await ObterAsync(usuarioId, ct);
+        if (usuario is null)
+            return (ResultadoDoLogin.CredencialInvalida, null);
+        if (usuario.BloqueadoPeloAdmin)
+            return (ResultadoDoLogin.BloqueadoPeloAdmin, null);
+        // A mesma conferência do login: o gestor que tirou o assento corta também a renovação.
+        if (!await Assentos.DentroAsync(db, usuario, ct))
+            return (ResultadoDoLogin.SemAssento, null);
+        return (ResultadoDoLogin.Ok, usuario);
+    }
 }
 
 /// <summary>

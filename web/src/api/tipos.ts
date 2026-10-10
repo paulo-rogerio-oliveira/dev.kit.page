@@ -325,6 +325,107 @@ export interface RoiResposta {
   totais: RoiTotais;
 }
 
+// ----- US #425: o catálogo, a conta, a licença e a compra -----
+
+/** O tipo de um item de catálogo: a skill, o Tech Plan ou o fluxo. */
+export type TipoDeItem = 'skill' | 'plan' | 'fluxo';
+
+/** Um item da vitrine pública do catálogo básico. */
+export interface ItemDaVitrine {
+  tipo: TipoDeItem;
+  nome: string;
+  descricao: string;
+  tecnologia: string;
+  versao: number;
+}
+
+/** A vitrine (GET /api/catalogo/base/vitrine): os itens agrupados por tecnologia. */
+export interface Vitrine {
+  versao: number;
+  publicadaEm: string;
+  grupos: { tecnologia: string; itens: ItemDaVitrine[] }[];
+}
+
+/** Uma release do catálogo básico (catalogo-vN), na página do admin. */
+export interface ReleaseDoCatalogo {
+  versao: number;
+  tag: string;
+  nome: string;
+  publicadaEm: string;
+  itens: number;
+  retirados: number;
+  tamanhoBytes: number;
+  sha256: string | null;
+}
+
+/** Um item do catálogo da empresa, na lista de quem é dela. */
+export interface ItemDaEmpresa {
+  id: number;
+  tipo: TipoDeItem;
+  nome: string;
+  descricao: string;
+  versao: number;
+  hash: string;
+  autor: string;
+  assinantes: number;
+  assinado: boolean;
+  publicadoEm: string;
+  /** Quando foi retirado; nulo enquanto está publicado. */
+  retirado: string | null;
+  dependencias: string[];
+}
+
+/** A conta de quem está logado (GET /api/conta). */
+export interface Conta {
+  login: string;
+  nome: string;
+  email: string;
+  papel: Papel;
+  empresa: string | null;
+  /** A empresa de um assento só, da compra individual. */
+  individual: boolean;
+  assinaturaAtiva: boolean;
+  /** O portal do gateway — só na conta individual. */
+  urlGerenciarAssinatura: string | null;
+  loginObrigatorio: boolean;
+}
+
+/** A empresa vista pelo gestor (GET /api/empresa). */
+export interface EmpresaDoGestor {
+  id: number;
+  nome: string;
+  plano: string;
+  assentos: number;
+  assentosOcupados: number;
+  codigoDeAdesao: string;
+  /** A escolha do gestor; nulo segue o padrão global. */
+  loginObrigatorio: boolean | null;
+  loginObrigatorioEfetivo: boolean;
+}
+
+/** Um usuário da empresa, na lista do gestor. */
+export interface UsuarioDaEmpresa {
+  id: number;
+  login: string;
+  nome: string;
+  email: string;
+  papel: Papel;
+  bloqueado: boolean;
+  criadoEm: string;
+}
+
+/** A resposta da adesão e do pedido de link: a mensagem (o link vai por e-mail). */
+export interface Mensagem {
+  mensagem: string;
+}
+
+/** Para onde o checkout leva o comprador. */
+export interface CheckoutCriado {
+  url: string;
+  /** Sem gateway configurado: o checkout simulado, que vai direto à compra concluída. */
+  simulado: boolean;
+}
+
 /** Um arquivo baixado da API: o conteúdo e o nome sugerido. */
 export interface ArquivoBaixado {
   conteudo: Blob;

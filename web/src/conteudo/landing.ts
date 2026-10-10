@@ -88,17 +88,19 @@ export const SECOES: SecaoDaLanding[] = [
   { id: 'como-funciona', rotulo: 'Como funciona' },
   { id: 'beneficios', rotulo: 'Por que o dev.kit' },
   { id: 'recursos', rotulo: 'Recursos' },
+  { id: 'catalogo', rotulo: 'Catálogo' },
   { id: 'comparativo', rotulo: 'Comparativo' },
   { id: 'integracoes', rotulo: 'Integrações' },
   { id: 'seguranca', rotulo: 'Segurança' },
   { id: 'empresas', rotulo: 'Empresas' },
+  { id: 'planos', rotulo: 'Planos' },
   { id: 'contato', rotulo: 'Contato' },
   { id: 'faq', rotulo: 'Perguntas' },
   { id: 'comecar', rotulo: 'Começar' },
 ];
 
-/** As seções do menu do topo (a proposta da US #405), na ordem. */
-export const MENU = ['como-funciona', 'recursos', 'integracoes', 'seguranca', 'faq'] as const;
+/** As seções do menu do topo (a proposta da US #405, com o Catálogo e os Planos da US #425), na ordem. */
+export const MENU = ['como-funciona', 'recursos', 'catalogo', 'integracoes', 'seguranca', 'planos', 'faq'] as const;
 
 /** As seções dos links do rodapé (a proposta da US #405), na ordem. */
 export const RODAPE = ['seguranca', 'comparativo', 'empresas', 'faq'] as const;
@@ -329,7 +331,79 @@ export const EMPRESAS = {
   ] satisfies Beneficio[],
 };
 
+/**
+ * A seção "Catálogo" (US #425): o catálogo básico versionado, que chega sozinho às máquinas, e o catálogo da
+ * empresa. A lista completa, por tecnologia, é a página pública /catalogo.
+ */
+export const CATALOGO = {
+  titulo: 'Catálogo de skills, Tech Plans e fluxos',
+  subtitulo: 'O dev.kit chega com o catálogo básico, e ele se atualiza sozinho.',
+  itens: [
+    {
+      titulo: 'Atualiza sozinho',
+      texto: 'Uma skill corrigida chega a todas as máquinas: o dev.kit confere o catálogo ao abrir e uma vez por dia. O que você editou fica do seu jeito, com o aviso de versão nova.',
+    },
+    {
+      titulo: 'O catálogo da sua empresa',
+      texto: 'Publique as skills, os Tech Plans e os fluxos do time; cada pessoa assina o que usa, e assinar um fluxo traz as skills e os planos dele.',
+    },
+    {
+      titulo: 'Versionado e revisado',
+      texto: 'Cada item tem versão e hash. O que muda no catálogo básico passa pela revisão do repositório antes de ser publicado.',
+    },
+  ] satisfies Beneficio[],
+};
+
+/** Um plano da seção "Planos" (US #425): o teste grátis, a assinatura individual e o plano para empresas. */
+export interface Plano {
+  id: 'teste' | 'individual' | 'empresas';
+  nome: string;
+  resumo: string;
+  itens: string[];
+}
+
+/** Os planos, na ordem dos cartões. O preço é o do checkout do gateway — a página não o repete. */
+export const PLANOS: Plano[] = [
+  {
+    id: 'teste',
+    nome: 'Teste grátis',
+    resumo: '14 dias, contados da primeira abertura. Sem cartão e sem login.',
+    itens: ['Todos os recursos do dev.kit', 'Catálogo básico atualizado', 'Reinstalar não reinicia o prazo'],
+  },
+  {
+    id: 'individual',
+    nome: 'Individual',
+    resumo: 'A assinatura para uma pessoa, renovada pelo login.',
+    itens: ['Licença de 30 dias que se renova sozinha', 'Catálogo próprio: publique para você', 'Cancele quando quiser'],
+  },
+  {
+    id: 'empresas',
+    nome: 'Empresas',
+    resumo: 'Assentos por usuário, para o time inteiro.',
+    itens: ['Catálogo da empresa', 'Gestor administra os usuários e os assentos', 'Adesão por código e e-mail'],
+  },
+];
+
 export const PERGUNTAS: PerguntaFrequente[] = [
+  {
+    pergunta: 'Como funciona o teste grátis?',
+    resposta:
+      'Baixe o dev.kit sem cadastro: os 14 dias contam da primeira abertura e ficam registrados também no servidor, então reinstalar não reinicia o prazo.',
+  },
+  {
+    pergunta: 'Como compro só para mim?',
+    resposta:
+      'Em Planos, escolha a assinatura individual. Depois do pagamento, chega um e-mail com o link para definir a senha; entre no dev.kit com o seu e-mail e a licença se renova sozinha.',
+  },
+  {
+    pergunta: 'Como cancelo a assinatura?',
+    resposta: 'Na sua conta, em "Gerenciar assinatura". O dev.kit segue funcionando até o fim da licença atual, e ela não renova mais.',
+  },
+  {
+    pergunta: 'O que é o catálogo do dev.kit?',
+    resposta:
+      'As skills, os Tech Plans e os fluxos que o agente usa. O básico vem com o dev.kit e se atualiza sozinho; a sua empresa pode publicar os dela para o time assinar.',
+  },
   {
     pergunta: 'Preciso trocar o meu processo no Azure DevOps?',
     resposta: 'Não. O dev.kit lê os work items, as iterações e os campos do processo que você já usa, e respeita os campos obrigatórios dele.',
@@ -350,7 +424,7 @@ export const PERGUNTAS: PerguntaFrequente[] = [
   {
     pergunta: 'Como funciona o plano para empresas?',
     resposta:
-      'A empresa recebe um código de adesão. Cada colaborador o informa no dev.kit e aceita o aviso de coleta; a partir daí o gestor acompanha e exporta o uso dele. Quem não aderir continua anônimo.',
+      'A empresa recebe um código de adesão. Cada pessoa adere com o código e o e-mail, define a senha pelo link que chega e ocupa um assento — o gestor administra os usuários e bloqueia quem sair, liberando o assento. O uso só é compartilhado com o gestor com o aceite do aviso de coleta no dev.kit.',
   },
   {
     pergunta: 'O que acontece com os dados do pedido de demonstração?',

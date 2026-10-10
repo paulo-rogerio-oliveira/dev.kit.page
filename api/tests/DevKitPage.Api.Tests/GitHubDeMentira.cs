@@ -58,8 +58,49 @@ public sealed class GitHubDeMentira : HttpMessageHandler
           { "tag_name": "v138", "name": "rascunho", "draft": true, "prerelease": false, "published_at": null,
             "body": "", "assets": [ { "id": 41, "name": "devkit-138.zip", "size": 10, "digest": null } ] },
           { "tag_name": "v135", "name": "", "draft": false, "prerelease": false, "published_at": "2026-10-01T18:00:00Z",
-            "body": "", "assets": [ { "id": 13, "name": "devkit-135.zip", "size": 4, "digest": "sha256:{{new string('A', 64)}}" } ] }
+            "body": "", "assets": [ { "id": 13, "name": "devkit-135.zip", "size": 4, "digest": "sha256:{{new string('A', 64)}}" } ] },
+          { "tag_name": "catalogo-v3", "name": "prévia do catálogo", "draft": false, "prerelease": true, "published_at": "2026-10-10T09:00:00Z",
+            "body": "", "assets": [ { "id": 61, "name": "catalogo-3.zip", "size": 10, "digest": null }, { "id": 62, "name": "manifesto.json", "size": 10, "digest": null } ] },
+          { "tag_name": "catalogo-v2", "name": "Catálogo 2", "draft": false, "prerelease": false, "published_at": "2026-10-08T12:00:00Z",
+            "body": "", "assets": [
+              { "id": 51, "name": "catalogo-2.zip", "size": 3000, "digest": "sha256:{{new string('b', 64)}}" },
+              { "id": 52, "name": "manifesto.json", "size": 900, "digest": null } ] },
+          { "tag_name": "catalogo-v1", "name": "Catálogo 1", "draft": false, "prerelease": false, "published_at": "2026-10-02T12:00:00Z",
+            "body": "", "assets": [
+              { "id": 53, "name": "catalogo-1.zip", "size": 2000, "digest": null },
+              { "id": 54, "name": "manifesto.json", "size": 600, "digest": null } ] }
         ]
+        """;
+
+    /// <summary>O zip do catálogo 2 (US #425), que o download do catálogo transmite.</summary>
+    public byte[] ZipDoCatalogo { get; } = Enumerable.Range(0, 3000).Select(i => (byte)(i % 13)).ToArray();
+
+    /// <summary>
+    /// O manifesto do catálogo 2: a skill do Angular e o plan geral vieram no catálogo 1; a revisão (versão 2) e o
+    /// fluxo mudaram no 2; a skill que saiu foi retirada no 2.
+    /// </summary>
+    public string Manifesto2 { get; set; } = """
+        {
+          "versao": 2, "minDevKit": 151,
+          "itens": [
+            { "tipo": "skill", "nome": "compilar-angular", "versao": 1, "hash": "a1", "catalogo": 1, "arquivo": "skills/compilar-angular.json",
+              "descricao": "Compila o Angular", "tecnologia": "Angular", "minDevKit": 151, "requer": ["node"], "dependencias": [], "hashes": ["a1"] },
+            { "tipo": "skill", "nome": "revisar-alteracoes", "versao": 2, "hash": "r2", "catalogo": 2, "arquivo": "skills/revisar-alteracoes.json",
+              "descricao": "Revisa antes do commit", "tecnologia": "Git", "minDevKit": 151, "requer": ["git"], "dependencias": [], "hashes": ["r1", "r2"] },
+            { "tipo": "plan", "nome": "geral", "versao": 1, "hash": "p1", "catalogo": 1, "arquivo": "plans/geral.json",
+              "descricao": "Regras gerais", "tecnologia": "", "minDevKit": 151, "requer": [], "dependencias": [], "hashes": ["p1"] },
+            { "tipo": "fluxo", "nome": "tarefa-avulsa", "versao": 1, "hash": "f1", "catalogo": 2, "arquivo": "fluxos/tarefa-avulsa.json",
+              "descricao": "Uma tarefa sem work item", "tecnologia": "dev.kit", "minDevKit": 151, "requer": [], "dependencias": ["skill:revisar-alteracoes"], "hashes": ["f1"] }
+          ],
+          "retirados": [ { "tipo": "skill", "nome": "descrever-processos", "versao": 3, "catalogo": 2 } ]
+        }
+        """;
+
+    private const string Manifesto1 = """
+        { "versao": 1, "minDevKit": 151, "itens": [
+            { "tipo": "skill", "nome": "compilar-angular", "versao": 1, "hash": "a1", "catalogo": 1, "arquivo": "skills/compilar-angular.json",
+              "descricao": "Compila o Angular", "tecnologia": "Angular", "minDevKit": 151, "requer": [], "dependencias": [], "hashes": ["a1"] } ],
+          "retirados": [] }
         """;
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -86,6 +127,11 @@ public sealed class GitHubDeMentira : HttpMessageHandler
             $"{Api}/releases/assets/13" => Responder(HttpStatusCode.OK, new ByteArrayContent([1, 2, 3, 4])),
             $"{Armazenamento}/github-production-release-asset/devkit-136.zip" => Responder(HttpStatusCode.OK, Conteudo(Zip, "application/octet-stream")),
             $"{Armazenamento}/github-production-release-asset/devkit-136.zip.sha256" => Responder(HttpStatusCode.OK, new StringContent($"{Sha256}  devkit-136.zip\n")),
+            // O catálogo básico (US #425): o zip passa pelo armazenamento como o do app; os manifestos vêm direto.
+            $"{Api}/releases/assets/51" => Redirecionar($"{Armazenamento}/github-production-release-asset/catalogo-2.zip?X-Amz-Signature=assinada"),
+            $"{Armazenamento}/github-production-release-asset/catalogo-2.zip" => Responder(HttpStatusCode.OK, Conteudo(ZipDoCatalogo, "application/octet-stream")),
+            $"{Api}/releases/assets/52" => Responder(HttpStatusCode.OK, new StringContent(Manifesto2, Encoding.UTF8, "application/octet-stream")),
+            $"{Api}/releases/assets/54" => Responder(HttpStatusCode.OK, new StringContent(Manifesto1, Encoding.UTF8, "application/octet-stream")),
             _ => Responder(HttpStatusCode.NotFound, new StringContent(CorpoDaFalha)),
         };
     }
