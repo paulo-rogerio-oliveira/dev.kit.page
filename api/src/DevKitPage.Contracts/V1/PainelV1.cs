@@ -44,10 +44,44 @@ public sealed record CausaDeFalha(string Causa, long Quantidade);
 /// <param name="NotaMedia">A média das notas dos avaliadores (0–100).</param>
 /// <param name="RazaoCumpridosRecusados">Objetivos cumpridos por recusado.</param>
 /// <param name="TurnosPorObjetivoCumprido">O retrabalho: quantos turnos custou cada objetivo aceito.</param>
+/// <param name="Impasses">O cartão Impasses (US #405); nulo só numa API anterior a ele.</param>
+/// <param name="Arbitro">O cartão Árbitro (US #405); nulo só numa API anterior a ele.</param>
 public sealed record QualidadeResposta(
     DateOnly De, DateOnly Ate, long Turnos, long TurnosComFalha, double? TaxaDeFalha, double? DuracaoMediaDoTurnoMs,
     IReadOnlyList<CausaDeFalha> FalhasPorCausa, long Avaliacoes, double? NotaMedia, long ObjetivosCumpridos,
-    long ObjetivosRecusados, double? RazaoCumpridosRecusados, double? TurnosPorObjetivoCumprido);
+    long ObjetivosRecusados, double? RazaoCumpridosRecusados, double? TurnosPorObjetivoCumprido,
+    ImpassesResumo? Impasses = null, ArbitroResumo? Arbitro = null);
+
+/// <summary>Quantas vezes um recorte (a origem, o desfecho, a ação, a regra) aparece no período.</summary>
+public sealed record ContagemPorRecorte(string Recorte, long Quantidade);
+
+/// <summary>
+/// Os impasses do fluxo no período (US #405): quantos, quanto tempo parados e como destravaram. As
+/// médias são nulas sem evento (a tela mostra um traço).
+/// </summary>
+/// <param name="Detectados">Eventos <c>ImpasseDetectado</c>.</param>
+/// <param name="PorOrigem">Os detectados por origem (<c>mensagem-parada</c>, <c>objetivo-parado</c>).</param>
+/// <param name="MinutosParadoNaDeteccao">Por quantos minutos, em média, o fluxo estava parado quando o impasse foi detectado.</param>
+/// <param name="Destravados">Eventos <c>ImpasseResolvido</c>.</param>
+/// <param name="MinutosAteDestravar">Quantos minutos, em média, da detecção ao desfecho.</param>
+/// <param name="ComoDestravaram">Os desfechos, do mais comum ao mais raro.</param>
+public sealed record ImpassesResumo(
+    long Detectados, IReadOnlyList<ContagemPorRecorte> PorOrigem, double? MinutosParadoNaDeteccao,
+    long Destravados, double? MinutosAteDestravar, IReadOnlyList<ContagemPorRecorte> ComoDestravaram);
+
+/// <summary>
+/// O árbitro no período (US #405): as cobranças por regra, a taxa de correção e as escaladas ao dev.
+/// </summary>
+/// <param name="Acoes">Todos os eventos <c>ArbitroAgiu</c>.</param>
+/// <param name="Cobrancas">As ações <c>cobrou</c>.</param>
+/// <param name="CobrancasPorRegra">As cobranças pela seção da regra (vazia: cobrança sem seção).</param>
+/// <param name="Corrigidas">As ações <c>corrigido</c> — a cobrança atendida.</param>
+/// <param name="TaxaDeCorrecao">Corrigidas sobre cobranças; nula sem cobrança.</param>
+/// <param name="EscaladasAoDev">As ações <c>escalou-ao-dev</c>: o árbitro desistiu e chamou o desenvolvedor.</param>
+/// <param name="PorAcao">Todas as ações, da mais comum à mais rara.</param>
+public sealed record ArbitroResumo(
+    long Acoes, long Cobrancas, IReadOnlyList<ContagemPorRecorte> CobrancasPorRegra, long Corrigidas, double? TaxaDeCorrecao,
+    long EscaladasAoDev, IReadOnlyList<ContagemPorRecorte> PorAcao);
 
 /// <summary>Uma linha do log de eventos.</summary>
 public sealed record EventoDoLog(

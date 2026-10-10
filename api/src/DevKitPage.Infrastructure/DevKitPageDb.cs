@@ -30,6 +30,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(u => u.Login).HasMaxLength(100);
             e.Property(u => u.SenhaHash).HasMaxLength(500);
             e.Property(u => u.Papel).HasMaxLength(20);
+            // A gestão de usuários (US #405). No Azure SQL as colunas vêm de api/scripts/sqlserver/Usuarios.sql.
+            e.Property(u => u.Nome).HasMaxLength(ValidadorDeUsuario.TamanhoMaximoDoNome);
             e.HasIndex(u => u.Login).IsUnique();
             e.HasOne(u => u.Empresa).WithMany().HasForeignKey(u => u.EmpresaId).OnDelete(DeleteBehavior.Restrict);
         });

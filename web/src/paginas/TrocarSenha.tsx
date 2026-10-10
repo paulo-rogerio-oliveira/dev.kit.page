@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
-import { useSessao } from '../sessao';
+import { destinoDa, useSessao } from '../sessao';
 
 /** A troca de senha — obrigatória no primeiro acesso do admin, antes de qualquer outra tela. */
 export function TrocarSenha() {
@@ -20,8 +20,9 @@ export function TrocarSenha() {
       return;
     }
     try {
-      entrar(await api.trocarSenha(sessao!.token, atual, nova));
-      navegar('/dashboard', { replace: true });
+      const resposta = await api.trocarSenha(sessao!.token, atual, nova);
+      entrar(resposta);
+      navegar(destinoDa(resposta), { replace: true }); // o painel, ou a página inicial para o dev (US #405)
     } catch (falha) {
       if (falha instanceof ErroDaApi && falha.status === 401) {
         sair('expirou');

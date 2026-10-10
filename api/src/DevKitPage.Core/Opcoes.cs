@@ -93,6 +93,54 @@ public sealed class OpcoesDoProxy
     public string[] RedesConfiaveis { get; set; } = [];
 }
 
+/// <summary>
+/// A atualização do dev.kit pelas GitHub Releases (seção <c>Atualizacao</c>, US #405). O app e a landing
+/// nunca falam com o GitHub: a API consulta a release e faz o proxy do zip, e o token fica SÓ aqui.
+/// </summary>
+public sealed class OpcoesDeAtualizacao
+{
+    public const string Secao = "Atualizacao";
+
+    /// <summary>
+    /// A variável de ambiente com o PAT do GitHub (leitura do repositório do dev.kit). É a ÚNICA origem
+    /// do token: um <c>Atualizacao:Token</c> no appsettings é ignorado (sobrescrito por esta variável),
+    /// para o segredo nunca ir parar num arquivo versionado.
+    /// </summary>
+    public const string VariavelDoToken = "REPO_KEY";
+
+    /// <summary>O repositório das releases, <c>owner/nome</c> — o do dev.kit (git.kit) por padrão.</summary>
+    public string Repositorio { get; set; } = "paulo-rogerio-oliveira/git.kit";
+
+    /// <summary>A raiz da API do GitHub (trocada só em teste ou num GitHub Enterprise).</summary>
+    public string UrlDaApi { get; set; } = "https://api.github.com/";
+
+    /// <summary>
+    /// Por quantos minutos a lista de releases fica em memória: a landing e cada dev.kit perguntam pela
+    /// última versão, e o GitHub limita as chamadas por token.
+    /// </summary>
+    public int CacheMinutos { get; set; } = 5;
+
+    /// <summary>O token, lido de <see cref="VariavelDoToken"/> na composição. Vazio: a atualização responde 503.</summary>
+    public string Token { get; set; } = string.Empty;
+}
+
+/// <summary>A política de login do app (US #405), devolvida ao dev.kit e à landing.</summary>
+public sealed class OpcoesDeLogin
+{
+    /// <summary>A variável de ambiente que liga a política (<c>true</c> ou <c>1</c>); desligada por padrão.</summary>
+    public const string VariavelDeAmbiente = "DEVKIT_LOGIN_OBRIGATORIO";
+
+    /// <summary>Com ela ligada, o dev.kit pede o login (um usuário daqui) antes de abrir.</summary>
+    public bool Obrigatorio { get; set; }
+
+    /// <summary>O valor da variável como booleano: <c>true</c>/<c>1</c> liga; qualquer outra coisa (ou nada) desliga.</summary>
+    public static bool Ler(string? valor)
+    {
+        var texto = (valor ?? string.Empty).Trim();
+        return texto == "1" || string.Equals(texto, "true", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 /// <summary>A base embarcada (seção <c>Banco</c>): o provider é configuração, não código.</summary>
 public sealed class OpcoesDoBanco
 {

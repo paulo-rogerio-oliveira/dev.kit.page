@@ -77,6 +77,27 @@ novo não quebra uma API mais velha.
 | `AgenteTrocado` (US #399) | `de→para` (ex.: `claude→glm`) | — | trocas automáticas de agente no limite de uso |
 | `ComandoNegado` (US #399) | a classe (`proibido`, `nao-aprovado`) | — | comandos negados ao agente (a trilha de auditoria) |
 
+| `ImpasseDetectado` (US #405) | a origem (`mensagem-parada`, `objetivo-parado`) | minutos parado até a detecção | impasses do fluxo e o tempo parado |
+| `ImpasseResolvido` (US #405) | como destravou (`nota`, `mensagem-entregue`, `objetivo-cumprido`, `dev-falou`, `agente-pediu-avaliacao`, `cancelado`, `arbitro-reagiu`) | minutos entre a detecção e o desfecho | como e em quanto tempo os impasses destravam |
+| `ArbitroAgiu` (US #405) | `<acao>` ou `<acao>\|<seção da regra>` (ação: `cobrou`, `escalou-ao-dev`, `aprovou`, `corrigido`, `teto-de-rodadas`, `teto-de-custo`, `falha-de-comunicacao`, `reencaminhou-resposta`, `pediu-avaliacao`, `turno-no-dono`, `turno-no-leitor`) | a rodada (ou o nº da reação) | cobranças por regra, taxa de correção e escaladas ao dev |
+
+### O impasse e o árbitro (US #405)
+
+Os três tipos não levam campo novo: o recorte vai no `detalhe` e a medida no `valor`, e entram nos
+totais diários como os outros. No `ArbitroAgiu`, a seção é o **título** da seção do CLAUDE.md (ex.:
+`Arquivos alterados no turno`) — nunca texto de conversa —, e o painel separa a ação da seção pelo
+**primeiro** `|` (a seção pode conter outros). O painel de qualidade (`GET /api/dashboard/qualidade`,
+campos opcionais `impasses` e `arbitro` da `QualidadeResposta`) agrega:
+
+- **Impasses**: detectados (e por origem), a média dos minutos parado na detecção, os destravados, a média
+  dos minutos até destravar e como destravaram;
+- **Árbitro**: as ações, as cobranças (`cobrou`) por seção da regra, as correções (`corrigido`), a **taxa de
+  correção** = corrigidas ÷ cobranças (**nula sem cobrança** — a tela mostra um traço) e as escaladas ao dev
+  (`escalou-ao-dev`).
+
+Tudo no escopo de quem consulta (o gestor, só a empresa dele) e no período do filtro. Um dev.kit antigo não
+manda os tipos, e uma API antiga os ignora (`ignorados`).
+
 Nenhum tipo da US #399 leva campo novo: o texto livre da avaliação, o comando negado, o modelo efetivo e o
 detalhamento dos tokens (cache) ficam na máquina do dev. Os indicadores desses tipos no painel são a fase 2;
 os totais diários já acumulam desde a primeira versão que os envia.

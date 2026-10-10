@@ -4,6 +4,7 @@ import { api, ErroDaApi } from '../api/cliente';
 import type { ColaboradorResumo, EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
 import { salvarArquivo } from '../arquivos';
 import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
+import { CartoesDoFluxo } from '../componentes/CartoesDoFluxo';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
@@ -96,6 +97,7 @@ export function Dashboard() {
         <span className="marca">dev<span className="marca-ponto">.</span>kit <small>uso</small></span>
         <nav>
           {ehAdmin && <Link className="botao botao-fantasma" to="/empresas">Empresas</Link>}
+          {ehAdmin && <Link className="botao botao-fantasma" to="/usuarios">Usuários</Link>}
           <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>
           <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
         </nav>
@@ -166,6 +168,7 @@ export function Dashboard() {
                 vazio="Nenhuma falha de turno no período."
                 pontos={ql.falhasPorCausa.map((c) => ({ rotulo: c.causa, valor: c.quantidade }))}
               />
+              <CartoesDoFluxo impasses={ql.impasses} arbitro={ql.arbitro} />
             </section>
 
             <RoiPorWorkItem token={token} filtro={filtro} aoFalhar={tratar} />

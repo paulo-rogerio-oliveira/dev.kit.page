@@ -79,13 +79,14 @@ function midia(nome: string, alt: string, captura?: string): Midia {
 }
 
 /**
- * As seções, NA ORDEM da página (critério 1 da US #283, com o comparativo e as empresas da US #381)
- * — a landing e o teste usam esta lista.
+ * As seções, NA ORDEM da página — a landing e o teste usam esta lista. Desde a US #405 a ordem segue a
+ * proposta visual: hero → como funciona (as sete etapas) → por que o dev.kit (os três cartões) → o que a
+ * página já tinha (recursos, comparativo, integrações, segurança, empresas, contato, FAQ) → o CTA escuro.
  */
 export const SECOES: SecaoDaLanding[] = [
   { id: 'inicio', rotulo: 'Início' },
-  { id: 'beneficios', rotulo: 'Benefícios' },
   { id: 'como-funciona', rotulo: 'Como funciona' },
+  { id: 'beneficios', rotulo: 'Por que o dev.kit' },
   { id: 'recursos', rotulo: 'Recursos' },
   { id: 'comparativo', rotulo: 'Comparativo' },
   { id: 'integracoes', rotulo: 'Integrações' },
@@ -96,10 +97,22 @@ export const SECOES: SecaoDaLanding[] = [
   { id: 'comecar', rotulo: 'Começar' },
 ];
 
+/** As seções do menu do topo (a proposta da US #405), na ordem. */
+export const MENU = ['como-funciona', 'recursos', 'integracoes', 'seguranca', 'faq'] as const;
+
+/** As seções dos links do rodapé (a proposta da US #405), na ordem. */
+export const RODAPE = ['seguranca', 'comparativo', 'empresas', 'faq'] as const;
+
+/** O rótulo de uma seção (o do menu e o do rodapé). */
+export const rotuloDaSecao = (id: string) => SECOES.find((s) => s.id === id)?.rotulo ?? id;
+
 export const HERO = {
+  selo: 'Para times no Azure DevOps',
   titulo: 'O agente de IA que leva a sua task do work item à Pull Request',
+  /** O trecho do título em destaque (a cor da marca). */
+  destaque: 'Pull Request',
   texto:
-    'O dev.kit põe um agente para trabalhar nas tasks do Azure DevOps com as regras do seu time: clona os repositórios do work item, implementa, compila, testa, passa por avaliadores com nota mínima e entrega o commit, o push e a PR — enquanto você acompanha e aprova.',
+    'O dev.kit clona os repositórios, implementa, compila e testa com as regras do seu time. Cada entrega passa por avaliadores com nota mínima antes do commit, do push e do PR. Você acompanha e aprova.',
   midia: midia(
     'hero',
     'Demonstração do dev.kit: um work item do board vira uma task, o agente trabalha nos repositórios, o avaliador dá a nota e o trabalho segue para o commit e a Pull Request.',
@@ -107,18 +120,55 @@ export const HERO = {
   ),
 };
 
-export const BENEFICIOS: Beneficio[] = [
+/**
+ * O "Board" do hero (US #405): uma amostra estática do que o dev.kit mostra — o "Precisa de você" com o
+ * que espera o dev, a nota do avaliador e as horas do dia. Dados de demonstração, como as mídias.
+ */
+export const AMOSTRA_DO_BOARD = {
+  titulo: 'dev.kit · Board',
+  precisaDeVoce: [
+    { titulo: 'US #393 — Agente: diretório de trabalho e multimídia', estado: 'pronto para revisão · PR aberta', acao: 'Aprovar' },
+    { titulo: 'Fluxo “planejar e executar”', estado: 'aguardando interação', acao: 'Abrir' },
+  ],
+  avaliador: { titulo: 'Avaliador da entrega', notas: [93, 45, 92], gatilho: 'ao enviar' },
+  nota: { valor: 'Nota 92/100', texto: 'Aceito: acima da nota mínima' },
+  horas: { titulo: 'Horas de hoje', texto: '8h rateadas em 4 work items', partes: [40, 28, 16, 16] },
+};
+
+/** O cabeçalho de "Como funciona" e de "Por que o dev.kit" (o rótulo pequeno acima do título). */
+export const CABECALHOS = {
+  comoFunciona: {
+    rotulo: 'Como funciona',
+    titulo: 'Do work item à Pull Request, em sete etapas',
+    subtitulo: 'O agente faz o trabalho repetitivo. A decisão final é sua.',
+  },
+  porQue: {
+    rotulo: 'Por que o dev.kit',
+    titulo: 'O trabalho repetitivo com o agente. As decisões com o time.',
+  },
+  ctaFinal: {
+    titulo: 'Veja o dev.kit numa task do seu time',
+    texto: 'Uma demonstração com um work item real, do clone à Pull Request.',
+  },
+  rodape: 'desenvolvido por Paulo Rogério',
+};
+
+/** Os três cartões de "Por que o dev.kit", cada um com o seu ícone. */
+export const BENEFICIOS: (Beneficio & { icone: 'ramo' | 'nota' | 'relogio' })[] = [
   {
+    icone: 'ramo',
     titulo: 'Da task à PR sem trocar de janela',
     texto:
       'Work item, repositórios, branch, compilação, testes, commit e push no mesmo lugar. O agente faz o trabalho repetitivo; você decide o que entra.',
   },
   {
+    icone: 'nota',
     titulo: 'Qualidade com nota mínima',
     texto:
       'Cada entrega passa por avaliadores que dão nota de 0 a 100. O objetivo só é aceito com a nota mínima de cada um, dada depois da última alteração.',
   },
   {
+    icone: 'relogio',
     titulo: 'Horas lançadas sozinhas',
     texto:
       'As horas do dia vão para os work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — sem planilha no fim do dia.',
@@ -126,42 +176,17 @@ export const BENEFICIOS: Beneficio[] = [
 ];
 
 /**
- * O fluxo em ETAPAS NOMEADAS (US #381), como a Devin conta o dela — mas com o que só o dev.kit tem: a
- * nota mínima de cada avaliador, os gatilhos entre agentes e a sua aprovação antes do fechamento.
+ * O fluxo em SETE ETAPAS NOMEADAS (US #405, a proposta visual): o que o agente faz em cada uma, do clone
+ * à Pull Request. Os avaliadores, os gatilhos e o teto de rodadas são contados no recurso "Fluxos".
  */
 export const PASSOS: Passo[] = [
-  {
-    titulo: 'Work item',
-    texto: 'Uma US ou um Bug da iteração (ou uma tarefa avulsa), os repositórios e o fluxo salvo que vai conduzi-la.',
-  },
-  {
-    titulo: 'Executor',
-    texto:
-      'O agente executor recebe a task com as regras, as skills e os Tech Plans do time, clona cada repositório no branch dela e trabalha turno a turno: implementa, compila, testa e envia.',
-  },
-  {
-    titulo: 'Avaliadores com nota mínima',
-    texto:
-      'Cada avaliador dá uma nota de 0 a 100 ao trabalho. Abaixo da mínima de QUALQUER um, o que ele apontou volta ao executor; a nota só vale se for dada depois da última alteração.',
-  },
-  {
-    titulo: 'Gatilhos entre agentes',
-    texto:
-      'Ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar: cada evento dispara o próximo agente do fluxo, com os parâmetros dele — sem ninguém copiando contexto de uma janela para outra.',
-  },
-  {
-    titulo: 'Objetivo cumprido',
-    texto:
-      'O executor declara o objetivo cumprido, e o dev.kit só aceita com a nota de cada avaliador na mínima. Há teto de rodadas: um fluxo em impasse para e chama você, em vez de girar sem fim.',
-  },
-  {
-    titulo: 'Sua aprovação',
-    texto: 'O trabalho aceito espera você: diffs, logs, capturas e o resumo item a item contra o pedido, num lugar só.',
-  },
-  {
-    titulo: 'Fechamento com a PR',
-    texto: 'Aprovado, o agente de fechamento abre a Pull Request e atualiza o work item — commit, push e PR no branch da task.',
-  },
+  { titulo: 'Clona', texto: 'Os repositórios do work item, no branch certo.' },
+  { titulo: 'Implementa', texto: 'Com as regras e os tech plans do seu time.' },
+  { titulo: 'Compila', texto: 'Com o compilador do projeto.' },
+  { titulo: 'Testa', texto: 'Roda os testes antes de seguir.' },
+  { titulo: 'Avalia', texto: 'Avaliadores dão nota de 0 a 100; abaixo da mínima, refaz.' },
+  { titulo: 'Commit e push', texto: 'Só o que é da task, com a mensagem do board.' },
+  { titulo: 'Pull Request', texto: 'Você revisa e aprova.' },
 ];
 
 export const RECURSOS: Recurso[] = [

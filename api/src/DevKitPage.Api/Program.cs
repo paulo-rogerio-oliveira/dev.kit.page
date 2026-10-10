@@ -40,6 +40,8 @@ app.MapearMaquinas();
 app.MapearTelemetria();
 app.MapearPainel();
 app.MapearEmpresas();
+app.MapearUsuarios();
+app.MapearVersoes();
 app.MapearDemonstracoes();
 
 await app.RunAsync();

@@ -138,6 +138,30 @@ public static class TiposDeEvento
     /// <summary>Um comando negado ao agente: detalhe = a classe (<c>proibido</c> ou <c>nao-aprovado</c>).</summary>
     public const string ComandoNegado = "ComandoNegado";
 
+    // ----- US #405 (#411): o impasse do fluxo e o árbitro que reage a ele -----
+    // Wire v1 sem campo novo: o recorte vai no Detalhe e a medida no Valor. O painel de qualidade os
+    // agrega nos cartões Impasses e Árbitro (CalculoDeQualidade).
+
+    /// <summary>
+    /// O fluxo parou à espera de algo que não chega: <see cref="TelemetryEventV1.Detalhe"/> = a origem
+    /// (<see cref="OrigensDoImpasse"/>); <see cref="TelemetryEventV1.Valor"/> = os minutos parado até a detecção.
+    /// </summary>
+    public const string ImpasseDetectado = "ImpasseDetectado";
+
+    /// <summary>
+    /// O impasse destravou: detalhe = como (<c>nota</c>, <c>mensagem-entregue</c>, <c>objetivo-cumprido</c>,
+    /// <c>dev-falou</c>, <c>agente-pediu-avaliacao</c>, <c>cancelado</c>, <c>arbitro-reagiu</c>); valor = os
+    /// minutos entre a detecção e o desfecho.
+    /// </summary>
+    public const string ImpasseResolvido = "ImpasseResolvido";
+
+    /// <summary>
+    /// O árbitro agiu: detalhe = <c>&lt;acao&gt;</c> ou <c>&lt;acao&gt;|&lt;seção da regra&gt;</c> (a ação em
+    /// <see cref="AcoesDoArbitro"/>; a seção é o TÍTULO da seção do CLAUDE.md, nunca texto de conversa);
+    /// valor = a rodada (ou o número da reação).
+    /// </summary>
+    public const string ArbitroAgiu = "ArbitroAgiu";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -145,5 +169,39 @@ public static class TiposDeEvento
         TurnoFalhou, ObjetivoAvaliado, ObjetivoCumprido, ObjetivoRecusado, SessaoIniciada, ExcecaoNaoClassificada,
         RoiCalculado,
         EntregaAvaliada, EntregaPronta, RevisaoHumana, TokensConsumidos, CustoEstimado, AgenteTrocado, ComandoNegado,
+        ImpasseDetectado, ImpasseResolvido, ArbitroAgiu,
     };
+}
+
+/// <summary>As origens de um <see cref="TiposDeEvento.ImpasseDetectado"/> (o recorte do evento).</summary>
+public static class OrigensDoImpasse
+{
+    /// <summary>Uma mensagem entre tasks ficou sem resposta.</summary>
+    public const string MensagemParada = "mensagem-parada";
+
+    /// <summary>O objetivo do fluxo não andou (nenhuma nota, nenhum envio).</summary>
+    public const string ObjetivoParado = "objetivo-parado";
+}
+
+/// <summary>
+/// As ações de um <see cref="TiposDeEvento.ArbitroAgiu"/> — a parte do detalhe antes do primeiro <c>|</c>.
+/// O painel conta as cobranças por regra, a taxa de correção (<see cref="Corrigido"/> sobre
+/// <see cref="Cobrou"/>) e as escaladas ao desenvolvedor.
+/// </summary>
+public static class AcoesDoArbitro
+{
+    /// <summary>O separador entre a ação e a seção da regra no detalhe.</summary>
+    public const char Separador = '|';
+
+    public const string Cobrou = "cobrou";
+    public const string EscalouAoDev = "escalou-ao-dev";
+    public const string Aprovou = "aprovou";
+    public const string Corrigido = "corrigido";
+    public const string TetoDeRodadas = "teto-de-rodadas";
+    public const string TetoDeCusto = "teto-de-custo";
+    public const string FalhaDeComunicacao = "falha-de-comunicacao";
+    public const string ReencaminhouResposta = "reencaminhou-resposta";
+    public const string PediuAvaliacao = "pediu-avaliacao";
+    public const string TurnoNoDono = "turno-no-dono";
+    public const string TurnoNoLeitor = "turno-no-leitor";
 }

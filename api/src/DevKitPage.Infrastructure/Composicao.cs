@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using DevKitPage.Core;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
@@ -25,6 +24,15 @@ public static class Composicao
         servicos.Configure<OpcoesDaSemente>(configuracao.GetSection(OpcoesDaSemente.Secao));
         servicos.Configure<OpcoesDeDemonstracao>(configuracao.GetSection(OpcoesDeDemonstracao.Secao));
 
+        // A atualização pelas GitHub Releases (US #405): o token vem SÓ da variável REPO_KEY, lida da
+        // configuração FINAL (a do host, com as variáveis de ambiente) — e sobrescreve qualquer
+        // Atualizacao:Token que alguém ponha num appsettings.
+        servicos.AddOptions<OpcoesDeAtualizacao>()
+            .Bind(configuracao.GetSection(OpcoesDeAtualizacao.Secao))
+            .PostConfigure<IConfiguration>((opcoes, cfg) => opcoes.Token = (cfg[OpcoesDeAtualizacao.VariavelDoToken] ?? string.Empty).Trim());
+        servicos.AddOptions<OpcoesDeLogin>()
+            .Configure<IConfiguration>((opcoes, cfg) => opcoes.Obrigatorio = OpcoesDeLogin.Ler(cfg[OpcoesDeLogin.VariavelDeAmbiente]));
+
         // Lidos na criação do contexto, e não aqui: a configuração final (variáveis de ambiente, Key
         // Vault, a dos testes) só está completa depois do Build do host.
         servicos.AddDbContext<DevKitPageDb>((provedor, opcoes) =>
@@ -41,6 +49,13 @@ public static class Composicao
         servicos.TryAddSingleton(TimeProvider.System);
         servicos.AddSingleton<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
         servicos.AddScoped<IUsuarios, Usuarios>();
+        servicos.AddScoped<IGestaoDeUsuarios, GestaoDeUsuarios>();
+        servicos.AddMemoryCache();
+        // O HttpClient tipado das releases, com nome fixo: o teste troca o handler do GitHub por este nome.
+        // Sem redirecionamento automático: o download segue o 302 do GitHub à mão, SEM o Authorization (o
+        // token não vai para o armazenamento de outro host) — ver ReleasesDoDevKit.
+        servicos.AddHttpClient<IReleasesDoDevKit, ReleasesDoDevKit>(ReleasesDoDevKit.NomeDoCliente, ReleasesDoDevKit.Configurar)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         servicos.AddScoped<IMaquinas, Maquinas>();
         servicos.AddScoped<IIngestaoDeTelemetria, IngestaoDeTelemetria>();
         servicos.AddScoped<IConsultasDoPainel, ConsultasDoPainel>();
@@ -92,7 +107,7 @@ public sealed class InicializadorDaBase(
         var senha = semente.Value.AdminPassword;
         var gerada = string.IsNullOrWhiteSpace(senha);
         if (gerada)
-            senha = SenhaAleatoria();
+            senha = GeradorDeSenha.Temporaria();
 
         var admin = new Usuario
         {
@@ -116,10 +131,6 @@ public sealed class InicializadorDaBase(
             log.LogInformation("Usuário '{Login}' criado com a senha de Seed:AdminPassword — troca obrigatória no primeiro acesso.", login);
         }
     }
-
-    /// <summary>Uma senha que passa na <see cref="PoliticaDeSenha"/>.</summary>
-    public static string SenhaAleatoria()
-        => "Dk" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)) + "a1";
 
     private static void CriarPastaDoArquivo(string? conexao)
     {

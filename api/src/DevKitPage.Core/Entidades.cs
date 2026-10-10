@@ -8,14 +8,24 @@ public sealed class Usuario
     public string SenhaHash { get; set; } = string.Empty;
     public bool EhAdmin { get; set; }
 
+    /// <summary>O nome de exibição que o admin informa na gestão de usuários (US #405); vazio no usuário anterior a ela.</summary>
+    public string Nome { get; set; } = string.Empty;
+
     /// <summary>
-    /// Um de <c>Papeis</c> (US #381): <c>admin</c> (o semeado; <see cref="EhAdmin"/> ligado) ou
-    /// <c>gestor</c> (de UMA empresa, <see cref="EmpresaId"/>). É a claim <c>role</c> do token.
+    /// Um de <c>Papeis</c> (US #381, US #405): <c>admin</c> (o semeado; <see cref="EhAdmin"/> ligado),
+    /// <c>gestor</c> (de UMA empresa, <see cref="EmpresaId"/>) ou <c>dev</c> (o usuário do dev.kit, sem
+    /// acesso ao painel). É a claim <c>role</c> do token.
     /// </summary>
     public string Papel { get; set; } = "admin";
 
-    /// <summary>A empresa do gestor; nula para o admin.</summary>
+    /// <summary>A empresa do gestor (obrigatória) ou do dev (opcional); nula para o admin.</summary>
     public int? EmpresaId { get; set; }
+
+    /// <summary>
+    /// Bloqueado pelo admin (US #405) — diferente do <see cref="BloqueadoAteUtc"/>, que é o bloqueio
+    /// TEMPORÁRIO por falhas seguidas e vence sozinho: este só sai quando o admin desbloqueia.
+    /// </summary>
+    public bool BloqueadoPeloAdmin { get; set; }
 
     public Empresa? Empresa { get; set; }
 

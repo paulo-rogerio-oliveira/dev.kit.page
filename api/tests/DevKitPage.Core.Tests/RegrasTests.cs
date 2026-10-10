@@ -213,8 +213,182 @@ public sealed class RegrasTests
     [InlineData("gestor", "0")]
     [InlineData(null, null)]
     [InlineData("visitante", "7")]
+    [InlineData("dev", null)] // US #405: o dev entra no app, mas não no painel
+    [InlineData("dev", "7")]
     public void Token_sem_escopo_valido_nunca_vira_ver_tudo(string? papel, string? empresa)
         => Assert.Null(EscopoDoPainel.DasClaims(papel, empresa));
+
+    [Theory]
+    [InlineData(Papeis.Admin, true)]
+    [InlineData(Papeis.Gestor, true)]
+    [InlineData(Papeis.Dev, false)]
+    [InlineData(null, false)]
+    [InlineData("visitante", false)]
+    public void So_admin_e_gestor_entram_no_painel(string? papel, bool entra)
+        => Assert.Equal(entra, Papeis.EntraNoPainel(papel));
+
+    // ----- US #405: o impasse e o árbitro (#411) -----
+
+    [Theory]
+    [InlineData(TiposDeEvento.ImpasseDetectado)]
+    [InlineData(TiposDeEvento.ImpasseResolvido)]
+    [InlineData(TiposDeEvento.ArbitroAgiu)]
+    public void Os_tipos_do_impasse_e_do_arbitro_sao_gravados(string tipo)
+    {
+        Assert.Contains(tipo, TiposDeEvento.Conhecidos);
+        var lote = new TelemetryBatchV1("v1", "m1", "1.7.0", new[] { new TelemetryEventV1("e405", tipo, "s", 1, 3, "cobrou|Arquivos alterados no turno", Em) });
+        Assert.Null(ValidadorDeLote.Validar(lote, "m1", 10));
+    }
+
+    [Fact]
+    public void Impasses_e_arbitro_agregam_quantidade_tempo_desfecho_regra_e_taxa_de_correcao()
+    {
+        var somas = new[]
+        {
+            new SomaPorTipo(TiposDeEvento.ImpasseDetectado, OrigensDoImpasse.MensagemParada, 2, 2, 60),
+            new SomaPorTipo(TiposDeEvento.ImpasseDetectado, OrigensDoImpasse.ObjetivoParado, 1, 1, 30),
+            new SomaPorTipo(TiposDeEvento.ImpasseResolvido, "arbitro-reagiu", 2, 2, 20),
+            new SomaPorTipo(TiposDeEvento.ImpasseResolvido, "dev-falou", 1, 1, 40),
+            new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "cobrou|Arquivos alterados no turno", 3, 3, 6),
+            new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "cobrou|Idioma e fluxo", 1, 1, 1),
+            new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "cobrou", 0, 0, 0),
+            new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "corrigido|Arquivos alterados no turno", 3, 3, 9),
+            new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "escalou-ao-dev", 1, 1, 4),
+        };
+
+        var q = CalculoDeQualidade.Calcular(new Periodo(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 9)), somas);
+
+        var impasses = q.Impasses!;
+        Assert.Equal((3L, 30.0, 3L), (impasses.Detectados, impasses.MinutosParadoNaDeteccao, impasses.Destravados));
+        Assert.Equal(20.0, impasses.MinutosAteDestravar);
+        Assert.Equal(new[] { new ContagemPorRecorte(OrigensDoImpasse.MensagemParada, 2), new ContagemPorRecorte(OrigensDoImpasse.ObjetivoParado, 1) }, impasses.PorOrigem);
+        Assert.Equal(new[] { new ContagemPorRecorte("arbitro-reagiu", 2), new ContagemPorRecorte("dev-falou", 1) }, impasses.ComoDestravaram);
+
+        var arbitro = q.Arbitro!;
+        Assert.Equal((8L, 4L, 3L, 0.75, 1L), (arbitro.Acoes, arbitro.Cobrancas, arbitro.Corrigidas, arbitro.TaxaDeCorrecao, arbitro.EscaladasAoDev));
+        Assert.Equal(new[] { new ContagemPorRecorte("Arquivos alterados no turno", 3), new ContagemPorRecorte("Idioma e fluxo", 1) },
+            arbitro.CobrancasPorRegra.Where(c => c.Quantidade > 0));
+        Assert.Equal("cobrou", arbitro.PorAcao[0].Recorte);
+    }
+
+    [Fact]
+    public void Impasses_e_arbitro_sem_denominador_sao_nulos_e_nao_nan()
+    {
+        var vazia = CalculoDeQualidade.Calcular(new Periodo(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 9)), Array.Empty<SomaPorTipo>());
+        // Corrigidas sem nenhuma cobrança no período: a taxa continua sem denominador.
+        var soCorrigido = CalculoDeQualidade.Calcular(new Periodo(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 9)),
+            [new SomaPorTipo(TiposDeEvento.ArbitroAgiu, "corrigido", 2, 2, 0)]);
+
+        Assert.Equal(0, vazia.Impasses!.Detectados);
+        Assert.Null(vazia.Impasses.MinutosParadoNaDeteccao);
+        Assert.Null(vazia.Impasses.MinutosAteDestravar);
+        Assert.Empty(vazia.Impasses.ComoDestravaram);
+        Assert.Null(vazia.Arbitro!.TaxaDeCorrecao);
+        Assert.Empty(vazia.Arbitro.CobrancasPorRegra);
+        Assert.Null(soCorrigido.Arbitro!.TaxaDeCorrecao);
+        Assert.Equal(2, soCorrigido.Arbitro.Corrigidas);
+    }
+
+    [Theory]
+    [InlineData("cobrou|Arquivos alterados no turno", "cobrou", "Arquivos alterados no turno")]
+    [InlineData("escalou-ao-dev", "escalou-ao-dev", "")]
+    [InlineData("cobrou|Regra|com barra", "cobrou", "Regra|com barra")] // só o PRIMEIRO | separa
+    [InlineData("", "", "")]
+    public void Recorte_do_arbitro_separa_a_acao_da_secao_pelo_primeiro_separador(string detalhe, string acao, string secao)
+        => Assert.Equal((acao, secao), RegrasDoArbitro.Separar(detalhe));
+
+    // ----- US #405: a versão do dev.kit pelas GitHub Releases (#406) -----
+
+    [Theory]
+    [InlineData("v136", 136)]
+    [InlineData("V7", 7)]
+    [InlineData("v1.2.3", 1)] // a legada vX.Y.Z vale X
+    [InlineData("v12.0", 12)]
+    [InlineData(" v140 ", 140)]
+    [InlineData("v1.2.3-beta", null)] // sufixo de prerelease: ilegível
+    [InlineData("v0", null)]
+    [InlineData("136", null)] // sem o v não é tag do dev.kit
+    [InlineData("latest", null)]
+    [InlineData("v", null)]
+    [InlineData("vabc", null)]
+    [InlineData("v99999999999", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void Tag_vira_o_numero_do_devkit_ou_nada(string? tag, int? versao)
+        => Assert.Equal(versao, RegrasDeVersao.Versao(tag));
+
+    [Fact]
+    public void Estaveis_ignora_prerelease_rascunho_e_tag_ilegivel_e_ordena_pelo_numero()
+    {
+        var dia = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
+        var releases = new[]
+        {
+            new RegrasDeVersao.Candidata("v99", false, false, dia),
+            new RegrasDeVersao.Candidata("v137", true, false, dia.AddDays(3)),  // prerelease
+            new RegrasDeVersao.Candidata("v138", false, true, null),            // rascunho
+            new RegrasDeVersao.Candidata("nightly", false, false, dia.AddDays(4)), // ilegível
+            new RegrasDeVersao.Candidata("v136", false, false, dia.AddDays(2)),
+            new RegrasDeVersao.Candidata("v1.2.3", false, false, dia.AddDays(-30)),
+            new RegrasDeVersao.Candidata("v1.5.0", false, false, dia.AddDays(-20)), // a mesma versão 1: fica a mais recente
+        };
+
+        var estaveis = RegrasDeVersao.Estaveis(releases, r => r);
+
+        Assert.Equal(new[] { 136, 99, 1 }, estaveis.Select(e => e.Versao)); // numérica: 136 antes de 99
+        Assert.Equal("v1.5.0", estaveis[^1].Release.Tag);
+        Assert.Empty(RegrasDeVersao.Estaveis(new[] { new RegrasDeVersao.Candidata("v2", true, false, dia) }, r => r));
+    }
+
+    [Fact]
+    public void Destaques_sao_os_itens_de_lista_sem_markdown_no_maximo_cinco()
+    {
+        const string corpo = "## Novidades\r\n\r\nTexto de abertura.\r\n- **\"Precisa de você\"** no Board\r\n* Aviso de [nova versão](https://x/y) no app\r\n"
+            + "+ `devcli versao` mostra a versão\r\n- [x] Configurador obrigatório\r\n-sem espaço não é item\r\n- ![imagem](a.png)\r\n- quinto\r\n- sexto\r\n- sétimo";
+
+        var destaques = RegrasDeVersao.Destaques(corpo);
+
+        Assert.Equal(new[] { "\"Precisa de você\" no Board", "Aviso de nova versão no app", "devcli versao mostra a versão", "Configurador obrigatório", "quinto" }, destaques);
+        Assert.Empty(RegrasDeVersao.Destaques(null));
+        Assert.EndsWith("…", RegrasDeVersao.SemMarkdown(new string('a', 300)));
+    }
+
+    [Theory]
+    [InlineData("sha256:ABCDEF0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789", "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789")]
+    [InlineData("sha1:abc", null)]
+    [InlineData(null, null)]
+    public void Sha256_do_digest_do_asset(string? digest, string? esperado)
+        => Assert.Equal(esperado, RegrasDeVersao.Sha256DoDigest(digest));
+
+    [Theory]
+    [InlineData("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789  devkit-136.zip\n")]
+    [InlineData("ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789")]
+    public void Sha256_do_arquivo_aceita_o_formato_do_sha256sum_e_o_hash_puro(string conteudo)
+        => Assert.Equal("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", RegrasDeVersao.Sha256DoArquivo(conteudo));
+
+    [Fact]
+    public void Sha256_do_arquivo_sem_hash_e_nulo()
+        => Assert.Null(RegrasDeVersao.Sha256DoArquivo("não é um hash"));
+
+    // ----- US #405: a gestão de usuários (#407) -----
+
+    [Fact]
+    public void Senha_temporaria_e_aleatoria_e_passa_na_politica()
+    {
+        var senha = GeradorDeSenha.Temporaria();
+
+        Assert.Empty(PoliticaDeSenha.Validar(senha));
+        Assert.NotEqual(senha, GeradorDeSenha.Temporaria());
+    }
+
+    [Theory]
+    [InlineData("ana.dev", "Ana", Papeis.Dev, null, new string[0])]
+    [InlineData("ana.dev", "Ana", Papeis.Dev, 3, new string[0])]
+    [InlineData("gestor.a", "", Papeis.Gestor, 3, new string[0])]
+    [InlineData("gestor.a", "", Papeis.Gestor, null, new[] { "empresaId" })]
+    [InlineData("root", "", Papeis.Admin, 3, new[] { "empresaId" })]
+    [InlineData("ana dev", "", "visitante", null, new[] { "login", "papel" })]
+    public void Usuario_novo_valida_login_papel_e_empresa(string login, string nome, string papel, int? empresa, string[] campos)
+        => Assert.Equal(campos.Order(), ValidadorDeUsuario.Validar(new UsuarioNovo(login, nome, papel, empresa)).Keys.Order());
 
     [Fact]
     public void Empresa_valida_nome_plano_e_assentos_e_o_login_do_gestor()

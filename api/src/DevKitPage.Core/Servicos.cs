@@ -7,13 +7,23 @@ public enum ResultadoDoLogin
 {
     Ok,
     CredencialInvalida,
+
+    /// <summary>O bloqueio TEMPORÁRIO por falhas seguidas (o usuário volta com o <see cref="Usuario.BloqueadoAteUtc"/>).</summary>
     Bloqueado,
+
+    /// <summary>O admin bloqueou o usuário (US #405): só sai quando ele desbloqueia.</summary>
+    BloqueadoPeloAdmin,
 }
 
 /// <summary>O login e a troca de senha dos usuários do dashboard.</summary>
 public interface IUsuarios
 {
-    /// <summary>Confere a senha, conta as falhas e bloqueia depois de muitas seguidas.</summary>
+    /// <summary>
+    /// Confere a senha, conta as falhas e bloqueia depois de muitas seguidas. No
+    /// <see cref="ResultadoDoLogin.Bloqueado"/> o usuário volta junto (a API devolve o
+    /// <see cref="Usuario.BloqueadoAteUtc"/> ao app); o <see cref="ResultadoDoLogin.BloqueadoPeloAdmin"/> só sai
+    /// com a senha CERTA — sem ela é credencial inválida, e quem não sabe a senha não descobre que o login existe.
+    /// </summary>
     Task<(ResultadoDoLogin Resultado, Usuario? Usuario)> AutenticarAsync(string login, string senha, CancellationToken ct);
 
     /// <summary>Troca a senha (confere a atual e a política). Devolve o erro, ou vazio.</summary>
@@ -113,6 +123,92 @@ public interface IEmpresas
     /// primeiro acesso. Nulo quando a empresa não existe; o erro, quando o login já existe.
     /// </summary>
     Task<(GestorCriado? Gestor, string Erro)> CriarGestorAsync(int empresaId, string login, CancellationToken ct);
+}
+
+/// <summary>Por que uma operação da gestão de usuários não foi feita — a API traduz em status HTTP.</summary>
+public enum FalhaNaGestao
+{
+    Nenhuma,
+
+    /// <summary>O usuário (ou a empresa) não existe: 404.</summary>
+    NaoEncontrado,
+
+    /// <summary>O login já existe: 409.</summary>
+    Conflito,
+
+    /// <summary>A operação fere uma regra (empresa inexistente, o admin bloqueando a si mesmo): 400.</summary>
+    Recusada,
+}
+
+/// <summary>O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem.</summary>
+public sealed record ResultadoDaGestao<T>(T? Valor, FalhaNaGestao Falha = FalhaNaGestao.Nenhuma, string Mensagem = "")
+    where T : class
+{
+    public static ResultadoDaGestao<T> Falhou(FalhaNaGestao falha, string mensagem) => new(null, falha, mensagem);
+}
+
+/// <summary>
+/// A gestão de usuários pelo admin (US #405): criar com senha TEMPORÁRIA (devolvida uma vez), editar o
+/// nome, o papel e a empresa, bloquear e desbloquear, e redefinir a senha. Os dados chegam JÁ validados
+/// (<see cref="ValidadorDeUsuario"/>); aqui ficam as regras que dependem do banco.
+/// </summary>
+public interface IGestaoDeUsuarios
+{
+    Task<IReadOnlyList<UsuarioResumo>> ListarAsync(CancellationToken ct);
+
+    /// <summary>Cria o usuário com a troca obrigatória no primeiro acesso. Conflito no login repetido; recusa com empresa inexistente.</summary>
+    Task<ResultadoDaGestao<UsuarioComSenha>> CriarAsync(UsuarioNovo usuario, CancellationToken ct);
+
+    /// <summary>Muda o nome, o papel e a empresa. Quem edita (<paramref name="quem"/>) não muda o próprio papel.</summary>
+    Task<ResultadoDaGestao<UsuarioResumo>> EditarAsync(int id, UsuarioEditado edicao, int quem, CancellationToken ct);
+
+    /// <summary>Bloqueia ou desbloqueia. Quem bloqueia não bloqueia a si mesmo.</summary>
+    Task<ResultadoDaGestao<UsuarioResumo>> BloquearAsync(int id, bool bloqueado, int quem, CancellationToken ct);
+
+    /// <summary>
+    /// Gera uma senha temporária nova (devolvida uma vez), exige a troca no próximo acesso e zera o bloqueio
+    /// TEMPORÁRIO por falhas — o bloqueio do admin fica como está.
+    /// </summary>
+    Task<ResultadoDaGestao<UsuarioComSenha>> RedefinirSenhaAsync(int id, CancellationToken ct);
+}
+
+/// <summary>
+/// Uma release estável do dev.kit com o pacote (US #405), já lida do GitHub e com a versão do dev.kit
+/// (<see cref="RegrasDeVersao"/>). O <see cref="AssetId"/> é o que o download pede ao GitHub.
+/// </summary>
+public sealed record ReleaseDoDevKit(
+    int Versao, string Tag, string Nome, DateTimeOffset PublicadaEm, IReadOnlyList<string> Destaques,
+    long AssetId, string NomeDoPacote, long TamanhoBytes, string? Sha256);
+
+/// <summary>
+/// O pacote aberto para o download: o conteúdo em STREAMING (nada é bufferizado na API) e o tamanho,
+/// quando o GitHub o informa. Descartar fecha a resposta do GitHub.
+/// </summary>
+public sealed class PacoteAberto(Stream conteudo, long? tamanho, IDisposable dono) : IAsyncDisposable
+{
+    public Stream Conteudo { get; } = conteudo;
+
+    public long? Tamanho { get; } = tamanho;
+
+    public async ValueTask DisposeAsync()
+    {
+        await Conteudo.DisposeAsync();
+        dono.Dispose();
+    }
+}
+
+/// <summary>
+/// As releases do dev.kit no GitHub (US #405). O token (<see cref="OpcoesDeAtualizacao.Token"/>) só existe
+/// na API: o app e a landing pedem a versão e o pacote aqui. Nulo é "indisponível" (sem token, GitHub fora
+/// do ar) — a API responde 503 sem repassar nada do GitHub.
+/// </summary>
+public interface IReleasesDoDevKit
+{
+    /// <summary>As releases estáveis com o zip, da versão mais nova para a mais velha (em cache por poucos minutos); nulo quando indisponível.</summary>
+    Task<IReadOnlyList<ReleaseDoDevKit>?> EstaveisAsync(CancellationToken ct);
+
+    /// <summary>Abre o zip da release em streaming; nulo quando o GitHub não o entrega.</summary>
+    Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoDevKit release, CancellationToken ct);
 }
 
 /// <summary>A trilha de auditoria do acesso aos dados dos colaboradores (US #381).</summary>

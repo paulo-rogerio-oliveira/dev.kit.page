@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using DevKitPage.Contracts.V1;
+using DevKitPage.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,25 +24,44 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     public const string Segredo = "segredo-dos-testes-com-mais-de-32-caracteres";
     public const int LimitePorMinuto = 3;
 
+    /// <summary>O PAT de mentira das releases (o <c>REPO_KEY</c> dos testes): nunca pode sair da API.</summary>
+    public const string TokenDoGitHub = "ghp_token-de-teste-que-nao-pode-vazar";
+
     private readonly string _arquivo = Path.Combine(Path.GetTempPath(), $"devkitpage-api-{Guid.NewGuid():N}.db");
     private readonly string _ambiente;
     private readonly bool _comSegredo;
     private readonly string? _ipDaConexao;
     private readonly string? _redeConfiavel;
+    private readonly string? _repoKey;
+    private readonly bool _loginObrigatorio;
 
     /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
     /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
-    public ApiDeTeste(string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null)
+    /// <param name="repoKey">O <c>REPO_KEY</c> (US #405); nulo é a API sem ele — a atualização responde 503.</param>
+    /// <param name="loginObrigatorio">O <c>DEVKIT_LOGIN_OBRIGATORIO</c> (US #405).</param>
+    public ApiDeTeste(
+        string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
+        string? repoKey = TokenDoGitHub, bool loginObrigatorio = false)
     {
         _ambiente = ambiente;
         _comSegredo = comSegredo;
         _ipDaConexao = ipDaConexao;
         _redeConfiavel = redeConfiavel;
+        _repoKey = repoKey;
+        _loginObrigatorio = loginObrigatorio;
     }
+
+    /// <summary>O GitHub de mentira por trás do HttpClient das releases: nenhum teste sai para a rede.</summary>
+    public GitHubDeMentira GitHub { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_ambiente);
+        // As variáveis de ambiente da US #405, como chegam no Azure — vazias quando o teste não as quer
+        // (uma REPO_KEY na máquina de quem roda o teste não muda o resultado).
+        builder.UseSetting("REPO_KEY", _repoKey ?? string.Empty);
+        builder.UseSetting("DEVKIT_LOGIN_OBRIGATORIO", _loginObrigatorio ? "true" : string.Empty);
+        builder.ConfigureTestServices(s => s.AddHttpClient(ReleasesDoDevKit.NomeDoCliente).ConfigurePrimaryHttpMessageHandler(() => GitHub));
         if (_redeConfiavel is not null)
             builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
         if (_ipDaConexao is not null)
@@ -118,6 +139,27 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         troca.EnsureSuccessStatusCode();
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await troca.Content.ReadFromJsonAsync<LoginResponse>())!.Token);
         return cliente;
+    }
+
+    /// <summary>
+    /// O admin cria um usuário (US #405) pela gestão; o usuário entra com a senha temporária, faz a troca
+    /// obrigatória e volta como um cliente autenticado (com o login devolvido pela troca).
+    /// </summary>
+    public async Task<(HttpClient Cliente, LoginResponse Login)> UsuarioAsync(HttpClient admin, string login, string papel, int? empresa = null)
+    {
+        var criacao = await admin.PostAsJsonAsync("/api/usuarios", new UsuarioNovo(login, $"Nome de {login}", papel, empresa));
+        criacao.EnsureSuccessStatusCode();
+        var criado = (await criacao.Content.ReadFromJsonAsync<UsuarioComSenha>())!;
+
+        var cliente = CreateClient();
+        var primeiro = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(login, criado.SenhaTemporaria));
+        primeiro.EnsureSuccessStatusCode();
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await primeiro.Content.ReadFromJsonAsync<LoginResponse>())!.Token);
+        var troca = await cliente.PostAsJsonAsync("/api/auth/trocar-senha", new TrocarSenhaRequest(criado.SenhaTemporaria, NovaSenha));
+        troca.EnsureSuccessStatusCode();
+        var novo = (await troca.Content.ReadFromJsonAsync<LoginResponse>())!;
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", novo.Token);
+        return (cliente, novo);
     }
 
     protected override void Dispose(bool disposing)

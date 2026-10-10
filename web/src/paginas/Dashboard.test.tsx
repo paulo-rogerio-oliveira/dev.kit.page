@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
 import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
-import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, roi, servidor, tokenDoGestor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, roi, servidor, tokenDoDev, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
@@ -304,6 +304,60 @@ describe('Dashboard', () => {
       expect(doRoi.searchParams.get('maquina')).toBe('2');
       expect(doRoi.searchParams.get('de')).toBeTruthy();
     });
+  });
+
+  it('mostra os cartões Impasses e Árbitro na qualidade de uso (US #405)', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    const impasses = within(await screen.findByRole('article', { name: 'Impasses' }));
+    expect(impasses.getByTestId('kpi-Impasses detectados')).toHaveTextContent('3');
+    expect(impasses.getByText('2 destravado(s)')).toBeInTheDocument();
+    expect(impasses.getByTestId('kpi-Tempo médio parado')).toHaveTextContent('32,5 min');
+    expect(impasses.getByTestId('kpi-Tempo médio até destravar')).toHaveTextContent('12,0 min');
+    expect(impasses.getByText('o árbitro reagiu')).toBeInTheDocument();
+    expect(impasses.getByText('o dev falou')).toBeInTheDocument();
+
+    const arbitro = within(screen.getByRole('article', { name: 'Árbitro' }));
+    expect(arbitro.getByTestId('kpi-Cobranças do árbitro')).toHaveTextContent('4');
+    expect(arbitro.getByText('3 corrigida(s)')).toBeInTheDocument();
+    expect(arbitro.getByTestId('kpi-Taxa de correção')).toHaveTextContent(/75,0\s?%/);
+    expect(arbitro.getByTestId('kpi-Escaladas ao dev')).toHaveTextContent('1');
+    expect(arbitro.getByText('Arquivos alterados no turno')).toBeInTheDocument();
+    expect(arbitro.getByText('sem seção')).toBeInTheDocument(); // a cobrança sem a seção da regra
+  });
+
+  it('os cartões Impasses e Árbitro vazios mostram traço e o aviso, nunca NaN', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/qualidade`, () => HttpResponse.json(qualidadeVazia)));
+
+    renderizar('/dashboard', tokenValido());
+
+    const impasses = within(await screen.findByRole('article', { name: 'Impasses' }));
+    expect(impasses.getByTestId('kpi-Impasses detectados')).toHaveTextContent('0');
+    expect(impasses.getByTestId('kpi-Tempo médio parado')).toHaveTextContent('—');
+    expect(impasses.getByTestId('kpi-Tempo médio até destravar')).toHaveTextContent('—');
+    expect(impasses.getByText('Nenhum impasse destravado no período.')).toBeInTheDocument();
+    const arbitro = within(screen.getByRole('article', { name: 'Árbitro' }));
+    expect(arbitro.getByTestId('kpi-Taxa de correção')).toHaveTextContent('—');
+    expect(arbitro.getByText('Nenhuma cobrança no período.')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('NaN');
+  });
+
+  it('uma API anterior aos cartões (sem os campos) mostra os cartões vazios', async () => {
+    const antiga = { ...qualidadeVazia, impasses: undefined, arbitro: undefined }; // o JSON sai sem os dois campos
+    servidor.use(http.get(`${API}/api/dashboard/qualidade`, () => HttpResponse.json(antiga)));
+
+    renderizar('/dashboard', tokenValido());
+
+    const arbitro = within(await screen.findByRole('article', { name: 'Árbitro' }));
+    expect(arbitro.getByTestId('kpi-Cobranças do árbitro')).toHaveTextContent('0');
+    expect(arbitro.getByTestId('kpi-Taxa de correção')).toHaveTextContent('—');
+  });
+
+  it('o dev não entra no painel: o dashboard leva à página inicial (US #405)', async () => {
+    renderizar('/dashboard', tokenDoDev());
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('agente de IA');
+    expect(requisicoes.filter((r) => r.pathname.startsWith('/api/dashboard'))).toEqual([]);
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {

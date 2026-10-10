@@ -1,3 +1,4 @@
+using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,7 +20,7 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 
         var agora = relogio.GetUtcNow().UtcDateTime;
         if (usuario.BloqueadoAteUtc is { } ate && ate > agora)
-            return (ResultadoDoLogin.Bloqueado, null);
+            return (ResultadoDoLogin.Bloqueado, usuario); // com o usuário: a API diz ao app ATÉ quando
 
         var conferencia = hasher.VerifyHashedPassword(usuario, usuario.SenhaHash, senha ?? string.Empty);
         if (conferencia == PasswordVerificationResult.Failed)
@@ -34,6 +35,10 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
             await db.SaveChangesAsync(ct);
             return (ResultadoDoLogin.CredencialInvalida, null);
         }
+
+        // O bloqueio do admin só aparece para quem acertou a senha: sem ela, a resposta é a de sempre.
+        if (usuario.BloqueadoPeloAdmin)
+            return (ResultadoDoLogin.BloqueadoPeloAdmin, null);
 
         if (conferencia == PasswordVerificationResult.SuccessRehashNeeded)
             usuario.SenhaHash = hasher.HashPassword(usuario, senha!);
@@ -65,6 +70,131 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 
     public Task<Usuario?> ObterAsync(int usuarioId, CancellationToken ct)
         => db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstOrDefaultAsync(u => u.Id == usuarioId, ct);
+}
+
+/// <summary>
+/// A gestão de usuários pelo admin (US #405). O usuário criado ou redefinido recebe uma senha TEMPORÁRIA do
+/// <see cref="GeradorDeSenha"/> — o mesmo do admin semeado e do gestor convidado —, devolvida UMA vez, e a
+/// troca obrigatória no primeiro acesso (a regra que a API já aplica a todo token com a troca pendente).
+/// </summary>
+public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio) : IGestaoDeUsuarios
+{
+    public async Task<IReadOnlyList<UsuarioResumo>> ListarAsync(CancellationToken ct)
+    {
+        var agora = relogio.GetUtcNow().UtcDateTime;
+        return (await db.Usuarios.AsNoTracking().Include(u => u.Empresa).OrderBy(u => u.Login).ToListAsync(ct))
+            .Select(u => Resumo(u, agora))
+            .ToArray();
+    }
+
+    public async Task<ResultadoDaGestao<UsuarioComSenha>> CriarAsync(UsuarioNovo novo, CancellationToken ct)
+    {
+        var login = novo.Login.Trim();
+        if (await db.Usuarios.AnyAsync(u => u.Login == login, ct))
+            return ResultadoDaGestao<UsuarioComSenha>.Falhou(FalhaNaGestao.Conflito, $"Já existe um usuário '{login}'.");
+        if (await EmpresaInexistenteAsync(novo.EmpresaId, ct))
+            return ResultadoDaGestao<UsuarioComSenha>.Falhou(FalhaNaGestao.Recusada, "A empresa informada não existe.");
+
+        var usuario = new Usuario
+        {
+            Login = login,
+            DeveTrocarSenha = true,
+            CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
+        };
+        Aplicar(usuario, novo.Nome, novo.Papel, novo.EmpresaId);
+        var senha = GeradorDeSenha.Temporaria();
+        usuario.SenhaHash = hasher.HashPassword(usuario, senha);
+        db.Usuarios.Add(usuario);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Dois cadastros do mesmo login ao mesmo tempo: o índice único decide, e o segundo é o conflito.
+            db.Entry(usuario).State = EntityState.Detached;
+            if (!await db.Usuarios.AsNoTracking().AnyAsync(u => u.Login == login, ct))
+                throw;
+            return ResultadoDaGestao<UsuarioComSenha>.Falhou(FalhaNaGestao.Conflito, $"Já existe um usuário '{login}'.");
+        }
+
+        return new(new UsuarioComSenha(await ResumoAsync(usuario.Id, ct), senha));
+    }
+
+    public async Task<ResultadoDaGestao<UsuarioResumo>> EditarAsync(int id, UsuarioEditado edicao, int quem, CancellationToken ct)
+    {
+        var usuario = await db.Usuarios.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (usuario is null)
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.NaoEncontrado, "Usuário não encontrado.");
+        // O admin não tira o próprio papel: sem isto, o último admin se rebaixaria e ninguém mais administraria.
+        if (id == quem && PapelDe(usuario) != edicao.Papel)
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Recusada, "Você não pode mudar o seu próprio papel.");
+        if (await EmpresaInexistenteAsync(edicao.EmpresaId, ct))
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Recusada, "A empresa informada não existe.");
+
+        Aplicar(usuario, edicao.Nome, edicao.Papel, edicao.EmpresaId);
+        await db.SaveChangesAsync(ct);
+        return new(await ResumoAsync(id, ct));
+    }
+
+    public async Task<ResultadoDaGestao<UsuarioResumo>> BloquearAsync(int id, bool bloqueado, int quem, CancellationToken ct)
+    {
+        var usuario = await db.Usuarios.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (usuario is null)
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.NaoEncontrado, "Usuário não encontrado.");
+        if (id == quem && bloqueado)
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Recusada, "Você não pode bloquear a si mesmo.");
+
+        usuario.BloqueadoPeloAdmin = bloqueado;
+        if (!bloqueado)
+        {
+            // Desbloquear devolve o acesso por inteiro: o bloqueio temporário por falhas sai junto.
+            usuario.FalhasSeguidas = 0;
+            usuario.BloqueadoAteUtc = null;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return new(await ResumoAsync(id, ct));
+    }
+
+    public async Task<ResultadoDaGestao<UsuarioComSenha>> RedefinirSenhaAsync(int id, CancellationToken ct)
+    {
+        var usuario = await db.Usuarios.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (usuario is null)
+            return ResultadoDaGestao<UsuarioComSenha>.Falhou(FalhaNaGestao.NaoEncontrado, "Usuário não encontrado.");
+
+        var senha = GeradorDeSenha.Temporaria();
+        usuario.SenhaHash = hasher.HashPassword(usuario, senha);
+        usuario.DeveTrocarSenha = true;
+        usuario.FalhasSeguidas = 0;
+        usuario.BloqueadoAteUtc = null;
+        await db.SaveChangesAsync(ct);
+        return new(new UsuarioComSenha(await ResumoAsync(id, ct), senha));
+    }
+
+    /// <summary>
+    /// O papel e a empresa como o token os leva: o admin não tem empresa (vê tudo) e tem o <see cref="Usuario.EhAdmin"/>,
+    /// que o <c>EmissorDeToken</c> lê — os dois andam juntos para o papel do token nunca divergir do da lista.
+    /// </summary>
+    private static void Aplicar(Usuario usuario, string? nome, string papel, int? empresaId)
+    {
+        usuario.Nome = (nome ?? string.Empty).Trim();
+        usuario.Papel = papel;
+        usuario.EhAdmin = papel == Papeis.Admin;
+        usuario.EmpresaId = usuario.EhAdmin ? null : empresaId;
+    }
+
+    private static string PapelDe(Usuario usuario) => usuario.EhAdmin ? Papeis.Admin : usuario.Papel;
+
+    private async Task<bool> EmpresaInexistenteAsync(int? empresaId, CancellationToken ct)
+        => empresaId is { } id && !await db.Empresas.AnyAsync(e => e.Id == id, ct);
+
+    private async Task<UsuarioResumo> ResumoAsync(int id, CancellationToken ct)
+        => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow().UtcDateTime);
+
+    private static UsuarioResumo Resumo(Usuario u, DateTime agora)
+        => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
+            u.BloqueadoAteUtc is { } ate && ate > agora ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc));
 }
 
 /// <summary>

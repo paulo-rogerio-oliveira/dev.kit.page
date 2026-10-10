@@ -193,6 +193,178 @@ public static class PoliticaDeSenha
     }
 }
 
+/// <summary>
+/// O gerador ÚNICO de senha temporária (US #405): a do admin semeado sem <c>Seed:AdminPassword</c>, a do
+/// gestor convidado e a do usuário criado ou redefinido pelo admin. Aleatória (64 bits do gerador
+/// criptográfico) e sempre dentro da <see cref="PoliticaDeSenha"/> — ela vale até o primeiro acesso, que
+/// exige a troca.
+/// </summary>
+public static class GeradorDeSenha
+{
+    /// <summary>Uma senha temporária nova, como <c>Dk3F9A0C2E7B1D4A6a1</c>.</summary>
+    public static string Temporaria() => "Dk" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8)) + "a1";
+}
+
+/// <summary>A validação do usuário que o admin cria ou edita (US #405), antes do banco.</summary>
+public static class ValidadorDeUsuario
+{
+    public const int TamanhoMaximoDoLogin = 100;
+    public const int TamanhoMaximoDoNome = 100;
+
+    /// <summary>O problema do login (sem espaços, até 100 caracteres), ou vazio — <paramref name="quem"/> nomeia o usuário na mensagem.</summary>
+    public static string ValidarLogin(string? login, string quem = "usuário")
+    {
+        var limpo = (login ?? string.Empty).Trim();
+        if (limpo.Length is 0 or > TamanhoMaximoDoLogin || limpo.Any(char.IsWhiteSpace))
+            return $"Informe o login do {quem}, sem espaços (até {TamanhoMaximoDoLogin} caracteres).";
+        return string.Empty;
+    }
+
+    /// <summary>Os erros por campo do usuário novo; vazio quando ele pode ser criado.</summary>
+    public static Dictionary<string, string[]> Validar(UsuarioNovo? usuario)
+    {
+        if (usuario is null)
+            return new(StringComparer.Ordinal) { ["usuario"] = ["O corpo do pedido é obrigatório."] };
+
+        var erros = Validar(usuario.Nome, usuario.Papel, usuario.EmpresaId);
+        var login = ValidarLogin(usuario.Login);
+        if (login.Length > 0)
+            erros["login"] = [login];
+        return erros;
+    }
+
+    /// <summary>Os erros por campo da edição; vazio quando ela pode ser gravada.</summary>
+    public static Dictionary<string, string[]> Validar(UsuarioEditado? edicao)
+        => edicao is null
+            ? new(StringComparer.Ordinal) { ["usuario"] = ["O corpo do pedido é obrigatório."] }
+            : Validar(edicao.Nome, edicao.Papel, edicao.EmpresaId);
+
+    /// <summary>
+    /// O nome (até 100), o papel (um de <see cref="Papeis.Todos"/>) e a empresa: o gestor PRECISA de uma (é
+    /// o escopo dele no painel); o admin não tem (vê tudo); o dev pode ter ou não.
+    /// </summary>
+    private static Dictionary<string, string[]> Validar(string? nome, string? papel, int? empresaId)
+    {
+        var erros = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if ((nome ?? string.Empty).Trim().Length > TamanhoMaximoDoNome)
+            erros["nome"] = [$"O nome tem até {TamanhoMaximoDoNome} caracteres."];
+        if (!Papeis.Todos.Contains(papel ?? string.Empty))
+            erros["papel"] = [$"Papel inválido: use {string.Join(", ", Papeis.Todos)}."];
+        else if (papel == Papeis.Gestor && empresaId is null or <= 0)
+            erros["empresaId"] = ["O gestor precisa de uma empresa."];
+        else if (papel == Papeis.Admin && empresaId is not null)
+            erros["empresaId"] = ["O admin não pertence a uma empresa: ele vê todas."];
+        return erros;
+    }
+}
+
+/// <summary>
+/// A versão do dev.kit a partir das GitHub Releases (US #405) — regra pura, sem HTTP. A tag <c>vNNN</c> é o
+/// número do dev.kit; a legada <c>vX.Y.Z</c> vale X; prerelease, rascunho e tag ilegível ficam de fora. Os
+/// destaques são os itens de lista do corpo da release, sem markdown.
+/// </summary>
+public static partial class RegrasDeVersao
+{
+    /// <summary>Quantos destaques a versão mostra (o app e a landing não são o changelog).</summary>
+    public const int MaximoDeDestaques = 5;
+
+    /// <summary>O tamanho máximo de um destaque.</summary>
+    public const int TamanhoMaximoDoDestaque = 200;
+
+    /// <summary>
+    /// A versão do dev.kit da tag: <c>v136</c> é 136, a legada <c>v1.2.3</c> é 1. Nula para a tag ilegível
+    /// (<c>latest</c>, <c>v1.2.3-beta</c>, <c>v0</c>) — que fica fora da lista, em vez de virar a "última".
+    /// </summary>
+    public static int? Versao(string? tag)
+    {
+        var lido = Tag().Match((tag ?? string.Empty).Trim());
+        return lido.Success && int.TryParse(lido.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var versao) && versao > 0
+            ? versao
+            : null;
+    }
+
+    /// <summary>O que a regra lê de uma release do GitHub.</summary>
+    public sealed record Candidata(string? Tag, bool Prerelease, bool Rascunho, DateTimeOffset? PublicadaEm);
+
+    /// <summary>
+    /// As releases ESTÁVEIS com a versão de cada uma, da mais nova para a mais velha — pela versão NUMÉRICA
+    /// (v136 vem antes de v99, que a ordem de texto inverteria). Duas tags da mesma versão (a legada v1.2.3
+    /// e a v1.5.0) ficam uma só: a publicada por último.
+    /// </summary>
+    public static IReadOnlyList<(T Release, int Versao)> Estaveis<T>(IEnumerable<T> releases, Func<T, Candidata> ler)
+        => releases
+            .Select(r => (Release: r, Lida: ler(r)))
+            .Where(x => !x.Lida.Prerelease && !x.Lida.Rascunho)
+            .Select(x => (x.Release, x.Lida, Versao: Versao(x.Lida.Tag)))
+            .Where(x => x.Versao is not null)
+            .OrderByDescending(x => x.Versao).ThenByDescending(x => x.Lida.PublicadaEm ?? DateTimeOffset.MinValue)
+            .GroupBy(x => x.Versao!.Value)
+            .Select(g => (g.First().Release, g.Key))
+            .ToArray();
+
+    /// <summary>Os itens de lista (<c>- </c>, <c>* </c>, <c>+ </c>) do corpo da release, sem markdown, no máximo <see cref="MaximoDeDestaques"/>.</summary>
+    public static IReadOnlyList<string> Destaques(string? corpo)
+        => (corpo ?? string.Empty)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 2 && (l[0] is '-' or '*' or '+') && l[1] == ' ')
+            .Select(l => SemMarkdown(l[2..]))
+            .Where(l => l.Length > 0)
+            .Take(MaximoDeDestaques)
+            .ToArray();
+
+    /// <summary>O texto de um item sem a marcação: caixa de seleção, imagem, link (fica o texto), ênfase, código e HTML.</summary>
+    public static string SemMarkdown(string texto)
+    {
+        var limpo = Caixa().Replace(texto, string.Empty);
+        limpo = Imagem().Replace(limpo, string.Empty);
+        limpo = Link().Replace(limpo, "$1");
+        limpo = Html().Replace(limpo, string.Empty);
+        limpo = limpo.Replace("**", string.Empty, StringComparison.Ordinal).Replace("__", string.Empty, StringComparison.Ordinal).Replace("`", string.Empty, StringComparison.Ordinal);
+        limpo = Espacos().Replace(limpo, " ").Trim();
+        return limpo.Length <= TamanhoMaximoDoDestaque ? limpo : limpo[..TamanhoMaximoDoDestaque].TrimEnd() + "…";
+    }
+
+    /// <summary>O SHA-256 do <c>digest</c> do asset (<c>sha256:…</c>) em hex minúsculo; nulo quando não é um.</summary>
+    public static string? Sha256DoDigest(string? digest)
+    {
+        var texto = (digest ?? string.Empty).Trim();
+        return texto.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? Sha256DoArquivo(texto["sha256:".Length..]) : null;
+    }
+
+    /// <summary>
+    /// O SHA-256 do arquivo <c>&lt;zip&gt;.sha256</c> — o formato do <c>sha256sum</c> (<c>hash  nome</c>) ou só o
+    /// hash, em qualquer caixa —, em hex minúsculo; nulo sem um hash de 64 caracteres.
+    /// </summary>
+    public static string? Sha256DoArquivo(string? conteudo)
+    {
+        var achado = Hash().Match(conteudo ?? string.Empty);
+        return achado.Success ? achado.Value.ToLowerInvariant() : null;
+    }
+
+    [GeneratedRegex(@"^[vV](\d{1,9})(?:\.\d{1,9}){0,3}$")]
+    private static partial Regex Tag();
+
+    [GeneratedRegex(@"^\[[ xX]\]\s*")]
+    private static partial Regex Caixa();
+
+    [GeneratedRegex(@"!\[[^\]]*\]\([^)]*\)")]
+    private static partial Regex Imagem();
+
+    [GeneratedRegex(@"\[([^\]]*)\]\([^)]*\)")]
+    private static partial Regex Link();
+
+    [GeneratedRegex(@"<[^>]+>")]
+    private static partial Regex Html();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Espacos();
+
+    [GeneratedRegex(@"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")]
+    private static partial Regex Hash();
+}
+
 /// <summary>O período de uma consulta: os dois dias inclusive.</summary>
 public readonly record struct Periodo(DateOnly De, DateOnly Ate)
 {
@@ -356,8 +528,8 @@ public sealed record EscopoDoPainel(int? EmpresaId)
 
     /// <summary>
     /// O escopo das claims do token: <c>admin</c> é tudo; <c>gestor</c> com a empresa é ela. Qualquer
-    /// outra combinação (gestor sem empresa, papel desconhecido) é NULO — a rota responde 403, e um
-    /// token malformado nunca vira "ver tudo".
+    /// outra combinação (gestor sem empresa, o <c>dev</c> — que entra no app, mas não no painel —, papel
+    /// desconhecido) é NULO — a rota responde 403, e um token malformado nunca vira "ver tudo".
     /// </summary>
     public static EscopoDoPainel? DasClaims(string? papel, string? empresa)
         => papel switch
@@ -398,14 +570,8 @@ public static class ValidadorDeEmpresa
         return erros;
     }
 
-    /// <summary>O problema do login do gestor, ou vazio.</summary>
-    public static string ValidarLogin(string? login)
-    {
-        var limpo = (login ?? string.Empty).Trim();
-        if (limpo.Length is 0 or > TamanhoMaximoDoLogin || limpo.Any(char.IsWhiteSpace))
-            return $"Informe o login do gestor, sem espaços (até {TamanhoMaximoDoLogin} caracteres).";
-        return string.Empty;
-    }
+    /// <summary>O problema do login do gestor, ou vazio — a mesma regra de todo usuário (<see cref="ValidadorDeUsuario"/>).</summary>
+    public static string ValidarLogin(string? login) => ValidadorDeUsuario.ValidarLogin(login, "gestor");
 
     /// <summary>O nome do colaborador como o banco o guarda.</summary>
     public static string Colaborador(string? nome)
@@ -480,7 +646,8 @@ public sealed record SomaPorTipo(string Tipo, string Detalhe, long Quantidade, l
 
 /// <summary>
 /// A QUALIDADE de uso a partir das somas — a mesma definição do <c>devcli telemetria</c> do dev.kit.
-/// Toda razão sem denominador é NULA (a tela mostra um traço).
+/// Toda razão sem denominador é NULA (a tela mostra um traço). Os cartões Impasses e Árbitro (US #405)
+/// saem das MESMAS somas (tipo e recorte, já no escopo e no período): nenhuma consulta a mais.
 /// </summary>
 public static class CalculoDeQualidade
 {
@@ -502,13 +669,63 @@ public static class CalculoDeQualidade
             .OrderByDescending(c => c.Quantidade).ThenBy(c => c.Causa, StringComparer.Ordinal)
             .ToArray();
 
+        var detectados = Eventos(TiposDeEvento.ImpasseDetectado);
+        var destravados = Eventos(TiposDeEvento.ImpasseResolvido);
+        var impasses = new ImpassesResumo(
+            detectados, PorRecorte(somas.Where(s => s.Tipo == TiposDeEvento.ImpasseDetectado).Select(s => (s.Detalhe, s.Eventos))),
+            Razao(Valor(TiposDeEvento.ImpasseDetectado), detectados),
+            destravados, Razao(Valor(TiposDeEvento.ImpasseResolvido), destravados),
+            PorRecorte(somas.Where(s => s.Tipo == TiposDeEvento.ImpasseResolvido).Select(s => (s.Detalhe, s.Eventos))));
+
         return new QualidadeResposta(
             periodo.De, periodo.Ate, turnos, falhas,
             Razao(falhas, turnos), Razao(Valor(TiposDeEvento.TurnoExecutado), turnos),
             porCausa, avaliacoes, Razao(Valor(TiposDeEvento.ObjetivoAvaliado), avaliacoes),
-            cumpridos, recusados, Razao(cumpridos, recusados), Razao(turnos, cumpridos));
+            cumpridos, recusados, Razao(cumpridos, recusados), Razao(turnos, cumpridos),
+            impasses, Arbitro(somas));
     }
+
+    /// <summary>
+    /// O cartão Árbitro: as ações pelo recorte <c>acao|seção</c> (<see cref="RegrasDoArbitro.Separar"/>), as
+    /// cobranças por regra, a taxa de correção (corrigidas sobre cobranças, nula sem cobrança) e as escaladas.
+    /// </summary>
+    private static ArbitroResumo Arbitro(IReadOnlyCollection<SomaPorTipo> somas)
+    {
+        var acoes = somas
+            .Where(s => s.Tipo == TiposDeEvento.ArbitroAgiu)
+            .Select(s => (Partes: RegrasDoArbitro.Separar(s.Detalhe), s.Eventos))
+            .ToList();
+        long DaAcao(string acao) => acoes.Where(a => a.Partes.Acao == acao).Sum(a => a.Eventos);
+
+        var cobrancas = DaAcao(AcoesDoArbitro.Cobrou);
+        var corrigidas = DaAcao(AcoesDoArbitro.Corrigido);
+        return new ArbitroResumo(
+            acoes.Sum(a => a.Eventos), cobrancas,
+            PorRecorte(acoes.Where(a => a.Partes.Acao == AcoesDoArbitro.Cobrou).Select(a => (a.Partes.Secao, a.Eventos))),
+            corrigidas, Razao(corrigidas, cobrancas), DaAcao(AcoesDoArbitro.EscalouAoDev),
+            PorRecorte(acoes.Select(a => (a.Partes.Acao, a.Eventos))));
+    }
+
+    /// <summary>As contagens por recorte, da mais comum à mais rara (o empate, em ordem alfabética).</summary>
+    private static ContagemPorRecorte[] PorRecorte(IEnumerable<(string Recorte, long Eventos)> itens)
+        => itens
+            .GroupBy(i => i.Recorte, StringComparer.Ordinal)
+            .Select(g => new ContagemPorRecorte(g.Key, g.Sum(i => i.Eventos)))
+            .OrderByDescending(c => c.Quantidade).ThenBy(c => c.Recorte, StringComparer.Ordinal)
+            .ToArray();
 
     /// <summary>A razão, ou nula sem denominador.</summary>
     public static double? Razao(double parte, long todo) => todo == 0 ? null : Math.Round(parte / todo, 4);
+}
+
+/// <summary>O recorte do <see cref="TiposDeEvento.ArbitroAgiu"/> (US #405): <c>acao</c> ou <c>acao|seção da regra</c>.</summary>
+public static class RegrasDoArbitro
+{
+    /// <summary>A ação e a seção, separadas pelo PRIMEIRO <c>|</c> (a seção pode ter outros); sem ele, a seção é vazia.</summary>
+    public static (string Acao, string Secao) Separar(string? detalhe)
+    {
+        var texto = detalhe ?? string.Empty;
+        var corte = texto.IndexOf(AcoesDoArbitro.Separador, StringComparison.Ordinal);
+        return corte < 0 ? (texto.Trim(), string.Empty) : (texto[..corte].Trim(), texto[(corte + 1)..].Trim());
+    }
 }

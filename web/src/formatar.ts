@@ -14,6 +14,12 @@ export const formatar = {
   decimal: (valor: number | null | undefined) => (valido(valor) ? decimal.format(valor) : SEM_VALOR),
   percentual: (valor: number | null | undefined) => (valido(valor) ? percentual.format(valor) : SEM_VALOR),
   segundos: (ms: number | null | undefined) => (valido(ms) ? `${decimal.format(ms / 1000)} s` : SEM_VALOR),
+  /** Minutos com uma casa (o tempo parado de um impasse, US #405). */
+  minutos: (valor: number | null | undefined) => (valido(valor) ? `${decimal.format(valor)} min` : SEM_VALOR),
+  /** Bytes em MB com uma casa (o tamanho do pacote do dev.kit). */
+  megabytes: (bytes: number | null | undefined) => (valido(bytes) ? `${decimal.format(bytes / 1_048_576)} MB` : SEM_VALOR),
+  /** A data por extenso curto (dd/mm/aaaa). */
+  data: (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : SEM_VALOR),
   dataHora: (iso: string | null | undefined) =>
     iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : SEM_VALOR,
   /** DD/MM de um AAAA-MM-DD (o rótulo do eixo da série diária). */
