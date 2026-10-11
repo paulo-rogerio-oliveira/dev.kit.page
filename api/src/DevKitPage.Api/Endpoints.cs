@@ -18,25 +18,24 @@ public static class Endpoints
         grupo.MapPost("/login", async (LoginRequest pedido, IUsuarios usuarios, EmissorDeToken emissor, CancellationToken ct) =>
         {
             var (resultado, usuario) = await usuarios.AutenticarAsync(pedido.Login, pedido.Senha, ct);
-            return resultado switch
-            {
-                ResultadoDoLogin.Ok => Results.Ok(emissor.Emitir(usuario!)),
-                // O bloqueio temporário diz ATÉ quando (US #405): o app mostra a hora de tentar de novo.
-                ResultadoDoLogin.Bloqueado => Results.Problem(
-                    "Usuário bloqueado por excesso de tentativas. Tente de novo mais tarde.", statusCode: StatusCodes.Status423Locked,
-                    extensions: usuario?.BloqueadoAteUtc is { } ate
-                        ? new Dictionary<string, object?> { ["bloqueadoAte"] = new DateTimeOffset(DateTime.SpecifyKind(ate, DateTimeKind.Utc)) }
-                        : null),
-                // O bloqueio do admin não vence sozinho: sem bloqueadoAte.
-                ResultadoDoLogin.BloqueadoPeloAdmin => Results.Problem(
-                    "Usuário bloqueado pelo administrador. Fale com ele para voltar a entrar.", statusCode: StatusCodes.Status423Locked),
-                _ => Results.Problem("Login ou senha inválidos.", statusCode: StatusCodes.Status401Unauthorized),
-            };
+            return RespostaDoLogin(resultado, usuario, emissor);
         }).AllowAnonymous();
 
+        // A RENOVAÇÃO do token (US #425): o app troca o token perto de vencer por um novo, sem pedir a senha — com as
+        // MESMAS recusas do login (bloqueado pelo gestor, sem assento), para o corte do gestor valer também aqui.
+        grupo.MapPost("/renovar", async (ClaimsPrincipal quem, IUsuarios usuarios, EmissorDeToken emissor, CancellationToken ct) =>
+        {
+            if (Seguranca.UsuarioId(quem) is not { } id)
+                return Results.Unauthorized();
+            var (resultado, usuario) = await usuarios.RenovarAsync(id, ct);
+            return RespostaDoLogin(resultado, usuario, emissor);
+        }).RequireAuthorization();
+
         // A política de login do app (US #405), num ponto que NÃO depende do GitHub: o app a lê daqui, e o
-        // GitHub fora do ar não muda quem precisa entrar.
-        grupo.MapGet("/politica", (IOptions<OpcoesDeLogin> login) => Results.Ok(new PoliticaDeLoginV1(login.Value.Obrigatorio)))
+        // GitHub fora do ar não muda quem precisa entrar. Desde a US #425 ela é POR EMPRESA: a da empresa do token
+        // ou da máquina da chave (X-Machine-Key), e o DEVKIT_LOGIN_OBRIGATORIO vira só o padrão.
+        grupo.MapGet("/politica", async (HttpContext http, ClaimsPrincipal quem, IMaquinas maquinas, IContas contas, CancellationToken ct)
+                => Results.Ok(new PoliticaDeLoginV1(await EndpointsDaUs425.LoginObrigatorioAsync(http, quem, maquinas, contas, ct))))
             .AllowAnonymous();
 
         grupo.MapPost("/trocar-senha", async (TrocarSenhaRequest pedido, ClaimsPrincipal quem, IUsuarios usuarios, EmissorDeToken emissor, CancellationToken ct) =>
@@ -53,14 +52,38 @@ public static class Endpoints
         }).RequireAuthorization(Seguranca.PoliticaAutenticado);
     }
 
+    /// <summary>O token, ou a recusa — cada uma com o seu "codigo" (US #425): o dev.kit mostra a mensagem própria de cada caso.</summary>
+    private static IResult RespostaDoLogin(ResultadoDoLogin resultado, Usuario? usuario, EmissorDeToken emissor)
+        => resultado switch
+        {
+            ResultadoDoLogin.Ok => Results.Ok(emissor.Emitir(usuario!)),
+            // O bloqueio temporário diz ATÉ quando (US #405): o app mostra a hora de tentar de novo.
+            ResultadoDoLogin.Bloqueado => Results.Problem(
+                "Usuário bloqueado por excesso de tentativas. Tente de novo mais tarde.", statusCode: StatusCodes.Status423Locked,
+                extensions: usuario?.BloqueadoAteUtc is { } ate
+                    ? new Dictionary<string, object?> { ["codigo"] = CodigosDeRecusa.BloqueadoTemporario, ["bloqueadoAte"] = new DateTimeOffset(DateTime.SpecifyKind(ate, DateTimeKind.Utc)) }
+                    : new Dictionary<string, object?> { ["codigo"] = CodigosDeRecusa.BloqueadoTemporario }),
+            // O bloqueio do admin (ou do gestor) não vence sozinho: sem bloqueadoAte.
+            ResultadoDoLogin.BloqueadoPeloAdmin => Results.Problem(
+                "Usuário bloqueado pelo administrador. Fale com ele para voltar a entrar.", statusCode: StatusCodes.Status423Locked,
+                extensions: new Dictionary<string, object?> { ["codigo"] = CodigosDeRecusa.BloqueadoPeloAdmin }),
+            ResultadoDoLogin.SemAssento => Results.Problem(
+                "A sua empresa não tem assento livre para você. Fale com o gestor.", statusCode: StatusCodes.Status403Forbidden,
+                extensions: new Dictionary<string, object?> { ["codigo"] = CodigosDeRecusa.SemAssento }),
+            _ => Results.Problem("Login ou senha inválidos.", statusCode: StatusCodes.Status401Unauthorized),
+        };
+
     public static void MapearMaquinas(this IEndpointRouteBuilder app)
     {
         // Anônimo NA ROTA, e conferido no corpo: registra quem tem o código de registro configurado,
         // ou o admin autenticado (sem troca pendente).
         // A máquina que JÁ existe só se registra de novo apresentando a chave atual (X-Machine-Key) ou pelo
         // admin; sem ela, 409 — o dev.kit que perdeu a chave se registra como máquina nova, com outro id.
+        // Desde a US #425 o registro com a impressão da máquina devolve também o TRIAL assinado, contado do primeiro
+        // registro daquela impressão — reinstalar o dev.kit não reinicia os 14 dias.
         app.MapPost("/api/maquinas/registrar", async (
-            MachineRegistrationV1 pedido, HttpContext http, ClaimsPrincipal quem, IOptions<OpcoesDeTelemetria> opcoes, IMaquinas maquinas, CancellationToken ct) =>
+            MachineRegistrationV1 pedido, HttpContext http, ClaimsPrincipal quem, IOptions<OpcoesDeTelemetria> opcoes, IMaquinas maquinas, ILicencas licencas,
+            CancellationToken ct) =>
         {
             var maquinaId = (pedido.MaquinaId ?? string.Empty).Trim();
             if (maquinaId.Length is 0 or > 64)
@@ -77,7 +100,8 @@ public static class Endpoints
                 return Results.Problem(
                     "Esta máquina já está registrada: registre de novo com a chave atual (X-Machine-Key), ou registre-se com outro id.",
                     statusCode: StatusCodes.Status409Conflict);
-            return Results.Ok(new MachineRegistrationResponseV1(registro.Chave, registro.Empresa, registro.Adesao));
+            var trial = await maquinas.AutenticarAsync(registro.Chave, ct) is { } maquina ? await licencas.TrialAsync(maquina.Id, pedido.Impressao, ct) : null;
+            return Results.Ok(new MachineRegistrationResponseV1(registro.Chave, registro.Empresa, registro.Adesao, trial));
         }).AllowAnonymous().WithTags("Máquinas");
     }
 
@@ -292,34 +316,32 @@ public static class Endpoints
         {
             FalhaNaGestao.NaoEncontrado => StatusCodes.Status404NotFound,
             FalhaNaGestao.Conflito => StatusCodes.Status409Conflict,
+            FalhaNaGestao.Proibida => StatusCodes.Status403Forbidden,
             _ => StatusCodes.Status400BadRequest,
         });
 
     /// <summary>
     /// As versões do dev.kit (US #405), lidas das GitHub Releases pelo <see cref="IReleasesDoDevKit"/>. A
-    /// última é anônima (a landing e o app a mostram antes do login); o download exige o usuário — a política
-    /// padrão: autenticado e sem troca pendente — e é um PROXY em streaming do zip: o app e a landing nunca
-    /// veem o token do GitHub, nem o endereço do asset.
+    /// última é anônima (a landing e o app a mostram antes do login), e o download também — a US #425 REVERTEU a
+    /// exigência de login da US #405: com o trial de 14 dias quem baixa é quem ainda não tem conta, e a proteção
+    /// passou a ser o limite por IP (<see cref="LimiteDeTaxa.PoliticaDoDownload"/>). Continua um PROXY em streaming
+    /// do zip: o app e a landing nunca veem o token do GitHub, nem o endereço do asset.
     /// </summary>
     public static void MapearVersoes(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/versoes").WithTags("Versões");
 
-        grupo.MapGet("/ultima", async (IReleasesDoDevKit releases, IOptions<OpcoesDeLogin> login, CancellationToken ct) =>
+        grupo.MapGet("/ultima", async (HttpContext http, ClaimsPrincipal quem, IReleasesDoDevKit releases, IMaquinas maquinas, IContas contas, CancellationToken ct) =>
         {
             if (await releases.EstaveisAsync(ct) is not [var ultima, ..])
                 return Indisponivel();
             return Results.Ok(new VersaoV1(
                 ultima.Versao, ultima.Tag, ultima.Nome, ultima.PublicadaEm, ultima.Destaques, ultima.TamanhoBytes, ultima.Sha256,
-                $"/api/versoes/{ultima.Versao}/download", login.Value.Obrigatorio));
+                $"/api/versoes/{ultima.Versao}/download", await EndpointsDaUs425.LoginObrigatorioAsync(http, quem, maquinas, contas, ct)));
         }).AllowAnonymous();
 
-        grupo.MapGet("/{versao:int}/download", async (int versao, HttpContext http, ClaimsPrincipal quem, IUsuarios usuarios, IReleasesDoDevKit releases, CancellationToken ct) =>
+        grupo.MapGet("/{versao:int}/download", async (int versao, HttpContext http, IReleasesDoDevKit releases, CancellationToken ct) =>
         {
-            // O token vale até vencer: o usuário que o admin bloqueou depois não baixa mais.
-            if (Seguranca.UsuarioId(quem) is not { } id || await usuarios.ObterAsync(id, ct) is not { BloqueadoPeloAdmin: false })
-                return Results.Forbid();
-
             if (await releases.EstaveisAsync(ct) is not { Count: > 0 } estaveis)
                 return Indisponivel();
             if (estaveis.FirstOrDefault(r => r.Versao == versao) is not { } release)
@@ -331,14 +353,9 @@ public static class Endpoints
 
             // Os cabeçalhos são NOSSOS (nada do GitHub passa adiante) e o corpo é copiado em streaming:
             // o zip nunca é bufferizado na API.
-            http.Response.StatusCode = StatusCodes.Status200OK;
-            http.Response.ContentType = "application/zip";
-            http.Response.Headers.ContentDisposition = $"attachment; filename=devkit-{versao}.zip";
-            if (pacote.Tamanho is { } tamanho)
-                http.Response.ContentLength = tamanho;
-            await pacote.Conteudo.CopyToAsync(http.Response.Body, ct);
+            await EndpointsDaUs425.Transmitir(http, pacote, $"devkit-{versao}.zip", ct);
             return Results.Empty;
-        }).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
+        }).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoDownload);
     }
 
     /// <summary>O 503 das versões: genérico, sem nada do GitHub (nem o corpo, nem o motivo, nem o token).</summary>

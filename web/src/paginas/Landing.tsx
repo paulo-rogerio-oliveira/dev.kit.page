@@ -5,8 +5,8 @@ import { FormularioDeDemonstracao } from '../componentes/FormularioDeDemonstraca
 import { Midia } from '../componentes/Midia';
 import { Secao } from '../componentes/Secao';
 import {
-  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PRODUTOS_COMPARADOS, RECURSOS,
-  RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA,
+  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS,
+  PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA,
 } from '../conteudo/landing';
 
 /** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca). */
@@ -151,6 +151,17 @@ export function Landing() {
           </div>
         </Secao>
 
+        <Secao id="catalogo" rotulo="Catálogo" titulo={CATALOGO.titulo} subtitulo={CATALOGO.subtitulo} className="secao-tinta">
+          <ul className="grade-cartoes grade-tres">
+            {CATALOGO.itens.map((item) => (
+              <li key={item.titulo} className="cartao"><h3>{item.titulo}</h3><p>{item.texto}</p></li>
+            ))}
+          </ul>
+          <div className="ctas ctas-da-secao">
+            <Cta para="/catalogo" variante="secundario">Ver o catálogo completo</Cta>
+          </div>
+        </Secao>
+
         <Secao id="comparativo" rotulo="Comparativo" titulo="dev.kit e as alternativas" subtitulo="O que pesa para quem trabalha no Azure DevOps, lado a lado.">
           <div className="tabela-rolavel">
             <table className="comparativo">
@@ -200,6 +211,21 @@ export function Landing() {
           <div className="ctas ctas-da-secao">
             <Cta para="#contato">Falar sobre o plano para empresas</Cta>
           </div>
+        </Secao>
+
+        <Secao id="planos" rotulo="Planos" titulo="Planos" subtitulo="Comece com o teste grátis; assine para você ou para o time.">
+          <ul className="grade-cartoes grade-tres planos">
+            {PLANOS.map((plano) => (
+              <li key={plano.id} className="cartao plano" aria-labelledby={`plano-${plano.id}`}>
+                <h3 id={`plano-${plano.id}`}>{plano.nome}</h3>
+                <p>{plano.resumo}</p>
+                <ul>{plano.itens.map((item) => <li key={item}>{item}</li>)}</ul>
+                {plano.id === 'teste' && <BaixarDevKit rotulo="Testar grátis por 14 dias" />}
+                {plano.id === 'individual' && <Cta para="/comprar">Assinar o individual</Cta>}
+                {plano.id === 'empresas' && <Cta para="#contato" variante="secundario">Falar sobre o plano para empresas</Cta>}
+              </li>
+            ))}
+          </ul>
         </Secao>
 
         <Secao id="contato" rotulo="Contato" titulo="Quero uma demonstração" subtitulo="Conte quem você é e o que quer ver: mostramos o dev.kit sobre um work item como os seus." className="secao-tinta">

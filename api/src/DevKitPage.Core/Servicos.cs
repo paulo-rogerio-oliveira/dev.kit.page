@@ -13,6 +13,9 @@ public enum ResultadoDoLogin
 
     /// <summary>O admin bloqueou o usuário (US #405): só sai quando ele desbloqueia.</summary>
     BloqueadoPeloAdmin,
+
+    /// <summary>A empresa do dev não tem assento para ele (US #425): o assento conta por usuário.</summary>
+    SemAssento,
 }
 
 /// <summary>O login e a troca de senha dos usuários do dashboard.</summary>
@@ -30,6 +33,12 @@ public interface IUsuarios
     Task<string> TrocarSenhaAsync(int usuarioId, string senhaAtual, string novaSenha, CancellationToken ct);
 
     Task<Usuario?> ObterAsync(int usuarioId, CancellationToken ct);
+
+    /// <summary>
+    /// Confere se o usuário do token AINDA pode ter um token novo (US #425: a renovação automática do app) — existe, não
+    /// foi bloqueado pelo gestor/admin e tem assento. Sem senha: quem chama já apresentou um token válido.
+    /// </summary>
+    Task<(ResultadoDoLogin Resultado, Usuario? Usuario)> RenovarAsync(int usuarioId, CancellationToken ct);
 }
 
 /// <summary>O que o registro devolve: a chave nova e o desfecho da adesão à empresa (US #381).</summary>
@@ -147,6 +156,9 @@ public enum FalhaNaGestao
 
     /// <summary>A operação fere uma regra (empresa inexistente, o admin bloqueando a si mesmo): 400.</summary>
     Recusada,
+
+    /// <summary>O alvo é de outra empresa, ou de outro autor sem ser o gestor (US #425): 403.</summary>
+    Proibida,
 }
 
 /// <summary>O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem.</summary>
@@ -207,9 +219,19 @@ public sealed class PacoteAberto(Stream conteudo, long? tamanho, IDisposable don
 }
 
 /// <summary>
+/// Uma release do catálogo básico (US #425): a tag <c>catalogo-vN</c>, o zip com os itens e o
+/// <c>manifesto.json</c> anexado ao lado (<see cref="ManifestoAssetId"/>).
+/// </summary>
+public sealed record ReleaseDoCatalogo(
+    int Versao, string Tag, string Nome, DateTimeOffset PublicadaEm, long AssetId, string NomeDoPacote, long TamanhoBytes,
+    string? Sha256, long ManifestoAssetId);
+
+/// <summary>
 /// As releases do dev.kit no GitHub (US #405). O token (<see cref="OpcoesDeAtualizacao.Token"/>) só existe
 /// na API: o app e a landing pedem a versão e o pacote aqui. Nulo é "indisponível" (sem token, GitHub fora
-/// do ar) — a API responde 503 sem repassar nada do GitHub.
+/// do ar) — a API responde 503 sem repassar nada do GitHub. Desde a US #425 as releases do catálogo básico
+/// (<c>catalogo-vN</c>) passam pelo MESMO caminho: o mesmo token, a mesma lista em cache e o mesmo download em
+/// streaming — separadas das do app pela tag.
 /// </summary>
 public interface IReleasesDoDevKit
 {
@@ -218,6 +240,15 @@ public interface IReleasesDoDevKit
 
     /// <summary>Abre o zip da release em streaming; nulo quando o GitHub não o entrega.</summary>
     Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoDevKit release, CancellationToken ct);
+
+    /// <summary>As releases do catálogo básico com o zip e o manifesto, da mais nova para a mais velha; nulo quando indisponível.</summary>
+    Task<IReadOnlyList<ReleaseDoCatalogo>?> CatalogosAsync(CancellationToken ct);
+
+    /// <summary>O manifesto da release do catálogo (em cache pela tag); nulo quando ele não vem ou é inválido.</summary>
+    Task<ManifestoDoCatalogoV1?> ManifestoAsync(ReleaseDoCatalogo release, CancellationToken ct);
+
+    /// <summary>Abre o zip do catálogo em streaming; nulo quando o GitHub não o entrega.</summary>
+    Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoCatalogo release, CancellationToken ct);
 }
 
 /// <summary>A trilha de auditoria do acesso aos dados dos colaboradores (US #381).</summary>

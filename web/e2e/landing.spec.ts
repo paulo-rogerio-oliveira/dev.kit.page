@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 import { garantirSenhaDefinitiva } from './admin';
 import { NOVA_SENHA } from './ambiente';
 
-/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da US #405, com as da US #283 e da US #381). */
-const ORDEM = ['inicio', 'como-funciona', 'beneficios', 'recursos', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'contato', 'faq', 'comecar'];
+/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da US #405, com as da US #283, da US #381 e da US #425). */
+const ORDEM = ['inicio', 'como-funciona', 'beneficios', 'recursos', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar'];
 
 test('landing → seções e vídeo do hero → pedido de demonstração → o admin vê e exclui no dashboard', async ({ page, request }) => {
   const nome = `Visitante E2E ${Date.now()}`;
@@ -24,7 +24,7 @@ test('landing → seções e vídeo do hero → pedido de demonstração → o a
   await expect(page.locator('#recursos video')).toHaveCount(7);
   await expect(page.locator('body')).not.toContainText(/dashboard/i);
   // A API do e2e não tem REPO_KEY: o botão de download diz que está indisponível, sem quebrar a página.
-  await expect(page.getByRole('group', { name: 'Download do dev.kit' })).toContainText('Download indisponível no momento.');
+  await expect(page.getByRole('group', { name: 'Download do dev.kit', exact: true })).toContainText('Download indisponível no momento.');
   await page.screenshot({ path: 'test-results/capturas/10-landing.png', fullPage: true });
 
   // 1b. (US #381) O rodapé chega ao comparativo e às empresas.

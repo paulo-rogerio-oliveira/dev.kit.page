@@ -26,6 +26,18 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDaExportacao = "Exportacao";
 
+    /// <summary>
+    /// A política dos downloads ANÔNIMOS (US #425, a reversão da US #405): o zip do dev.kit e o do catálogo
+    /// básico, por IP do cliente, com <see cref="OpcoesDeAtualizacao.DownloadsPorHora"/> numa janela de uma hora.
+    /// </summary>
+    public const string PoliticaDoDownload = "Download";
+
+    /// <summary>
+    /// A política das escritas anônimas da conta (US #425): a adesão por código, o pedido do link de senha, a
+    /// definição da senha e o checkout — por IP do cliente, com <see cref="OpcoesDaConta.LimitePorMinuto"/>.
+    /// </summary>
+    public const string PoliticaDaConta = "Conta";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -55,6 +67,26 @@ public static class LimiteDeTaxa
                 var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoPainel>>().Value.ExportacoesPorMinuto);
                 var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
                 return RateLimitPartition.GetFixedWindowLimiter("usuario:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDoDownload, http =>
+            {
+                var porHora = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDeAtualizacao>>().Value.DownloadsPorHora);
+                return RateLimitPartition.GetFixedWindowLimiter("download:" + IpDoCliente(http), _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porHora,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaConta, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDaConta>>().Value.LimitePorMinuto);
+                return RateLimitPartition.GetFixedWindowLimiter("conta:" + IpDoCliente(http), _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),

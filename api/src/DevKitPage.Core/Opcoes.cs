@@ -122,6 +122,12 @@ public sealed class OpcoesDeAtualizacao
 
     /// <summary>O token, lido de <see cref="VariavelDoToken"/> na composição. Vazio: a atualização responde 503.</summary>
     public string Token { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Quantos downloads (do dev.kit e do catálogo básico) um mesmo IP faz por hora (US #425): o download é
+    /// anônimo desde a reversão da US #405, e o limite por IP é o que o protege de laço.
+    /// </summary>
+    public int DownloadsPorHora { get; set; } = 20;
 }
 
 /// <summary>A política de login do app (US #405), devolvida ao dev.kit e à landing.</summary>
@@ -139,6 +145,85 @@ public sealed class OpcoesDeLogin
         var texto = (valor ?? string.Empty).Trim();
         return texto == "1" || string.Equals(texto, "true", StringComparison.OrdinalIgnoreCase);
     }
+}
+
+/// <summary>A conta do dev (seção <c>Conta</c>, US #425): a adesão por código e e-mail e o link de definir a senha.</summary>
+public sealed class OpcoesDaConta
+{
+    public const string Secao = "Conta";
+
+    /// <summary>
+    /// A raiz PÚBLICA do site (o Static Web App), de onde sai o link <c>/definir-senha?token=…</c> do e-mail. Vazia,
+    /// o link é relativo — serve ao teste, e o e-mail de verdade precisa dela.
+    /// </summary>
+    public string UrlDoSite { get; set; } = string.Empty;
+
+    /// <summary>Por quantas horas o link de definir a senha vale (uso único).</summary>
+    public int ValidadeDoLinkHoras { get; set; } = 24;
+
+    /// <summary>Quantos pedidos anônimos da conta (adesão, link, senha, checkout) um mesmo IP faz por minuto; acima, 429.</summary>
+    public int LimitePorMinuto { get; set; } = 10;
+}
+
+/// <summary>
+/// O envio de e-mail (seção <c>Email</c>, US #425) por SMTP. Sem <see cref="Host"/>, nada sai: o e-mail vai para o
+/// log (desenvolvimento) — a senha do SMTP vem do Key Vault, como o segredo do JWT.
+/// </summary>
+public sealed class OpcoesDeEmail
+{
+    public const string Secao = "Email";
+
+    public string Host { get; set; } = string.Empty;
+    public int Porta { get; set; } = 587;
+    public bool Ssl { get; set; } = true;
+    public string Usuario { get; set; } = string.Empty;
+    public string Senha { get; set; } = string.Empty;
+    public string Remetente { get; set; } = "dev.kit <nao-responda@devkit.app>";
+}
+
+/// <summary>
+/// A licença assinada do dev.kit (seção <c>Licencas</c>, US #425): Ed25519, com a chave privada no Key Vault
+/// (o segredo <c>Licencas--ChavePrivada</c>, a semente de 32 bytes em base64). A pública vai embutida no app.
+/// </summary>
+public sealed class OpcoesDeLicenca
+{
+    public const string Secao = "Licencas";
+
+    /// <summary>A semente Ed25519 em base64. Vazia: as rotas de licença respondem 503 (o app segue com o que tem).</summary>
+    public string ChavePrivada { get; set; } = string.Empty;
+
+    /// <summary>A validade da licença de quem assina (dias).</summary>
+    public int ValidadeDias { get; set; } = 30;
+
+    /// <summary>O trial, contado da primeira abertura (dias).</summary>
+    public int TrialDias { get; set; } = 14;
+
+    /// <summary>A partir de qual dia da licença atual a renovação vale: antes disto, a renovação é recusada (409).</summary>
+    public int RenovaAPartirDoDia { get; set; } = 7;
+}
+
+/// <summary>
+/// O gateway de pagamento da compra individual (seção <c>Pagamentos</c>, US #425, fase 5). O segredo do webhook vem
+/// do Key Vault; sem ele, o webhook recusa tudo (401).
+/// </summary>
+public sealed class OpcoesDePagamento
+{
+    public const string Secao = "Pagamentos";
+
+    /// <summary>O segredo HMAC-SHA256 com que o gateway assina o aviso (o cabeçalho <c>X-Gateway-Assinatura</c>).</summary>
+    public string SegredoDoWebhook { get; set; } = string.Empty;
+
+    /// <summary>A tolerância do carimbo de tempo da assinatura: o aviso mais velho que isto é recusado (repetição).</summary>
+    public int ToleranciaSegundos { get; set; } = 300;
+
+    /// <summary>
+    /// O checkout do gateway, com <c>{email}</c> e <c>{plano}</c> substituídos. Vazio: o site usa o checkout
+    /// SIMULADO (vai direto a <c>/compra-concluida?simulado=1</c>) — o de desenvolvimento e o do e2e.
+    /// </summary>
+    public string UrlDoCheckout { get; set; } = string.Empty;
+
+    /// <summary>O portal do gateway onde o cliente gerencia a assinatura (o "Gerenciar assinatura" da /conta).</summary>
+    public string UrlDoPortal { get; set; } = string.Empty;
 }
 
 /// <summary>A base embarcada (seção <c>Banco</c>): o provider é configuração, não código.</summary>

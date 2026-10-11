@@ -122,6 +122,13 @@ public static class Seguranca
     /// </summary>
     public static EscopoDoPainel? Escopo(ClaimsPrincipal usuario)
         => EscopoDoPainel.DasClaims(usuario.FindFirstValue("role"), usuario.FindFirstValue(ClaimEmpresa));
+
+    /// <summary>
+    /// O escopo da EMPRESA de quem fez a requisição (US #425) — o do catálogo da empresa e da gestão dela. Nulo é quem
+    /// não tem empresa (o admin, um token torto): a rota responde 403.
+    /// </summary>
+    public static EscopoDaEmpresa? EscopoDaEmpresa(ClaimsPrincipal usuario)
+        => Core.EscopoDaEmpresa.DasClaims(usuario.FindFirstValue("role"), usuario.FindFirstValue(ClaimEmpresa), usuario.FindFirstValue(JwtRegisteredClaimNames.Sub));
 }
 
 /// <summary>Emite o JWT do usuário.</summary>
@@ -138,10 +145,12 @@ public sealed class EmissorDeToken(IOptions<OpcoesDeAutenticacao> opcoes, TimePr
             [JwtRegisteredClaimNames.Sub] = usuario.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [JwtRegisteredClaimNames.Name] = usuario.Login,
         };
-        // O papel (US #381): o admin semeado continua "admin" pelo EhAdmin; o gestor leva a empresa.
+        // O papel (US #381): o admin semeado continua "admin" pelo EhAdmin; o gestor leva a empresa — e, desde a
+        // US #425, o dev também (o catálogo da empresa e a conta são dela). O painel continua fechado ao dev pela
+        // PoliticaPainel e pelo EscopoDoPainel, que é nulo para ele com ou sem a claim.
         var papel = usuario.EhAdmin ? Papeis.Admin : usuario.Papel;
         claims["role"] = papel;
-        if (papel == Papeis.Gestor && usuario.EmpresaId is { } empresa)
+        if (papel is Papeis.Gestor or Papeis.Dev && usuario.EmpresaId is { } empresa)
             claims[Seguranca.ClaimEmpresa] = empresa.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (usuario.DeveTrocarSenha)
             claims[Seguranca.ClaimTrocaPendente] = "true";

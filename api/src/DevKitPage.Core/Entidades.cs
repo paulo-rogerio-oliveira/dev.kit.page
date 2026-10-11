@@ -12,6 +12,12 @@ public sealed class Usuario
     public string Nome { get; set; } = string.Empty;
 
     /// <summary>
+    /// O e-mail (US #425): o dev que aderiu pelo código entra com ele, e é para ele que vai o link de definir a
+    /// senha. Vazio no usuário anterior à adesão (o admin semeado, o gestor convidado). Um e-mail é de UMA empresa.
+    /// </summary>
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>
     /// Um de <c>Papeis</c> (US #381, US #405): <c>admin</c> (o semeado; <see cref="EhAdmin"/> ligado),
     /// <c>gestor</c> (de UMA empresa, <see cref="EmpresaId"/>) ou <c>dev</c> (o usuário do dev.kit, sem
     /// acesso ao painel). É a claim <c>role</c> do token.
@@ -54,6 +60,12 @@ public sealed class Maquina
     public DateTime? UltimoEnvioEmUtc { get; set; }
 
     /// <summary>
+    /// A impressão da instalação do Windows que o dev.kit mandou no registro (US #425) — a chave do
+    /// <see cref="TrialDeMaquina"/>. Vazia no dev.kit antigo.
+    /// </summary>
+    public string Impressao { get; set; } = string.Empty;
+
+    /// <summary>
     /// A empresa a que o colaborador aderiu NO DEV.KIT (US #381), com o código de adesão e o aceite do
     /// aviso de coleta. Nula: a máquina é anônima e não aparece para gestor nenhum.
     /// </summary>
@@ -88,13 +100,31 @@ public sealed class Empresa
     public string Nome { get; set; } = string.Empty;
     public string Plano { get; set; } = string.Empty;
 
-    /// <summary>Quantas máquinas podem aderir; a adesão acima disto é recusada (a máquina fica anônima).</summary>
+    /// <summary>
+    /// Os assentos contratados. Desde a US #425 o assento conta por USUÁRIO: os devs da empresa que o gestor não
+    /// bloqueou (bloquear libera o assento). A adesão da máquina à telemetria continua com o seu teto próprio.
+    /// </summary>
     public int Assentos { get; set; }
 
     /// <summary>Único: o que o colaborador informa no dev.kit para aderir.</summary>
     public string CodigoDeAdesao { get; set; } = string.Empty;
 
     public DateTime CriadaEmUtc { get; set; }
+
+    /// <summary>
+    /// O login obrigatório DESTA empresa (US #425): nulo segue o padrão global (<c>DEVKIT_LOGIN_OBRIGATORIO</c>),
+    /// que deixou de ser a única regra.
+    /// </summary>
+    public bool? LoginObrigatorio { get; set; }
+
+    /// <summary>A empresa de um assento só, criada pela compra individual no site (US #425, fase 5).</summary>
+    public bool Individual { get; set; }
+
+    /// <summary>O id da assinatura no gateway de pagamento (a compra individual); vazio na empresa do admin.</summary>
+    public string AssinaturaExterna { get; set; } = string.Empty;
+
+    /// <summary>Quando o gateway avisou o cancelamento: daí em diante a licença não renova.</summary>
+    public DateTime? AssinaturaCanceladaEmUtc { get; set; }
 }
 
 /// <summary>

@@ -92,13 +92,21 @@ public sealed record BatchResultV1(int Recebidos, int Novos, int Duplicados, int
 /// ACEITAR o aviso de coleta. Nulo (o cliente antigo) não mexe no vínculo; vazio desfaz.
 /// </param>
 /// <param name="Colaborador">Opcional (US #381): o nome que o próprio colaborador informou, compartilhado com o gestor.</param>
+/// <param name="Impressao">
+/// Opcional (US #425): a impressão da instalação do Windows (um hash, nunca o identificador cru) — a chave do trial
+/// de 14 dias, que reinstalar o dev.kit não reinicia. O dev.kit antigo não manda, e não ganha trial assinado.
+/// </param>
 public sealed record MachineRegistrationV1(
-    string MaquinaId, string VersaoDevKit, string CodigoRegistro, string? CodigoEmpresa = null, string? Colaborador = null);
+    string MaquinaId, string VersaoDevKit, string CodigoRegistro, string? CodigoEmpresa = null, string? Colaborador = null, string? Impressao = null);
 
 /// <summary>A chave da máquina — devolvida UMA vez; a API guarda só o hash.</summary>
 /// <param name="Empresa">A empresa a que a máquina ficou vinculada, ou nulo (US #381).</param>
 /// <param name="Adesao">O que aconteceu com o código da empresa, para o dev.kit mostrar ao colaborador.</param>
-public sealed record MachineRegistrationResponseV1(string Chave, string? Empresa = null, string? Adesao = null);
+/// <param name="Trial">
+/// A licença de trial assinada (US #425), contada do PRIMEIRO registro da impressão — nula sem impressão ou sem a
+/// chave de licença configurada na API.
+/// </param>
+public sealed record MachineRegistrationResponseV1(string Chave, string? Empresa = null, string? Adesao = null, LicencaV1? Trial = null);
 
 /// <summary>
 /// Os tipos de evento que o dev.kit envia (o <c>TelemetryEventKind</c> do git.kit, pelo nome).

@@ -27,6 +27,15 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <summary>O PAT de mentira das releases (o <c>REPO_KEY</c> dos testes): nunca pode sair da API.</summary>
     public const string TokenDoGitHub = "ghp_token-de-teste-que-nao-pode-vazar";
 
+    /// <summary>A semente Ed25519 da licença nos testes (US #425) — o vetor 1 do RFC 8032, e nunca a de produção.</summary>
+    public static readonly byte[] SementeDaLicenca = Convert.FromHexString("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+
+    /// <summary>O segredo do webhook do gateway nos testes (US #425).</summary>
+    public const string SegredoDoWebhook = "segredo-do-webhook-de-teste";
+
+    /// <summary>A raiz do site de onde sai o link de definir a senha nos testes (US #425).</summary>
+    public const string UrlDoSite = "https://site.test";
+
     private readonly string _arquivo = Path.Combine(Path.GetTempPath(), $"devkitpage-api-{Guid.NewGuid():N}.db");
     private readonly string _ambiente;
     private readonly bool _comSegredo;
@@ -34,14 +43,18 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly string? _redeConfiavel;
     private readonly string? _repoKey;
     private readonly bool _loginObrigatorio;
+    private readonly bool _comLicenca;
+    private readonly int _downloadsPorHora;
 
     /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
     /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
     /// <param name="repoKey">O <c>REPO_KEY</c> (US #405); nulo é a API sem ele — a atualização responde 503.</param>
     /// <param name="loginObrigatorio">O <c>DEVKIT_LOGIN_OBRIGATORIO</c> (US #405).</param>
+    /// <param name="comLicenca">A chave privada da licença configurada (US #425); sem ela, as rotas de licença respondem 503.</param>
+    /// <param name="downloadsPorHora">O limite de downloads anônimos por IP (US #425).</param>
     public ApiDeTeste(
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
-        string? repoKey = TokenDoGitHub, bool loginObrigatorio = false)
+        string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100)
     {
         _ambiente = ambiente;
         _comSegredo = comSegredo;
@@ -49,10 +62,15 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         _redeConfiavel = redeConfiavel;
         _repoKey = repoKey;
         _loginObrigatorio = loginObrigatorio;
+        _comLicenca = comLicenca;
+        _downloadsPorHora = downloadsPorHora;
     }
 
     /// <summary>O GitHub de mentira por trás do HttpClient das releases: nenhum teste sai para a rede.</summary>
     public GitHubDeMentira GitHub { get; } = new();
+
+    /// <summary>Os e-mails que a API "enviou" (US #425): o falso guarda as mensagens, e o teste lê o link.</summary>
+    public EmailsDeTeste Emails { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -61,7 +79,19 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         // (uma REPO_KEY na máquina de quem roda o teste não muda o resultado).
         builder.UseSetting("REPO_KEY", _repoKey ?? string.Empty);
         builder.UseSetting("DEVKIT_LOGIN_OBRIGATORIO", _loginObrigatorio ? "true" : string.Empty);
-        builder.ConfigureTestServices(s => s.AddHttpClient(ReleasesDoDevKit.NomeDoCliente).ConfigurePrimaryHttpMessageHandler(() => GitHub));
+        builder.ConfigureTestServices(s =>
+        {
+            s.AddHttpClient(ReleasesDoDevKit.NomeDoCliente).ConfigurePrimaryHttpMessageHandler(() => GitHub);
+            s.AddSingleton<DevKitPage.Core.IEnvioDeEmail>(Emails);
+        });
+        // A US #425: a licença assinada com a semente de teste, o webhook do gateway, o site do link e os limites
+        // largos (os testes do limite usam os seus).
+        builder.UseSetting("Licencas:ChavePrivada", _comLicenca ? Convert.ToBase64String(SementeDaLicenca) : string.Empty);
+        builder.UseSetting("Pagamentos:SegredoDoWebhook", SegredoDoWebhook);
+        builder.UseSetting("Pagamentos:UrlDoPortal", "https://gateway.test/portal");
+        builder.UseSetting("Conta:UrlDoSite", UrlDoSite);
+        builder.UseSetting("Conta:LimitePorMinuto", "100");
+        builder.UseSetting("Atualizacao:DownloadsPorHora", _downloadsPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (_redeConfiavel is not null)
             builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
         if (_ipDaConexao is not null)
@@ -160,6 +190,24 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         var novo = (await troca.Content.ReadFromJsonAsync<LoginResponse>())!;
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", novo.Token);
         return (cliente, novo);
+    }
+
+    /// <summary>
+    /// O dev que ADERE pelo código e e-mail (US #425): a adesão, o link do e-mail, a senha definida e o login — o
+    /// cliente volta autenticado (sem troca pendente: a senha é dele desde o início).
+    /// </summary>
+    public async Task<(HttpClient Cliente, LoginResponse Login)> DevPorAdesaoAsync(string codigo, string email)
+    {
+        var anonimo = CreateClient();
+        (await anonimo.PostAsJsonAsync("/api/conta/adesao", new AdesaoV1(codigo, email, $"Nome de {email}"))).EnsureSuccessStatusCode();
+        (await anonimo.PostAsJsonAsync("/api/conta/definir-senha", new DefinirSenhaV1(Emails.TokenPara(email), NovaSenha))).EnsureSuccessStatusCode();
+
+        var cliente = CreateClient();
+        var login = await cliente.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, NovaSenha));
+        login.EnsureSuccessStatusCode();
+        var resposta = (await login.Content.ReadFromJsonAsync<LoginResponse>())!;
+        cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", resposta.Token);
+        return (cliente, resposta);
     }
 
     protected override void Dispose(bool disposing)

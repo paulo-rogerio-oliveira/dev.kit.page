@@ -17,6 +17,12 @@ BEGIN
         [Assentos] int NOT NULL,
         [CodigoDeAdesao] nvarchar(20) NOT NULL,
         [CriadaEmUtc] datetime2 NOT NULL,
+        -- As colunas da US #425 (a política de login e a compra individual): na base que já tem a tabela,
+        -- quem as acrescenta é o Us425.sql.
+        [LoginObrigatorio] bit NULL,
+        [Individual] bit NOT NULL CONSTRAINT [DF_Empresas_Individual] DEFAULT CAST(0 AS bit),
+        [AssinaturaExterna] nvarchar(100) NOT NULL CONSTRAINT [DF_Empresas_AssinaturaExterna] DEFAULT N'',
+        [AssinaturaCanceladaEmUtc] datetime2 NULL,
         CONSTRAINT [PK_Empresas] PRIMARY KEY ([Id])
     );
 END;

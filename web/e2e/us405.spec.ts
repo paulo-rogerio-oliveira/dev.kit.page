@@ -31,24 +31,19 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  const baixar = page.getByRole('group', { name: 'Download do dev.kit' });
+  const baixar = page.getByRole('group', { name: 'Download do dev.kit', exact: true });
   await expect(baixar.getByRole('button', { name: 'Baixar o dev.kit 136' })).toBeVisible();
   await expect(baixar).toContainText('versão 136 · 09/10/2026 · 50,0 MB');
   await page.screenshot({ path: 'test-results/capturas/30-landing-nova.png', fullPage: true });
   await page.locator('#inicio').screenshot({ path: 'test-results/capturas/31-hero-baixar-versao.png' });
 
-  // 2. Sem login, baixar leva ao login; com ele, o zip vem com o Bearer.
-  await baixar.getByRole('button', { name: 'Baixar o dev.kit 136' }).click();
-  await expect(page.getByText('Entre para baixar o dev.kit.')).toBeVisible();
+  // 2. Desde a US #425 o download é ANÔNIMO (a reversão do login da US #405): o zip vem sem o Bearer.
   await garantirSenhaDefinitiva(request);
-  await page.getByLabel('Login').fill('admin');
-  await page.getByLabel('Senha').fill(NOVA_SENHA);
-  await page.getByRole('button', { name: 'Entrar' }).click();
   const arquivo = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Baixar o dev.kit 136' }).click();
+  await baixar.getByRole('button', { name: 'Baixar o dev.kit 136' }).click();
   expect((await arquivo).suggestedFilename()).toBe('devkit-136.zip');
   expect(downloads).toHaveLength(1);
-  expect(downloads[0]).toMatch(/^Bearer /);
+  expect(downloads[0]).toBeNull();
 
   // 3. Uma máquina manda o impasse e o árbitro no contrato v1 — e a API os grava (nenhum ignorado).
   const registro = await request.post(`${API}/api/maquinas/registrar`, { data: { maquinaId: MAQUINA, versaoDevKit: '137', codigoRegistro: CODIGO_DE_REGISTRO } });
@@ -75,7 +70,12 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   expect(envio.status()).toBe(202);
   expect(((await envio.json()) as { ignorados: number }).ignorados).toBe(0);
 
-  // 4. Os cartões Impasses e Árbitro no painel (filtrados pela máquina: os números são os do lote).
+  // 4. Os cartões Impasses e Árbitro no painel (filtrados pela máquina: os números são os do lote) — o painel, sim, pede o login.
+  await page.goto('/login');
+  await page.getByLabel('Login').fill('admin');
+  await page.getByLabel('Senha').fill(NOVA_SENHA);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.waitForURL('**/dashboard');
   await page.goto('/dashboard');
   await page.getByRole('combobox').first().selectOption({ label: 'máquina e2e0maqu (dev.kit 137)' });
   const impasses = page.getByRole('article', { name: 'Impasses' });

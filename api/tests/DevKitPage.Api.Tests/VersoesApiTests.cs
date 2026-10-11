@@ -6,8 +6,9 @@ namespace DevKitPage.Api.Tests;
 
 /// <summary>
 /// As versões do dev.kit pelas GitHub Releases (US #405, #406), de ponta a ponta no processo com o GitHub
-/// de mentira: a última estável anônima, o download autenticado em streaming, o token que vai ao
-/// api.github.com e NUNCA ao cliente nem ao armazenamento, o 503 genérico e o 404.
+/// de mentira: a última estável anônima, o download em streaming — anônimo e limitado por IP desde a US #425,
+/// que reverteu o login exigido pela US #405 —, o token que vai ao api.github.com e NUNCA ao cliente nem ao
+/// armazenamento, o 503 genérico e o 404.
 /// </summary>
 public sealed class VersoesApiTests : IDisposable
 {
@@ -47,13 +48,32 @@ public sealed class VersoesApiTests : IDisposable
         Assert.Single(_api.GitHub.Pedidos, p => p.Endereco.AbsolutePath.EndsWith("/releases", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// A REVERSÃO da US #405 (US #425): com o trial de 14 dias, quem baixa o dev.kit ainda não tem conta — o download
+    /// voltou a ser anônimo, e a proteção é o limite por IP.
+    /// </summary>
     [Fact]
-    public async Task Download_exige_token()
+    public async Task Download_e_anonimo_desde_a_us_425()
     {
         var resposta = await _api.CreateClient().GetAsync("/api/versoes/136/download");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, resposta.StatusCode);
-        Assert.DoesNotContain(_api.GitHub.Pedidos, p => p.Endereco.AbsolutePath.Contains("/assets/", StringComparison.Ordinal));
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        Assert.Equal(_api.GitHub.Zip, await resposta.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Download_anonimo_tem_limite_por_ip()
+    {
+        using var limitada = new ApiDeTeste(downloadsPorHora: 2);
+        var cliente = limitada.CreateClient();
+
+        var respostas = new List<HttpStatusCode>();
+        for (var i = 0; i < 3; i++)
+            respostas.Add((await cliente.GetAsync("/api/versoes/135/download")).StatusCode);
+
+        Assert.Equal(new[] { HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.TooManyRequests }, respostas);
+        // O catálogo divide a mesma cota: é o mesmo download anônimo.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await cliente.GetAsync("/api/catalogo/base/download")).StatusCode);
     }
 
     [Fact]
@@ -159,11 +179,10 @@ public sealed class VersoesApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Dev_baixa_a_versao_e_quem_tem_a_troca_pendente_ou_foi_bloqueado_nao()
+    public async Task Download_nao_depende_do_usuario_nem_da_troca_pendente_desde_a_us_425()
     {
         var admin = await _api.AdminAsync();
         var (dev, login) = await _api.UsuarioAsync(admin, "ana.dev", Papeis.Dev);
-        // Um dev que ainda não trocou a senha temporária: o token dele só abre a troca.
         var criado = (await (await admin.PostAsJsonAsync("/api/usuarios", new UsuarioNovo("bia.dev", "", Papeis.Dev, null))).Content.ReadFromJsonAsync<UsuarioComSenha>())!;
         var comTroca = _api.CreateClient();
         var token = (await (await comTroca.PostAsJsonAsync("/api/auth/login", new LoginRequest("bia.dev", criado.SenhaTemporaria))).Content.ReadFromJsonAsync<LoginResponse>())!.Token;
@@ -171,13 +190,7 @@ public sealed class VersoesApiTests : IDisposable
 
         Assert.Equal(Papeis.Dev, login.Papel);
         Assert.Equal(HttpStatusCode.OK, (await dev.GetAsync("/api/versoes/136/download")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await comTroca.GetAsync("/api/versoes/136/download")).StatusCode);
-
-        // Bloqueado pelo admin depois de entrar: o token ainda vale, mas o download não sai.
-        (await admin.PutAsJsonAsync($"/api/usuarios/{await IdAsync(admin, "ana.dev")}/bloqueio", new BloqueioDoUsuario(true))).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Forbidden, (await dev.GetAsync("/api/versoes/136/download")).StatusCode);
+        // A rota é anônima: o token com a troca pendente não atrapalha (a US #405 o recusava com 403).
+        Assert.Equal(HttpStatusCode.OK, (await comTroca.GetAsync("/api/versoes/136/download")).StatusCode);
     }
-
-    private static async Task<int> IdAsync(HttpClient admin, string login)
-        => (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == login).Id;
 }

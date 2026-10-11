@@ -52,6 +52,31 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("AcessosAosDados", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.AssinaturaDeCatalogo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AssinadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("ItemId", "UsuarioId")
+                        .IsUnique();
+
+                    b.ToTable("AssinaturasDeCatalogo", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AvaliacaoDeEntrega", b =>
                 {
                     b.Property<long>("Id")
@@ -125,6 +150,14 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<int>("Assentos")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("AssinaturaCanceladaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssinaturaExterna")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("CodigoDeAdesao")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -132,6 +165,12 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<DateTime>("CriadaEmUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Individual")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("LoginObrigatorio")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Nome")
                         .IsRequired()
@@ -145,10 +184,39 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssinaturaExterna");
+
                     b.HasIndex("CodigoDeAdesao")
                         .IsUnique();
 
                     b.ToTable("Empresas", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.EventoDePagamento", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("EventoId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecebidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventoId")
+                        .IsUnique();
+
+                    b.ToTable("EventosDePagamento", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>
@@ -258,6 +326,128 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("GruposDeErro", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ItemDeCatalogo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dependencias")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HashAtual")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RetiradoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VersaoAtual")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutorId");
+
+                    b.HasIndex("EmpresaId", "Tipo", "Nome")
+                        .IsUnique();
+
+                    b.ToTable("ItensDeCatalogo", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.LicencaEmitida", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("EmitidaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaquinaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ValidaAteUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MaquinaId", "EmitidaEmUtc");
+
+                    b.ToTable("LicencasEmitidas", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.LinkDeSenha", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiraEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("UsadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("LinksDeSenha", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Maquina", b =>
                 {
                     b.Property<int>("Id")
@@ -287,6 +477,11 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Impressao")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("MaquinaId")
                         .IsRequired()
@@ -514,6 +709,28 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("TotaisDiarios", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.TrialDeMaquina", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Impressao")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("IniciadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Impressao")
+                        .IsUnique();
+
+                    b.ToTable("TrialsDeMaquina", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Usuario", b =>
                 {
                     b.Property<int>("Id")
@@ -534,6 +751,11 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<bool>("EhAdmin")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
@@ -563,12 +785,66 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Email");
+
                     b.HasIndex("EmpresaId");
 
                     b.HasIndex("Login")
                         .IsUnique();
 
                     b.ToTable("Usuarios", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VersaoDeItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("PublicadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId", "Versao")
+                        .IsUnique();
+
+                    b.ToTable("VersoesDeItem", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.AssinaturaDeCatalogo", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ItemDeCatalogo", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.AvaliacaoDeEntrega", b =>
@@ -591,6 +867,47 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Maquina");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ItemDeCatalogo", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", "Autor")
+                        .WithMany()
+                        .HasForeignKey("AutorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Autor");
+
+                    b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.LicencaEmitida", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Maquina", "Maquina")
+                        .WithMany()
+                        .HasForeignKey("MaquinaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Maquina");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.LinkDeSenha", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.Maquina", b =>
@@ -650,6 +967,17 @@ namespace DevKitPage.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VersaoDeItem", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ItemDeCatalogo", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
                 });
 #pragma warning restore 612, 618
         }

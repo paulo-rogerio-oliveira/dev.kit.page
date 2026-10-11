@@ -55,6 +55,13 @@ No App Service, além das variáveis da tabela abaixo:
 | `Atualizacao__Repositorio` | `owner/nome` das releases — padrão `paulo-rogerio-oliveira/git.kit` |
 | `Atualizacao__CacheMinutos` | 5 — por quanto tempo a lista de releases fica em memória (o GitHub limita as chamadas por token) |
 | `DEVKIT_LOGIN_OBRIGATORIO` | `true` (ou `1`) liga a política de login do app (US #405), devolvida em `GET /api/auth/politica` e no `loginObrigatorio` da última versão; ausente, desligada |
+| `Licencas__ChavePrivada` | **Segredo** (US #425): a semente Ed25519 (32 bytes em base64) que assina as licenças. Referência ao Key Vault (`Licencas--ChavePrivada`). A PÚBLICA correspondente está embutida no git.kit (`LicencaAssinada.ChavePublicaDeProducao`): trocar a chave exige um dev.kit novo. Sem ela, a renovação responde 503 e o registro da máquina sai sem o trial assinado (o app conta o trial local) |
+| `Conta__UrlDoSite` | A URL da web, para o link de definir a senha (US #425) |
+| `Email__Host`, `Email__Porta`, `Email__Usuario`, `Email__Remetente` | O SMTP dos e-mails da conta (US #425). Sem `Email__Host`, o e-mail vai só para o log — serve para teste, não para produção |
+| `Email__Senha` | **Segredo**: a senha do SMTP. Referência ao Key Vault (`Email--Senha`) |
+| `Pagamentos__SegredoDoWebhook` | **Segredo** (US #425): o segredo HMAC do webhook do gateway. Referência ao Key Vault (`Pagamentos--SegredoDoWebhook`) |
+| `Pagamentos__UrlDoCheckout`, `Pagamentos__UrlDoPortal` | O checkout e o portal do gateway. Sem o checkout, a compra é SIMULADA (o fluxo conclui na própria página) |
+| `Atualizacao__DownloadsPorHora` | 20 — downloads anônimos do dev.kit por hora por IP (US #425; 429 acima) |
 | `Proxy__RedesConfiaveis__0` | A rede (CIDR) do proxy na frente da API — no Container Apps, a sub-rede do ambiente (ex.: `100.100.0.0/16`, confira em *Networking* do ambiente). Sem ela o `X-Forwarded-For` é ignorado e todos os visitantes dividem a cota do IP do proxy |
 
 Dê à identidade gerenciada da API o papel **Key Vault Secrets User** no cofre.
@@ -149,6 +156,17 @@ API em streaming (sem bufferizar a memória), então o tempo do download conta n
 proxy da plataforma — confira o da sua opção (App Service ou Container Apps) para o tamanho do pacote.
 O workflow `release.yml` do git.kit publica o zip e o `<zip>.sha256` em cada release; prerelease e
 rascunho não são oferecidos.
+
+### Catálogo, conta do dev e licença assinada (US #425)
+
+Rode também `api/scripts/sqlserver/Us425.sql` (idempotente): cria as tabelas do catálogo da empresa, dos
+links de senha, dos trials por impressão de máquina, das licenças emitidas e dos eventos de pagamento, e
+acrescenta as colunas novas a `Usuarios` (`Email`), `Empresas` (política de login, individual, assinatura
+externa e cancelamento) e `Maquinas` (`Impressao`). Sem elas, o login e o registro de máquina falham com 500.
+
+Antes de publicar, crie no Key Vault os segredos `Licencas--ChavePrivada` (a chave privada de produção,
+gerada uma vez e NUNCA versionada), `Email--Senha` e `Pagamentos--SegredoDoWebhook`, e configure as variáveis
+da tabela acima. O download do dev.kit passa a ser anônimo: confira o `Atualizacao__DownloadsPorHora`.
 
 ## Web
 

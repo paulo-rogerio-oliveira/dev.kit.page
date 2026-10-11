@@ -336,10 +336,14 @@ public static partial class RegrasDeVersao
 
     /// <summary>
     /// A versão do dev.kit da tag: <c>v136</c> é 136, a legada <c>v1.2.3</c> é 1. Nula para a tag ilegível
-    /// (<c>latest</c>, <c>v1.2.3-beta</c>, <c>v0</c>) — que fica fora da lista, em vez de virar a "última".
+    /// (<c>latest</c>, <c>v1.2.3-beta</c>, <c>v0</c>) — que fica fora da lista, em vez de virar a "última". A tag
+    /// do catálogo básico (<c>catalogo-vN</c>, US #425) é recusada EXPLICITAMENTE: o catálogo publica no mesmo
+    /// repositório, e uma regex mais frouxa amanhã não pode transformá-lo na versão do app.
     /// </summary>
     public static int? Versao(string? tag)
     {
+        if (RegrasDoCatalogoBase.EhDoCatalogo(tag))
+            return null;
         var lido = Tag().Match((tag ?? string.Empty).Trim());
         return lido.Success && int.TryParse(lido.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var versao) && versao > 0
             ? versao
