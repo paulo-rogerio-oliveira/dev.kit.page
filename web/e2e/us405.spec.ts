@@ -21,8 +21,9 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Authorization, Accept', 'Access-Control-Expose-Headers': 'Content-Disposition' };
   const downloads: (string | null)[] = [];
   await page.route(`${API}/api/versoes/ultima`, (rota) => rota.fulfill({ json: VERSAO, headers: cors }));
-  await page.route(`${API}/api/versoes/136/download`, async (rota) => {
-    if (rota.request().method() === 'OPTIONS') return rota.fulfill({ status: 204, headers: cors });
+  // O alias PERMANENTE (US #467 · task #471): é o endereço do link, e não o /136/download. A rota é do CONTEXTO, e
+  // não só da página: o passo 2b cola o endereço numa aba nova, que tem de cair nela também.
+  await page.context().route(`${API}/api/versoes/ultima/download`, async (rota) => {
     downloads.push(rota.request().headers().authorization ?? null);
     return rota.fulfill({
       body: Buffer.from([80, 75, 5, 6, ...new Array<number>(18).fill(0)]),
@@ -32,18 +33,32 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   const baixar = page.getByRole('group', { name: 'Download do dev.kit', exact: true });
-  await expect(baixar.getByRole('button', { name: 'Baixar o dev.kit 136' })).toBeVisible();
+  const link = baixar.getByRole('link', { name: 'Baixar o dev.kit versão 136' });
+  await expect(link).toBeVisible();
   await expect(baixar).toContainText('versão 136 · 09/10/2026 · 50,0 MB');
+  // A URL de verdade: no href (o "Copiar endereço do link") e escrita na página, para colar na barra.
+  const endereco = `${API}/api/versoes/ultima/download`;
+  await expect(link).toHaveAttribute('href', endereco);
+  await expect(baixar.locator('code')).toHaveText(endereco);
+  await link.hover();
   await page.screenshot({ path: 'test-results/capturas/30-landing-nova.png', fullPage: true });
   await page.locator('#inicio').screenshot({ path: 'test-results/capturas/31-hero-baixar-versao.png' });
 
-  // 2. Desde a US #425 o download é ANÔNIMO (a reversão do login da US #405): o zip vem sem o Bearer.
+  // 2. Desde a US #425 o download é ANÔNIMO (a reversão do login da US #405): o zip vem sem o Bearer. Clicar no
+  // link é NAVEGAR até o endereço — o mesmo que colá-lo na barra —, e o navegador baixa o zip.
   await garantirSenhaDefinitiva(request);
   const arquivo = page.waitForEvent('download');
-  await baixar.getByRole('button', { name: 'Baixar o dev.kit 136' }).click();
+  await link.click();
   expect((await arquivo).suggestedFilename()).toBe('devkit-136.zip');
   expect(downloads).toHaveLength(1);
   expect(downloads[0]).toBeNull();
+
+  // 2b. Colar o endereço numa aba nova baixa do mesmo jeito: é uma URL, não um blob: passageiro.
+  const aba = await page.context().newPage();
+  const colado = aba.waitForEvent('download');
+  await aba.goto(endereco).catch(() => undefined); // a navegação que vira download "aborta" o goto
+  expect((await colado).suggestedFilename()).toBe('devkit-136.zip');
+  await aba.close();
 
   // 3. Uma máquina manda o impasse e o árbitro no contrato v1 — e a API os grava (nenhum ignorado).
   const registro = await request.post(`${API}/api/maquinas/registrar`, { data: { maquinaId: MAQUINA, versaoDevKit: '137', codigoRegistro: CODIGO_DE_REGISTRO } });
@@ -77,7 +92,7 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   await page.getByRole('button', { name: 'Entrar' }).click();
   await page.waitForURL('**/dashboard');
   await page.goto('/dashboard');
-  await page.getByRole('combobox').first().selectOption({ label: 'máquina e2e0maqu (dev.kit 137)' });
+  await page.getByRole('combobox').first().selectOption({ label: 'máquina e2e0maqu (dev.kit versão 137)' });
   const impasses = page.getByRole('article', { name: 'Impasses' });
   await expect(impasses.getByTestId('kpi-Impasses detectados')).toHaveText('2');
   await expect(impasses.getByTestId('kpi-Tempo médio parado')).toHaveText('27,5 min');

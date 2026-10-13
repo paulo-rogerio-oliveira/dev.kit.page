@@ -118,7 +118,10 @@ export interface VersaoDoDevKit {
   destaques: string[];
   tamanhoBytes: number;
   sha256: string | null;
-  /** A rota da API que entrega o zip — autenticada (Bearer). */
+  /**
+   * A rota da API que entrega o zip DESTA versão — anônima desde a US #425, com limite por IP. A landing aponta para
+   * o alias permanente `/api/versoes/ultima/download` (US #467), que segue a última versão.
+   */
   urlDownload: string;
   loginObrigatorio: boolean;
 }

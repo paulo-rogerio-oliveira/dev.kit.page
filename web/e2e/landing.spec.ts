@@ -2,26 +2,49 @@ import { expect, test } from '@playwright/test';
 import { garantirSenhaDefinitiva } from './admin';
 import { NOVA_SENHA } from './ambiente';
 
-/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da US #405, com as da US #283, da US #381 e da US #425). */
-const ORDEM = ['inicio', 'como-funciona', 'beneficios', 'recursos', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar'];
+/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da home da US #467). */
+const ORDEM = ['inicio', 'como-funciona', 'recursos', 'beneficios', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar'];
 
-test('landing → seções e vídeo do hero → pedido de demonstração → o admin vê e exclui no dashboard', async ({ page, request }) => {
+/** A home inteira nas quatro combinações da entrega (US #467): desktop e celular, claro e escuro. */
+test('a home da proposta (US #467) em desktop e celular, nos temas claro e escuro', async ({ page }) => {
+  for (const [tela, largura, altura] of [['desktop', 1440, 900], ['celular', 390, 844]] as const) {
+    for (const tema of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width: largura, height: altura });
+      await page.emulateMedia({ colorScheme: tema, reducedMotion: 'reduce' });
+      await page.goto('/');
+      await expect(page.locator('#recursos article')).toHaveCount(4);
+      // Com menos movimento entra o poster (o primeiro quadro): a captura não depende do vídeo carregar.
+      await expect(page.locator('#recursos .janela img')).toHaveCount(4);
+      await page.screenshot({ path: `test-results/capturas/16-home-${tela}-${tema === 'light' ? 'claro' : 'escuro'}.png`, fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.locator('#recursos').screenshot({ path: 'test-results/capturas/17-recursos.png' });
+});
+
+test('landing → seções e recursos da proposta → pedido de demonstração → o admin vê e exclui no dashboard', async ({ page, request }) => {
   const nome = `Visitante E2E ${Date.now()}`;
 
-  // 1. A landing de venda, na ordem do critério 1, com o vídeo do hero.
+  // 1. A landing de venda, na ordem da proposta da home (US #467).
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
   await expect(page.locator('main > section')).toHaveCount(ORDEM.length);
   expect(await page.locator('main > section').evaluateAll((secoes) => secoes.map((s) => s.id))).toEqual(ORDEM);
-  // (US #405) O hero da proposta: o selo, a amostra do Board com a nota; o vídeo do fluxo foi para "Como funciona".
+  // O hero da proposta: o selo e a amostra do Board com a nota. "Como funciona" ficou só com as sete etapas.
   await expect(page.locator('#inicio')).toContainText('Para times no Azure DevOps');
   await expect(page.getByRole('img', { name: /Amostra do Board/ })).toBeVisible();
-  const videoDoFluxo = page.locator('#como-funciona video');
-  await expect(videoDoFluxo).toHaveAttribute('poster', '/midia/hero.jpg');
-  await videoDoFluxo.scrollIntoViewIfNeeded();
-  await expect(videoDoFluxo.locator('source[type="video/webm"]')).toHaveAttribute('src', '/midia/hero.webm');
   await expect(page.locator('#como-funciona ol > li')).toHaveCount(7);
-  await expect(page.locator('#recursos video')).toHaveCount(7);
+  await expect(page.locator('#como-funciona video')).toHaveCount(0);
+  // Os quatro recursos, com as abas 01–04: a aba leva ao bloco, e a mídia toca dentro da moldura de janela.
+  await expect(page.locator('#recursos video')).toHaveCount(4);
+  await page.getByRole('navigation', { name: 'Recursos em destaque' }).getByRole('link', { name: '03 Cherry-pick' }).click();
+  await expect(page).toHaveURL(/#recurso-replicacao$/);
+  const cherryPick = page.locator('#recurso-replicacao');
+  await expect(cherryPick.locator('.janela-barra')).toHaveText('dev.kit - Cherry-pick');
+  await expect(cherryPick.locator('figcaption')).toHaveText('Marque os commits a replicar');
+  await expect(cherryPick.locator('video source[type="video/webm"]')).toHaveAttribute('src', '/midia/replicacao.webm');
   await expect(page.locator('body')).not.toContainText(/dashboard/i);
   // A API do e2e não tem REPO_KEY: o botão de download diz que está indisponível, sem quebrar a página.
   await expect(page.getByRole('group', { name: 'Download do dev.kit', exact: true })).toContainText('Download indisponível no momento.');

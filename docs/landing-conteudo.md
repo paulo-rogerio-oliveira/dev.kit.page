@@ -71,24 +71,27 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
 
 ## Roteiro das mídias
 
-Todas em 1280×720, 24 fps, muted e em loop, com o poster no quadro zero (que já mostra a primeira
-legenda e o primeiro destaque — é o que aparece com *prefers-reduced-motion*). As telas são as
-capturas do modo `--screenshots` do git.kit, com **dados de demonstração** (nenhum dado de cliente);
-as cenas de terminal reproduzem o formato da saída do `devcli` sobre o mesmo work item fictício
-(#1234). O roteiro executável é [`web/midia/roteiro.mjs`](../web/midia/roteiro.mjs).
+Todas em 1280×720, 24 fps, muted e em loop, com o poster no quadro zero (que já mostra o primeiro
+destaque — é o que aparece com *prefers-reduced-motion*). As telas são as capturas do modo
+`--screenshots` do git.kit, com **dados de demonstração** (nenhum dado de cliente). O roteiro executável
+é [`web/midia/roteiro.mjs`](../web/midia/roteiro.mjs).
 
-| Mídia | Duração | Cenário e o que aparece | Texto alternativo (resumo) |
+**Desde a US #467 (a proposta da home)** a home tem só os QUATRO recursos da proposta, cada um com a
+mídia numa moldura de janela do app ("dev.kit - Agente") e a **legenda abaixo dela, na página** — o
+vídeo não tem mais legenda sobreposta: fica só a tela do app, o destaque e o cursor. O vídeo do fluxo
+(`hero`) saiu do "Como funciona", e `agendamento`, `depurador` e `devcli` saíram da home (os recursos
+continuam no comparativo e nas integrações); as mídias e as capturas que deixaram de ser usadas
+saíram de `public/`, e o `landing.test.ts` confere que o roteiro e a pasta só têm as que a home usa.
+
+| Mídia | Duração | Cenário e o que aparece | Legenda na página |
 |---|---|---|---|
-| `hero` | 15 s | Board (work item) → agente (suíte verde) → Atividades (pronto para enviar) → terminal com commit, push e PR #42 | O work item vira task, o agente trabalha, o avaliador dá a nota e o trabalho segue para a PR |
-| `agente` | 12 s | Pedido de comando (Permitir sempre) → suíte verde → mensagem de commit para aprovar | O agente pede a compilação, roda os testes e propõe o commit |
-| `fluxos` | 12 s | Abas de estado → task em execução → task pronta para enviar | As tasks do fluxo em execução, aguardando e prontas para enviar |
-| `replicacao` | 12 s | Branches de origem/destino → commits marcados → Replicar selecionados | A tela de cherry-pick com os commits marcados |
-| `agendamento` | 12 s | Expressão cron → Executar agora → atividades recentes | Os agendamentos com cron, próxima execução e Executar agora |
-| `depurador` | 12 s | Terminal: `devcli depurar --parar Pedido.cs:142 --valores` → pilha → valores | O alvo para no ponto e a saída mostra a pilha e os valores |
-| `devcli` | 12 s | Terminal: `devcli workitem` → `workitem-alterar` simulado → `--aplicar` | Consulta o work item e simula antes de gravar |
-| `board` | 12 s | Work item → repositórios e branches → horas de hoje | O work item com os repositórios, o branch e as horas |
+| `agente` | 12 s | Pedido de comando (Permitir sempre) → suíte verde → mensagem de commit para aprovar | Propõe o commit com Ab#1234 — e você aprova |
+| `fluxos` | 12 s | Abas de estado → task em execução → task pronta para enviar | Com a nota mínima de cada avaliador, o trabalho segue para o push |
+| `replicacao` | 12 s | Branches de origem/destino → commits marcados → Replicar selecionados | Marque os commits a replicar |
+| `board` | 12 s | Board: horas de hoje → hoje/ontem/semanal/mensal → os work items do "Precisa de você" (captura `tela-board.png`, a `tela-board-precisa-de-voce` do gerador) | Horas de hoje, já rateadas |
 
-O texto alternativo completo de cada uma está no campo `alt` da mídia em `landing.ts`.
+O texto alternativo completo de cada uma está no campo `alt` da mídia em `landing.ts`, e a legenda no
+campo `legenda` do recurso.
 
 ## Regravar as mídias (a cada versão do produto)
 

@@ -158,11 +158,13 @@ export const api = {
     chamar<GestorCriado>(`/api/empresas/${empresa}/gestores`, { metodo: 'POST', corpo: { login }, token }),
 
   // A versão do dev.kit (US #405): a última é anônima, e o zip também desde a US #425 (a reversão do login
-  // da US #405, com o trial de 14 dias). Segue por fetch e blob: o nome do arquivo vem da API.
+  // da US #405, com o trial de 14 dias).
   ultimaVersao: () => chamar<VersaoDoDevKit>('/api/versoes/ultima'),
 
-  baixarVersao: (versao: VersaoDoDevKit) =>
-    baixar(versao.urlDownload, undefined, `devkit-${versao.versao}.zip`),
+  // O endereço ABSOLUTO do zip da última versão (US #467 · task #471), para o href do link: o alias permanente da
+  // API, e não o /{N}/download, para que a URL copiada continue valendo na próxima versão. Sem VITE_API_URL (a
+  // mesma origem), o endereço é completado pela página — o que se copia tem de colar em outra aba.
+  enderecoDoDownload: () => new URL(`${baseDaApi}/api/versoes/ultima/download`, window.location.href).href,
 
   // O catálogo (US #425): a vitrine pública do básico e o catálogo da empresa.
   vitrine: () => chamar<Vitrine>('/api/catalogo/base/vitrine'),

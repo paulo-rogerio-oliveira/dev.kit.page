@@ -16,11 +16,21 @@ export interface Midia {
   altura: number;
 }
 
-/** Um recurso do dev.kit: o texto vem do README e do manual do git.kit. */
+/**
+ * Um recurso do dev.kit (US #467, a proposta da home): o número e o rótulo curto da aba (01–04), o texto com os
+ * marcadores, a mídia numa moldura de janela do app ("dev.kit - Agente") e a legenda curta abaixo dela — a
+ * legenda saiu de cima do vídeo e veio para a página.
+ */
 export interface Recurso {
   id: string;
+  numero: string;
+  aba: string;
   titulo: string;
   texto: string;
+  marcadores: string[];
+  /** A tela do app mostrada na moldura (o título da janela: "dev.kit - {janela}"). */
+  janela: string;
+  legenda: string;
   midia: Midia;
 }
 
@@ -78,16 +88,20 @@ function midia(nome: string, alt: string, captura?: string): Midia {
   };
 }
 
+/** O título da moldura de janela do app ("dev.kit - Agente"), o mesmo na amostra do hero e nos recursos. */
+export const tituloDaJanela = (tela: string) => `dev.kit - ${tela}`;
+
 /**
- * As seções, NA ORDEM da página — a landing e o teste usam esta lista. Desde a US #405 a ordem segue a
- * proposta visual: hero → como funciona (as sete etapas) → por que o dev.kit (os três cartões) → o que a
- * página já tinha (recursos, comparativo, integrações, segurança, empresas, contato, FAQ) → o CTA escuro.
+ * As seções, NA ORDEM da página — a landing e o teste usam esta lista. A ordem segue a proposta da home
+ * (US #467): hero → como funciona (as sete etapas) → recursos (as quatro demonstrações) → por que o dev.kit
+ * (os três cartões) → as seções que o menu, o rodapé e o "Quero uma demonstração" apontam (catálogo,
+ * comparativo, integrações, segurança, empresas, planos, contato, FAQ) → o CTA escuro.
  */
 export const SECOES: SecaoDaLanding[] = [
   { id: 'inicio', rotulo: 'Início' },
   { id: 'como-funciona', rotulo: 'Como funciona' },
-  { id: 'beneficios', rotulo: 'Por que o dev.kit' },
   { id: 'recursos', rotulo: 'Recursos' },
+  { id: 'beneficios', rotulo: 'Por que o dev.kit' },
   { id: 'catalogo', rotulo: 'Catálogo' },
   { id: 'comparativo', rotulo: 'Comparativo' },
   { id: 'integracoes', rotulo: 'Integrações' },
@@ -115,11 +129,6 @@ export const HERO = {
   destaque: 'Pull Request',
   texto:
     'O dev.kit clona os repositórios, implementa, compila e testa com as regras do seu time. Cada entrega passa por avaliadores com nota mínima antes do commit, do push e do PR. Você acompanha e aprova.',
-  midia: midia(
-    'hero',
-    'Demonstração do dev.kit: um work item do board vira uma task, o agente trabalha nos repositórios, o avaliador dá a nota e o trabalho segue para o commit e a Pull Request.',
-    '/capturas/tela-agente.png',
-  ),
 };
 
 /**
@@ -127,7 +136,7 @@ export const HERO = {
  * que espera o dev, a nota do avaliador e as horas do dia. Dados de demonstração, como as mídias.
  */
 export const AMOSTRA_DO_BOARD = {
-  titulo: 'dev.kit · Board',
+  titulo: tituloDaJanela('Board'),
   precisaDeVoce: [
     { titulo: 'US #393 — Agente: diretório de trabalho e multimídia', estado: 'pronto para revisão · PR aberta', acao: 'Aprovar' },
     { titulo: 'Fluxo “planejar e executar”', estado: 'aguardando interação', acao: 'Abrir' },
@@ -137,12 +146,16 @@ export const AMOSTRA_DO_BOARD = {
   horas: { titulo: 'Horas de hoje', texto: '8h rateadas em 4 work items', partes: [40, 28, 16, 16] },
 };
 
-/** O cabeçalho de "Como funciona" e de "Por que o dev.kit" (o rótulo pequeno acima do título). */
+/** O cabeçalho de "Como funciona", de "Recursos" e de "Por que o dev.kit" (o rótulo pequeno acima do título). */
 export const CABECALHOS = {
   comoFunciona: {
     rotulo: 'Como funciona',
     titulo: 'Do work item à Pull Request, em sete etapas',
     subtitulo: 'O agente faz o trabalho repetitivo. A decisão final é sua.',
+  },
+  recursos: {
+    rotulo: 'Recursos',
+    titulo: 'Cada recurso com a sua demonstração',
   },
   porQue: {
     rotulo: 'Por que o dev.kit',
@@ -191,55 +204,69 @@ export const PASSOS: Passo[] = [
   { titulo: 'Pull Request', texto: 'Você revisa e aprova.' },
 ];
 
+/**
+ * Os QUATRO recursos da home (US #467, a proposta): as abas 01–04 apontam para eles, e cada um traz a mídia
+ * gravada do app atual (web/midia/roteiro.mjs) sem legenda sobreposta — a legenda é a deste arquivo, abaixo
+ * da moldura. Agendamento, depurador e devcli saíram da home: continuam no comparativo e nas integrações.
+ */
 export const RECURSOS: Recurso[] = [
   {
     id: 'agente',
+    numero: '01',
+    aba: 'O agente sobre a task',
     titulo: 'O agente sobre a sua task',
     texto:
-      'Escolha a US ou o Bug da iteração (ou uma tarefa avulsa), marque os repositórios e descreva o que precisa ser feito. O dev.kit clona cada repositório lado a lado, cria o branch, grava as regras, as skills e o conhecimento comum na pasta da task e roda a CLI do agente — claude, kiro, kimi ou glm — turno a turno, até o commit, o push e a Pull Request.',
+      'Escolha a US, o Bug ou uma tarefa avulsa, marque os repositórios e descreva o que precisa ser feito. O agente trabalha turno a turno até o commit, o push e a Pull Request.',
+    marcadores: [
+      'Clona cada repositório lado a lado e cria o branch',
+      'Grava as regras, as skills e o conhecimento comum na pasta da task',
+      'Roda a CLI que você escolher: Claude, Kiro, Kimi ou GLM',
+    ],
+    janela: 'Agente',
+    legenda: 'Propõe o commit com Ab#1234 — e você aprova',
     midia: midia('agente', 'O agente pede para executar a compilação, roda a suíte de testes e propõe a mensagem de commit para aprovação.', '/capturas/tela-agente.png'),
   },
   {
     id: 'fluxos',
+    numero: '02',
+    aba: 'Fluxos com avaliadores',
     titulo: 'Fluxos com avaliadores, gatilhos e objetivo',
     texto:
-      'Encadeie agentes num fluxo: um planeja, outro implementa e os avaliadores dão nota ao trabalho. Gatilhos ligam as etapas — ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar — e cada agente recebe os parâmetros do fluxo. O objetivo só é aceito com a nota mínima de cada avaliador, dada depois da última alteração; o teto de rodadas para o fluxo em impasse e chama você. Exporte e importe os fluxos para levá-los a outro time.',
+      'Encadeie agentes num fluxo: um planeja, outro implementa e os avaliadores dão nota ao trabalho. Exporte e importe fluxos para levá-los a outro time.',
+    marcadores: [
+      'Gatilhos ligam as etapas: ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar',
+      'O objetivo só é aceito com a nota mínima de cada avaliador, dada depois da última alteração',
+      'Um teto de rodadas para o fluxo em impasse e chama você',
+    ],
+    janela: 'Atividades',
+    legenda: 'Com a nota mínima de cada avaliador, o trabalho segue para o push',
     midia: midia('fluxos', 'A aba Atividades com as tasks do fluxo em execução, aguardando interação e prontas para enviar.', '/capturas/tela-atividades.png'),
   },
   {
     id: 'replicacao',
+    numero: '03',
+    aba: 'Cherry-pick',
     titulo: 'Cherry-pick e replicação de branch',
-    texto:
-      'Replique commits entre branches numa cópia temporária, sem trocar o branch do seu projeto: por cherry-pick ou por integração de diff. Conflito que o git não resolve abre o TortoiseGitMerge arquivo por arquivo.',
+    texto: 'Replique commits entre branches numa cópia temporária, sem trocar o branch do seu projeto.',
+    marcadores: [
+      'Por cherry-pick ou por integração de diff',
+      'Conflito que o git não resolve abre no TortoiseGitMerge, arquivo por arquivo',
+    ],
+    janela: 'Cherry-pick',
+    legenda: 'Marque os commits a replicar',
     midia: midia('replicacao', 'A tela de cherry-pick: o repositório, os branches de origem e destino e os commits marcados para replicar.', '/capturas/tela-cherry-pick.png'),
   },
   {
-    id: 'agendamento',
-    titulo: 'Agendamento sem ninguém na frente da tela',
-    texto:
-      'Agende uma task por cron: o serviço do Windows roda o mesmo pipeline às três da manhã, com as permissões do agente liberadas e os comandos pedidos executados automaticamente.',
-    midia: midia('agendamento', 'Os agendamentos do board, com a expressão cron, a próxima execução e o botão Executar agora.', '/capturas/tela-agendamentos.png'),
-  },
-  {
-    id: 'depurador',
-    titulo: 'Depurador sem tela',
-    texto:
-      'O agente colhe evidência antes de teorizar: roda o alvo sob o depurador do dev.kit, para no ponto combinado e devolve a pilha e os valores de cada quadro — ou você depura na aba Depuração, com os mesmos pontos de parada.',
-    midia: midia('depurador', 'O agente roda devcli depurar: o alvo para no ponto combinado e a saída mostra a pilha e os valores das variáveis.'),
-  },
-  {
-    id: 'devcli',
-    titulo: 'devcli: o dev.kit nas mãos do agente',
-    texto:
-      'O lado do board voltado ao agente: consulta e altera work items, comenta, anexa, planeja as tasks, lança as horas e mede o próprio uso. Usa o mesmo banco e as mesmas credenciais do app — o agente nunca vê o token — e o que grava simula por padrão.',
-    midia: midia('devcli', 'O agente consulta um work item com devcli workitem e simula a mudança de estado antes de aplicar.', '/capturas/tela-principal.png'),
-  },
-  {
     id: 'board',
-    titulo: 'Board e horas',
+    numero: '04',
+    aba: 'Horas',
+    titulo: 'Horas lançadas sozinhas',
     texto:
-      'Os work items da iteração em cartões, o plano técnico, os repositórios e o branch da task num lugar só — e as horas do dia lançadas nos itens trabalhados, rateadas pelos turnos do agente.',
-    midia: midia('board', 'O work item no board com os repositórios da task, o branch de cada um e as horas lançadas no dia.', '/capturas/tela-user-stories.png'),
+      'As horas do dia vão para os work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — sem planilha no fim do dia.',
+    marcadores: ['Rateio por turnos do agente', 'Divisão entre as tasks filhas'],
+    janela: 'Board',
+    legenda: 'Horas de hoje, já rateadas',
+    midia: midia('board', 'O Board com as horas de hoje lançadas, os períodos de hoje a mensal e os work items trabalhados que esperam por você.', '/capturas/tela-board.png'),
   },
 ];
 
