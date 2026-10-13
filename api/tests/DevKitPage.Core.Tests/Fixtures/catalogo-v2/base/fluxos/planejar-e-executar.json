@@ -1,0 +1,521 @@
+{
+  "formato": "devkit-fluxo",
+  "versao": 1,
+  "nome": "planejar e executar",
+  "descricao": "planeja (cria o work item e as tasks, avaliado), e ao cumprir o objetivo abre a task que implementa",
+  "desenho": {
+    "nodes": [
+      {
+        "id": "task",
+        "kind": "Task",
+        "title": "Task",
+        "caption": "Planejar o work item",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 40
+      },
+      {
+        "id": "e1",
+        "kind": "Step",
+        "title": "criar-workitem",
+        "caption": "Criar o work item",
+        "skillName": "criar-workitem",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 332,
+        "y": 40
+      },
+      {
+        "id": "e2",
+        "kind": "Step",
+        "title": "planejar-tasks",
+        "caption": "Planejar as tasks filhas",
+        "skillName": "planejar-tasks",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 632,
+        "y": 40
+      },
+      {
+        "id": "a1",
+        "kind": "Agent",
+        "title": "Avaliador do planejamento",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "Avalie o PLANEJAMENTO da task que te acionou: o work item criado descreve o que foi pedido (o pedido.md da entrega dela), e as tasks filhas cobrem o trabalho, com testes, reuso e arquitetura previstos (os Tech Plans deste bloco). Dê a nota de 0 a 100 dizendo o que falta.",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": true,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 344,
+        "y": 198
+      },
+      {
+        "id": "n1",
+        "kind": "Agent",
+        "title": "Implementador",
+        "caption": "Implementar o item planejado",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "Implemente o work item criado pela task de planejamento — o número está no resumo da entrega dela (o caminho vem abaixo) — seguindo as tasks filhas planejadas (devcli workitem --id N). Antes de começar, vincule esta task ao item (devcli vincular --id N), para as horas e o board contarem para ele. Utilize a skill de enviar para enviar o que foi implementado",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": true,
+        "criterio": "O work item está implementado como as tasks planejadas pedem, compila, os testes passam, a arquitetura e o reuso seguem os Tech Plans, e a entrega tem os logs, os diffs e as capturas.",
+        "techPlanId": 0,
+        "x": 368,
+        "y": 447
+      },
+      {
+        "id": "a2",
+        "kind": "Agent",
+        "title": "Avaliador da implementação",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "Avalie o que a task de implementação ENVIOU — em cada repositório, no branch dele — contra o objetivo dela e as tasks planejadas: compila, os testes passam, segue os Tech Plans deste bloco (testes, reuso, arquitetura) e não deixa pendência. Dê a nota de 0 a 100 dizendo o que falta.",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": true,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 700,
+        "y": 470
+      },
+      {
+        "id": "p1",
+        "kind": "TechPlan",
+        "title": "planejamento",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 300
+      },
+      {
+        "id": "p2",
+        "kind": "TechPlan",
+        "title": "avaliar testes",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 898,
+        "y": 78
+      },
+      {
+        "id": "p3",
+        "kind": "TechPlan",
+        "title": "avaliar reuso",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 900,
+        "y": 170
+      },
+      {
+        "id": "p4",
+        "kind": "TechPlan",
+        "title": "avaliar arquitetura",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 900,
+        "y": 280
+      },
+      {
+        "id": "p5",
+        "kind": "TechPlan",
+        "title": "logs",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 120,
+        "y": 690
+      },
+      {
+        "id": "p6",
+        "kind": "TechPlan",
+        "title": "diffs",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 380,
+        "y": 690
+      },
+      {
+        "id": "p7",
+        "kind": "TechPlan",
+        "title": "Screenshots",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 640,
+        "y": 690
+      },
+      {
+        "id": "p9",
+        "kind": "TechPlan",
+        "title": "build mínimo",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 332,
+        "y": 308
+      },
+      {
+        "id": "p12",
+        "kind": "TechPlan",
+        "title": "testes mínimos",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 601,
+        "y": 329
+      }
+    ],
+    "links": [
+      {
+        "from": "task",
+        "fromPort": "next",
+        "to": "e1",
+        "kind": "Sequence"
+      },
+      {
+        "from": "e1",
+        "fromPort": "next",
+        "to": "e2",
+        "kind": "Sequence"
+      },
+      {
+        "from": "task",
+        "fromPort": "responder",
+        "to": "a1",
+        "kind": "Event"
+      },
+      {
+        "from": "task",
+        "fromPort": "objetivo",
+        "to": "n1",
+        "kind": "Event"
+      },
+      {
+        "from": "n1",
+        "fromPort": "push",
+        "to": "a2",
+        "kind": "Event"
+      },
+      {
+        "from": "task",
+        "fromPort": "entrega",
+        "to": "p1",
+        "kind": "Delivery"
+      },
+      {
+        "from": "p2",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      },
+      {
+        "from": "p3",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      },
+      {
+        "from": "p3",
+        "fromPort": "aplica",
+        "to": "a2",
+        "kind": "Plan"
+      },
+      {
+        "from": "p4",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      },
+      {
+        "from": "p4",
+        "fromPort": "aplica",
+        "to": "a2",
+        "kind": "Plan"
+      },
+      {
+        "from": "n1",
+        "fromPort": "entrega",
+        "to": "p5",
+        "kind": "Delivery"
+      },
+      {
+        "from": "n1",
+        "fromPort": "entrega",
+        "to": "p6",
+        "kind": "Delivery"
+      },
+      {
+        "from": "n1",
+        "fromPort": "entrega",
+        "to": "p7",
+        "kind": "Delivery"
+      },
+      {
+        "from": "p9",
+        "fromPort": "aplica",
+        "to": "n1",
+        "kind": "Plan"
+      },
+      {
+        "from": "p12",
+        "fromPort": "aplica",
+        "to": "a2",
+        "kind": "Plan"
+      }
+    ],
+    "parameters": [],
+    "objective": {
+      "criterio": "O work item foi criado com o que foi pedido e as tasks filhas planejadas cobrem o trabalho (testes, reuso e arquitetura previstos), na nota mínima do avaliador.",
+      "notaMinima": 90,
+      "maxRodadas": 10
+    },
+    "workItemOptional": true,
+    "repositories": "",
+    "schedules": []
+  },
+  "agentes": [
+    {
+      "bloco": "a1",
+      "nome": "Avaliador do planejamento",
+      "eventos": "responder",
+      "plano": "Avalie o PLANEJAMENTO da task que te acionou: o work item criado descreve o que foi pedido (o pedido.md da entrega dela), e as tasks filhas cobrem o trabalho, com testes, reuso e arquitetura previstos (os Tech Plans deste bloco). Dê a nota de 0 a 100 dizendo o que falta.",
+      "agente": "",
+      "modelo": "",
+      "avaliador": true
+    },
+    {
+      "bloco": "n1",
+      "nome": "Implementador",
+      "eventos": "objetivo",
+      "plano": "Implemente o work item criado pela task de planejamento — o número está no resumo da entrega dela (o caminho vem abaixo) — seguindo as tasks filhas planejadas (devcli workitem --id N). Antes de começar, vincule esta task ao item (devcli vincular --id N), para as horas e o board contarem para ele. Utilize a skill de enviar para enviar o que foi implementado",
+      "agente": "",
+      "modelo": "",
+      "avaliador": false
+    },
+    {
+      "bloco": "a2",
+      "nome": "Avaliador da implementação",
+      "eventos": "push",
+      "plano": "Avalie o que a task de implementação ENVIOU — em cada repositório, no branch dele — contra o objetivo dela e as tasks planejadas: compila, os testes passam, segue os Tech Plans deste bloco (testes, reuso, arquitetura) e não deixa pendência. Dê a nota de 0 a 100 dizendo o que falta.",
+      "agente": "",
+      "modelo": "",
+      "avaliador": true
+    }
+  ],
+  "planos": [
+    {
+      "bloco": "p1",
+      "plano": {
+        "description": "planejamento",
+        "content": "Planejamento em texto com o workitem",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p2",
+      "plano": {
+        "description": "avaliar testes",
+        "content": "Avaliar os testes  se existem e se cumprem a regressão",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p3",
+      "plano": {
+        "description": "avaliar reuso",
+        "content": "Avaliar o reuso de componentes que foram utilizados. O componente existe deve ser utilizado",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p4",
+      "plano": {
+        "description": "avaliar arquitetura",
+        "content": "Você irá avaliar aspectos arquiteturais",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p5",
+      "plano": {
+        "description": "logs",
+        "content": "Logs de build e de testes",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p6",
+      "plano": {
+        "description": "diffs",
+        "content": "Diffs no tortoise do que foi alterado",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p7",
+      "plano": {
+        "description": "Screenshots",
+        "content": "Adicionar na entrega as screenshots do que foi feito ",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p9",
+      "plano": {
+        "description": "build mínimo",
+        "content": "O build deve ser focado somente no que foi alterado. Caso o arquivo pertença a somente um projeto só esse projeto deve ser alterado",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p12",
+      "plano": {
+        "description": "testes mínimos",
+        "content": "Na regressão validar somente os projetos que tiveram arquivos alterados. Não compilar tudo",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    }
+  ]
+}

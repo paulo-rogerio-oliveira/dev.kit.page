@@ -1,0 +1,10 @@
+{
+  "name": "workitems-em-andamento",
+  "description": "Consultar no Azure Boards os work items em andamento do desenvolvedor e as horas já lançadas.",
+  "content": "# Work items em andamento\r\n\r\nPara saber em que o desenvolvedor está trabalhando (e onde as horas caem), pergunte ao CLI do dev.kit — nunca ao `git log` nem ao nome do branch:\r\n\r\n```\r\n\"{DEVCLI}\" workitems --tasks --json\r\n```\r\n\r\n- A saída traz, por item: `id`, `tipo` (User Story/Bug/Task), `estado`, `titulo` e as `tasks` filhas com `completedWork` (horas já lançadas) e `remainingWork`.\r\n- \"Em andamento\" é o que não está `New`, `Closed`, `Removed` nem `Done` — a lista já vem filtrada assim.\r\n- Sem `--json` a saída é a versão legível, boa para mostrar ao desenvolvedor.\r\n- Organização, projeto, PAT e e-mail vêm das Configurações do dev.kit. Se o comando responder que a configuração está incompleta, PARE e avise o desenvolvedor: não tente adivinhar credencial nem usar outra ferramenta.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

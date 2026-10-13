@@ -1,0 +1,10 @@
+{
+  "name": "listar-arquivos-alterados",
+  "description": "Responder quais arquivos o agente alterou nesta task (aba Alterações do git.kit).",
+  "content": "# Listar arquivos alterados\n\nQuando o git.kit pedir a lista de arquivos alterados:\n\n- Liste SOMENTE os arquivos que VOCÊ alterou, criou ou excluiu nesta task. NUNCA inclua arquivos que já estavam modificados no branch, arquivos gerados pelo compilador, nem arquivos que você apenas leu.\n- Em especial, NUNCA liste o que a criação da solução VB6 ajustou (skill `criar-solucao-vb6`): `.vbp` do grupo, `AmbienteProxy.cls`, os `.bak` e o `.vbg` em `Solutions\\` são efeito do compilador, não alteração sua.\n- Responda com o MESMO bloco de relato que fecha toda resposta sua (o do arquivo de regras): a abertura `[GITKIT:ARQUIVOS]` numa linha, um caminho por linha — sem comentários nem numeração — e o fechamento `[/GITKIT:ARQUIVOS]`.\n- O caminho segue a forma do relato: task multirepo, prefixado pela pasta do clone (`meu-repo/src/Foo.cs`); task de um repositório só, relativo à raiz dele, com ou sem a pasta do clone na frente (as duas formas valem).\n- Se você ainda não alterou nenhum arquivo, responda exatamente `Nenhum arquivo alterado.` e omita o bloco.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

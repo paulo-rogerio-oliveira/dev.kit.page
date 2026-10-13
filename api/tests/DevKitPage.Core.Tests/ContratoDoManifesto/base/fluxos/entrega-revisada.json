@@ -1,0 +1,121 @@
+{
+  "formato": "devkit-fluxo",
+  "versao": 1,
+  "nome": "entrega revisada",
+  "descricao": "Revisa e publica o pacote, sob as regras de build",
+  "desenho": {
+    "nodes": [
+      {
+        "id": "task",
+        "kind": "Task",
+        "title": "Task",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 40
+      },
+      {
+        "id": "e1",
+        "kind": "Step",
+        "title": "revisar-entrega",
+        "skillName": "revisar-entrega",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 160
+      },
+      {
+        "id": "e2",
+        "kind": "Step",
+        "title": "publicar-pacote",
+        "skillName": "publicar-pacote",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 280
+      },
+      {
+        "id": "p1",
+        "kind": "TechPlan",
+        "title": "Regras de build",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 360,
+        "y": 40
+      }
+    ],
+    "links": [
+      {
+        "from": "task",
+        "fromPort": "next",
+        "to": "e1",
+        "kind": "Sequence"
+      },
+      {
+        "from": "e1",
+        "fromPort": "next",
+        "to": "e2",
+        "kind": "Sequence"
+      },
+      {
+        "from": "p1",
+        "fromPort": "aplica",
+        "to": "task",
+        "kind": "Plan"
+      }
+    ],
+    "parameters": [],
+    "workItemOptional": false,
+    "repositories": "",
+    "schedules": []
+  },
+  "agentes": [],
+  "planos": [
+    {
+      "bloco": "p1",
+      "plano": {
+        "key": "regras-de-build",
+        "description": "Regras de build",
+        "content": "Compile só o projeto que você alterou e os que dependem dele; a solução inteira fica para mudança estrutural.",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    }
+  ]
+}

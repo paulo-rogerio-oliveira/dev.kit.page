@@ -1,0 +1,10 @@
+{
+  "name": "anexos-workitem",
+  "description": "Listar, baixar e anexar arquivos de um work item pelo CLI do dev.kit — ler o que o cliente mandou e deixar no item o log, a captura ou o CSV.",
+  "content": "# Anexos do work item\n\nOs anexos da SUA task já estão na pasta `anexos`, baixados antes do primeiro turno. Um anexo acima de 20 MB fica citado e não baixado. Use este comando para o que está fora disso: os anexos de outro item, o arquivo grande que faltou, e o caminho de volta, deixar no item o resultado do seu trabalho.\n\n## Ler e baixar\n\n```\n\"{DEVCLI}\" anexo --id <n> --json\n\"{DEVCLI}\" anexo --id <n> --baixar --pasta \"{WORKSPACE}\\anexos\"\n\"{DEVCLI}\" anexo --id <n> --nome <arquivo> --baixar --pasta \"{WORKSPACE}\\anexos\"\n```\n\nListar vem primeiro: cada download é uma consulta. Baixe só o que for ler, e sempre para fora dos clones, para o arquivo nunca entrar num commit.\n\n## Anexar\n\nUm anexo **não se apaga pelo CLI** e fica visível para o time inteiro.\n\n1. Simule:\n\n```\n\"{DEVCLI}\" anexo --id <n> --arquivo <caminho> --comentario \"o que é este arquivo\"\n```\n\n2. Mostre ao desenvolvedor o que vai subir e aplique com `--aplicar`. Com vários `--arquivo`, todos são conferidos antes de enviar o primeiro.\n3. Se o envio falhar no meio, o erro diz quais já subiram. Não repita o comando inteiro: isso duplicaria esses anexos no item.\n\nNão anexe dado sensível (senha, connection string, dump de produção) sem o desenvolvedor ter pedido.\n\n## Regras de escrita (valem para todo comando que grava)\n\n- **Simule primeiro.** Sem `--aplicar` nada é gravado nem disparado.\n- **Mostre a simulação ao desenvolvedor e só então aplique**, com os MESMOS parâmetros mais `--aplicar`.\n- **Sem ninguém na frente** (execução agendada, roteiro): aplique apenas o que o roteiro ou o planejamento mandou fazer explicitamente. O resto fica descrito na sua resposta para o desenvolvedor decidir.\n- Código de saída diferente de 0 é recusa, e o stderr diz o motivo. Corrija o parâmetro; NÃO contorne com outra ferramenta.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

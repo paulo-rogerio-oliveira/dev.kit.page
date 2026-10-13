@@ -1,0 +1,10 @@
+{
+  "name": "consultar-tfs",
+  "description": "Ler work items de um TFS/Azure DevOps Server antigo (outro servidor que não o board configurado) pelo CLI do dev.kit.",
+  "content": "# Consultar o TFS\n\nPara ids que vivem no **TFS antigo** (uma coleção on-premise), e não no board das Configurações. O desenvolvedor costuma dizer \"o item 12731 do TFS\", ou a descrição da US cita ids de lá.\n\n```\n\"{DEVCLI}\" tfs --ids 12731,53395 --json\n\"{DEVCLI}\" tfs 12731 53395\n```\n\n- O endereço e o token vêm de **variáveis de ambiente**, `TFS_URL` e `TFS_TOKEN` por padrão, ou as gravadas em `config`. Nunca passe o valor do token na linha de comando.\n- Um id que não existe é omitido, e a saída diz quais faltaram. Nenhum encontrado é saída 1.\n- As mensagens de erro dizem o que conferir: 401/403 aponta o token, 404 mostra a URL que está na variável, 400 aponta a versão da API (`--api-version`, padrão 5.0). Erro de rede costuma ser VPN desligada. Diga isso ao desenvolvedor em vez de tentar outro caminho.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

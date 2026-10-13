@@ -1,0 +1,320 @@
+{
+  "formato": "devkit-fluxo",
+  "versao": 1,
+  "nome": "tarefa avulsa",
+  "descricao": "tarefa sem board: a orientação da execução é a tarefa, avaliada no envio e fechada na sua aprovação",
+  "desenho": {
+    "nodes": [
+      {
+        "id": "task",
+        "kind": "Task",
+        "title": "Task",
+        "caption": "Executar a tarefa avulsa",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 32,
+        "y": 40
+      },
+      {
+        "id": "a1",
+        "kind": "Agent",
+        "title": "Avaliador da tarefa avulsa",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "Avalie o que a task que te acionou ENVIOU — em cada repositório, no branch dele — contra a ORIENTAÇÃO dela (o pedido.md da entrega: a tarefa avulsa não tem work item): o que foi pedido está feito, compila, os testes passam, segue os Tech Plans deste bloco (testes, reuso, arquitetura) e não deixa pendência. Dê a nota de 0 a 100 dizendo o que falta.",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": true,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 343,
+        "y": 185
+      },
+      {
+        "id": "f1",
+        "kind": "Agent",
+        "title": "Fechamento da tarefa avulsa",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "A tarefa foi APROVADA pelo desenvolvedor, com tudo já ENVIADO (o dev.kit só aprova depois do envio, e estes clones vêm do remoto). A task pode ter VÁRIOS repositórios, cada um no seu branch: abra UMA pull request por repositório, do branch dele, para o destino que a skill criar-pull-requests deduzir (confira com o diffs.md da entrega). Leia antes os artefatos da entrega com o comando entrega do devcli: o resumo vai na descrição das PRs, e os diffs e os logs entram citados. Só se a task que te acionou tiver work item vinculado, comente nele o resumo com o link de cada PR (skill comentar-workitem); tarefa avulsa não comenta. Reporte o desfecho.",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 332,
+        "y": 379
+      },
+      {
+        "id": "p3",
+        "kind": "TechPlan",
+        "title": "avaliar reuso",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 900,
+        "y": 170
+      },
+      {
+        "id": "p4",
+        "kind": "TechPlan",
+        "title": "avaliar arquitetura",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 900,
+        "y": 280
+      },
+      {
+        "id": "p5",
+        "kind": "TechPlan",
+        "title": "logs",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 120,
+        "y": 560
+      },
+      {
+        "id": "p6",
+        "kind": "TechPlan",
+        "title": "diffs",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 380,
+        "y": 560
+      },
+      {
+        "id": "p7",
+        "kind": "TechPlan",
+        "title": "Screenshots",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 640,
+        "y": 560
+      },
+      {
+        "id": "p2",
+        "kind": "TechPlan",
+        "title": "testes mínimos",
+        "skillName": "",
+        "hookId": 0,
+        "plan": "",
+        "agentKind": "",
+        "agentModel": "",
+        "argument": "",
+        "isEvaluator": false,
+        "createIfMissing": false,
+        "opensTask": false,
+        "criterio": "",
+        "techPlanId": 0,
+        "x": 905,
+        "y": 82
+      }
+    ],
+    "links": [
+      {
+        "from": "task",
+        "fromPort": "push",
+        "to": "a1",
+        "kind": "Event"
+      },
+      {
+        "from": "task",
+        "fromPort": "aprovar",
+        "to": "f1",
+        "kind": "Event"
+      },
+      {
+        "from": "p3",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      },
+      {
+        "from": "p4",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      },
+      {
+        "from": "task",
+        "fromPort": "entrega",
+        "to": "p5",
+        "kind": "Delivery"
+      },
+      {
+        "from": "task",
+        "fromPort": "entrega",
+        "to": "p6",
+        "kind": "Delivery"
+      },
+      {
+        "from": "task",
+        "fromPort": "entrega",
+        "to": "p7",
+        "kind": "Delivery"
+      },
+      {
+        "from": "p2",
+        "fromPort": "aplica",
+        "to": "a1",
+        "kind": "Plan"
+      }
+    ],
+    "parameters": [],
+    "objective": {
+      "criterio": "O que a orientação da tarefa pede está feito, compila, os testes passam, a arquitetura e o reuso seguem os Tech Plans, e a entrega tem os logs, os diffs e as capturas.",
+      "notaMinima": 90,
+      "maxRodadas": 10
+    },
+    "workItemOptional": true,
+    "repositories": "",
+    "schedules": []
+  },
+  "agentes": [
+    {
+      "bloco": "a1",
+      "nome": "Avaliador da tarefa avulsa",
+      "eventos": "push",
+      "plano": "Avalie o que a task que te acionou ENVIOU — em cada repositório, no branch dele — contra a ORIENTAÇÃO dela (o pedido.md da entrega: a tarefa avulsa não tem work item): o que foi pedido está feito, compila, os testes passam, segue os Tech Plans deste bloco (testes, reuso, arquitetura) e não deixa pendência. Dê a nota de 0 a 100 dizendo o que falta.",
+      "agente": "",
+      "modelo": "",
+      "avaliador": true
+    },
+    {
+      "bloco": "f1",
+      "nome": "Fechamento da tarefa avulsa",
+      "eventos": "aprovar",
+      "plano": "A tarefa foi APROVADA pelo desenvolvedor, com tudo já ENVIADO (o dev.kit só aprova depois do envio, e estes clones vêm do remoto). A task pode ter VÁRIOS repositórios, cada um no seu branch: abra UMA pull request por repositório, do branch dele, para o destino que a skill criar-pull-requests deduzir (confira com o diffs.md da entrega). Leia antes os artefatos da entrega com o comando entrega do devcli: o resumo vai na descrição das PRs, e os diffs e os logs entram citados. Só se a task que te acionou tiver work item vinculado, comente nele o resumo com o link de cada PR (skill comentar-workitem); tarefa avulsa não comenta. Reporte o desfecho.",
+      "agente": "",
+      "modelo": "",
+      "avaliador": false
+    }
+  ],
+  "planos": [
+    {
+      "bloco": "p3",
+      "plano": {
+        "description": "avaliar reuso",
+        "content": "Avaliar o reuso de componentes que foram utilizados. O componente existe deve ser utilizado",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p4",
+      "plano": {
+        "description": "avaliar arquitetura",
+        "content": "Você irá avaliar aspectos arquiteturais",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p5",
+      "plano": {
+        "description": "logs",
+        "content": "Logs de build e de testes",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p6",
+      "plano": {
+        "description": "diffs",
+        "content": "Diffs no tortoise do que foi alterado",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p7",
+      "plano": {
+        "description": "Screenshots",
+        "content": "Adicionar na entrega as screenshots do que foi feito ",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    },
+    {
+      "bloco": "p2",
+      "plano": {
+        "description": "testes mínimos",
+        "content": "Na regressão validar somente os projetos que tiveram arquivos alterados. Não compilar tudo",
+        "repository": "",
+        "onlyWithWorkItem": false,
+        "isRequired": false,
+        "isAgentInstruction": false
+      }
+    }
+  ]
+}

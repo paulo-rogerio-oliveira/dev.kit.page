@@ -13,54 +13,46 @@ namespace DevKitPage.Api;
 public static class EndpointsDaUs425
 {
     /// <summary>
-    /// O catálogo BÁSICO (fase 1): anônimo como a última versão do app, pelo MESMO caminho das releases — o token só
-    /// no servidor, a mesma lista em cache e o download em streaming. A delta (<c>?desde=N</c>) traz só o que mudou,
-    /// e 304 sem mudança. As releases do catálogo para o admin acompanhar ficam sob a <see cref="Seguranca.PoliticaAdmin"/>.
+    /// O catálogo BÁSICO (fase 1): anônimo como a última versão do app. Desde a US #461 ele é servido pela última release
+    /// publicada NO SITE (<see cref="IPublicacaoDeCatalogos"/>) e, enquanto não houver uma, pelas releases <c>catalogo-vN</c>
+    /// do GitHub, como antes — as rotas ficam para o dev.kit de versão anterior, que não conhece <c>/api/catalogos</c>. A
+    /// delta (<c>?desde=N</c>) traz só o que mudou, e 304 sem mudança. As releases para o admin acompanhar ficam sob a
+    /// <see cref="Seguranca.PoliticaAdmin"/>.
     /// </summary>
     public static void MapearCatalogoBase(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/catalogo/base").WithTags("Catálogo básico");
 
-        grupo.MapGet("/", async (int? desde, HttpContext http, IReleasesDoDevKit releases, CancellationToken ct) =>
+        grupo.MapGet("/", async (int? desde, HttpContext http, IPublicacaoDeCatalogos publicacao, CancellationToken ct) =>
         {
-            if (await UltimoAsync(releases, ct) is not { } ultimo)
+            if (await BasicoAsync(publicacao, ct) is not { } ultimo)
                 return CatalogoIndisponivel();
-            http.Response.Headers.ETag = $"\"{ultimo.Release.Tag}\"";
+            http.Response.Headers.ETag = $"\"{ultimo.Tag}\"";
             var inicio = Math.Max(0, desde ?? 0);
             if (RegrasDoCatalogoBase.Delta(ultimo.Manifesto, inicio) is not { } delta)
                 return Results.StatusCode(StatusCodes.Status304NotModified);
-            return Results.Ok(new CatalogoBaseV1(inicio, delta, "/api/catalogo/base/download", ultimo.Release.Sha256));
+            return Results.Ok(new CatalogoBaseV1(inicio, delta, "/api/catalogo/base/download", ultimo.Sha256));
         }).AllowAnonymous();
 
-        grupo.MapGet("/download", async (HttpContext http, IReleasesDoDevKit releases, CancellationToken ct) =>
+        grupo.MapGet("/download", async (HttpContext http, IPublicacaoDeCatalogos publicacao, CancellationToken ct) =>
         {
-            if (await releases.CatalogosAsync(ct) is not [var ultima, ..])
+            if (await BasicoAsync(publicacao, ct) is not { } ultimo)
                 return CatalogoIndisponivel();
-            await using var pacote = await releases.AbrirPacoteAsync(ultima, ct);
+            await using var pacote = await publicacao.AbrirPacoteAsync(ultimo, ct);
             if (pacote is null)
                 return CatalogoIndisponivel();
-            await Transmitir(http, pacote, $"catalogo-{ultima.Versao}.zip", ct);
+            await Transmitir(http, pacote, $"catalogo-{ultimo.Versao}.zip", ct);
             return Results.Empty;
         }).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoDownload);
 
-        grupo.MapGet("/vitrine", async (IReleasesDoDevKit releases, CancellationToken ct) =>
-            await UltimoAsync(releases, ct) is { } ultimo
-                ? Results.Ok(RegrasDoCatalogoBase.Vitrine(ultimo.Manifesto, ultimo.Release.PublicadaEm))
+        grupo.MapGet("/vitrine", async (IPublicacaoDeCatalogos publicacao, CancellationToken ct) =>
+            await BasicoAsync(publicacao, ct) is { } ultimo
+                ? Results.Ok(RegrasDoCatalogoBase.Vitrine(ultimo.Manifesto, ultimo.PublicadaEm))
                 : CatalogoIndisponivel()).AllowAnonymous();
 
-        grupo.MapGet("/releases", async (IReleasesDoDevKit releases, CancellationToken ct) =>
-        {
-            if (await releases.CatalogosAsync(ct) is not { } lista)
-                return CatalogoIndisponivel();
-            var linhas = new List<ReleaseDoCatalogoV1>(lista.Count);
-            foreach (var r in lista)
-            {
-                var manifesto = await releases.ManifestoAsync(r, ct);
-                linhas.Add(new ReleaseDoCatalogoV1(r.Versao, r.Tag, r.Nome, r.PublicadaEm, manifesto?.Itens.Count ?? 0, manifesto?.Retirados.Count ?? 0, r.TamanhoBytes, r.Sha256));
-            }
-
-            return Results.Ok(linhas);
-        }).RequireAuthorization(Seguranca.PoliticaAdmin);
+        grupo.MapGet("/releases", async (IPublicacaoDeCatalogos publicacao, CancellationToken ct)
+            => await publicacao.ReleasesAsync(Catalogos.Basico, ct) is { } lista ? Results.Ok(lista) : CatalogoIndisponivel())
+            .RequireAuthorization(Seguranca.PoliticaAdmin);
     }
 
     /// <summary>
@@ -75,10 +67,10 @@ public static class EndpointsDaUs425
         grupo.MapGet("/", (ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, CancellationToken ct)
             => ComEmpresa(quem, async escopo => Results.Ok(await catalogo.ListarAsync(escopo, ct))));
 
-        grupo.MapPost("/", (PublicacaoV1? publicacao, ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, IReleasesDoDevKit releases, CancellationToken ct)
+        grupo.MapPost("/", (PublicacaoV1? publicacao, ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, IPublicacaoDeCatalogos basico, CancellationToken ct)
             => ComEmpresa(quem, async escopo =>
             {
-                var problema = RegrasDoCatalogoDaEmpresa.Validar(publicacao, await NomesDoBasicoAsync(releases, ct));
+                var problema = RegrasDoCatalogoDaEmpresa.Validar(publicacao, await NomesDoBasicoAsync(basico, ct));
                 if (problema.Length > 0)
                     return Results.Problem(problema, statusCode: problema.StartsWith("Já existe", StringComparison.Ordinal) ? StatusCodes.Status409Conflict : StatusCodes.Status400BadRequest);
                 var feita = await catalogo.PublicarAsync(escopo, publicacao!, ct);
@@ -250,20 +242,16 @@ public static class EndpointsDaUs425
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>A última release do catálogo com o manifesto válido; nula quando indisponível.</summary>
-    private static async Task<(ReleaseDoCatalogo Release, ManifestoDoCatalogoV1 Manifesto)?> UltimoAsync(IReleasesDoDevKit releases, CancellationToken ct)
-    {
-        if (await releases.CatalogosAsync(ct) is not [var ultima, ..])
-            return null;
-        return await releases.ManifestoAsync(ultima, ct) is { } manifesto ? (ultima, manifesto) : null;
-    }
+    /// <summary>A última release do básico (a do site, ou a do GitHub antes da primeira publicação); nula quando indisponível.</summary>
+    private static Task<ReleaseServida?> BasicoAsync(IPublicacaoDeCatalogos publicacao, CancellationToken ct)
+        => publicacao.UltimaAsync(Catalogos.Basico, AcessoAoCatalogo.Anonimo, ct);
 
     /// <summary>
     /// Os nomes do catálogo básico (<c>tipo:nome</c>) para a regra da colisão. Sem o catálogo (GitHub fora do ar), a
     /// lista é vazia: a publicação segue, e a máquina continua preferindo o básico na sincronia.
     /// </summary>
-    private static async Task<IReadOnlySet<string>> NomesDoBasicoAsync(IReleasesDoDevKit releases, CancellationToken ct)
-        => await UltimoAsync(releases, ct) is { } ultimo
+    private static async Task<IReadOnlySet<string>> NomesDoBasicoAsync(IPublicacaoDeCatalogos publicacao, CancellationToken ct)
+        => await BasicoAsync(publicacao, ct) is { } ultimo
             ? ultimo.Manifesto.Itens.Select(i => RegrasDoCatalogoDaEmpresa.Chave(i.Tipo, i.Nome)).ToHashSet(StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
 

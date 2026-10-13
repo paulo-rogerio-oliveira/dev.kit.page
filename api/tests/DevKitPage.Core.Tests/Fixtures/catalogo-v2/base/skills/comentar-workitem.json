@@ -1,0 +1,14 @@
+{
+    "name":  "comentar-workitem",
+    "description":  "Registrar no board, como comentário do work item, o que foi apurado na task — e corrigir um comentário já escrito.",
+    "content":  "# Comentar no work item\n\nRegistrar no board o que você apurou. O comentário fica **no item**, e não no commit: é onde o time lê o que foi decidido e por quê, sem abrir o dev.kit. Uma análise que só existe nesta conversa morre com a task.\n\n1. **Leia os comentários antes de escrever** — é o modo padrão do comando, sem `--texto`:\n\n```\n\"{DEVCLI}\" comentario --id \u003cid\u003e --json\n```\n\n   Serve para duas coisas: não repetir o que já está lá, e pegar o `id` de um comentário quando o que você precisa é **corrigir** um seu, e não escrever outro.\n\n2. **Escreva para quem não acompanhou a task.** O comentário útil tem, nesta ordem: o que foi feito, por que foi feito assim, o que ficou de fora e o que precisa de decisão. Sem transcrição de log, sem colar diff inteiro — o código está no commit; o comentário explica o que o código não diz.\n\n3. **Simule.** Sem `--aplicar` nada é gravado, e você vê o texto como ele vai ficar:\n\n```\n\"{DEVCLI}\" comentario --id \u003cid\u003e --texto \"...\" --json\n```\n\n4. **Mostre o texto ao desenvolvedor e só então aplique**, com os MESMOS parâmetros mais `--aplicar`. O comentário aparece na discussão do item e notifica quem acompanha: publicar sem ele ler é falar pelo desenvolvedor.\n\n```\n\"{DEVCLI}\" comentario --id \u003cid\u003e --texto \"...\" --aplicar\n```\n\n5. **Corrigir é diferente de acrescentar.** Para consertar algo que você mesmo escreveu — um dado errado, uma frase truncada — reescreva o comentário em vez de empilhar uma errata:\n\n```\n\"{DEVCLI}\" comentario --id \u003cid\u003e --comentario \u003cid do comentário\u003e --texto \"...\" --aplicar\n```\n\n   Saiba a diferença ao escolher: um comentário **editado não avisa ninguém**, enquanto um **novo aparece na discussão**. Correção de conteúdo do seu próprio comentário → edite. Informação nova que o time precisa ver → comentário novo.\n\n6. Nunca edite o comentário **de outra pessoa**: o que ela escreveu é dela. Responda com um comentário seu.\n\n7. **NUNCA comente por outro caminho** (`{AZ}`, `curl`, REST na mão): a credencial do board é do dev.kit, e o CLI é quem a usa.",
+    "arguments":  [
+
+                  ],
+    "repositories":  [
+
+                     ],
+    "isCommand":  false,
+    "isBackground":  false,
+    "isPinned":  false
+}

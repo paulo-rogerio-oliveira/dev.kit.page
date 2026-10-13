@@ -168,6 +168,19 @@ Antes de publicar, crie no Key Vault os segredos `Licencas--ChavePrivada` (a cha
 gerada uma vez e NUNCA versionada), `Email--Senha` e `Pagamentos--SegredoDoWebhook`, e configure as variáveis
 da tabela acima. O download do dev.kit passa a ser anônimo: confira o `Atualizacao__DownloadsPorHora`.
 
+### Catálogos nomeados (US #461)
+
+Rode também `api/scripts/sqlserver/Us461.sql` (idempotente): cria `Catalogos` (com o registro do básico),
+`VinculosDeCatalogo`, `ItensEditaveisDeCatalogo`, `VersoesDoCatalogo` e `PacotesDoCatalogo` (o zip de cada
+release, em `varbinary(max)`). Sem elas, a vitrine, o `/api/catalogo/base` e a sincronia das máquinas
+respondem 500.
+
+Depois da publicação, o admin abre **Catálogo → Catálogos → Básico** e usa **Importar do GitHub** UMA vez: a
+última release `catalogo-vN` (o mesmo zip, o mesmo manifesto) passa a ser servida pelo site, e a próxima
+publicação é a `catalogo-v(N+1)`. Até lá, o básico continua saindo do GitHub (o `REPO_KEY`), como antes. A
+partir daí o git.kit não publica mais o básico: o `catalogo.yml` dele só confere o manifesto, e o
+`build/catalogo.ps1 -Baixar` traz o básico publicado no site para o pacote do instalador.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

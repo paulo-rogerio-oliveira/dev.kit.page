@@ -1,0 +1,14 @@
+{
+    "name":  "alterar-workitem",
+    "description":  "Mudar estado, responsável e campos do processo de um work item pelo CLI do dev.kit, tratando a exigência de campo obrigatório.",
+    "content":  "# Alterar work item\n\nMover o item no board — estado, responsável, campos do processo — pelo CLI do dev.kit. Duas coisas são diferentes das demais escritas e são o motivo desta skill existir: **o processo pode exigir campos que você não conhece**, e a recusa crua do board não diz o suficiente para tentar de novo sozinho. O comando resolve isso; o seu papel é **perguntar ao desenvolvedor** o que você não tem como adivinhar.\n\n1. **Leia antes de mudar.** Sem `--estado` e sem `--responsavel`, o comando mostra o item e os estados que ESTE processo aceita (o nome muda de template para template — nunca invente um):\n\n```\n\"{DEVCLI}\" workitem-alterar --id \u003cid\u003e --json\n```\n\n2. **Simule.** Sem `--aplicar` nada é gravado:\n\n```\n\"{DEVCLI}\" workitem-alterar --id \u003cid\u003e --estado \"\u003cnome exato\u003e\" --json\n```\n\n3. **Aplique** com os MESMOS parâmetros mais `--aplicar`.\n\n4. **Saiu com código 2? O processo exige campos que ninguém informou.** Isso não é falha: é o board pedindo o que falta. A saída traz `camposExigidos` — rótulo, nome de referência e valores aceitos de cada um — e `comandoSugerido`, a linha pronta faltando só os valores. Faça exatamente isto:\n   - **PERGUNTE ao desenvolvedor** o valor de cada campo exigido, mostrando os valores aceitos quando houver. Não escolha por conta própria: esses campos existem para registrar uma decisão (motivo da mudança, sistema afetado, causa), e um valor inventado por você entra no relatório da equipe como se fosse dele.\n   - **Repita o comando** acrescentando um `--campo` por campo, com o valor que ele respondeu:\n\n```\n\"{DEVCLI}\" workitem-alterar --id \u003cid\u003e --estado \"\u003cnome\u003e\" --campo \"Custom.Motivo=\u003cvalor\u003e\" --aplicar\n```\n\n   - `--campo` é **repetível** e aceita o **rótulo** (\"Motivo da alteração\") ou o **nome de referência** (`Custom.MotivoAlteracao`); prefira a referência, que não depende do idioma do processo.\n\n5. Código **1** é outra coisa: o campo não existe no tipo, é somente leitura, o estado não é válido, ou o board recusou por permissão. Aí repetir não adianta — leia a mensagem e corrija o que ela aponta.\n\n6. Responsável: `--responsavel` aceita o e-mail ou o nome de exibição de um membro do time; `--remover-responsavel` deixa o item sem dono.\n\n7. **NUNCA altere work item por outro caminho** (`{AZ}`, `curl`, REST na mão): a credencial do board é do dev.kit, e o CLI é quem a usa.",
+    "arguments":  [
+
+                  ],
+    "repositories":  [
+
+                     ],
+    "isCommand":  false,
+    "isBackground":  false,
+    "isPinned":  false
+}

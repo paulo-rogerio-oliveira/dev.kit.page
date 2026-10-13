@@ -1,0 +1,10 @@
+{
+  "name": "listar-sprints",
+  "description": "Listar as sprints dos times do desenvolvedor (caminho, período e a atual) pelo CLI do dev.kit, para escolher a iteração com ele.",
+  "content": "# Listar sprints\n\n```\n\"{DEVCLI}\" iterations --json\n\"{DEVCLI}\" iterations --todas --json\n```\n\n- São as sprints dos **times de que o desenvolvedor participa**, com o período de cada uma. A atual vem com `situacao: current`. `--todas` inclui as encerradas.\n- É daqui que sai o `--iteration` de `criar-userstory` e `criar-bug`. A sprint é **perguntada ao desenvolvedor**: mostre as opções com os períodos e deixe que ele escolha. Não assuma a atual.\n- Quando os times do usuário não podem ser descobertos, a lista vem do time padrão do projeto. Se a sprint que o desenvolvedor espera não aparecer, diga isso a ele em vez de escolher outra.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

@@ -1,0 +1,102 @@
+{
+  "versao": 2,
+  "minDevKit": 160,
+  "itens": [
+    {
+      "tipo": "fluxo",
+      "nome": "entrega-revisada",
+      "versao": 1,
+      "hash": "b3e776d6bd7ef7bc2cf14fcd0c7584f8c0606dfec2d20b4d8f87fc89e661995f",
+      "catalogo": 2,
+      "arquivo": "fluxos/entrega-revisada.json",
+      "descricao": "Revisa e publica o pacote, sob as regras de build",
+      "tecnologia": "Fluxos",
+      "minDevKit": 160,
+      "requer": [],
+      "dependencias": [
+        "plan:regras-de-build",
+        "skill:publicar-pacote",
+        "skill:revisar-entrega"
+      ],
+      "hashes": [
+        "b3e776d6bd7ef7bc2cf14fcd0c7584f8c0606dfec2d20b4d8f87fc89e661995f"
+      ]
+    },
+    {
+      "tipo": "plan",
+      "nome": "regras-de-build",
+      "versao": 1,
+      "hash": "dcdffae52cc0aad72a7c4326d7fa519abe4da21e66ae2ed3fee3ddab9254aedd",
+      "catalogo": 2,
+      "arquivo": "plans/regras-de-build.json",
+      "descricao": "Regras de build",
+      "tecnologia": "Tech Plans",
+      "minDevKit": 160,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "dcdffae52cc0aad72a7c4326d7fa519abe4da21e66ae2ed3fee3ddab9254aedd"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "publicar-pacote",
+      "versao": 2,
+      "hash": "0c7ec1b441c7c3868595d93c104a3569393a99cea456f0cf194fdabe1ed69088",
+      "catalogo": 2,
+      "arquivo": "skills/publicar-pacote.json",
+      "descricao": "Publicar o pacote da versão na pasta de saída, conferindo o hash do que foi gerado.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 160,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "9e0592365f66934dfd9c039a013b33fe3e59e8e150ce41f4837c98525db0873f",
+        "0c7ec1b441c7c3868595d93c104a3569393a99cea456f0cf194fdabe1ed69088"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "revisar-entrega",
+      "versao": 1,
+      "hash": "500b1bb257c77170dffc9b8fda39d6ce9c8e5679d5144c2cf9fda692157b05b6",
+      "catalogo": 1,
+      "arquivo": "skills/revisar-entrega.json",
+      "descricao": "Revisar o que vai ser entregue antes do envio: build, testes e o diff de cada repositório.",
+      "tecnologia": "Git",
+      "minDevKit": 150,
+      "requer": [
+        "devcli",
+        "msbuild"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "500b1bb257c77170dffc9b8fda39d6ce9c8e5679d5144c2cf9fda692157b05b6"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "testar-pacote-dotnet",
+      "versao": 1,
+      "hash": "b6ada27953ddbf433f443747f6e23d3b5dadd8c3cc03a8f84c7fe2750ba23909",
+      "catalogo": 2,
+      "arquivo": "skills/testar-pacote-dotnet.json",
+      "descricao": "Rodar os testes do projeto .NET que o pacote leva, com filtro pelo que mudou.",
+      "tecnologia": ".NET",
+      "minDevKit": 160,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "b6ada27953ddbf433f443747f6e23d3b5dadd8c3cc03a8f84c7fe2750ba23909"
+      ]
+    }
+  ],
+  "retirados": [
+    {
+      "tipo": "skill",
+      "nome": "descrever-telas",
+      "versao": 1,
+      "catalogo": 2
+    }
+  ]
+}

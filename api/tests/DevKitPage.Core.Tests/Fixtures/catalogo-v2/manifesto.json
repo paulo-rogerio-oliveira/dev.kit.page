@@ -1,0 +1,1069 @@
+{
+  "versao": 2,
+  "minDevKit": 1,
+  "itens": [
+    {
+      "tipo": "fluxo",
+      "nome": "implementacao-de-work-item-planejado",
+      "versao": 1,
+      "hash": "a8140badf3674bf5de7950b911abbdbc0fa28786dcb668155c94ff72f7340795",
+      "catalogo": 1,
+      "arquivo": "fluxos/implementacao-de-work-item-planejado.json",
+      "descricao": "implementa o work item já planejado (item e tasks em Active), avaliado no envio, e fecha na sua aprovação",
+      "tecnologia": "Fluxos",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [
+        "plan:avaliar-arquitetura",
+        "plan:avaliar-reuso",
+        "plan:diffs",
+        "plan:logs",
+        "plan:screenshots",
+        "plan:testes-minimos",
+        "skill:commitar-e-enviar",
+        "skill:iniciar-implementacao"
+      ],
+      "hashes": [
+        "a8140badf3674bf5de7950b911abbdbc0fa28786dcb668155c94ff72f7340795"
+      ]
+    },
+    {
+      "tipo": "fluxo",
+      "nome": "planejar-e-executar",
+      "versao": 1,
+      "hash": "5ad0e802e80d09050f9d6234b5c9c9af787cec5a9bf6c7665fcb6d162329786b",
+      "catalogo": 1,
+      "arquivo": "fluxos/planejar-e-executar.json",
+      "descricao": "planeja (cria o work item e as tasks, avaliado), e ao cumprir o objetivo abre a task que implementa",
+      "tecnologia": "Fluxos",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [
+        "plan:avaliar-arquitetura",
+        "plan:avaliar-reuso",
+        "plan:avaliar-testes",
+        "plan:build-minimo",
+        "plan:diffs",
+        "plan:logs",
+        "plan:planejamento",
+        "plan:screenshots",
+        "plan:testes-minimos",
+        "skill:criar-workitem",
+        "skill:planejar-tasks"
+      ],
+      "hashes": [
+        "5ad0e802e80d09050f9d6234b5c9c9af787cec5a9bf6c7665fcb6d162329786b"
+      ]
+    },
+    {
+      "tipo": "fluxo",
+      "nome": "somente-planejamento",
+      "versao": 1,
+      "hash": "a2507d7db79e23e63a84cd1a25cc30439751437dfaa1184189fe2be6150ea626",
+      "catalogo": 1,
+      "arquivo": "fluxos/somente-planejamento.json",
+      "descricao": "cria o work item e as tasks (em New), avaliado com nota mínima; a implementação fica para quando você decidir",
+      "tecnologia": "Fluxos",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [
+        "plan:avaliar-arquitetura",
+        "plan:avaliar-reuso",
+        "plan:avaliar-testes",
+        "plan:planejamento",
+        "skill:criar-workitem",
+        "skill:planejar-tasks"
+      ],
+      "hashes": [
+        "a2507d7db79e23e63a84cd1a25cc30439751437dfaa1184189fe2be6150ea626"
+      ]
+    },
+    {
+      "tipo": "fluxo",
+      "nome": "tarefa-avulsa",
+      "versao": 2,
+      "hash": "dd9d5bec0108ff682c6f3b8979889895be6ff6d9912bdc3abfc3ac4b47946b2d",
+      "catalogo": 2,
+      "arquivo": "fluxos/tarefa-avulsa.json",
+      "descricao": "tarefa sem board: a orientação da execução é a tarefa, avaliada no envio e fechada na sua aprovação",
+      "tecnologia": "Fluxos",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [
+        "plan:avaliar-arquitetura",
+        "plan:avaliar-reuso",
+        "plan:diffs",
+        "plan:logs",
+        "plan:screenshots",
+        "plan:testes-minimos"
+      ],
+      "hashes": [
+        "6cddf564d40d9885510fd9e5f73aba1a33e7f250287639fea7ab2d95e56ecdf2",
+        "dd9d5bec0108ff682c6f3b8979889895be6ff6d9912bdc3abfc3ac4b47946b2d"
+      ]
+    },
+    {
+      "tipo": "plan",
+      "nome": "geral",
+      "versao": 1,
+      "hash": "abf4fcdd0dfdbc94d183539a50299ade3319a95ef2c3df91d28c4e913f84c167",
+      "catalogo": 1,
+      "arquivo": "plans/geral.json",
+      "descricao": "Geral",
+      "tecnologia": "Tech Plans",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "abf4fcdd0dfdbc94d183539a50299ade3319a95ef2c3df91d28c4e913f84c167"
+      ]
+    },
+    {
+      "tipo": "plan",
+      "nome": "tarefa-devops",
+      "versao": 1,
+      "hash": "d3e3c2164d5c5d88ec89762077b3be344e30c5944217aa30ff11e07fee19dc2f",
+      "catalogo": 1,
+      "arquivo": "plans/tarefa-devops.json",
+      "descricao": "Tarefa devops",
+      "tecnologia": "Tech Plans",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "d3e3c2164d5c5d88ec89762077b3be344e30c5944217aa30ff11e07fee19dc2f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "adicionar-repositorio",
+      "versao": 1,
+      "hash": "eaf038309cee63b8b6b0bd54f4f419a07c9c3a543e6e50a1fa1301d2d2a5f851",
+      "catalogo": 1,
+      "arquivo": "skills/adicionar-repositorio.json",
+      "descricao": "Conhecer os repositórios que o desenvolvedor acessa (URL e branches) e adicionar um repositório ao dev.kit por URL, conferindo o acesso antes, pelo CLI.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "eaf038309cee63b8b6b0bd54f4f419a07c9c3a543e6e50a1fa1301d2d2a5f851"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "agendar-tarefa",
+      "versao": 1,
+      "hash": "08cb4ba25ad90de610dc9368a104178ddeeafe8c15a21d65d53c480ca46e11a8",
+      "catalogo": 1,
+      "arquivo": "skills/agendar-tarefa.json",
+      "descricao": "Criar um agendamento no dev.kit (o \"Agendar\" do Board): a task roda sozinha no horário, pelo serviço agendador.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "08cb4ba25ad90de610dc9368a104178ddeeafe8c15a21d65d53c480ca46e11a8"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "alterar-workitem",
+      "versao": 1,
+      "hash": "594794451f2577de7ab0022663c3318d1de16f0db71c3e2d6ee3ce2779340a5a",
+      "catalogo": 1,
+      "arquivo": "skills/alterar-workitem.json",
+      "descricao": "Mudar estado, responsável e campos do processo de um work item pelo CLI do dev.kit, tratando a exigência de campo obrigatório.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "594794451f2577de7ab0022663c3318d1de16f0db71c3e2d6ee3ce2779340a5a"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "anexos-workitem",
+      "versao": 1,
+      "hash": "91d70a2daacafd4d14cc4724eb175c1a781132b85bc39ef94c4886cbce652a77",
+      "catalogo": 1,
+      "arquivo": "skills/anexos-workitem.json",
+      "descricao": "Listar, baixar e anexar arquivos de um work item pelo CLI do dev.kit — ler o que o cliente mandou e deixar no item o log, a captura ou o CSV.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "91d70a2daacafd4d14cc4724eb175c1a781132b85bc39ef94c4886cbce652a77"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "avaliar-entrega",
+      "versao": 1,
+      "hash": "d6029f624c60991facfa7abf8071526d578155255c60c5c60096c21ad5eda948",
+      "catalogo": 1,
+      "arquivo": "skills/avaliar-entrega.json",
+      "descricao": "Registrar a avaliação do DESENVOLVEDOR sobre a entrega da task (boa ou ruim, com o motivo da lista fechada) e, no ruim, devolvê-la ao agente para correção, pelo CLI do dev.kit.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "d6029f624c60991facfa7abf8071526d578155255c60c5c60096c21ad5eda948"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "best-of-n",
+      "versao": 1,
+      "hash": "5d95d12d11ee7b787ad24dcc018d156b4822d99a91829803eb3dd5527b889b06",
+      "catalogo": 1,
+      "arquivo": "skills/best-of-n.json",
+      "descricao": "Rodar a mesma task em 2 a 4 agentes (Claude, Kiro, Kimi, GLM), cada um com a sua pasta e os seus clones, e escolher a melhor execução pela nota do avaliador do fluxo.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "5d95d12d11ee7b787ad24dcc018d156b4822d99a91829803eb3dd5527b889b06"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "catalogo-skills",
+      "versao": 1,
+      "hash": "3b3a0fad38755d5b21c0e664621e0febe0a437eeee0da81e5ba82ebc63aec5ee",
+      "catalogo": 1,
+      "arquivo": "skills/catalogo-skills.json",
+      "descricao": "Consultar o catálogo de skills do dev.kit, ver o conteúdo de uma skill, exportar, importar, pinar no combo da conversa, sincronizar o catálogo básico e publicar ou assinar no catálogo da empresa.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "3b3a0fad38755d5b21c0e664621e0febe0a437eeee0da81e5ba82ebc63aec5ee"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "cherry-pick",
+      "versao": 1,
+      "hash": "0d80fd67a00a27ed266fa3bde017fa3ddafbe09a876be6aa6ed148d3f3a8c610",
+      "catalogo": 1,
+      "arquivo": "skills/cherry-pick.json",
+      "descricao": "Aplicar commits num branch de destino e enviar, pelo CLI do dev.kit (a tela de Cherry-pick), simulando antes.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "0d80fd67a00a27ed266fa3bde017fa3ddafbe09a876be6aa6ed148d3f3a8c610"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "comentar-workitem",
+      "versao": 1,
+      "hash": "f05cea85603aefd342b5b72e7819194ae1c0924ad50a5c796ae5dcced7b8659f",
+      "catalogo": 1,
+      "arquivo": "skills/comentar-workitem.json",
+      "descricao": "Registrar no board, como comentário do work item, o que foi apurado na task — e corrigir um comentário já escrito.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "f05cea85603aefd342b5b72e7819194ae1c0924ad50a5c796ae5dcced7b8659f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "commitar-e-enviar",
+      "versao": 1,
+      "hash": "ae15dee6a9c573be121a92d77218373dde2a667d3d7dc33098611adc358d87c6",
+      "catalogo": 1,
+      "arquivo": "skills/commitar-e-enviar.json",
+      "descricao": "Fazer o commit e o push do trabalho da task respeitando as regras do board e do dev.kit: o portão do objetivo, só o que é da task, a mensagem com AB#<work item> e o branch da task, sem Pull Request.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "ae15dee6a9c573be121a92d77218373dde2a667d3d7dc33098611adc358d87c6"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "compilar-angular",
+      "versao": 1,
+      "hash": "f6918867608bbdf1254cc8f1b029cc00584f96b6adc02071815666f3fd64de67",
+      "catalogo": 1,
+      "arquivo": "skills/compilar-angular.json",
+      "descricao": "Compilar o projeto Angular (ng build) após alterar arquivos .ts/.html/.scss.",
+      "tecnologia": "Angular",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "f6918867608bbdf1254cc8f1b029cc00584f96b6adc02071815666f3fd64de67"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "compilar-net-framework",
+      "versao": 1,
+      "hash": "24545df703a2fe330894c44321762feff581f4eb9579b6ffb80751b5a9c89512",
+      "catalogo": 1,
+      "arquivo": "skills/compilar-net-framework.json",
+      "descricao": "Compilar projetos .NET Framework (csproj antigo, ex.: 4.7.1) com o MSBuild — onde dotnet build não funciona.",
+      "tecnologia": ".NET",
+      "minDevKit": 1,
+      "requer": [
+        "msbuild"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "24545df703a2fe330894c44321762feff581f4eb9579b6ffb80751b5a9c89512"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "configurar-devcli",
+      "versao": 1,
+      "hash": "a08dcae5f3c413eb90843c77121e93af293a4b638afe8922399426931bfc0f25",
+      "catalogo": 1,
+      "arquivo": "skills/configurar-devcli.json",
+      "descricao": "Ajustar as preferências de lançamento de horas (jornada, granularidade, apropriação do dia) e o acesso ao TFS pelo CLI do dev.kit.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "a08dcae5f3c413eb90843c77121e93af293a4b638afe8922399426931bfc0f25"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "consultar-lancamentos",
+      "versao": 1,
+      "hash": "6d018132ec6bc2da72c6cd2dbe76cb9ae6d5a5dffc52b1fa4077105633a64799",
+      "catalogo": 1,
+      "arquivo": "skills/consultar-lancamentos.json",
+      "descricao": "Consultar as horas JÁ lançadas na ferramenta corporativa de timesheet (somente leitura), por dia ou mês.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "6d018132ec6bc2da72c6cd2dbe76cb9ae6d5a5dffc52b1fa4077105633a64799"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "consultar-tech-plans",
+      "versao": 1,
+      "hash": "0034e93f769ec2760303c0520233a568548b4eee47396eb522c398515019548d",
+      "catalogo": 1,
+      "arquivo": "skills/consultar-tech-plans.json",
+      "descricao": "Consultar os Tech Plans do dev.kit — os padrões do time que entram no prompt das tasks — e o texto de cada um.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "0034e93f769ec2760303c0520233a568548b4eee47396eb522c398515019548d"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "consultar-telemetria",
+      "versao": 1,
+      "hash": "d6ea1a569ecd7e9924e91ac694a350cdd07a86b7b6c42b29be53a75ead1ff67a",
+      "catalogo": 1,
+      "arquivo": "skills/consultar-telemetria.json",
+      "descricao": "Consultar o uso do dev.kit pela telemetria (arquivos alterados pelos agentes, fluxos executados, ferramentas acionadas e comandos delegados) num período, e o feedback das entregas (\uD83D\uDC4D/\uD83D\uDC4E) guardado no dev.kit.page, pelo CLI, somente leitura.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "d6ea1a569ecd7e9924e91ac694a350cdd07a86b7b6c42b29be53a75ead1ff67a"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "consultar-tfs",
+      "versao": 1,
+      "hash": "c631a529385abc8233d6abb78d4e29dbda2ed848ce6c7937902dda5265a14b6a",
+      "catalogo": 1,
+      "arquivo": "skills/consultar-tfs.json",
+      "descricao": "Ler work items de um TFS/Azure DevOps Server antigo (outro servidor que não o board configurado) pelo CLI do dev.kit.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "c631a529385abc8233d6abb78d4e29dbda2ed848ce6c7937902dda5265a14b6a"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "consultar-workitem",
+      "versao": 1,
+      "hash": "20afe428fcbd082a047e75cd7961649839e2a9f9c7b2de567ec65d80175b4095",
+      "catalogo": 1,
+      "arquivo": "skills/consultar-workitem.json",
+      "descricao": "Ler um work item por inteiro pelo CLI do dev.kit — descrição, planejamento técnico e tasks filhas — ou vários de uma vez, resumidos.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "20afe428fcbd082a047e75cd7961649839e2a9f9c7b2de567ec65d80175b4095"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "controlar-devkit",
+      "versao": 1,
+      "hash": "63dfdb78f174d472aa1af4de41d685ba47998c03fc935b8581cba353d7d1af9e",
+      "catalogo": 1,
+      "arquivo": "skills/controlar-devkit.json",
+      "descricao": "Mapa de como operar o dev.kit pelo CLI, do mesmo jeito que o desenvolvedor faz nas telas: qual comando e qual skill para cada ação.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "63dfdb78f174d472aa1af4de41d685ba47998c03fc935b8581cba353d7d1af9e"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "converter-encoding",
+      "versao": 1,
+      "hash": "f08d299106f3607753d6ca404b5592984432d813080af6d91f3fc4c2e2707393",
+      "catalogo": 1,
+      "arquivo": "skills/converter-encoding.json",
+      "descricao": "Devolver ao encoding do branch (ex.: Windows-1252 do VB6) um fonte que a ferramenta de edição gravou em UTF-8 — pelo CLI do dev.kit, sem PowerShell.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "f08d299106f3607753d6ca404b5592984432d813080af6d91f3fc4c2e2707393"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "criar-bug",
+      "versao": 1,
+      "hash": "60a2f62636b03ee6b098b97f13f5c2bbc8b02cba2edf5c8852b1aabcc0ae55e7",
+      "catalogo": 1,
+      "arquivo": "skills/criar-bug.json",
+      "descricao": "Criar um Bug no Azure Boards pelo CLI do dev.kit — simulando antes e perguntando ao desenvolvedor em qual sprint ele entra.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "60a2f62636b03ee6b098b97f13f5c2bbc8b02cba2edf5c8852b1aabcc0ae55e7"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "criar-pull-requests",
+      "versao": 1,
+      "hash": "bbec60c7b6a9416d2925c867d913eaa27218f72f4782f7436be4b3119fd3488f",
+      "catalogo": 1,
+      "arquivo": "skills/criar-pull-requests.json",
+      "descricao": "Abrir as Pull Requests dos work items em review: consulta o Azure Boards e cria a PR no GitHub.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [
+        "az"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "bbec60c7b6a9416d2925c867d913eaa27218f72f4782f7436be4b3119fd3488f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "criar-tool-devcli",
+      "versao": 1,
+      "hash": "4a5bcb3131e8cd308154c86f8868287cdc6e1bb5bb79938578f555d697c740b4",
+      "catalogo": 1,
+      "arquivo": "skills/criar-tool-devcli.json",
+      "descricao": "Criar uma ferramenta nova no devcli (uma tool gerada em C#, compilada e publicada pelo próprio dev.kit), a pedido do desenvolvedor.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "4a5bcb3131e8cd308154c86f8868287cdc6e1bb5bb79938578f555d697c740b4"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "criar-user-story",
+      "versao": 1,
+      "hash": "b9c9ac4af7e4c98b65369254162bc754b51d4f17c914882dfb4f7a6a65278f48",
+      "catalogo": 1,
+      "arquivo": "skills/criar-user-story.json",
+      "descricao": "Criar uma User Story no Azure Boards pelo CLI do dev.kit — simulando antes e perguntando ao desenvolvedor em qual sprint ela entra.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "b9c9ac4af7e4c98b65369254162bc754b51d4f17c914882dfb4f7a6a65278f48"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "criar-workitem",
+      "versao": 1,
+      "hash": "1f5dc125de22c82c98f1d91de62fda72372f88df569edfc7c8c6ffaea6e786f8",
+      "catalogo": 1,
+      "arquivo": "skills/criar-workitem.json",
+      "descricao": "Criar no Azure Boards um work item de qualquer tipo do processo (HADM, Solicitação…) pelo CLI do dev.kit — lendo os campos obrigatórios do tipo, perguntando os valores ao desenvolvedor, simulando e só então aplicando.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "1f5dc125de22c82c98f1d91de62fda72372f88df569edfc7c8c6ffaea6e786f8"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "depurar-em-execucao",
+      "versao": 1,
+      "hash": "9793e6b5e730910a8df2f04f6cb9759173228d3e0aeee0377d165d7c8591c833",
+      "catalogo": 1,
+      "arquivo": "skills/depurar-em-execucao.json",
+      "descricao": "Colher evidência de execução (pilha, valores, objetos) com o depurador do dev.kit, em vez de deduzir do fonte.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "9793e6b5e730910a8df2f04f6cb9759173228d3e0aeee0377d165d7c8591c833"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "descrever-processos",
+      "versao": 1,
+      "hash": "bdcf922dc1724bb3ba7582a6694fa3badac7fc9011b004556a64fd15588835ed",
+      "catalogo": 1,
+      "arquivo": "skills/descrever-processos.json",
+      "descricao": "Ler os work items (TFS antigo ou Azure DevOps), tirar os tópicos do título e da descrição, derivar deles os processos e decompor cada um nos componentes que tem no código.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "bdcf922dc1724bb3ba7582a6694fa3badac7fc9011b004556a64fd15588835ed"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "elucidar-fluxo",
+      "versao": 1,
+      "hash": "aa814f6a570e217ede4729697bc31a99f70309f098c6a54ab40264a21e67ebe9",
+      "catalogo": 1,
+      "arquivo": "skills/elucidar-fluxo.json",
+      "descricao": "Explicar de ponta a ponta um fluxo/rotina do sistema, gerando um documento de análise.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "aa814f6a570e217ede4729697bc31a99f70309f098c6a54ab40264a21e67ebe9"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "gerar-test-cases",
+      "versao": 1,
+      "hash": "2e36df79f41c180acbfa958377438ac6d18b012e537c5fb8ceb7ffc290b08ddd",
+      "catalogo": 1,
+      "arquivo": "skills/gerar-test-cases.json",
+      "descricao": "Ler o código de cada componente dos processos e escrever os passos que validam cada um deles.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "2e36df79f41c180acbfa958377438ac6d18b012e537c5fb8ceb7ffc290b08ddd"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "gerenciar-agendamentos",
+      "versao": 1,
+      "hash": "a61bdc319ace816d83c95819c947f25f8ecc22ab4e90207fa85f69fb27403d07",
+      "catalogo": 1,
+      "arquivo": "skills/gerenciar-agendamentos.json",
+      "descricao": "Listar os agendamentos do dev.kit com o histórico, e pausar, ativar, excluir ou executar agora um deles.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "a61bdc319ace816d83c95819c947f25f8ecc22ab4e90207fa85f69fb27403d07"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "iniciar-implementacao",
+      "versao": 1,
+      "hash": "d03c1ac839124fcee7b9d9e0241dd942b85af3c28464bb7ebd2f0cbaeef36f90",
+      "catalogo": 1,
+      "arquivo": "skills/iniciar-implementacao.json",
+      "descricao": "Começar a implementação de um work item já planejado: vincular a task ao item e passar o item e as tasks filhas abertas para Active, pelo CLI do dev.kit.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "d03c1ac839124fcee7b9d9e0241dd942b85af3c28464bb7ebd2f0cbaeef36f90"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "iniciar-processo",
+      "versao": 1,
+      "hash": "098b4645d818aa262537264f6041be0fc0a33502ce572b2e1b1623345875dc12",
+      "catalogo": 1,
+      "arquivo": "skills/iniciar-processo.json",
+      "descricao": "Iniciar uma task do agente no dev.kit (o \"Executar com agente\" do Board) pelo CLI, simulando antes e mostrando a parametrização ao desenvolvedor.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "098b4645d818aa262537264f6041be0fc0a33502ce572b2e1b1623345875dc12"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "itens-em-revisao",
+      "versao": 1,
+      "hash": "a37dbf4bb5ab9b934c503bfc7f9c4c61b978dc8b9a055da19e14e8d8134fd18b",
+      "catalogo": 1,
+      "arquivo": "skills/itens-em-revisao.json",
+      "descricao": "Listar os work items do desenvolvedor em revisão e o branch vinculado a cada um, pelo CLI do dev.kit.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "a37dbf4bb5ab9b934c503bfc7f9c4c61b978dc8b9a055da19e14e8d8134fd18b"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "lancar-horas",
+      "versao": 1,
+      "hash": "e437bae561f33325049972e300a45ee28e2534bfbeaf6aa2587b0ecc517423e3",
+      "catalogo": 1,
+      "arquivo": "skills/lancar-horas.json",
+      "descricao": "Lançar as horas do dia nos work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — ou item a item (lançamento manual com --item), quando o desenvolvedor disser onde vai cada hora.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "e437bae561f33325049972e300a45ee28e2534bfbeaf6aa2587b0ecc517423e3"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "listar-arquivos-alterados",
+      "versao": 1,
+      "hash": "a8178d20976630845fc0abc6c8b5ff0c58f538a8582f842dac8b4c6471f5c9c8",
+      "catalogo": 1,
+      "arquivo": "skills/listar-arquivos-alterados.json",
+      "descricao": "Responder quais arquivos o agente alterou nesta task (aba Alterações do git.kit).",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "a8178d20976630845fc0abc6c8b5ff0c58f538a8582f842dac8b4c6471f5c9c8"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "listar-sprints",
+      "versao": 1,
+      "hash": "df1b85c19db1bfbaf857b30fb39abc35ffae67da2e8ff7f0e36f4864123ffee0",
+      "catalogo": 1,
+      "arquivo": "skills/listar-sprints.json",
+      "descricao": "Listar as sprints dos times do desenvolvedor (caminho, período e a atual) pelo CLI do dev.kit, para escolher a iteração com ele.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "df1b85c19db1bfbaf857b30fb39abc35ffae67da2e8ff7f0e36f4864123ffee0"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "mensagens-entre-tasks",
+      "versao": 1,
+      "hash": "4d64d73f4b6799a66865e09fdb31c3562d127907ba9b282121aba17ab77f9bd0",
+      "catalogo": 1,
+      "arquivo": "skills/mensagens-entre-tasks.json",
+      "descricao": "Pedir algo ao agente de outra task do dev.kit (um resumo, uma confirmação) e responder aos pedidos que chegam, pela fila do devcli mensagem.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "4d64d73f4b6799a66865e09fdb31c3562d127907ba9b282121aba17ab77f9bd0"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "pipelines-ado",
+      "versao": 1,
+      "hash": "9802457faf65210bbffc8c5c57009b26fcd109ba1b4ce0bd6c5e117bb165dd5f",
+      "catalogo": 1,
+      "arquivo": "skills/pipelines-ado.json",
+      "descricao": "Disparar um build nos Pipelines do Azure DevOps, acompanhar a execução e ler o log por etapa, pelo CLI do dev.kit — simulando antes de disparar.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "9802457faf65210bbffc8c5c57009b26fcd109ba1b4ce0bd6c5e117bb165dd5f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "planejar-tasks",
+      "versao": 1,
+      "hash": "dc66addbd18968b767ebd2eea09af91527be1efcf3bce7412a5a5cb64d92335a",
+      "catalogo": 1,
+      "arquivo": "skills/planejar-tasks.json",
+      "descricao": "Criar no Azure Boards as tasks filhas de uma US/Bug a partir do planejamento técnico feito para o desenvolvedor.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "dc66addbd18968b767ebd2eea09af91527be1efcf3bce7412a5a5cb64d92335a"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "plano-tecnico",
+      "versao": 1,
+      "hash": "3729f2aacd9be028fda4b3c9c8ad238aeae8a3568bf14fafcaf6d5a7aedb5fa8",
+      "catalogo": 1,
+      "arquivo": "skills/plano-tecnico.json",
+      "descricao": "Ler e escrever o planejamento técnico de um work item (o editor do Board), simulando antes de substituir o texto do desenvolvedor.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "3729f2aacd9be028fda4b3c9c8ad238aeae8a3568bf14fafcaf6d5a7aedb5fa8"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "processos-devkit",
+      "versao": 1,
+      "hash": "a4a6e7f6b884fbb7d1c340a16932df0eb572084c1b9c110961bab5a91a111d01",
+      "catalogo": 1,
+      "arquivo": "skills/processos-devkit.json",
+      "descricao": "Consultar as tasks do agente no dev.kit (aba Atividades): situação, pasta, pendências e o fim da conversa de cada uma.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "a4a6e7f6b884fbb7d1c340a16932df0eb572084c1b9c110961bab5a91a111d01"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "publicar-angular",
+      "versao": 1,
+      "hash": "011cf6c307109e0b83d354b83078f89899fea3146cfc75dd09844678dc318b7f",
+      "catalogo": 1,
+      "arquivo": "skills/publicar-angular.json",
+      "descricao": "Gerar o build de produção do Angular e publicar o conteúdo do dist no local de saída.",
+      "tecnologia": "Angular",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "011cf6c307109e0b83d354b83078f89899fea3146cfc75dd09844678dc318b7f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "replicar-branch",
+      "versao": 1,
+      "hash": "c69decd406b47b7c58ddeb181e759840783786bc2df5cf5be76fe7f3c20bff1b",
+      "catalogo": 1,
+      "arquivo": "skills/replicar-branch.json",
+      "descricao": "Replicar os commits próprios de um branch num branch novo a partir do destino, enviar e abrir a PR, pelo CLI do dev.kit.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "c69decd406b47b7c58ddeb181e759840783786bc2df5cf5be76fe7f3c20bff1b"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "reportar-desfecho",
+      "versao": 1,
+      "hash": "ef7df68dcc2a0e8e5b0bfd9ea6ac2cff52d08c1e0218f7599175e05b6c5677f1",
+      "catalogo": 1,
+      "arquivo": "skills/reportar-desfecho.json",
+      "descricao": "Reportar pelo CLI do dev.kit como terminou a execução de uma task aberta por gatilho — uma vez por evento; a task fica de pé esperando o próximo.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "ef7df68dcc2a0e8e5b0bfd9ea6ac2cff52d08c1e0218f7599175e05b6c5677f1"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "resolver conflitos",
+      "versao": 1,
+      "hash": "12181d71b5eae7c15a6aabf856ea4c8f26a7c45132735398f3958e9276cd6b27",
+      "catalogo": 1,
+      "arquivo": "skills/resolver-conflitos.json",
+      "descricao": "Resolve os conflitos utilizando a ferramenta tortoisegit",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "12181d71b5eae7c15a6aabf856ea4c8f26a7c45132735398f3958e9276cd6b27"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "revisar-alteracoes",
+      "versao": 1,
+      "hash": "7306de551be41a5d28ee1b58fdd8529e535f327d0890d7e6eca3724c8fae4a98",
+      "catalogo": 1,
+      "arquivo": "skills/revisar-alteracoes.json",
+      "descricao": "Revisar as alterações da task antes do commit: encoding, escopo, padrões e pontas soltas.",
+      "tecnologia": "Git",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "7306de551be41a5d28ee1b58fdd8529e535f327d0890d7e6eca3724c8fae4a98"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "roi-workitem",
+      "versao": 1,
+      "hash": "1df62bf6348408a326e15ad32f5abc8b18048c4b7c0284b579693ad837f26a92",
+      "catalogo": 1,
+      "arquivo": "skills/roi-workitem.json",
+      "descricao": "Medir o ROI de um work item pelo CLI do dev.kit: turnos do agente × horas lançadas × lead time × Pull Requests, com o envio ao painel e ao OpenTelemetry.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "1df62bf6348408a326e15ad32f5abc8b18048c4b7c0284b579693ad837f26a92"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "servidor-mcp-devcli",
+      "versao": 1,
+      "hash": "8ae6f2b7c8da72817279379428dfe791b1794bd0111b7384358582baf689385e",
+      "catalogo": 1,
+      "arquivo": "skills/servidor-mcp-devcli.json",
+      "descricao": "Configurar o devcli como servidor MCP (stdio) no Claude Code, no VS Code (Copilot) e no Cursor, e explicar o que ele publica.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "8ae6f2b7c8da72817279379428dfe791b1794bd0111b7384358582baf689385e"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "testar-dotnet",
+      "versao": 1,
+      "hash": "3ae4a266331b7982a4c06c8761c82d2431645bae83a3c921cdfcf427108d0573",
+      "catalogo": 1,
+      "arquivo": "skills/testar-dotnet.json",
+      "descricao": "Rodar os testes unitários C# (dotnet test) dos projetos afetados pela alteração.",
+      "tecnologia": ".NET",
+      "minDevKit": 1,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "3ae4a266331b7982a4c06c8761c82d2431645bae83a3c921cdfcf427108d0573"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "testplans-wiki-ado",
+      "versao": 1,
+      "hash": "535360364cbad52eaf700499869a95841dacdea88fa190fda3ef80d3342dd1a1",
+      "catalogo": 1,
+      "arquivo": "skills/testplans-wiki-ado.json",
+      "descricao": "Ler e escrever casos de teste (Test Plans) e páginas da Wiki do Azure DevOps pelo MCP oficial do ADO, quando ele está ligado na sessão do agente.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "az",
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "535360364cbad52eaf700499869a95841dacdea88fa190fda3ef80d3342dd1a1"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "vincular-workitem",
+      "versao": 1,
+      "hash": "fd2c0ef9519a53c420b9c511e4daec9736fbc303dda972a210c1a9dbdf33c09f",
+      "catalogo": 1,
+      "arquivo": "skills/vincular-workitem.json",
+      "descricao": "Vincular um work item a uma task do dev.kit já iniciada (ou desvincular), para o processo e o rateio de horas contarem para ele.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "fd2c0ef9519a53c420b9c511e4daec9736fbc303dda972a210c1a9dbdf33c09f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "workitems-em-andamento",
+      "versao": 1,
+      "hash": "8720be907d27d19bd953c17d3b2768b6d990b5999deb57faa25fb6e9b6ab7d4b",
+      "catalogo": 1,
+      "arquivo": "skills/workitems-em-andamento.json",
+      "descricao": "Consultar no Azure Boards os work items em andamento do desenvolvedor e as horas já lançadas.",
+      "tecnologia": "Azure DevOps",
+      "minDevKit": 1,
+      "requer": [
+        "devcli"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "8720be907d27d19bd953c17d3b2768b6d990b5999deb57faa25fb6e9b6ab7d4b"
+      ]
+    }
+  ],
+  "retirados": []
+}

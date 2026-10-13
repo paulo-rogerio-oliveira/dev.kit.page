@@ -1,0 +1,10 @@
+{
+  "name": "processos-devkit",
+  "description": "Consultar as tasks do agente no dev.kit (aba Atividades): situação, pasta, pendências e o fim da conversa de cada uma.",
+  "content": "# Processos do dev.kit\n\nPara responder \"o que está rodando?\", \"em que pé está a task do 34607?\", \"o que o agente respondeu naquela task?\" ou \"o disparo que fiz deu certo?\":\n\n```\n\"{DEVCLI}\" processos --json\n```\n\n- Sem opção: as tasks **abertas** (em execução, aguardando o desenvolvedor, prontas para enviar, com conflito). `--encerrados` inclui as concluídas e canceladas. `--workitem N` filtra.\n- Detalhe de uma, com o fim da conversa (o id aceita prefixo):\n\n```\n\"{DEVCLI}\" processos --id <sessão> --mensagens 20\n```\n\n  Mostra repositórios, roteiro, **comando pendente** (o agente pediu e espera o clique do desenvolvedor), depuração pedida, commit proposto e as últimas mensagens.\n\n## O que este comando NÃO faz\n\nÉ **somente leitura**. Concluir, cancelar, excluir, responder na conversa de outra task, aprovar comando pendente: tudo isso é do desenvolvedor, na janela do processo. A task aberta pertence ao dev.kit que a conduz; escrever nela por fora deixaria a tela e o banco em desacordo. Quando algo precisar dessas ações, diga ao desenvolvedor qual task (id e pasta) e o que falta.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

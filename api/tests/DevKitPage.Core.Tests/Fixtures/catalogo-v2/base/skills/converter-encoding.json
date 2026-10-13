@@ -1,0 +1,10 @@
+{
+  "name": "converter-encoding",
+  "description": "Devolver ao encoding do branch (ex.: Windows-1252 do VB6) um fonte que a ferramenta de edição gravou em UTF-8 — pelo CLI do dev.kit, sem PowerShell.",
+  "content": "# Converter encoding de fontes\n\nAs ferramentas de arquivo da sua CLI só gravam UTF-8. Um fonte legado — VB6 (`.bas`, `.cls`, `.frm`, `.ctl`, `.vbp`), `.sql` ou qualquer arquivo que o branch mantém em Windows-1252/ISO-8859-1 — fica em UTF-8 depois que você o edita, e a acentuação quebra no compilador e no diff. O encoding do branch está no arquivo de regras.\n\n## Depois de editar (ou criar) o fonte\n\n```\n\"{DEVCLI}\" encoding --arquivo <caminho do arquivo> --para windows-1252\n```\n\n- `--arquivo` é relativo à pasta corrente e se repete: converta TODOS os fontes legados que você tocou no turno de uma vez.\n- O comando RECUSA em vez de estragar:\n  - **o arquivo não é UTF-8 válido** — ele já está no encoding do branch (você não o editou, ou já converteu). Não converta de novo.\n  - **um caractere não existe no destino** — a mensagem diz qual e em que linha. Troque-o por um que exista (aspas curvas por retas, travessão por hífen) e converta de novo.\n- Na dúvida, confira antes com `--verificar`, que não grava nada.\n- Arquivo NOVO de tipo legado: crie pela ferramenta (UTF-8) e converta em seguida, igual.\n\n## Não faça\n\n- NUNCA use PowerShell para editar ou converter arquivo — nem a ferramenta, nem `powershell -Command` com `[IO.File]::WriteAllText`. É exatamente o que este comando substitui: aquele caminho não confere nada e troca acento por `?` em silêncio.\n- Não tente reproduzir os bytes Windows-1252 dentro da ferramenta de edição: a CLI aborta o turno com \"stream did not contain valid UTF-8\".\n- Não converta arquivo que o branch mantém em UTF-8.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

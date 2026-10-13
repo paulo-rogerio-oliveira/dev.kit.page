@@ -1,0 +1,10 @@
+{
+  "name": "revisar-entrega",
+  "description": "Revisar o que vai ser entregue antes do envio: build, testes e o diff de cada repositório.",
+  "content": "# Revisar a entrega\n\n1. Compile o projeto alterado com `\"{MSBUILD}\" <projeto>.csproj -v q`.\n2. Rode os testes do que mudou.\n3. Registre o resumo com `\"{DEVCLI}\" entrega --resumo \"...\"`.\n\nUse `meu-repo` como exemplo de repositório e `AB#123` para citar o work item.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

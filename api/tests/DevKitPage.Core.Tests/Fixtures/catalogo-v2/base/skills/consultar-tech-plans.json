@@ -1,0 +1,10 @@
+{
+  "name": "consultar-tech-plans",
+  "description": "Consultar os Tech Plans do dev.kit — os padrões do time que entram no prompt das tasks — e o texto de cada um.",
+  "content": "# Tech Plans\n\nOs Tech Plans são os textos de padrão do time que o dev.kit põe no prompt das tasks. Podem ser gerais ou de um repositório, obrigatórios ou não, e alguns servem de instrução de abertura do agente. Os que valem para a sua task já estão no seu prompt. Use este comando para responder \"que padrão o time tem para X?\" ou \"por que este plano entrou?\".\n\n```\n\"{DEVCLI}\" planos --json\n\"{DEVCLI}\" planos --repo <nome do repositório>\n\"{DEVCLI}\" planos --id <n>\n```\n\n- `--repo` filtra os planos daquele repositório mais os gerais.\n- As marcas dizem: **obrigatório** (entra sem escolha), **instrução do agente** (substitui o texto de abertura) e **só com work item**.\n\nÉ somente leitura. Editar um padrão do time é decisão do desenvolvedor, na tela Tech Plans. Se o que você apurou pede um padrão novo, proponha o texto na resposta.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

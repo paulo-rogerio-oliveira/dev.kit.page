@@ -1,0 +1,9 @@
+{
+  "key": "regras-de-build",
+  "description": "Regras de build",
+  "content": "Compile só o projeto que você alterou e os que dependem dele; a solução inteira fica para mudança estrutural.",
+  "repository": "",
+  "onlyWithWorkItem": false,
+  "isRequired": false,
+  "isAgentInstruction": false
+}
