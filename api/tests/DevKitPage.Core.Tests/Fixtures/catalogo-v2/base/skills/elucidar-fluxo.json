@@ -1,0 +1,10 @@
+{
+  "name": "elucidar-fluxo",
+  "description": "Explicar de ponta a ponta um fluxo/rotina do sistema, gerando um documento de análise.",
+  "content": "# Elucidar fluxo\n\nQuando o desenvolvedor pedir para explicar como algo funciona: siga o fluxo de ponta a ponta e produza um documento de análise. É uma skill de LEITURA — não altere nenhum arquivo dos repositórios.\n\n1. Comece pelo ponto de entrada informado (tela Angular, endpoint C#, formulário VB6) e siga a execução camada por camada — componente/template → service TypeScript → controller/endpoint → regras de negócio C# → componentes COM/VB6 → banco (procedures/queries) — citando arquivo e rotina em CADA salto.\n2. Escreva o resultado em `{WORKSPACE}\\analise_<tema>.md` — a pasta da task, FORA dos clones, para o documento nunca entrar num commit. Estruture assim:\n   - **Visão geral** — 3 a 5 linhas do que o fluxo faz;\n   - **Passo a passo** — a cadeia de chamadas, com o caminho de cada arquivo;\n   - **Regras de negócio** — condições, validações e cálculos encontrados;\n   - **Pontos de atenção** — acoplamentos, efeitos colaterais e código aparentemente morto.\n3. Na resposta ao desenvolvedor, traga a visão geral e aponte o caminho do documento gerado.\n4. O que não der para afirmar pelo código (configuração externa, dados de produção), marque explicitamente como SUPOSIÇÃO — não invente comportamento.\n5. O documento fica fora dos repositórios: NUNCA o inclua na resposta da skill `listar-arquivos-alterados`.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": true,
+  "isPinned": true
+}

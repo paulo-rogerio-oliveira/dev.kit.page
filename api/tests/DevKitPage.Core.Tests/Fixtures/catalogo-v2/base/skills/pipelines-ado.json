@@ -1,0 +1,10 @@
+{
+  "name": "pipelines-ado",
+  "description": "Disparar um build nos Pipelines do Azure DevOps, acompanhar a execução e ler o log por etapa, pelo CLI do dev.kit — simulando antes de disparar.",
+  "content": "# Pipelines do Azure DevOps\n\nUse quando o pedido for \"rode o pipeline\", \"dispare o build do branch\", \"por que o CI falhou?\", \"leia o log do build\". O CI do board passa pelo `{DEVCLI}`, com a credencial que o desenvolvedor cadastrou — nunca por `{AZ}`, `curl` ou REST na mão.\n\n## 1. Descubra o pipeline\n\n```\n\"{DEVCLI}\" pipeline --listar --json\n```\n\nA saída traz o `id`, o `nome` e a `pasta` de cada pipeline. Escolha pelo nome; não invente id.\n\n## 2. Dispare — simulando antes\n\n```\n\"{DEVCLI}\" pipeline --disparar <id> --branch <branch> --json\n\"{DEVCLI}\" pipeline --disparar <id> --branch <branch> --aplicar\n```\n\n- Sem `--aplicar` nada é enfileirado: a simulação só confere que o pipeline existe e mostra o branch (em forma de ref, `refs/heads/...`).\n- Sem `--branch`, o board usa o branch padrão do pipeline.\n- Disparar ocupa um agente de build do time e aparece para todos: dispare quando o pedido ou o planejamento mandar.\n\n## 3. Acompanhe e leia o log\n\n```\n\"{DEVCLI}\" pipeline --status <execução> --json\n\"{DEVCLI}\" pipeline --execucoes --branch <branch> --json\n\"{DEVCLI}\" pipeline --log <execução> --json\n\"{DEVCLI}\" pipeline --log <execução> --etapa Build\n```\n\n- `status` é `notStarted`, `inProgress` ou `completed`; `resultado`, `succeeded`, `partiallySucceeded`, `failed` ou `canceled` (o campo `falhou` já diz se falhou).\n- O log vem por ETAPA, na ordem em que rodaram; cada etapa traz só o FIM do log (o teto é de 20 mil caracteres, que é onde o erro de uma compilação está). Leia primeiro as etapas com `falhou: true`.\n- Não fique consultando em laço: um build leva minutos. Consulte o status quando precisar dele para decidir o próximo passo.\n\nCódigo de saída diferente de 0 é recusa (pipeline ou execução que não existe, PAT sem escopo de Build): o stderr diz o motivo.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

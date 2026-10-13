@@ -20,8 +20,9 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await page.getByRole('link', { name: 'Usuários' }).click();
   await expect(page.getByRole('heading', { name: 'Novo usuário' })).toBeVisible();
 
-  // 2. Cria o dev: a senha temporária aparece uma vez.
-  const formulario = page.getByRole('form', { name: 'Novo usuário' });
+  // 2. Cria o dev pelo painel lateral (US #461): a senha temporária aparece uma vez.
+  const formulario = page.getByRole('complementary', { name: 'Novo usuário' }).getByRole('form', { name: 'Novo usuário' });
+  await expect(formulario).toContainText('A senha temporária aparece uma única vez depois de criar.');
   await formulario.getByLabel('Login').fill(login);
   await formulario.getByLabel('Nome').fill('Dev do E2E');
   await formulario.getByLabel('Papel').selectOption('dev');
@@ -32,7 +33,16 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   expect(temporaria.length).toBeGreaterThanOrEqual(10);
   const linha = page.getByRole('row', { name: new RegExp(login.replaceAll('.', '\\.')) });
   await expect(linha).toContainText('Troca de senha pendente');
+  await expect(linha).toContainText('Dev do E2E');
   await page.screenshot({ path: 'test-results/capturas/20-usuarios-senha-temporaria.png', fullPage: true });
+
+  // A busca (no navegador) acha o dev pelo login, e o menu ⋯ da linha tem as ações dele.
+  await page.getByRole('searchbox', { name: 'Buscar por nome ou login' }).fill(login);
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(2);
+  await page.getByRole('button', { name: `Ações de ${login}` }).click();
+  await expect(page.getByRole('menu', { name: `Ações de ${login}` }).getByRole('menuitem')).toHaveText(['Editar', 'Bloquear', 'Redefinir senha']);
+  await page.screenshot({ path: 'test-results/capturas/21-usuarios-menu-da-linha.png', fullPage: true });
+  await page.keyboard.press('Escape');
 
   // A lista que a API devolve não traz a senha.
   const { token } = (await (await request.post(`${API}/api/auth/login`, { data: { login: 'admin', senha: NOVA_SENHA } })).json()) as { token: string };

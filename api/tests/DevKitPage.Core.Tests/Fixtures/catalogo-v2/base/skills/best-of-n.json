@@ -1,0 +1,10 @@
+{
+  "name": "best-of-n",
+  "description": "Rodar a mesma task em 2 a 4 agentes (Claude, Kiro, Kimi, GLM), cada um com a sua pasta e os seus clones, e escolher a melhor execução pela nota do avaliador do fluxo.",
+  "content": "# Best-of-N entre CLIs\n\nUse quando o pedido for \"rode isto no Claude e no Kiro e fique com o melhor\", \"compare os agentes nesta task\".\n\n## 1. Dispare as N execuções — simulando antes\n\n```\n\"{DEVCLI}\" processo-iniciar --workitem <N> --repo <origem> --fluxo <fluxo com avaliador> --best-of claude,kiro,kimi --json\n\"{DEVCLI}\" processo-iniciar --workitem <N> --repo <origem> --fluxo <fluxo com avaliador> --best-of claude,kiro,kimi --aplicar\n```\n\n- De 2 a 4 agentes (`claude`, `kiro`, `kimi`, `glm`, com `:modelo` opcional, ex.: `claude:opus`). Não use `--agente` junto: no best-of cada execução tem o agente da lista.\n- Cada execução é uma task comum, na SUA pasta e com os SEUS clones: elas não pisam umas nas outras. O título de cada uma leva a marca do grupo (`[bo-AAAAMMDDHHMMSS]`), que a saída mostra.\n- A escolha é pela NOTA do avaliador: use um fluxo com avaliador (`--fluxo`), senão nenhuma execução terá nota.\n- Disparar N vezes custa N agentes inteiros: dispare quando o pedido ou o planejamento mandar.\n\n## 2. Classifique\n\n```\n\"{DEVCLI}\" best-of\n\"{DEVCLI}\" best-of --grupo <bo-...> --json\n```\n\n- Sem `--grupo`, lista os grupos. Com ele, a classificação: a maior nota VÁLIDA primeiro (a mais recente do avaliador, e só se a pasta não mudou depois dela); no empate, a que precisou de menos rodadas.\n- `vencedora` nula quer dizer que nenhuma execução tem nota válida ainda — espere os avaliadores, não escolha no escuro.\n- O comando só lê. Seguir com a vencedora (enviar, abrir a PR) e concluir ou excluir as demais é do desenvolvedor, pela tela: diga qual venceu, com a nota e a pasta.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

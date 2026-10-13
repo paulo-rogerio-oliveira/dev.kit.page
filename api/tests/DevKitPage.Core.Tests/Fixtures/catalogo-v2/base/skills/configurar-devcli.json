@@ -1,0 +1,10 @@
+{
+  "name": "configurar-devcli",
+  "description": "Ajustar as preferências de lançamento de horas (jornada, granularidade, apropriação do dia) e o acesso ao TFS pelo CLI do dev.kit.",
+  "content": "# Configurar o devcli\n\n```\n\"{DEVCLI}\" config --json\n```\n\nSem opções, mostra o que está gravado.\n\n| Preferência | Opção | Observação |\n|---|---|---|\n| jornada diária | `--diaria 8` | horas por dia útil |\n| menor fração lançável | `--granularidade 0,25` | 15 min |\n| apropriação do dia | `--apropriacao 50` | % da jornada; **volta sozinha a 100%** depois do próximo lançamento aplicado |\n| TFS | `--tfs-url-variavel`, `--tfs-token-variavel`, `--tfs-api-version` | os NOMES das variáveis de ambiente, nunca os valores |\n| OpenTelemetry (esforço do agente e ROI, `gen_ai.*`) | `--otlp-endpoint http://localhost:4317`, `--otlp-protocolo grpc\\|http/protobuf` | desligado por padrão; `--otlp-endpoint -` desliga |\n| status do agente no card do board | `--status-no-card sim\\|nao` | desligado por padrão: escreve marcador e comentário no work item, visíveis ao time |\n\n- Mude só o que o desenvolvedor pediu. Estas preferências valem para todo lançamento seguinte.\n- \"Hoje só trabalhei meio período\" é `--apropriacao 50`, e não mexer na jornada.\n- A gravação é local e imediata.\n- Organização, projeto, PAT e e-mail do board ficam na tela Configurações do dev.kit, e não aqui. Se faltarem, avise o desenvolvedor.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

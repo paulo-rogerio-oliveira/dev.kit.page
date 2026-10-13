@@ -5,7 +5,7 @@ import type { ItemDaEmpresa } from '../api/tipos';
 import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
-import { NOME_DO_TIPO } from './Catalogo';
+import { NOME_DO_TIPO } from './catalogo/tipos';
 
 /**
  * O catálogo da empresa visto pelo GESTOR (US #425, /empresa/catalogo): os itens que o time publicou (pelo

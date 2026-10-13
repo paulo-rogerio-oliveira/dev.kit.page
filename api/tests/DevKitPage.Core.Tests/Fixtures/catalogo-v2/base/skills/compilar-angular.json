@@ -1,0 +1,10 @@
+{
+  "name": "compilar-angular",
+  "description": "Compilar o projeto Angular (ng build) após alterar arquivos .ts/.html/.scss.",
+  "content": "# Compilar Angular\n\nPipeline de verificação do front: depois de alterar qualquer arquivo do projeto Angular (`.ts`, `.html`, `.scss`/`.css`), compile para validar antes de concluir a resposta.\n\n1. Localize a raiz do projeto Angular: a pasta com `angular.json` mais próxima do arquivo alterado, subindo na árvore de diretórios. Execute os comandos SEMPRE nessa pasta.\n2. Se `node_modules` não existir, restaure as dependências primeiro: `npm ci` (ou `npm install` quando não houver `package-lock.json`). NUNCA edite o `package-lock.json` à mão.\n3. Compile com o script do próprio projeto: `npm run build`; sem script de build no `package.json`, use `npx ng build`. Use `timeout` alto na ferramenta Bash e NUNCA rode em background.\n4. Se a execução for bloqueada por permissão, use o fluxo `[GITKIT:EXECUTAR]<comando>[/GITKIT:EXECUTAR]` e aguarde.\n5. Erro de compilação: CONSULTE o `commonFixes.md` na raiz do branch antes de investigar, corrija o primeiro erro real da saída e recompile até ficar limpa. Resolvido um problema não trivial (dependência, versão de Node, proxy do npm), REGISTRE-o no `commonFixes.md`.\n6. `node_modules/`, `dist/` e `.angular/` são artefatos: nunca edite nada dentro deles e NUNCA os inclua na resposta da skill `listar-arquivos-alterados`.\n7. O build valida tipos e templates, mas não comportamento: quando o projeto tiver testes, siga a skill `testar-angular` depois do build limpo.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

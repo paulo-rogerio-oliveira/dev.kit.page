@@ -1,0 +1,10 @@
+{
+  "name": "consultar-lancamentos",
+  "description": "Consultar as horas JÁ lançadas na ferramenta corporativa de timesheet (somente leitura), por dia ou mês.",
+  "content": "# Consultar lançamentos\n\nA ferramenta corporativa de horas é outra fonte, diferente do `CompletedWork` do board. Consulte-a antes de lançar, porque o caminho mais curto para um dia lançado duas vezes é não olhar o que já está lá.\n\n```\n\"{DEVCLI}\" lancamentos --json\n\"{DEVCLI}\" lancamentos --dia 2026-09-22 --json\n\"{DEVCLI}\" lancamentos --mes --json\n```\n\n- Somente leitura. Lançar é a skill `lancar-horas` (`horas --aplicar`, que grava no board e na ferramenta).\n- Sem a chave configurada (variável `TIME_SHEET_KEY` por padrão), o comando diz que não está configurado. Isso não é erro seu: avise o desenvolvedor.\n- Compare com a simulação do `horas`: o rateio diz o que DEVERIA ir para cada item; os lançamentos dizem o que JÁ está lá.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

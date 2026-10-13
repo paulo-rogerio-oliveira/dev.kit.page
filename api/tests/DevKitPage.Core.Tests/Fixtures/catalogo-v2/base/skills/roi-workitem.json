@@ -1,0 +1,10 @@
+{
+  "name": "roi-workitem",
+  "description": "Medir o ROI de um work item pelo CLI do dev.kit: turnos do agente × horas lançadas × lead time × Pull Requests, com o envio ao painel e ao OpenTelemetry.",
+  "content": "# ROI de um work item\n\nUse quando o pedido for \"quanto o agente rendeu nesta US?\", \"qual o lead time do item?\", \"quantas horas e PRs saíram do #N?\".\n\n```\n\"{DEVCLI}\" roi --id <work item> --json\n\"{DEVCLI}\" roi --id <work item> --de 2026-10-01 --ate 2026-10-31\n```\n\n- **Somente leitura** no board e no GitHub: o comando não grava nada neles e não pede `--aplicar`.\n- Os números e de onde vêm:\n  - `turnosDoAgente` — os turnos do agente no período, pela MESMA contagem do rateio de horas (`horas`): o ROI e o lançamento batem;\n  - `horasNoTimesheet` — o que a ferramenta corporativa tem lançado nas tasks do item (nulo quando ela não está configurada); `horasNoBoard` — o CompletedWork das tasks; `horas` é a primeira quando existe, senão a segunda;\n  - `leadTimeDias` — da ativação ao encerramento (nulo com o item aberto);\n  - `pullRequests` — as PRs que citam `AB#<id>`, pelo `gh` (sem login no `gh`, a lista vem vazia e um aviso diz isso).\n- Sem `--de`/`--ate`, o período é a vida do item: da ativação (ou criação) ao encerramento (ou hoje).\n- `avisos` lista a fonte que não respondeu: ausência não é zero — diga isso ao desenvolvedor.\n- O comando também PUBLICA o agregado: na fila da telemetria de uso (o painel do dev.kit.page mostra o ROI quando o envio está ligado) e em OpenTelemetry, nas convenções `gen_ai.*`, quando há um coletor configurado (`\"{DEVCLI}\" config --otlp-endpoint http://localhost:4317`; `--otlp-endpoint -` desliga).\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

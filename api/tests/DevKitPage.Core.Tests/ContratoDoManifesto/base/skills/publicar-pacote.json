@@ -1,0 +1,10 @@
+{
+  "name": "publicar-pacote",
+  "description": "Publicar o pacote da versão na pasta de saída, conferindo o hash do que foi gerado.",
+  "content": "# Publicar o pacote\n\n1. Gere o pacote na pasta `dist`.\n2. Confira o SHA-256 do zip antes de copiar (versão 2: a conferência entrou).\n3. Copie para a pasta de saída combinada.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

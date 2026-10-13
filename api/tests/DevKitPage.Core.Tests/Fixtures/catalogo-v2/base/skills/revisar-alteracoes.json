@@ -1,0 +1,10 @@
+{
+  "name": "revisar-alteracoes",
+  "description": "Revisar as alterações da task antes do commit: encoding, escopo, padrões e pontas soltas.",
+  "content": "# Revisar alterações\n\nRevisão final das SUAS alterações, antes do commit (ou quando o desenvolvedor pedir):\n\n1. Releia o diff de cada arquivo que você alterou (`git status` e `git diff` no clone de cada repositório da task).\n2. Verifique em todos os arquivos:\n   - **Encoding**: os fontes continuam no encoding original (**{ENCODING}**), sem BOM novo e sem acentuação corrompida.\n   - **Restos de depuração**: `Console.WriteLine`/`console.log`/`Debug.Print` seus, comentários de rascunho e código comentado que você deixou para trás.\n   - **Escopo**: nada fora do que a task pede — sem formatação em massa, refactor não solicitado nem arquivo tocado sem necessidade.\n   - **C#**: tratamento de null nos caminhos novos, `async` sem `await` esquecido, `IDisposable` sem `using`.\n   - **Angular**: subscription sem `unsubscribe`/`takeUntil` em componente, `any` novo sem justificativa, URL literal duplicada onde já existe service.\n   - **VB6**: `On Error` restaurado depois do uso, variável sem `Dim` (nada de `Variant` implícito), índice 1-based respeitado, `Set ... = Nothing` nos objetos COM que você criou.\n3. Confirme que a compilação dos projetos afetados está limpa (skill `compilar-projeto` — ou `compilar-angular` no front) e rode os testes quando existirem (skills `testar-dotnet` / `testar-angular`).\n4. Responda com a lista do que revisou e do que corrigiu; se não corrigiu nada, diga que as alterações estão prontas para commit.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": true,
+  "isPinned": true
+}

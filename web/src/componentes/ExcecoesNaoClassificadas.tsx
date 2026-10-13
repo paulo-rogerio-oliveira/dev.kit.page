@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/cliente';
 import type { EstadoDoGrupo, Filtro, GrupoDeErroDetalhe, GrupoDeErroResumo, Pagina } from '../api/tipos';
+import { copiarTexto } from '../areaDeTransferencia';
 import { salvarArquivo } from '../arquivos';
 import { formatar } from '../formatar';
 import { GraficoDeColunas } from './Graficos';
@@ -104,12 +105,9 @@ export function ExcecoesNaoClassificadas({ token, filtro, podeReagir, aoFalhar }
 
   async function copiar() {
     if (!detalhe) return;
-    try {
-      await navigator.clipboard.writeText(textoDoBug(detalhe));
-      setAviso('Texto do Bug copiado para a área de transferência.');
-    } catch {
-      setAviso('O navegador não deixou copiar: use a exportação em JSON.');
-    }
+    setAviso(await copiarTexto(textoDoBug(detalhe))
+      ? 'Texto do Bug copiado para a área de transferência.'
+      : 'O navegador não deixou copiar: use a exportação em JSON.');
   }
 
   const totalDePaginas = lista ? Math.max(1, Math.ceil(lista.total / lista.tamanho)) : 1;

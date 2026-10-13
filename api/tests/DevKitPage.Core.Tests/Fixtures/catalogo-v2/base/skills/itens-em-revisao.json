@@ -1,0 +1,10 @@
+{
+  "name": "itens-em-revisao",
+  "description": "Listar os work items do desenvolvedor em revisão e o branch vinculado a cada um, pelo CLI do dev.kit.",
+  "content": "# Itens em revisão\n\n```\n\"{DEVCLI}\" review --json\n```\n\n- São os itens que o **desenvolvedor colocou em andamento** (ActivatedBy), e não os atribuídos a ele: em revisão o item costuma estar com o revisor.\n- Cada item traz o **branch vinculado**, que é a origem da PR.\n- O estado de revisão é reconhecido pelo radical (Review, Code Review, Em Revisão). Se nada vier, a saída lista `estadosEncontrados`. Repita com `--estado \"<nome>\"`, em vez de concluir que não há nada.\n- Para abrir as PRs desses itens: skill `criar-pull-requests`.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

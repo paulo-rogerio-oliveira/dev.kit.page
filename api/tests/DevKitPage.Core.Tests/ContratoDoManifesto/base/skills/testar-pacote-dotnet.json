@@ -1,0 +1,10 @@
+{
+  "name": "testar-pacote-dotnet",
+  "description": "Rodar os testes do projeto .NET que o pacote leva, com filtro pelo que mudou.",
+  "content": "# Testar o pacote\n\nRode `dotnet test <projeto de teste> --filter \"FullyQualifiedName~<o que mudou>\"` e anexe o resultado à entrega.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

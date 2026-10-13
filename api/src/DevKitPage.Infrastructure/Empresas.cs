@@ -36,14 +36,29 @@ public sealed class Empresas(DevKitPageDb db, IGestaoDeUsuarios usuarios, TimePr
 
     public async Task<IReadOnlyList<EmpresaResumo>> ListarAsync(CancellationToken ct)
     {
-        var ocupados = await db.Maquinas
+        var colaboradores = await db.Maquinas
             .Where(m => m.EmpresaId != null && m.ConsentiuEmUtc != null)
             .GroupBy(m => m.EmpresaId!.Value)
             .Select(g => new { Empresa = g.Key, Quantas = g.Count() })
             .ToDictionaryAsync(x => x.Empresa, x => x.Quantas, ct);
 
-        return (await db.Empresas.AsNoTracking().OrderBy(e => e.Nome).ToListAsync(ct))
-            .Select(e => new EmpresaResumo(e.Id, e.Nome, e.Plano, e.Assentos, e.CodigoDeAdesao, ocupados.GetValueOrDefault(e.Id), DevKitPageDb.Utc(e.CriadaEmUtc)))
+        // A tela de Empresas (US #461) mostra o gestor e os assentos pela MESMA conta da adesão e da licença
+        // (Assentos.Ocupantes: os devs ativos), e não pelas máquinas.
+        var ocupados = new Dictionary<int, int>();
+        var empresas = await db.Empresas.AsNoTracking().OrderBy(e => e.Nome).ToListAsync(ct);
+        foreach (var empresa in empresas)
+            ocupados[empresa.Id] = await Assentos.OcupadosAsync(db, empresa.Id, ct);
+        var gestores = (await db.Usuarios.AsNoTracking()
+                .Where(u => u.Papel == Papeis.Gestor && u.EmpresaId != null)
+                .OrderBy(u => u.Id)
+                .Select(u => new { Empresa = u.EmpresaId!.Value, u.Nome, u.Login })
+                .ToListAsync(ct))
+            .GroupBy(g => g.Empresa)
+            .ToDictionary(g => g.Key, g => g.First().Nome.Length > 0 ? g.First().Nome : g.First().Login);
+
+        return empresas
+            .Select(e => new EmpresaResumo(e.Id, e.Nome, e.Plano, e.Assentos, e.CodigoDeAdesao, colaboradores.GetValueOrDefault(e.Id), DevKitPageDb.Utc(e.CriadaEmUtc),
+                gestores.GetValueOrDefault(e.Id), ocupados.GetValueOrDefault(e.Id)))
             .ToArray();
     }
 

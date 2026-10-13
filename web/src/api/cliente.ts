@@ -1,7 +1,8 @@
 import type {
-  ArquivoBaixado, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaNova, EmpresaResumo, EstadoDoGrupo,
-  EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa, LoginResponse, MaquinaResumo, Mensagem, Pagina,
-  PedidoDeDemonstracao, PedidoDeDemonstracaoCriado, QualidadeResposta, QuantidadeResposta, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
+  ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor,
+  EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, ImportacaoDoBasico,
+  ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
+  PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RelatorioDePublicacao, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
 
@@ -12,12 +13,22 @@ export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 export class ErroDaApi extends Error {
   readonly status: number;
   readonly erros: Record<string, string[]>;
+  /** O corpo da resposta como veio — o 409 da publicação (US #461) traz o relatório, e não um ProblemDetails. */
+  readonly corpo: unknown;
 
-  constructor(status: number, mensagem: string, erros: Record<string, string[]> = {}) {
+  constructor(status: number, mensagem: string, erros: Record<string, string[]> = {}, corpo: unknown = null) {
     super(mensagem);
     this.status = status;
     this.erros = erros;
+    this.corpo = corpo;
   }
+}
+
+/** O texto de uma falha para a tela: os erros por campo do 400, senão o `detail` do ProblemDetails. */
+export function mensagemDaFalha(falha: unknown): string {
+  const campos = falha instanceof ErroDaApi ? Object.values(falha.erros).flat() : [];
+  if (campos.length > 0) return campos.join(' ');
+  return falha instanceof Error ? falha.message : 'Falha ao consultar a API.';
 }
 
 interface Opcoes {
@@ -42,14 +53,16 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (!resposta.ok) {
     let mensagem = `A API respondeu ${resposta.status}.`;
     let erros: Record<string, string[]> = {};
+    let corpo: unknown = null;
     try {
-      const problema = (await resposta.json()) as { detail?: string; title?: string; errors?: Record<string, string[]> };
+      corpo = await resposta.json();
+      const problema = (corpo ?? {}) as { detail?: string; title?: string; errors?: Record<string, string[]> };
       mensagem = problema.detail ?? problema.title ?? mensagem;
       erros = problema.errors ?? {};
     } catch {
       // Sem corpo (o 401 do JWT): fica a mensagem padrão.
     }
-    throw new ErroDaApi(resposta.status, mensagem, erros);
+    throw new ErroDaApi(resposta.status, mensagem, erros, corpo);
   }
 
   return resposta;
@@ -153,10 +166,69 @@ export const api = {
   // mesma origem), o endereço é completado pela página — o que se copia tem de colar em outra aba.
   enderecoDoDownload: () => new URL(`${baseDaApi}/api/versoes/ultima/download`, window.location.href).href,
 
-  // O catálogo (US #425): a vitrine pública do básico, as releases dele (admin) e o catálogo da empresa.
+  // O catálogo (US #425): a vitrine pública do básico e o catálogo da empresa.
   vitrine: () => chamar<Vitrine>('/api/catalogo/base/vitrine'),
 
-  releasesDoCatalogo: (token: string) => chamar<ReleaseDoCatalogo[]>('/api/catalogo/base/releases', { token }),
+  // Os catálogos nomeados (US #461) — só o admin, menos o /meus. O slug vai codificado: é texto do admin.
+  catalogos: (token: string) => chamar<CatalogoNomeado[]>('/api/catalogos', { token }),
+
+  criarCatalogo: (token: string, catalogo: CatalogoNovo) =>
+    chamar<CatalogoNomeado>('/api/catalogos', { metodo: 'POST', corpo: catalogo, token }),
+
+  editarCatalogo: (token: string, slug: string, nome: string, descricao: string) =>
+    chamar<CatalogoNomeado>(`/api/catalogos/${encodeURIComponent(slug)}`, { metodo: 'PUT', corpo: { nome, descricao }, token }),
+
+  excluirCatalogo: (token: string, slug: string) =>
+    chamar<void>(`/api/catalogos/${encodeURIComponent(slug)}`, { metodo: 'DELETE', token }),
+
+  relacionarEmpresa: (token: string, slug: string, empresaId: number) =>
+    chamar<CatalogoNomeado>(`/api/catalogos/${encodeURIComponent(slug)}/empresas`, { metodo: 'POST', corpo: { empresaId }, token }),
+
+  desrelacionarEmpresa: (token: string, slug: string, empresaId: number) =>
+    chamar<CatalogoNomeado>(`/api/catalogos/${encodeURIComponent(slug)}/empresas/${empresaId}`, { metodo: 'DELETE', token }),
+
+  itensDoCatalogo: (token: string, slug: string) =>
+    chamar<ItemEditavel[]>(`/api/catalogos/${encodeURIComponent(slug)}/itens`, { token }),
+
+  itemDoCatalogo: (token: string, slug: string, id: number) =>
+    chamar<ItemEditavel>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}`, { token }),
+
+  criarItem: (token: string, slug: string, item: ItemEditado) =>
+    chamar<ItemEditavel>(`/api/catalogos/${encodeURIComponent(slug)}/itens`, { metodo: 'POST', corpo: item, token }),
+
+  editarItem: (token: string, slug: string, id: number, item: ItemEditado) =>
+    chamar<ItemEditavel>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}`, { metodo: 'PUT', corpo: item, token }),
+
+  // O item nunca publicado some (204, sem corpo); o publicado vira 'retirada-pendente'.
+  retirarDoCatalogo: (token: string, slug: string, id: number) =>
+    chamar<ItemEditavel | undefined>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}`, { metodo: 'DELETE', token }),
+
+  conferirPublicacao: (token: string, slug: string, minDevKit: number | null = null) =>
+    chamar<RelatorioDePublicacao>(
+      `/api/catalogos/${encodeURIComponent(slug)}/publicacao${minDevKit === null ? '' : `?${new URLSearchParams({ minDevKit: String(minDevKit) })}`}`,
+      { token },
+    ),
+
+  // O 409 traz o RelatorioDePublicacao no corpo (ErroDaApi.corpo), e não um ProblemDetails.
+  publicarCatalogo: (token: string, slug: string, minDevKit: number | null = null) =>
+    chamar<PublicacaoDoCatalogo>(`/api/catalogos/${encodeURIComponent(slug)}/publicar`, {
+      metodo: 'POST', corpo: minDevKit === null ? {} : { minDevKit }, token,
+    }),
+
+  importarBasico: (token: string) => chamar<ImportacaoDoBasico>('/api/catalogos/basico/importar', { metodo: 'POST', token }),
+
+  catalogosMeus: (token?: string) => chamar<CatalogoDisponivel[]>('/api/catalogos/meus', { token }),
+
+  // As releases de um catálogo (a aba Releases): a lista, o manifesto de uma e o zip — este por fetch e blob,
+  // porque a rota é autenticada e um link direto não levaria o token.
+  releasesDoCatalogo: (token: string, slug: string) =>
+    chamar<ReleaseDoCatalogo[]>(`/api/catalogos/${encodeURIComponent(slug)}/releases`, { token }),
+
+  manifestoDaRelease: (token: string, slug: string, versao: number) =>
+    chamar<unknown>(`/api/catalogos/${encodeURIComponent(slug)}/releases/${versao}/manifesto`, { token }),
+
+  baixarRelease: (token: string, slug: string, release: ReleaseDoCatalogo) =>
+    baixar(`/api/catalogos/${encodeURIComponent(slug)}/releases/${release.versao}/download`, token, `${release.tag}.zip`),
 
   catalogoDaEmpresa: (token: string) => chamar<ItemDaEmpresa[]>('/api/catalogo/empresa', { token }),
 

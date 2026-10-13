@@ -1,0 +1,10 @@
+{
+  "name": "planejar-tasks",
+  "description": "Criar no Azure Boards as tasks filhas de uma US/Bug a partir do planejamento técnico feito para o desenvolvedor.",
+  "content": "# Planejar tasks da US/Bug\r\n\r\nQuando o planejamento estiver fechado (seu ou do desenvolvedor), transforme cada passo numa **Task filha** da US/Bug — é assim que o board mostra o que vem pela frente.\r\n\r\n1. Escreva o planejamento em JSON, uma entrada por task. `titulo` é obrigatório; `descricao` e `estimativa` (horas, `OriginalEstimate`) são opcionais:\r\n\r\n```json\r\n[\r\n  { \"titulo\": \"Ajustar o serviço de contratos\", \"descricao\": \"Incluir o campo X no DTO e propagar até o repositório.\", \"estimativa\": 4 },\r\n  { \"titulo\": \"Cobrir o cálculo com testes\", \"descricao\": \"Casos de borda: contrato sem parcelas e contrato quitado.\" }\r\n]\r\n```\r\n\r\n2. **Simule** (nada é criado sem `--aplicar`) e mostre o resultado ao desenvolvedor:\r\n\r\n```\r\n\"{DEVCLI}\" planejar --pai <id-da-US> --arquivo plano.json --json\r\n```\r\n\r\n3. Com o aval dele, crie:\r\n\r\n```\r\n\"{DEVCLI}\" planejar --pai <id-da-US> --arquivo plano.json --aplicar\r\n```\r\n\r\n4. Para uma task só, sem arquivo: `planejar --pai <id> --titulo \"...\" --descricao \"...\" --aplicar`.\r\n5. Regras do planejamento — o que faz a task ser útil para quem a lê depois:\r\n   - um título por PASSO executável, não por arquivo tocado;\r\n   - a descrição diz **o que fazer e por quê**, não repete o título;\r\n   - nada de task \"Analisar\" genérica: se o passo é investigação, diga o que precisa ser respondido.\r\n6. As tasks nascem atribuídas ao desenvolvedor e em New: planejar não é começar. Quem as passa para Active é o início da implementação — a skill `iniciar-implementacao`. Elas são também o destino das horas — ver a skill `lancar-horas`.\r\n7. Task criada é visível para o time inteiro. Na dúvida sobre o recorte, PERGUNTE ao desenvolvedor antes de aplicar; criar dez tasks erradas é mais trabalhoso de desfazer do que uma pergunta.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}
