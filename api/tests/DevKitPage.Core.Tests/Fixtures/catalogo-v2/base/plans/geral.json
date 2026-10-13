@@ -1,0 +1,7 @@
+{
+  "description": "Geral",
+  "content": "Implemente e valide a us/bug, sempre de prioridade a seguir o padrão já existente arquitetural e comportamental. Instrumente testes ajustando os serviços alterados em novas interfaces que poderão ser mockadas. Não tome decisão arquitetural que causará impacto sem perguntar ao desenvolvedor.",
+  "repository": "",
+  "onlyWithWorkItem": false,
+  "isRequired": false
+}

@@ -141,6 +141,41 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("AvaliacoesDeEntrega", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.Catalogo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Basico")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("Catalogos", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Empresa", b =>
                 {
                     b.Property<int>("Id")
@@ -385,6 +420,73 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("ItensDeCatalogo", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ItemDoCatalogoEditavel", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AlteradoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AlteradoPor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Arquivo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CatalogoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Categoria")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dependencias")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RetiradoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogoId", "Tipo", "Nome")
+                        .IsUnique();
+
+                    b.ToTable("ItensEditaveisDeCatalogo", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.LicencaEmitida", b =>
                 {
                     b.Property<long>("Id")
@@ -551,6 +653,20 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("GrupoId", "EmUtc");
 
                     b.ToTable("OcorrenciasDeErro", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.PacoteDoCatalogo", b =>
+                {
+                    b.Property<long>("VersaoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Zip")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("VersaoId");
+
+                    b.ToTable("PacotesDoCatalogo", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.PedidoDeDemonstracao", b =>
@@ -830,6 +946,82 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("VersoesDeItem", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.VersaoDoCatalogo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CatalogoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Itens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Manifesto")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("PublicadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicadaPor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Retirados")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TamanhoBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CatalogoId", "Versao")
+                        .IsUnique();
+
+                    b.ToTable("VersoesDoCatalogo", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VinculoDeCatalogo", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CatalogoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RelacionadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmpresaId");
+
+                    b.HasIndex("CatalogoId", "EmpresaId")
+                        .IsUnique();
+
+                    b.ToTable("VinculosDeCatalogo", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AssinaturaDeCatalogo", b =>
                 {
                     b.HasOne("DevKitPage.Core.ItemDeCatalogo", "Item")
@@ -888,6 +1080,17 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ItemDoCatalogoEditavel", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Catalogo", "Catalogo")
+                        .WithMany()
+                        .HasForeignKey("CatalogoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Catalogo");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.LicencaEmitida", b =>
                 {
                     b.HasOne("DevKitPage.Core.Maquina", "Maquina")
@@ -939,6 +1142,15 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Maquina");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.PacoteDoCatalogo", b =>
+                {
+                    b.HasOne("DevKitPage.Core.VersaoDoCatalogo", null)
+                        .WithOne()
+                        .HasForeignKey("DevKitPage.Core.PacoteDoCatalogo", "VersaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DevKitPage.Core.RoiDeWorkItem", b =>
                 {
                     b.HasOne("DevKitPage.Core.Maquina", "Maquina")
@@ -978,6 +1190,36 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VersaoDoCatalogo", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Catalogo", "Catalogo")
+                        .WithMany()
+                        .HasForeignKey("CatalogoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Catalogo");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VinculoDeCatalogo", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Catalogo", "Catalogo")
+                        .WithMany()
+                        .HasForeignKey("CatalogoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Catalogo");
+
+                    b.Navigation("Empresa");
                 });
 #pragma warning restore 612, 618
         }

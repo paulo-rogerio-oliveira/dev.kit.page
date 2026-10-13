@@ -61,6 +61,50 @@ public sealed class VersoesApiTests : IDisposable
         Assert.Equal(_api.GitHub.Zip, await resposta.Content.ReadAsByteArrayAsync());
     }
 
+    /// <summary>
+    /// O ALIAS PERMANENTE (US #467 · task #471): o endereço que a landing põe no link "Baixar o dev.kit" — anônimo,
+    /// e sempre o zip da ÚLTIMA estável, com o nome dela; a URL copiada continua valendo na próxima versão.
+    /// </summary>
+    [Fact]
+    public async Task Ultima_download_e_o_alias_anonimo_do_zip_da_ultima_estavel()
+    {
+        var resposta = await _api.CreateClient().GetAsync("/api/versoes/ultima/download");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        Assert.Equal("application/zip", resposta.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("devkit-136.zip", resposta.Content.Headers.ContentDisposition!.FileName); // a v137 é prerelease
+        Assert.Equal(_api.GitHub.Zip, await resposta.Content.ReadAsByteArrayAsync());
+        Assert.DoesNotContain(resposta.Headers.Concat(resposta.Content.Headers), h => h.Value.Any(v => v.Contains("github", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task Ultima_download_sem_versao_estavel_e_503()
+    {
+        _api.GitHub.Releases = """[ { "tag_name": "v137", "draft": false, "prerelease": true, "published_at": "2026-10-10T12:00:00Z", "assets": [ { "id": 21, "name": "devkit-137.zip", "size": 1 } ] } ]""";
+        using var semChave = new ApiDeTeste(repoKey: null);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await _api.CreateClient().GetAsync("/api/versoes/ultima/download")).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await semChave.CreateClient().GetAsync("/api/versoes/ultima/download")).StatusCode);
+        Assert.Empty(semChave.GitHub.Pedidos);
+    }
+
+    /// <summary>O alias conta na MESMA cota por IP do download por número: é o mesmo download, por outro endereço.</summary>
+    [Fact]
+    public async Task Ultima_download_divide_o_limite_por_ip_com_o_download_por_numero()
+    {
+        using var limitada = new ApiDeTeste(downloadsPorHora: 2);
+        var cliente = limitada.CreateClient();
+
+        var respostas = new[]
+        {
+            (await cliente.GetAsync("/api/versoes/ultima/download")).StatusCode,
+            (await cliente.GetAsync("/api/versoes/136/download")).StatusCode,
+            (await cliente.GetAsync("/api/versoes/ultima/download")).StatusCode,
+        };
+
+        Assert.Equal(new[] { HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.TooManyRequests }, respostas);
+    }
+
     [Fact]
     public async Task Download_anonimo_tem_limite_por_ip()
     {

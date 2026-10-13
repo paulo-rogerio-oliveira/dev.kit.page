@@ -72,8 +72,11 @@ public sealed class GitHubDeMentira : HttpMessageHandler
         ]
         """;
 
-    /// <summary>O zip do catálogo 2 (US #425), que o download do catálogo transmite.</summary>
-    public byte[] ZipDoCatalogo { get; } = Enumerable.Range(0, 3000).Select(i => (byte)(i % 13)).ToArray();
+    /// <summary>
+    /// O zip do catálogo 2 (US #425), que o download do catálogo transmite. A importação do básico (US #461) troca-o por
+    /// um zip de verdade, junto com o <see cref="Manifesto2"/>.
+    /// </summary>
+    public byte[] ZipDoCatalogo { get; set; } = Enumerable.Range(0, 3000).Select(i => (byte)(i % 13)).ToArray();
 
     /// <summary>
     /// O manifesto do catálogo 2: a skill do Angular e o plan geral vieram no catálogo 1; a revisão (versão 2) e o

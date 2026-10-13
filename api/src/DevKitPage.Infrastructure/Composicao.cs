@@ -77,6 +77,12 @@ public static class Composicao
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
         servicos.AddScoped<IPagamentos, Pagamentos>();
+        // Os catálogos nomeados (US #461): a gestão usa a MESMA instância da publicação (o manifesto da última release
+        // decide a situação dos itens), e o armazém dos zips é o banco por ora.
+        servicos.AddScoped<IArmazemDePacotes, ArmazemDePacotesNoBanco>();
+        servicos.AddScoped<PublicacaoDeCatalogos>();
+        servicos.AddScoped<IPublicacaoDeCatalogos>(sp => sp.GetRequiredService<PublicacaoDeCatalogos>());
+        servicos.AddScoped<IGestaoDeCatalogos, GestaoDeCatalogos>();
         // O teste troca o envio por um falso que guarda as mensagens (o TryAdd deixa o dele valer).
         servicos.TryAddSingleton<IEnvioDeEmail, EnvioDeEmail>();
         servicos.AddScoped<InicializadorDaBase>();
@@ -108,6 +114,26 @@ public sealed class InicializadorDaBase(
         }
 
         await SemearAdminAsync(ct);
+        await SemearCatalogoBasicoAsync(ct);
+    }
+
+    /// <summary>
+    /// O registro do catálogo BÁSICO (US #461), uma vez: é ele que a sincronia de toda máquina pede e que o admin edita e
+    /// publica no site. Sem release no site, ele continua servido pelas releases do GitHub.
+    /// </summary>
+    private async Task SemearCatalogoBasicoAsync(CancellationToken ct)
+    {
+        if (await db.Catalogos.AnyAsync(c => c.Basico, ct))
+            return;
+        db.Catalogos.Add(new Catalogo
+        {
+            Slug = Contracts.V1.Catalogos.Basico,
+            Nome = "Básico",
+            Descricao = "Skills, tech plans e fluxos que vêm com o dev.kit — de todas as empresas.",
+            Basico = true,
+            CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     private async Task SemearAdminAsync(CancellationToken ct)

@@ -1,0 +1,10 @@
+{
+  "name": "vincular-workitem",
+  "description": "Vincular um work item a uma task do dev.kit já iniciada (ou desvincular), para o processo e o rateio de horas contarem para ele.",
+  "content": "# Vincular work item à task\n\nQuando a task começou avulsa e o desenvolvedor diz a que item ela pertence, ou quando o vínculo está errado:\n\n```\n\"{DEVCLI}\" vincular --id <work item>\n\"{DEVCLI}\" vincular --remover\n```\n\n- A task é achada pela **pasta corrente**, a pasta da task onde você roda. De dentro de um clone, use `--pasta <pasta da task>`. Havendo mais de uma sessão na pasta, a saída lista as sessões; escolha com `--sessao <id>`.\n- O work item é conferido no board antes de gravar.\n- A gravação é local, no banco do dev.kit, e desfaz-se com `--remover`. Por isso não pede `--aplicar`. O rateio de horas passa a contar os turnos desta task para o item. **Confirme o id com o desenvolvedor**: vínculo errado vira hora lançada no item errado.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

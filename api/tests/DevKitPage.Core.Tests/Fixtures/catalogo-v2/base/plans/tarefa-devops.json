@@ -1,0 +1,7 @@
+{
+  "description": "Tarefa devops",
+  "content": "Planeje a task utilizando a skill de planejamento",
+  "repository": "",
+  "onlyWithWorkItem": true,
+  "isRequired": true
+}

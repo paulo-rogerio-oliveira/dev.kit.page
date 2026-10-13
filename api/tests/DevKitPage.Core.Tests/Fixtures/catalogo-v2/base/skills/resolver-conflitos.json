@@ -1,0 +1,10 @@
+{
+  "name": "resolver conflitos",
+  "description": "Resolve os conflitos utilizando a ferramenta tortoisegit",
+  "content": "Sempre que houver um conflito durante um merge o desenvolvedor deve resolve-lo para isso utilizar a ferramenta tortoise git com a parametrização contextualizada",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

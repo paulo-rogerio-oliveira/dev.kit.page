@@ -2,11 +2,12 @@ import { Link } from 'react-router-dom';
 import { BaixarDevKit } from '../componentes/BaixarDevKit';
 import { Cta } from '../componentes/Cta';
 import { FormularioDeDemonstracao } from '../componentes/FormularioDeDemonstracao';
+import { Janela } from '../componentes/Janela';
 import { Midia } from '../componentes/Midia';
 import { Secao } from '../componentes/Secao';
 import {
   AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS,
-  PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA,
+  PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
 } from '../conteudo/landing';
 
 /** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca). */
@@ -41,8 +42,7 @@ function AmostraDoBoard() {
   const b = AMOSTRA_DO_BOARD;
   return (
     <figure className="amostra" role="img" aria-label={`Amostra do Board do dev.kit: Precisa de você com ${b.precisaDeVoce.length} itens; ${b.nota.valor}, ${b.nota.texto.toLowerCase()}; ${b.horas.texto}.`}>
-      <div className="amostra-janela" aria-hidden="true">
-        <div className="amostra-barra"><span /><span /><span /><em>{b.titulo}</em></div>
+      <Janela titulo={b.titulo} className="amostra-janela" aria-hidden="true">
         <div className="amostra-corpo">
           <div className="amostra-lateral"><span /><span /><span /><span /></div>
           <div className="amostra-conteudo">
@@ -70,7 +70,7 @@ function AmostraDoBoard() {
             </div>
           </div>
         </div>
-      </div>
+      </Janela>
       <div className="amostra-selo" aria-hidden="true">
         <span className="amostra-check">✓</span>
         <span><b>{b.nota.valor}</b><small>{b.nota.texto}</small></span>
@@ -80,12 +80,14 @@ function AmostraDoBoard() {
 }
 
 /**
- * A landing pública — a página de venda do dev.kit, repaginada na US #405 conforme a proposta visual:
+ * A landing pública — a página de venda do dev.kit, na disposição da proposta da home (US #467):
  * cabeçalho (marca, menu, Entrar e Pedir demonstração), hero com o selo, o título com "Pull Request" em
- * destaque, a amostra do Board e o "Baixar o dev.kit" → como funciona em sete etapas (com o vídeo do
- * fluxo) → por que o dev.kit (três cartões) → o que a página já tinha (recursos, comparativo,
- * integrações, segurança, empresas, contato, FAQ) → CTA escuro → rodapé. O texto e as mídias vêm de
- * conteudo/landing.ts, na ordem de SECOES. A página vende o produto e NÃO explica a área logada.
+ * destaque, os dois botões, o link discreto de download e a amostra do Board → como funciona em sete
+ * etapas → recursos (as abas 01–04 e, em blocos alternados, o texto com os marcadores e a mídia numa
+ * moldura de janela com a legenda abaixo) → por que o dev.kit (três cartões) → as seções que o menu, o
+ * rodapé e o contato apontam (catálogo, comparativo, integrações, segurança, empresas, planos, contato,
+ * FAQ) → CTA escuro → rodapé. O texto e as mídias vêm de conteudo/landing.ts, na ordem de SECOES. A
+ * página vende o produto e NÃO explica a área logada.
  */
 export function Landing() {
   const [antes, depois] = HERO.titulo.split(HERO.destaque);
@@ -115,7 +117,7 @@ export function Landing() {
               <Cta para="#contato">Quero uma demonstração <span aria-hidden="true">→</span></Cta>
               <Cta para="#como-funciona" variante="secundario">Ver como funciona</Cta>
             </div>
-            <BaixarDevKit />
+            <BaixarDevKit discreto />
           </div>
           <AmostraDoBoard />
         </section>
@@ -126,7 +128,36 @@ export function Landing() {
               <li key={p.titulo}><h3>{p.titulo}</h3><p>{p.texto}</p></li>
             ))}
           </ol>
-          <Midia midia={HERO.midia} className="midia-do-fluxo" />
+        </Secao>
+
+        <Secao id="recursos" rotulo={CABECALHOS.recursos.rotulo} titulo={CABECALHOS.recursos.titulo}>
+          <nav className="abas-dos-recursos" aria-label="Recursos em destaque">
+            <ol>
+              {RECURSOS.map((r) => (
+                <li key={r.id}><a href={`#recurso-${r.id}`}><span className="aba-numero">{r.numero}</span> {r.aba}</a></li>
+              ))}
+            </ol>
+          </nav>
+          <div className="recursos">
+            {RECURSOS.map((recurso) => (
+              <article key={recurso.id} id={`recurso-${recurso.id}`} className="recurso" aria-labelledby={`titulo-recurso-${recurso.id}`}>
+                <div className="recurso-texto">
+                  <p className="recurso-numero" aria-hidden="true">{recurso.numero}</p>
+                  <h3 id={`titulo-recurso-${recurso.id}`}>{recurso.titulo}</h3>
+                  <p>{recurso.texto}</p>
+                  <ul className="marcadores">
+                    {recurso.marcadores.map((m) => <li key={m}>{m}</li>)}
+                  </ul>
+                </div>
+                <figure className="recurso-midia">
+                  <Janela titulo={tituloDaJanela(recurso.janela)} escura>
+                    <Midia midia={recurso.midia} />
+                  </Janela>
+                  <figcaption>{recurso.legenda}</figcaption>
+                </figure>
+              </article>
+            ))}
+          </div>
         </Secao>
 
         <Secao id="beneficios" rotulo={CABECALHOS.porQue.rotulo} titulo={CABECALHOS.porQue.titulo} className="secao-tinta">
@@ -135,20 +166,6 @@ export function Landing() {
               <li key={b.titulo} className="cartao"><Icone tipo={b.icone} /><h3>{b.titulo}</h3><p>{b.texto}</p></li>
             ))}
           </ul>
-        </Secao>
-
-        <Secao id="recursos" rotulo="O dev.kit em funcionamento" titulo="Recursos" subtitulo="Cada recurso com a sua demonstração.">
-          <div className="recursos">
-            {RECURSOS.map((recurso) => (
-              <article key={recurso.id} className="recurso" aria-labelledby={`recurso-${recurso.id}`}>
-                <div>
-                  <h3 id={`recurso-${recurso.id}`}>{recurso.titulo}</h3>
-                  <p>{recurso.texto}</p>
-                </div>
-                <Midia midia={recurso.midia} />
-              </article>
-            ))}
-          </div>
         </Secao>
 
         <Secao id="catalogo" rotulo="Catálogo" titulo={CATALOGO.titulo} subtitulo={CATALOGO.subtitulo} className="secao-tinta">

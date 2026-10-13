@@ -1,0 +1,58 @@
+{
+  "versao": 1,
+  "minDevKit": 150,
+  "itens": [
+    {
+      "tipo": "skill",
+      "nome": "descrever-telas",
+      "versao": 1,
+      "hash": "df0648d0a2d7b986ec592933ff6f79323c0236e5b107861670db0345c5d926b3",
+      "catalogo": 1,
+      "arquivo": "skills/descrever-telas.json",
+      "descricao": "Descrever as telas do sistema.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 150,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "df0648d0a2d7b986ec592933ff6f79323c0236e5b107861670db0345c5d926b3"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "publicar-pacote",
+      "versao": 1,
+      "hash": "9e0592365f66934dfd9c039a013b33fe3e59e8e150ce41f4837c98525db0873f",
+      "catalogo": 1,
+      "arquivo": "skills/publicar-pacote.json",
+      "descricao": "Publicar o pacote da versão na pasta de saída.",
+      "tecnologia": "dev.kit",
+      "minDevKit": 150,
+      "requer": [],
+      "dependencias": [],
+      "hashes": [
+        "9e0592365f66934dfd9c039a013b33fe3e59e8e150ce41f4837c98525db0873f"
+      ]
+    },
+    {
+      "tipo": "skill",
+      "nome": "revisar-entrega",
+      "versao": 1,
+      "hash": "500b1bb257c77170dffc9b8fda39d6ce9c8e5679d5144c2cf9fda692157b05b6",
+      "catalogo": 1,
+      "arquivo": "skills/revisar-entrega.json",
+      "descricao": "Revisar o que vai ser entregue antes do envio: build, testes e o diff de cada repositório.",
+      "tecnologia": "Git",
+      "minDevKit": 150,
+      "requer": [
+        "devcli",
+        "msbuild"
+      ],
+      "dependencias": [],
+      "hashes": [
+        "500b1bb257c77170dffc9b8fda39d6ce9c8e5679d5144c2cf9fda692157b05b6"
+      ]
+    }
+  ],
+  "retirados": []
+}

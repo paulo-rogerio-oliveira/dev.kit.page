@@ -16,6 +16,11 @@ export const formatar = {
   segundos: (ms: number | null | undefined) => (valido(ms) ? `${decimal.format(ms / 1000)} s` : SEM_VALOR),
   /** Minutos com uma casa (o tempo parado de um impasse, US #405). */
   minutos: (valor: number | null | undefined) => (valido(valor) ? `${decimal.format(valor)} min` : SEM_VALOR),
+  /**
+   * O rótulo da versão do dev.kit, como o app o mostra na barra de título (US #467 · task #470): "dev.kit versão 136".
+   * O formatador único da landing e do painel; sem versão, o "?" de quem ainda não a informou.
+   */
+  versaoDoDevKit: (versao: number | string | null | undefined) => `dev.kit versão ${versao === null || versao === undefined || versao === '' ? '?' : versao}`,
   /** Bytes em MB com uma casa (o tamanho do pacote do dev.kit). */
   megabytes: (bytes: number | null | undefined) => (valido(bytes) ? `${decimal.format(bytes / 1_048_576)} MB` : SEM_VALOR),
   /** A data por extenso curto (dd/mm/aaaa). */

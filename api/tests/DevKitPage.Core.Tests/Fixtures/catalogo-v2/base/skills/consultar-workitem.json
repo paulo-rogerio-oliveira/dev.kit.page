@@ -1,0 +1,10 @@
+{
+  "name": "consultar-workitem",
+  "description": "Ler um work item por inteiro pelo CLI do dev.kit — descrição, planejamento técnico e tasks filhas — ou vários de uma vez, resumidos.",
+  "content": "# Consultar work item\n\nPara ler um item do board: a US vizinha que o desenvolvedor citou, o bug de origem, o pai da sua task.\n\n```\n\"{DEVCLI}\" workitem --id <n> --json\n```\n\nTraz tipo, estado, responsável, **descrição**, **planejamento técnico** (o do Board) e as **tasks filhas** com horas.\n\nVários de uma vez, em forma resumida (sem plano nem tasks, que custam uma consulta por item):\n\n```\n\"{DEVCLI}\" workitem --ids 34607,12731 --json\n```\n\n- A discussão e os anexos têm comandos próprios: `comentario --id <n>` (skill `comentar-workitem`) e `anexo --id <n>` (skill `anexos-workitem`). Os da SUA task já foram baixados para a pasta `anexos` antes do primeiro turno.\n- Item do TFS antigo (outro servidor): skill `consultar-tfs`.\n- Configuração incompleta: pare e avise o desenvolvedor. Não tente outra credencial.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

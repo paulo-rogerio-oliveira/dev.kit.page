@@ -15,7 +15,6 @@ import { Comprar } from './paginas/Comprar';
 import { CompraConcluida } from './paginas/CompraConcluida';
 import { EmpresaUsuarios } from './paginas/EmpresaUsuarios';
 import { EmpresaCatalogo } from './paginas/EmpresaCatalogo';
-import { CatalogoBase } from './paginas/CatalogoBase';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
@@ -57,7 +56,8 @@ export function App() {
       <Route path="/dashboard" element={<RotaProtegida doPainel><Dashboard /></RotaProtegida>} />
       <Route path="/empresas" element={<RotaProtegida soAdmin><Empresas /></RotaProtegida>} />
       <Route path="/usuarios" element={<RotaProtegida soAdmin><Usuarios /></RotaProtegida>} />
-      <Route path="/catalogo-base" element={<RotaProtegida soAdmin><CatalogoBase /></RotaProtegida>} />
+      {/* A página das releases do básico (US #425) virou a aba Releases do /catalogo (US #461): o link antigo leva para lá. */}
+      <Route path="/catalogo-base" element={<RotaProtegida soAdmin><Navigate to="/catalogo?aba=releases" replace /></RotaProtegida>} />
       <Route path="/empresa/usuarios" element={<RotaProtegida soGestor><EmpresaUsuarios /></RotaProtegida>} />
       <Route path="/empresa/catalogo" element={<RotaProtegida soGestor><EmpresaCatalogo /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />

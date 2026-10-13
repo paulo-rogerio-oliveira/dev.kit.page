@@ -1,0 +1,10 @@
+{
+  "name": "avaliar-entrega",
+  "description": "Registrar a avaliação do DESENVOLVEDOR sobre a entrega da task (boa ou ruim, com o motivo da lista fechada) e, no ruim, devolvê-la ao agente para correção, pelo CLI do dev.kit.",
+  "content": "# Avaliar a entrega da task\n\nUse quando o DESENVOLVEDOR disser o que achou da entrega do agente: \"a entrega ficou boa\", \"ficou ruim, não atendeu o pedido\", \"reprove e mande corrigir\". É o mesmo cartão \"Avaliar entrega\" da aba Entrega, sem a tela.\n\n```\n\"{DEVCLI}\" avaliar --status boa\n\"{DEVCLI}\" avaliar --status ruim --motivo nao-atendeu-o-pedido --texto \"faltou o filtro por branch\"\n\"{DEVCLI}\" avaliar --status ruim --motivo quebrou-build-ou-teste --devolver\n```\n\n- **Quem avalia é o desenvolvedor.** Você só registra o que ele disse — nunca avalie a sua própria entrega nem invente o motivo. Sem o motivo dito por ele, pergunte.\n- `--status` é `boa` ou `ruim`. No `ruim`, o `--motivo` é obrigatório e é da lista FECHADA: `nao-atendeu-o-pedido`, `quebrou-build-ou-teste`, `fora-do-padrao`, `arquitetura`, `seguranca`, `escopo-alem-do-pedido`, `inventou-api-ou-arquivo`, `retrabalho-manual-alto`, `outro`.\n- `--texto` é o porquê, livre. Ele fica SÓ local, na conversa da task — não vai para a telemetria nem para o servidor.\n- `--devolver` (só no `ruim`): o motivo e o texto viram a próxima mensagem da task (\"O desenvolvedor reprovou a entrega: … Corrija.\"). O dev.kit a entrega ao agente quando a task parar.\n- Cada avaliação é um registro novo: reavaliar não apaga a anterior — a sequência \"ruim → ruim → boa\" é a medida do retrabalho.\n- A task é a da pasta corrente (`--pasta` para outra; `--sessao` quando há mais de uma na pasta).\n- O resultado aparece no `\"{DEVCLI}\" telemetria`, em \"Aprovação humana\" e nos motivos mais frequentes.\n",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}

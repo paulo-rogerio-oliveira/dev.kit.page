@@ -1,19 +1,19 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { BENEFICIOS, CATALOGO, COMPARATIVO, PASSOS, PLANOS, PRODUTOS_COMPARADOS, RECURSOS, SECOES } from '../conteudo/landing';
-import { entregues } from '../testes/navegador';
+import { BENEFICIOS, CATALOGO, COMPARATIVO, PASSOS, PLANOS, PRODUTOS_COMPARADOS, RECURSOS, SECOES, tituloDaJanela } from '../conteudo/landing';
 import { renderizar } from '../testes/renderizar';
-import { API, downloads, servidor, tokenDoDev } from '../testes/servidor';
+import { API, servidor, tokenDoDev } from '../testes/servidor';
 
 describe('Landing', () => {
-  it('abre sem login com as seções na ordem da proposta (US #405)', () => {
+  it('abre sem login com as seções na ordem da proposta da home (US #467)', () => {
     const { container } = renderizar('/');
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('O agente de IA que leva a sua task do work item à Pull Request');
     const ordem = [...container.querySelectorAll('main > section')].map((s) => s.id);
     expect(ordem).toEqual(SECOES.map((s) => s.id));
-    expect(ordem.slice(0, 3)).toEqual(['inicio', 'como-funciona', 'beneficios']);
+    expect(ordem.slice(0, 4)).toEqual(['inicio', 'como-funciona', 'recursos', 'beneficios']);
+    expect(ordem.at(-1)).toBe('comecar');
   });
 
   it('o hero tem o selo, "Pull Request" em destaque, a amostra do Board com a nota e o CTA para o contato', () => {
@@ -29,14 +29,14 @@ describe('Landing', () => {
     expect(within(hero).getByRole('link', { name: 'Ver como funciona' })).toHaveAttribute('href', '#como-funciona');
   });
 
-  it('o como funciona mostra as sete etapas da proposta e o vídeo do fluxo', () => {
+  it('o como funciona mostra as sete etapas da proposta, sem o vídeo do hero', () => {
     renderizar('/');
 
     const secao = screen.getByRole('region', { name: 'Do work item à Pull Request, em sete etapas' });
     const etapas = within(secao).getAllByRole('listitem');
     expect(etapas.map((e) => e.querySelector('h3')!.textContent)).toEqual(['Clona', 'Implementa', 'Compila', 'Testa', 'Avalia', 'Commit e push', 'Pull Request']);
     expect(etapas[4]).toHaveTextContent('abaixo da mínima, refaz');
-    expect(secao.querySelector('video')).toHaveAttribute('poster', '/midia/hero.jpg');
+    expect(secao.querySelector('video, img')).toBeNull();
     expect(PASSOS).toHaveLength(7);
   });
 
@@ -47,17 +47,41 @@ describe('Landing', () => {
     expect(within(secao).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(BENEFICIOS.map((b) => b.titulo));
   });
 
-  it('cada recurso tem a sua mídia, com texto alternativo', () => {
+  it('os recursos têm as abas 01–04, e cada aba leva ao seu bloco (US #467)', () => {
     renderizar('/');
 
-    const recursos = screen.getByRole('region', { name: 'Recursos' });
+    const recursos = screen.getByRole('region', { name: 'Cada recurso com a sua demonstração' });
+    const abas = within(within(recursos).getByRole('navigation', { name: 'Recursos em destaque' })).getAllByRole('link');
+    expect(abas.map((a) => a.textContent)).toEqual(['01 O agente sobre a task', '02 Fluxos com avaliadores', '03 Cherry-pick', '04 Horas']);
+    for (const [i, recurso] of RECURSOS.entries()) {
+      expect(abas[i]).toHaveAttribute('href', `#recurso-${recurso.id}`);
+      expect(within(recursos).getByRole('article', { name: recurso.titulo })).toHaveAttribute('id', `recurso-${recurso.id}`);
+    }
+  });
+
+  it('cada recurso tem os marcadores e a mídia numa moldura de janela, com o texto alternativo e a legenda abaixo', () => {
+    renderizar('/');
+
+    const recursos = screen.getByRole('region', { name: 'Cada recurso com a sua demonstração' });
     for (const recurso of RECURSOS) {
       const artigo = within(recursos).getByRole('article', { name: recurso.titulo });
-      const video = artigo.querySelector('video')!;
+      expect(within(artigo).getAllByRole('listitem').map((l) => l.textContent)).toEqual(recurso.marcadores);
+      const moldura = artigo.querySelector('.janela')!;
+      expect(moldura.querySelector('.janela-barra')).toHaveTextContent(tituloDaJanela(recurso.janela));
+      const video = moldura.querySelector('video')!;
       expect(video).toHaveAttribute('poster', recurso.midia.poster);
       expect(video).toHaveAccessibleName(recurso.midia.alt);
+      expect(artigo.querySelector('figure > figcaption')).toHaveTextContent(recurso.legenda);
     }
-    expect(recursos.querySelectorAll('video')).toHaveLength(RECURSOS.length);
+    expect(recursos.querySelectorAll('video')).toHaveLength(4);
+    expect(document.querySelectorAll('main video')).toHaveLength(4);
+  });
+
+  it('a amostra do Board do hero usa a mesma moldura de janela dos recursos', () => {
+    renderizar('/');
+
+    const amostra = screen.getByRole('img', { name: /Amostra do Board/ });
+    expect(amostra.querySelector('.janela .janela-barra')).toHaveTextContent('dev.kit - Board');
   });
 
   it('o contato tem o formulário de demonstração e o FAQ abre em details', () => {
@@ -151,52 +175,63 @@ describe('Landing', () => {
   });
 });
 
-describe('Baixar o dev.kit (US #405, anônimo desde a US #425)', () => {
+describe('Baixar o dev.kit (US #405, anônimo desde a US #425, link copiável desde a US #467)', () => {
+  /** O endereço que o visitante copia: o alias permanente da API, ABSOLUTO (o VITE_API_URL dos testes). */
+  const ENDERECO = `${API}/api/versoes/ultima/download`;
   const download = () => screen.getByRole('group', { name: 'Download do dev.kit' });
 
-  it('mostra a versão da API, a data, o tamanho e o teste grátis sem login', async () => {
+  it('é um link com o rótulo "dev.kit versão N", a versão, a data, o tamanho e o teste grátis sem login', async () => {
     renderizar('/');
 
-    expect(await within(download()).findByRole('button', { name: 'Baixar o dev.kit 136' })).toBeEnabled();
+    const link = await within(download()).findByRole('link', { name: 'Baixar o dev.kit versão 136' });
+    expect(link).toHaveAttribute('href', ENDERECO);
     expect(download()).toHaveTextContent('versão 136 · 09/10/2026 · 50,0 MB · 14 dias grátis, sem login');
+    expect(within(download()).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('sem login, baixa direto — a reversão da US #405: nenhum Authorization vai junto', async () => {
+  it('o endereço do download aparece escrito na página, para copiar e colar na barra do navegador', async () => {
     renderizar('/');
 
-    await userEvent.click(await within(download()).findByRole('button', { name: 'Baixar o dev.kit 136' }));
-
-    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
-    expect(entregues.arquivos[0].nome).toBe('devkit-136.zip');
-    expect(downloads).toEqual([null]);
-    expect(screen.queryByRole('heading', { name: 'Entrar' })).not.toBeInTheDocument();
+    await within(download()).findByRole('link', { name: 'Baixar o dev.kit versão 136' });
+    expect(within(download()).getByText(ENDERECO).tagName).toBe('CODE');
+    expect(download()).toHaveTextContent(`Ou copie o endereço: ${ENDERECO}`);
   });
 
-  it('com login, também não manda o token (a rota é anônima)', async () => {
+  it('o link é o alias permanente e anônimo: o mesmo href com ou sem login, e não o da versão', async () => {
     renderizar('/', tokenDoDev());
 
-    await userEvent.click(await within(download()).findByRole('button', { name: 'Baixar o dev.kit 136' }));
-
-    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
-    expect(downloads).toEqual([null]);
+    const link = await within(download()).findByRole('link', { name: 'Baixar o dev.kit versão 136' });
+    expect(link).toHaveAttribute('href', ENDERECO);
+    expect(link.getAttribute('href')).not.toContain('/136/');
   });
 
-  it('o "Testar grátis por 14 dias" dos planos é o mesmo download', async () => {
+  it('o "Testar grátis por 14 dias" dos planos é o mesmo link de download', async () => {
     renderizar('/');
 
     const planos = screen.getByRole('region', { name: 'Planos' });
-    await userEvent.click(await within(planos).findByRole('button', { name: 'Testar grátis por 14 dias' }));
-
-    await waitFor(() => expect(entregues.arquivos).toHaveLength(1));
-    expect(entregues.arquivos[0].nome).toBe('devkit-136.zip');
+    const link = await within(planos).findByRole('link', { name: 'Testar grátis por 14 dias' });
+    expect(link).toHaveAttribute('href', ENDERECO);
+    expect(link).toHaveClass('botao');
   });
 
-  it('com a atualização indisponível (503), o botão fica desabilitado e diz por quê', async () => {
+  it('no hero o download é um link discreto abaixo dos dois botões da proposta', async () => {
+    renderizar('/');
+
+    const link = await within(download()).findByRole('link', { name: 'Baixar o dev.kit versão 136' });
+    expect(link).toHaveClass('link-baixar');
+    expect(link).not.toHaveClass('botao');
+    expect(download().previousElementSibling).toHaveClass('ctas');
+  });
+
+  it('com a atualização indisponível (503), não há link e a nota diz por quê', async () => {
     servidor.use(http.get(`${API}/api/versoes/ultima`, () => HttpResponse.json({ detail: 'indisponível' }, { status: 503 })));
 
     renderizar('/');
 
     expect(await within(download()).findByText('Download indisponível no momento.')).toBeInTheDocument();
-    expect(within(download()).getByRole('button', { name: 'Baixar o dev.kit' })).toBeDisabled();
+    expect(within(download()).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(download()).getByText('Baixar o dev.kit')).toHaveAttribute('aria-disabled', 'true');
+    const planos = screen.getByRole('region', { name: 'Planos' });
+    expect(await within(planos).findByRole('button', { name: 'Testar grátis por 14 dias' })).toBeDisabled();
   });
 });

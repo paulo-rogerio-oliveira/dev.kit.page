@@ -59,7 +59,7 @@ export function Dashboard() {
   // a API devolve ao gestor só a empresa dele, e o nome vem do que o colaborador informou no dev.kit.
   useEffect(() => {
     const carregar: Promise<OpcaoDoFiltro[]> = ehAdmin
-      ? api.maquinas(token).then((lista: MaquinaResumo[]) => lista.map((m) => ({ id: m.id, rotulo: `${m.apelido} (dev.kit ${m.versaoDevKit || '?'})` })))
+      ? api.maquinas(token).then((lista: MaquinaResumo[]) => lista.map((m) => ({ id: m.id, rotulo: `${m.apelido} (${formatar.versaoDoDevKit(m.versaoDevKit)})` })))
       : api.colaboradores(token).then((lista: ColaboradorResumo[]) => lista.map((c) => ({ id: c.maquinaId, rotulo: c.colaborador || c.apelido })));
     carregar.then(setOpcoes).catch(tratar);
   }, [token, ehAdmin, tratar]);
@@ -98,7 +98,7 @@ export function Dashboard() {
         <nav>
           {ehAdmin && <Link className="botao botao-fantasma" to="/empresas">Empresas</Link>}
           {ehAdmin && <Link className="botao botao-fantasma" to="/usuarios">Usuários</Link>}
-          {ehAdmin && <Link className="botao botao-fantasma" to="/catalogo-base">Catálogo básico</Link>}
+          {ehAdmin && <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>}
           {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
           {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
           <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>

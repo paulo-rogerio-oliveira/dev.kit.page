@@ -23,9 +23,12 @@ public sealed record EmpresaNova(string Nome, string Plano, int Assentos);
 
 /// <summary>Uma empresa na lista do admin.</summary>
 /// <param name="CodigoDeAdesao">O código que o colaborador informa no dev.kit para aderir — entregue pelo gestor ao time.</param>
-/// <param name="Colaboradores">Máquinas vinculadas (com consentimento) — os assentos ocupados.</param>
+/// <param name="Colaboradores">Máquinas vinculadas (com consentimento) à telemetria da empresa.</param>
+/// <param name="Gestor">O gestor da empresa (o nome, ou o login sem nome); nulo quando ela ainda não tem gestor (US #461).</param>
+/// <param name="AssentosEmUso">Os assentos ocupados: os devs ativos da empresa, a mesma conta da adesão e da licença (US #461).</param>
 public sealed record EmpresaResumo(
-    int Id, string Nome, string Plano, int Assentos, string CodigoDeAdesao, int Colaboradores, DateTimeOffset CriadaEm);
+    int Id, string Nome, string Plano, int Assentos, string CodigoDeAdesao, int Colaboradores, DateTimeOffset CriadaEm,
+    string? Gestor = null, int AssentosEmUso = 0);
 
 /// <summary>O convite de um gestor para a empresa: o login dele.</summary>
 public sealed record GestorNovo(string Login);

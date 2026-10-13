@@ -29,6 +29,11 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<TrialDeMaquina> TrialsDeMaquina => Set<TrialDeMaquina>();
     public DbSet<LicencaEmitida> LicencasEmitidas => Set<LicencaEmitida>();
     public DbSet<EventoDePagamento> EventosDePagamento => Set<EventoDePagamento>();
+    public DbSet<Catalogo> Catalogos => Set<Catalogo>();
+    public DbSet<VinculoDeCatalogo> VinculosDeCatalogo => Set<VinculoDeCatalogo>();
+    public DbSet<ItemDoCatalogoEditavel> ItensEditaveis => Set<ItemDoCatalogoEditavel>();
+    public DbSet<VersaoDoCatalogo> VersoesDoCatalogo => Set<VersaoDoCatalogo>();
+    public DbSet<PacoteDoCatalogo> PacotesDoCatalogo => Set<PacoteDoCatalogo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,6 +96,59 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(a => a.UsuarioId);
             e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.
+        modelBuilder.Entity<Catalogo>(e =>
+        {
+            e.ToTable("Catalogos");
+            e.Property(c => c.Slug).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDoSlug);
+            e.Property(c => c.Nome).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDoNome);
+            e.Property(c => c.Descricao).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaDescricao);
+            e.HasIndex(c => c.Slug).IsUnique();
+        });
+
+        modelBuilder.Entity<VinculoDeCatalogo>(e =>
+        {
+            e.ToTable("VinculosDeCatalogo");
+            e.HasIndex(v => new { v.CatalogoId, v.EmpresaId }).IsUnique();
+            e.HasIndex(v => v.EmpresaId);
+            e.HasOne(v => v.Catalogo).WithMany().HasForeignKey(v => v.CatalogoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(v => v.Empresa).WithMany().HasForeignKey(v => v.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ItemDoCatalogoEditavel>(e =>
+        {
+            e.ToTable("ItensEditaveisDeCatalogo");
+            e.Property(i => i.Tipo).HasMaxLength(10);
+            e.Property(i => i.Nome).HasMaxLength(RegrasDoCatalogoDaEmpresa.TamanhoMaximoDoNome);
+            e.Property(i => i.Descricao).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaDescricao);
+            e.Property(i => i.Categoria).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaCategoria);
+            e.Property(i => i.Arquivo).HasMaxLength(200);
+            // Até 256 KB de UTF-8 (a regra do Core): nvarchar(max) no SQL Server, como o EF gera sem tamanho.
+            e.Property(i => i.Hash).HasMaxLength(64);
+            e.Property(i => i.Dependencias).HasMaxLength(4000);
+            e.Property(i => i.AlteradoPor).HasMaxLength(100);
+            e.HasIndex(i => new { i.CatalogoId, i.Tipo, i.Nome }).IsUnique();
+            e.HasOne(i => i.Catalogo).WithMany().HasForeignKey(i => i.CatalogoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<VersaoDoCatalogo>(e =>
+        {
+            e.ToTable("VersoesDoCatalogo");
+            e.Property(v => v.Tag).HasMaxLength(60);
+            e.Property(v => v.Sha256).HasMaxLength(64);
+            e.Property(v => v.PublicadaPor).HasMaxLength(100);
+            e.HasIndex(v => new { v.CatalogoId, v.Versao }).IsUnique();
+            e.HasOne(v => v.Catalogo).WithMany().HasForeignKey(v => v.CatalogoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // O zip à parte: a lista das releases não carrega os bytes (varbinary(max) no SQL Server).
+        modelBuilder.Entity<PacoteDoCatalogo>(e =>
+        {
+            e.ToTable("PacotesDoCatalogo");
+            e.HasKey(p => p.VersaoId);
+            e.HasOne<VersaoDoCatalogo>().WithOne().HasForeignKey<PacoteDoCatalogo>(p => p.VersaoId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // A conta do dev, o trial, a licença e o pagamento (US #425): o mesmo script Us425.sql no Azure SQL.

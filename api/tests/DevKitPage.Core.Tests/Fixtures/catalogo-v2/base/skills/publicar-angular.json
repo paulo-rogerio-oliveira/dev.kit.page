@@ -1,0 +1,13 @@
+{
+  "name": "publicar-angular",
+  "description": "Gerar o build de produção do Angular e publicar o conteúdo do dist no local de saída.",
+  "content": "# Publicar Angular\n\nBuild de PUBLICAÇÃO do front: gera o `dist` otimizado e copia para o local de saída.\n\n1. Na raiz do projeto Angular, execute (timeout alto na Bash, nunca em background):\n\n```\nnpx ng build --configuration {ARGUMENTO}\n```\n\n2. A configuração vem do argumento desta skill: `production` (padrão) ou `development`. Não invente outra: configurações válidas são as do `angular.json`.\n3. Com o build limpo, copie o CONTEÚDO gerado em `dist/` para `{OUTPUT}\\<nome-do-projeto>_{VERSAO}` — crie a pasta se não existir e NÃO apague publicações de outras versões que estiverem ao lado.\n4. Se o build falhar, siga o fluxo de correção da skill `compilar-angular` antes de repetir.\n5. `dist/` é artefato: nunca entra em commit e nunca aparece na resposta da skill `listar-arquivos-alterados`.\n6. Termine a resposta dizendo a pasta exata onde a publicação ficou.",
+  "arguments": [
+    "production",
+    "development"
+  ],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": true
+}

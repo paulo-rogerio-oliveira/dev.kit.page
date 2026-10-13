@@ -1,0 +1,10 @@
+{
+  "name": "testar-dotnet",
+  "description": "Rodar os testes unitários C# (dotnet test) dos projetos afetados pela alteração.",
+  "content": "# Testar .NET\n\nDepois que a compilação estiver limpa, rode os testes dos projetos que a sua alteração afeta:\n\n1. Identifique os projetos de teste que referenciam o(s) projeto(s) que você alterou: procure `*.csproj` com `<ProjectReference>` para eles — os nomes costumam terminar em `.Tests`.\n2. Rode cada um pela ferramenta Bash, com `timeout` alto e NUNCA em background:\n\n```\ndotnet test <caminho-do-csproj>\n```\n\n   Para repetir um teste específico: `dotnet test <csproj> --filter \"FullyQualifiedName~<NomeDoTeste>\"`.\n3. Teste que falhou por causa da sua alteração: corrija o CÓDIGO. Só altere o teste quando o comportamento esperado realmente mudou com a task — NUNCA apague testes, marque `Skip` nem afrouxe asserções para \"passar\".\n4. Falha pré-existente (o teste já falhava sem a sua alteração): não é desta task — reporte ao desenvolvedor e siga.\n5. Problema de ambiente ou dependência resolvido no caminho: registre no `commonFixes.md`, uma entrada por problema.\n6. Repositório sem projeto de teste: siga sem testes e diga isso explicitamente na resposta — não crie projeto de teste por conta própria.",
+  "arguments": [],
+  "repositories": [],
+  "isCommand": false,
+  "isBackground": false,
+  "isPinned": false
+}
