@@ -1,9 +1,9 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa, LoginResponse,
-  MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, ReleaseDoCatalogo, RoiResposta, UsuarioDaEmpresa,
-  UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
+  CatalogoNomeado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa,
+  ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RelatorioDePublicacao,
+  ReleaseDoCatalogo, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -31,6 +31,13 @@ export const colaboradores: ColaboradorResumo[] = [
 
 export const empresa: EmpresaResumo = {
   id: 4, nome: 'Empresa A', plano: 'Empresarial', assentos: 10, codigoDeAdesao: 'DK-7QH4-M2XA', colaboradores: 2, criadaEm: '2026-10-01T10:00:00Z',
+  gestor: null, assentosEmUso: 3,
+};
+
+/** A segunda empresa (US #461): já tem gestor e o único assento ocupado. */
+export const outraEmpresa: EmpresaResumo = {
+  id: 5, nome: 'Empresa B', plano: 'Individual', assentos: 1, codigoDeAdesao: 'DK-B0B0-0001', colaboradores: 1, criadaEm: '2026-10-05T10:00:00Z',
+  gestor: 'gestor.b', assentosEmUso: 1,
 };
 
 /** As empresas criadas e os gestores convidados pelo admin no servidor de mentira. */
@@ -161,11 +168,70 @@ export const vitrine: Vitrine = {
   ],
 };
 
-/** As releases do catálogo básico (a página do admin). */
+/** As releases do catálogo básico (a aba Releases do admin). */
 export const releasesDoCatalogo: ReleaseDoCatalogo[] = [
   { versao: 2, tag: 'catalogo-v2', nome: 'Catálogo 2', publicadaEm: '2026-10-08T12:00:00Z', itens: 4, retirados: 1, tamanhoBytes: 3_145_728, sha256: 'b'.repeat(64) },
   { versao: 1, tag: 'catalogo-v1', nome: 'Catálogo 1', publicadaEm: '2026-10-02T12:00:00Z', itens: 1, retirados: 0, tamanhoBytes: 1_048_576, sha256: null },
 ];
+
+// ----- US #461: os catálogos nomeados -----
+
+/** O básico (vale para todas as empresas) e um catálogo do admin, relacionado à Empresa A e ainda sem release. */
+export const catalogoBasico: CatalogoNomeado = {
+  id: 1, slug: 'basico', nome: 'Catálogo básico', descricao: 'O que vem com o dev.kit.', basico: true, versao: 2,
+  publicadaEm: '2026-10-08T12:00:00Z', itens: 4, pendentes: 0, empresas: [], criadoEm: '2026-10-01T10:00:00Z',
+};
+
+export const catalogoUau: CatalogoNomeado = {
+  id: 2, slug: 'equipe-uau', nome: 'Equipe UAU', descricao: 'As skills do time do UAU.', basico: false, versao: 0, publicadaEm: null,
+  itens: 2, pendentes: 2, empresas: [{ id: 4, nome: 'Empresa A', relacionadaEm: '2026-10-09T10:00:00Z' }], criadoEm: '2026-10-09T09:00:00Z',
+};
+
+/** Os itens do catálogo Equipe UAU: a skill e o fluxo que a usa, os dois nunca publicados. */
+export const itensDoCatalogo: ItemEditavel[] = [
+  {
+    id: 21, tipo: 'skill', nome: 'compilar-uau', descricao: 'Compila o UAU', categoria: 'UAU', hash: 'h1', versaoPublicada: 0, situacao: 'novo',
+    alteradoEm: '2026-10-09T11:00:00Z', alteradoPor: 'admin', dependencias: [], conteudo: null,
+  },
+  {
+    id: 22, tipo: 'fluxo', nome: 'entrega-uau', descricao: 'A entrega do UAU', categoria: 'UAU', hash: 'h2', versaoPublicada: 0, situacao: 'novo',
+    alteradoEm: '2026-10-09T11:30:00Z', alteradoPor: 'admin', dependencias: ['skill:compilar-uau'], conteudo: null,
+  },
+];
+
+/** O conteúdo guardado da skill compilar-uau — o SkillJson do dev.kit. */
+export const conteudoDaSkill = JSON.stringify({
+  name: 'compilar-uau', description: 'Compila o UAU', content: '# Compilar\nRode o build do UAU.', arguments: ['branch'], repositories: [],
+  isCommand: true, isBackground: false, isPinned: false,
+}, null, 2);
+
+/** O envelope devkit-fluxo do entrega-uau: a task e a etapa que roda a skill. */
+export const fluxoDeExemplo = {
+  formato: 'devkit-fluxo', versao: 1, nome: 'entrega uau', descricao: 'Compila e entrega o UAU.',
+  desenho: {
+    nodes: [
+      { id: 'task', kind: 'Task', title: 'Task', skillName: '' },
+      { id: 'e1', kind: 'Step', title: 'compilar-uau', skillName: 'compilar-uau' },
+    ],
+    links: [{ from: 'task', fromPort: 'next', to: 'e1', kind: 'Sequence' }],
+  },
+  agentes: [],
+  planos: [],
+};
+
+/** A conferência da publicação do Equipe UAU: pode publicar a v1. */
+export const relatorioDePublicacao: RelatorioDePublicacao = {
+  slug: 'equipe-uau', versaoAtual: 0, proxima: 1, podePublicar: true, minDevKit: 136,
+  mudancas: ['+ skill:compilar-uau v1', '+ fluxo:entrega-uau v1'], problemas: [],
+};
+
+/** O manifesto de uma release (o formato do dev.kit, resumido). */
+export const manifestoDaRelease = { catalogo: 2, minDevKit: 130, itens: [{ tipo: 'skill', nome: 'revisar-alteracoes', versao: 2, catalogo: 2 }] };
+
+/** A release que a publicação do catálogo grava (a primeira dele). */
+const releaseNova = (slug: string): ReleaseDoCatalogo => ({
+  versao: 1, tag: `${slug}-v1`, nome: `${slug} 1`, publicadaEm: '2026-10-13T10:00:00Z', itens: 2, retirados: 0, tamanhoBytes: 104_857, sha256: 'c'.repeat(64),
+});
 
 /** O catálogo da Empresa A: uma skill publicada e um fluxo retirado. */
 export const itensDaEmpresa: ItemDaEmpresa[] = [
@@ -257,11 +323,11 @@ export const handlersPadrao = [
       headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename=uso-dos-colaboradores-20260904-20261003.csv' },
     });
   }),
-  http.get(`${API}/api/empresas`, () => HttpResponse.json([empresa])),
+  http.get(`${API}/api/empresas`, () => HttpResponse.json([empresa, outraEmpresa])),
   http.post(`${API}/api/empresas`, async ({ request }) => {
     const corpo = await request.json();
     cadastros.empresas.push(corpo);
-    return HttpResponse.json({ ...empresa, id: 9, ...(corpo as object), codigoDeAdesao: 'DK-NOVA-0001', colaboradores: 0 }, { status: 201 });
+    return HttpResponse.json({ ...empresa, id: 9, ...(corpo as object), codigoDeAdesao: 'DK-NOVA-0001', colaboradores: 0, assentosEmUso: 0 }, { status: 201 });
   }),
   http.post(`${API}/api/empresas/:id/gestores`, async ({ params, request }) => {
     const { login } = (await request.json()) as { login: string };
@@ -279,7 +345,79 @@ export const handlersPadrao = [
   }),
   // US #425: o catálogo, a conta, a empresa do gestor e a compra.
   http.get(`${API}/api/catalogo/base/vitrine`, () => HttpResponse.json(vitrine)),
-  http.get(`${API}/api/catalogo/base/releases`, () => HttpResponse.json(releasesDoCatalogo)),
+  // US #461: os catálogos nomeados (o admin), as releases de cada um e o /meus.
+  http.get(`${API}/api/catalogos`, () => HttpResponse.json([catalogoBasico, catalogoUau])),
+  http.get(`${API}/api/catalogos/meus`, () => HttpResponse.json([
+    { slug: 'basico', nome: 'Catálogo básico', basico: true, versao: 2, publicadaEm: '2026-10-08T12:00:00Z' },
+  ])),
+  http.post(`${API}/api/catalogos`, async ({ request }) => {
+    const corpo = (await request.json()) as { slug: string; nome: string; descricao: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/catalogos', corpo });
+    return HttpResponse.json({ ...catalogoUau, id: 3, ...corpo, itens: 0, pendentes: 0, empresas: [] }, { status: 201 });
+  }),
+  http.post(`${API}/api/catalogos/basico/importar`, () => {
+    escritas.push({ metodo: 'POST', caminho: '/api/catalogos/basico/importar', corpo: null });
+    return HttpResponse.json({ versao: 2, itens: 58, retirados: 0, importada: true, mensagem: 'Catálogo básico importado da catalogo-v2: 58 itens.' });
+  }),
+  http.put(`${API}/api/catalogos/:slug`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'PUT', caminho: `/api/catalogos/${params.slug}`, corpo });
+    return HttpResponse.json({ ...catalogoUau, ...(corpo as object) });
+  }),
+  http.delete(`${API}/api/catalogos/:slug`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/catalogos/${params.slug}`, corpo: null });
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.post(`${API}/api/catalogos/:slug/empresas`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { empresaId: number };
+    escritas.push({ metodo: 'POST', caminho: `/api/catalogos/${params.slug}/empresas`, corpo });
+    return HttpResponse.json({ ...catalogoUau, empresas: [...catalogoUau.empresas, { id: corpo.empresaId, nome: 'Empresa B', relacionadaEm: '2026-10-13T10:00:00Z' }] });
+  }),
+  http.delete(`${API}/api/catalogos/:slug/empresas/:empresa`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/catalogos/${params.slug}/empresas/${params.empresa}`, corpo: null });
+    return HttpResponse.json({ ...catalogoUau, empresas: [] });
+  }),
+  http.get(`${API}/api/catalogos/:slug/itens`, ({ params }) => HttpResponse.json(params.slug === 'basico' ? [] : itensDoCatalogo)),
+  http.get(`${API}/api/catalogos/:slug/itens/:id`, ({ params }) => {
+    const item = itensDoCatalogo.find((i) => String(i.id) === params.id)!;
+    return HttpResponse.json({ ...item, conteudo: item.tipo === 'skill' ? conteudoDaSkill : JSON.stringify(fluxoDeExemplo) });
+  }),
+  http.post(`${API}/api/catalogos/:slug/itens`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { tipo: string; conteudo: string };
+    escritas.push({ metodo: 'POST', caminho: `/api/catalogos/${params.slug}/itens`, corpo });
+    const lido = JSON.parse(corpo.conteudo) as { name?: string; nome?: string; key?: string };
+    return HttpResponse.json({ ...itensDoCatalogo[0], id: 23, tipo: corpo.tipo, nome: lido.name ?? lido.key ?? lido.nome ?? '', conteudo: corpo.conteudo }, { status: 201 });
+  }),
+  http.put(`${API}/api/catalogos/:slug/itens/:id`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'PUT', caminho: `/api/catalogos/${params.slug}/itens/${params.id}`, corpo });
+    return HttpResponse.json({ ...itensDoCatalogo.find((i) => String(i.id) === params.id)!, situacao: 'alterado' });
+  }),
+  http.delete(`${API}/api/catalogos/:slug/itens/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/catalogos/${params.slug}/itens/${params.id}`, corpo: null });
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.get(`${API}/api/catalogos/:slug/publicacao`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(relatorioDePublicacao);
+  }),
+  http.post(`${API}/api/catalogos/:slug/publicar`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'POST', caminho: `/api/catalogos/${params.slug}/publicar`, corpo });
+    return HttpResponse.json({ release: releaseNova(String(params.slug)), relatorio: relatorioDePublicacao }, { status: 201 });
+  }),
+  // As releases: as do básico são as da US #425; um catálogo do admin só tem release depois de publicado.
+  http.get(`${API}/api/catalogos/:slug/releases`, ({ params }) => HttpResponse.json(
+    params.slug === 'basico' ? releasesDoCatalogo
+      : escritas.some((e) => e.caminho === `/api/catalogos/${params.slug}/publicar`) ? [releaseNova(String(params.slug))] : [],
+  )),
+  http.get(`${API}/api/catalogos/:slug/releases/:versao/manifesto`, () => HttpResponse.json(manifestoDaRelease)),
+  http.get(`${API}/api/catalogos/:slug/releases/:versao/download`, ({ params, request }) => {
+    downloads.push(request.headers.get('Authorization'));
+    return new HttpResponse(new Uint8Array([80, 75, 3, 4]), {
+      headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename=catalogo-v${params.versao}.zip` },
+    });
+  }),
   http.get(`${API}/api/catalogo/empresa`, () => HttpResponse.json(itensDaEmpresa)),
   http.delete(`${API}/api/catalogo/empresa/:id`, ({ params }) => {
     escritas.push({ metodo: 'DELETE', caminho: `/api/catalogo/empresa/${params.id}`, corpo: null });

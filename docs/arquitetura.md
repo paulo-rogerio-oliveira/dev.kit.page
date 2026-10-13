@@ -81,6 +81,53 @@ caminho para regravar estão em [landing-conteudo.md](landing-conteudo.md).
 - **Sem tocar na telemetria.** A tabela `PedidosDeDemonstracao` não tem relação com máquinas nem
   eventos.
 
+## A área logada da web (US #461)
+
+O visual de Empresas, Usuários e Catálogo segue os prints anexados à US #461, sobre os MESMOS tokens de
+`web/src/estilo.css` (as variantes de cor novas — sucesso, alerta, info, papel — entram ali, com o tema escuro).
+Nada de biblioteca de componentes: os compartilhados novos ficam em `web/src/componentes`:
+
+| Componente | Papel |
+|---|---|
+| `Pagina` | o corpo da página logada: o título, o subtítulo (ao lado, `emLinha`, ou embaixo) e a ação/pílula à direita |
+| `PainelLateral` | o cartão à direita da lista ("Nova empresa", "Novo usuário", "Novo catálogo"), dentro de um `.com-lateral` que vira uma coluna na tela estreita |
+| `Abas` | o `tablist` do WAI-ARIA (setas, Home/End); a aba ativa é decidida pela página |
+| `Chips` | os filtros de um valor só com a contagem (`aria-pressed`) |
+| `Selo` | o badge (neutro, sucesso, aviso, info, papel), com o ponto opcional |
+| `BotaoCopiar` | o copiar ao lado de um valor, com o retorno num `aria-live` sem papel de status; o `copiarTexto` (`web/src/areaDeTransferencia.ts`) é o mesmo do "Copiar para Bug" das exceções |
+| `BarraDeUso` | "N de M em uso" com o `.trilho`/`.barra` de sempre (`role="progressbar"`) |
+| `Avatar` | as iniciais com a cor derivada do nome (decorativo: `aria-hidden`) |
+
+O `Topo` é o cabeçalho de TODA página logada (Empresas e Usuários deixaram de montar o próprio), com o avatar de
+quem está logado; o `MenuDoAdmin` (Uso, Empresas, Usuários, Catálogo) marca a página atual.
+
+- **Empresas**: a tabela traz o plano (selo), os assentos em uso (`assentosEmUso` do `EmpresaResumo` — os devs
+  ativos, a mesma conta do login), o código de adesão com o copiar e o gestor (`gestor`, ou o selo "Sem gestor") com
+  o Convidar, que abre o login na própria linha. O cadastro fica no painel lateral.
+- **Usuários**: a busca por nome ou login e os filtros de papel e empresa são do navegador (a lista já vem inteira);
+  cada linha tem o menu ⋯ (editar, bloquear/desbloquear, redefinir senha). A API não mudou.
+- **Catálogo** (`/catalogo`): a aba e o catálogo escolhido ficam na URL — `?aba=releases&catalogo={slug}`,
+  `?aba=catalogos&catalogo={slug}` —, então o link volta ao mesmo lugar e a página continua sendo `/catalogo` para a
+  regra das páginas do dev (`sessao.tsx`). A rota antiga **`/catalogo-base` redireciona para `/catalogo?aba=releases`**
+  (só para o admin, como antes). Quem não é admin vê só a **Vitrine**, qualquer que seja a aba da URL.
+  - **Vitrine** (pública): o básico de `GET /api/catalogo/base/vitrine`, com a busca, os chips de tipo (a contagem
+    respeita a busca e a categoria) e a barra lateral de categorias; a pílula do cabeçalho conta os itens dela.
+  - **Releases** (admin): o seletor de catálogo (o básico por padrão), o cartão da release atual (tag, Atual, data,
+    itens, retirados, tamanho, SHA-256 abreviado com o copiar), **Ver manifesto** (o JSON numa área sobre a página) e
+    **Baixar zip** (por `fetch` com o Bearer e blob, como as exportações) e o histórico — de
+    `GET /api/catalogos/{slug}/releases`, `.../{versao}/manifesto` e `.../{versao}/download`.
+  - **Catálogos** (admin): a lista e o painel "Novo catálogo" (o slug é conferido antes da API: minúsculas, números e
+    hífen, 2–40); o detalhe tem as empresas relacionadas (o básico "vale para todas"; o 409 da colisão mostra o
+    `detail`), os itens com a situação em relação à última release e os chips de tipo, o "Importar do GitHub" no
+    básico vazio, e o **Publicar**: a conferência (`GET .../publicacao`, com o dev.kit mínimo), a confirmação e, no
+    409, o relatório que vem no corpo (`ErroDaApi.corpo` — não é ProblemDetails) com os problemas; publicada, a
+    página vai à aba Releases daquele catálogo.
+  - **O editor** grava o MESMO JSON do dev.kit desktop (`web/src/paginas/catalogo/conteudo.ts`): a skill como o
+    `SkillJson` e o Tech Plan como o `TechPlanJson` — mesmos campos, mesma ordem, dois espaços —, com as mensagens de
+    erro do app; o fluxo é o envelope `devkit-fluxo` como texto (colado ou carregado do `devcli fluxos --exportar`),
+    conferido (JSON, `formato`, `versao` 1, `nome`, `desenho`) e com a prévia dos passos (nó → tipo → skill). O
+    desenho gráfico continua no desktop. Salvar grava rascunho; só o Publicar leva às máquinas.
+
 As convenções vêm do git.kit: pacotes centralizados (`Directory.Packages.props`), aviso é erro e a
 documentação XML gerada (`Directory.Build.props`), SDK fixado (`global.json`).
 
@@ -272,6 +319,44 @@ nenhuma consulta a mais. A taxa de correção sem cobrança é nula. Na web, os 
 
 Tabelas novas: migration `Us425CatalogoContaELicenca` e `api/scripts/sqlserver/Us425.sql`.
 
+**Catálogos nomeados: o site publica (US #461).** O site passa a ser a FONTE de publicação dos catálogos,
+inclusive do básico — é a única forma de "editar pelo site, gerar o manifesto e republicar" sem duas fontes de
+`catalogo-vN`. Em `EndpointsDeCatalogos.cs`, no padrão do `EndpointsDaUs425`:
+- **Modelo** (`EntidadesDaUs461.cs`): `Catalogo` (slug imutável — é o que as máquinas guardam —, nome, `Basico`),
+  `VinculoDeCatalogo` (N:N com `Empresa`; o nome não é `CatalogoDaEmpresa` porque esse já é o serviço da US #425),
+  `ItemDoCatalogoEditavel` (o RASCUNHO de skill, plan ou fluxo; distinto do `ItemDeCatalogo` dos devs),
+  `VersaoDoCatalogo` (a release: tag `catalogo-vN` no básico e `{slug}-vN` nos demais, o manifesto, o SHA-256) e
+  `PacoteDoCatalogo` (o zip, à parte, atrás do `IArmazemDePacotes` — no banco hoje, Blob depois sem mudar regra).
+  O básico é semeado pelo `InicializadorDaBase` e não se vincula nem se exclui.
+- **O formato é o do app** (`FormatosDoCatalogo`): o porte do `SkillJson`, do `TechPlanJson` (com a chave fixa e o
+  `Slugify`) e do envelope `devkit-fluxo`, com as MESMAS mensagens de erro. O editor grava exatamente esse JSON; a
+  importação na máquina continua sendo a do dev.kit. O nome segue a regra do APP (o básico real tem a skill
+  `resolver conflitos`, com espaço), e não a do catálogo da empresa.
+- **O manifesto é o do git.kit** (`GeradorDoManifesto` e `ManifestoJson`, portados): hash novo é versão + 1, o que
+  sai vai para os retirados, nada mudou não publica; `requer`, `tecnologia` e `dependencias` pelas mesmas regras. São
+  dois repositórios sem pacote comum, então a igualdade é TRAVADA por teste: a paridade com o `catalogo/base` v2 do
+  git.kit (os 58 itens dão o mesmo hash, e o manifesto regravado sai com o mesmo texto) e o teste de contrato
+  `ContratoDoManifesto`, o MESMO conjunto de fixtures nos dois repositórios — mudar o gerador de um lado obriga a
+  mudar o outro. A importação da release do GitHub também confere o hash de cada item e para se divergir.
+- **Publicar** (`PublicacaoDeCatalogos`): o zip leva TODOS os itens ativos (a dependência resolvida no próprio
+  catálogo vai no mesmo pacote) e o `manifesto.json`. O FECHAMENTO das dependências (`RegrasDosCatalogos.Dependencias`)
+  aceita o que está no próprio catálogo, o plan embutido no `planos[]` do fluxo (o caso real `plan:avaliar-arquitetura`)
+  e o básico (que toda máquina sincroniza); a de outro catálogo nomeado, ou inexistente, RECUSA com o relatório (409
+  com o `RelatorioDePublicacaoV1`, e não um ProblemDetails, para a tela listar o que corrigir). O `minDevKit` dos
+  itens que mudaram é o informado, ou o do manifesto anterior.
+- **Colisão de nomes**: na máquina o item é tipo + nome. Recusa-se (409) o item de um catálogo nomeado com o nome de
+  um item do básico, e relacionar a uma empresa um catálogo que colide com outro já relacionado a ela.
+- **Distribuição**: `GET /api/catalogos/meus` (o básico para todos; com o JWT, os relacionados à empresa; o admin vê
+  todos), `GET /api/catalogos/{slug}?desde=N` (a delta, 304 sem mudança), `/download` (o zip) e
+  `/releases/{versao}/manifesto`. O isolamento é UM ponto (`PublicacaoDeCatalogos.VisivelAsync`, pelo
+  `EscopoDaEmpresa`): o catálogo que quem pede não pode ver responde 404, e não 403 — não se descobre que ele existe.
+- **Compatibilidade**: o formato `ManifestoDoCatalogoV1` NÃO muda (o slug e o nome vão só no `/meus`), e as rotas
+  `/api/catalogo/base*` seguem para o dev.kit antigo, agora servidas pela última release do básico NO SITE — com
+  fallback para as releases do GitHub enquanto não houver uma. A importação (`POST /api/catalogos/basico/importar`)
+  copia UMA vez a última `catalogo-vN` do GitHub (o mesmo zip e o mesmo manifesto) para o site, e a numeração continua.
+
+Tabelas novas: migration `Us461CatalogosNomeados` e `api/scripts/sqlserver/Us461.sql`.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -282,7 +367,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -303,4 +388,6 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin); o ROI por work item (KPIs, gráfico com a dica do lead time, tabela, traço sem turno, estado vazio com o `devcli roi`, os filtros) |
 | US #405 | Core: `RegrasTests` (tag → versão, prerelease/rascunho/ilegível, ordem numérica, destaques, SHA-256, senha temporária, validação do usuário, papel dev sem escopo, os tipos novos e os cartões Impasses/Árbitro inclusive sem denominador); Infrastructure: `UsuariosTests` (senha temporária, redefinição, bloqueio pelo admin × temporário, dev sem painel, script do Azure SQL) e a qualidade com os eventos novos no escopo; Api: `VersoesApiTests` (GitHub de mentira: 200, cache, 401 anônimo, streaming do zip, o token só no api.github.com e nunca no armazenamento nem na resposta, 404, 503 sem REPO_KEY e com o GitHub fora do ar), `UsuariosApiTests` (401/403, senha só na criação/redefinição, `bloqueadoAte` no 423, dev 403 no painel) e `QualidadeDoFluxoApiTests`; web: `Landing.test.tsx` (proposta e download), `Usuarios.test.tsx`, os cartões em `Dashboard.test.tsx`; e2e: `usuarios.spec.ts` e `us405.spec.ts` |
 | US #425 | Core: `Ed25519Tests` (vetores do RFC 8032, adulterada, chave errada), `CatalogoTests` (tag, delta, vitrine, validação da publicação), `LicencasTests` (emitir/ler, janela do 7º dia, recusas, link, gateway); Infrastructure: `Us425Tests` (isolamento do catálogo por empresa, adesão, assento por usuário, link de uso único, trial pela impressão, licenças, webhook, script `Us425.sql`); Api: `CatalogoApiTests` (delta e 304, download, vitrine, admin), `ContaApiTests` (adesão, link, recusa com `codigo`, renovação do token cortada pelo bloqueio, política por empresa, gestor 403 na outra empresa), `LicencasApiTests` (renovação com JWT e chave, cada recusa, a janela) e `VersoesApiTests` (download anônimo com limite por IP); web: `Catalogo`, `Conta`, `Comprar` e `EmpresaDoGestor`; e2e: `us425.spec.ts` (as telas novas com as capturas) |
+| US #461 (API) | Core: `GeradorDoManifestoTests` (paridade com o `catalogo/base` v2 do git.kit em `Fixtures/catalogo-v2`: mesmos hashes, dependências, `requer` e manifesto regravado igual; versão + 1, retirados, o que volta, sem mudança), `FormatosDoCatalogoTests` (os 58 arquivos do git.kit regravados no formato canônico com o mesmo hash, a ordem do `SkillJson`, as mensagens do app), `RegrasDosCatalogosTests` (slug, nome do app, situação do rascunho, dependências, colisões) e `ContratoDoManifestoTests` (o conjunto de fixtures compartilhado com o git.kit); Infrastructure: `Us461Tests` (básico semeado, slug único, rascunho → release → versão nova só do alterado → retirada, o zip e o manifesto, a dependência que recusa, as colisões, o isolamento da distribuição, o gestor e os assentos de Empresas, script `Us461.sql`); Api: `CatalogosApiTests` (só o admin gere; a empresa vinculada vê, baixa e recebe 304, a outra e o anônimo recebem 404; o SHA-256 do zip; o 409 com o relatório; a importação do GitHub e as rotas antigas servindo o básico do site na `catalogo-v3`; o histórico 3, 2, 1) |
+| US #461 (web) | Vitest: `componentes/Compartilhados.test.tsx` (iniciais, selo, barra de uso, copiar, abas pelo teclado, chips, página e painel lateral), `Empresas.test.tsx` (assentos em uso, gestor, copiar o código, painel lateral, convite na linha), `Usuarios.test.tsx` (busca e filtros, menu ⋯, painel lateral), `Catalogo.test.tsx` (vitrine com busca, chips e categorias; a rota antiga na aba Releases; o cartão da release, o copiar do SHA-256, o manifesto e o zip; o seletor de catálogo), `catalogo/conteudo.test.ts` (o JSON da skill e do plan na ordem do dev.kit, as mensagens do app, o envelope do fluxo e a prévia) e `catalogo/Catalogos.test.tsx` (cadastro, slug, empresas e a colisão, itens, editor, retirar, publicação com o 409 da dependência e o sucesso indo para Releases); e2e: `catalogos.spec.ts` (catálogo → empresa → skill e fluxo → publicar → release e manifesto → `/api/catalogos/meus` só para a empresa relacionada) e `usuarios.spec.ts` no layout novo |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e vídeo do hero → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard |

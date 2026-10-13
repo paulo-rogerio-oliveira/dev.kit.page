@@ -251,6 +251,10 @@ export interface EmpresaResumo {
   codigoDeAdesao: string;
   colaboradores: number;
   criadaEm: string;
+  /** O login (ou o nome) do gestor da empresa; nulo enquanto ninguém foi convidado (US #461). */
+  gestor: string | null;
+  /** Os devs ativos que ocupam assento — a mesma conta do login (US #461). */
+  assentosEmUso: number;
 }
 
 export interface EmpresaNova {
@@ -346,7 +350,7 @@ export interface Vitrine {
   grupos: { tecnologia: string; itens: ItemDaVitrine[] }[];
 }
 
-/** Uma release do catálogo básico (catalogo-vN), na página do admin. */
+/** Uma release de um catálogo (catalogo-vN no básico, {slug}-vN nos demais), na aba Releases do admin. */
 export interface ReleaseDoCatalogo {
   versao: number;
   tag: string;
@@ -424,6 +428,105 @@ export interface CheckoutCriado {
   url: string;
   /** Sem gateway configurado: o checkout simulado, que vai direto à compra concluída. */
   simulado: boolean;
+}
+
+// ----- US #461: os catálogos nomeados, editados e publicados pelo site -----
+
+/** Uma empresa relacionada a um catálogo: os usuários dela recebem o catálogo no dev.kit. */
+export interface EmpresaVinculada {
+  id: number;
+  nome: string;
+  relacionadaEm: string;
+}
+
+/** Um catálogo na gestão do admin (GET /api/catalogos) — o básico vem primeiro. */
+export interface CatalogoNomeado {
+  id: number;
+  slug: string;
+  nome: string;
+  descricao: string;
+  basico: boolean;
+  /** A versão publicada mais nova (0 = nunca publicado). */
+  versao: number;
+  publicadaEm: string | null;
+  /** Os itens ativos (não retirados), publicados ou não. */
+  itens: number;
+  /** Os itens com rascunho que ainda não chegou às máquinas. */
+  pendentes: number;
+  empresas: EmpresaVinculada[];
+  criadoEm: string;
+}
+
+export interface CatalogoNovo {
+  slug: string;
+  nome: string;
+  descricao: string;
+}
+
+/** A situação de um item editável em relação à última release do catálogo. */
+export type SituacaoDoItem = 'novo' | 'alterado' | 'publicado' | 'retirada-pendente' | 'retirado';
+
+/**
+ * Um item editável (skill, Tech Plan ou fluxo). O `conteudo` é o MESMO JSON que o dev.kit grava (SkillJson,
+ * TechPlanJson, o envelope devkit-fluxo), como texto: nulo na lista, inteiro no detalhe.
+ */
+export interface ItemEditavel {
+  id: number;
+  tipo: TipoDeItem;
+  nome: string;
+  descricao: string;
+  categoria: string;
+  hash: string;
+  /** A versão na última release (0 = nunca publicado). */
+  versaoPublicada: number;
+  situacao: SituacaoDoItem;
+  alteradoEm: string;
+  alteradoPor: string;
+  /** O que o item usa (`tipo:nome`). */
+  dependencias: string[];
+  conteudo: string | null;
+}
+
+/** Criar ou editar um item: o conteúdo é o JSON no formato do dev.kit; a categoria vazia é a derivada do nome. */
+export interface ItemEditado {
+  tipo: TipoDeItem;
+  conteudo: string;
+  categoria?: string;
+}
+
+/** A conferência de uma publicação — também o corpo do 409 quando ela é recusada. */
+export interface RelatorioDePublicacao {
+  slug: string;
+  versaoAtual: number;
+  proxima: number;
+  podePublicar: boolean;
+  minDevKit: number;
+  /** '+ skill:x v1', '~ plan:y v2', '- fluxo:z (retirado)', '· skill:w (dados da vitrine)'. */
+  mudancas: string[];
+  problemas: string[];
+}
+
+export interface PublicacaoDoCatalogo {
+  release: ReleaseDoCatalogo;
+  relatorio: RelatorioDePublicacao;
+}
+
+/** A importação única da release catalogo-vN do GitHub para o básico do site. */
+export interface ImportacaoDoBasico {
+  versao: number;
+  itens: number;
+  retirados: number;
+  importada: boolean;
+  mensagem: string;
+}
+
+/** Um catálogo que o dev.kit de quem consulta sincroniza (GET /api/catalogos/meus). */
+export interface CatalogoDisponivel {
+  slug: string;
+  nome: string;
+  basico: boolean;
+  versao: number;
+  publicadaEm: string | null;
 }
 
 /** Um arquivo baixado da API: o conteúdo e o nome sugerido. */
