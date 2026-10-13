@@ -23,13 +23,17 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 
 ## A landing (US #283)
 
-A landing é a página de venda, repaginada na US #405 conforme a proposta visual: hero (selo "Para times no
-Azure DevOps", o título com "Pull Request" em destaque, a amostra do Board feita em HTML e o "Baixar o
-dev.kit") → como funciona (sete etapas, de Clona a Pull Request, com o vídeo do fluxo) → por que o dev.kit
-(três cartões) → recursos (um vídeo cada) → comparativo → integrações → segurança → para empresas →
-contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit" (`BaixarDevKit`) lê
-`/api/versoes/ultima` e baixa por `fetch` com o Bearer (o blob vira o arquivo); sem sessão, leva ao login,
-que volta para a landing. A ordem é a lista `SECOES` de
+A landing é a página de venda, na disposição da proposta da home (US #467, que reorganizou a da US #405):
+hero (selo "Para times no Azure DevOps", o título com "Pull Request" em destaque, os dois botões, o link
+discreto "Baixar o dev.kit versão N" e a amostra do Board feita em HTML) → como funciona (sete etapas, de
+Clona a Pull Request) → recursos (as abas 01–04 e quatro blocos alternados: o texto com os marcadores e a
+mídia numa moldura de janela do app — o componente `Janela`, o mesmo da amostra do Board —, com a legenda
+abaixo) → por que o dev.kit (três cartões) → catálogo → comparativo → integrações → segurança → para
+empresas → planos → contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit"
+(`BaixarDevKit`) lê `/api/versoes/ultima` e, desde a US #467, é um **link de verdade** (`<a href>`) para o
+alias permanente `/api/versoes/ultima/download`, com o endereço absoluto escrito abaixo dele: o
+navegador mostra a URL, o "Copiar endereço do link" funciona e ela cola em outra aba — o `fetch` + blob
+anterior só deixava um `blob:` passageiro. A ordem é a lista `SECOES` de
 `web/src/conteudo/landing.ts`, a mesma que o teste confere. Desde a US #381 a página **não explica a
 área logada** (o teste recusa "dashboard" e "métricas" no conteúdo), e a tabela comparativa e a seção
 "Para empresas" seguem a pesquisa de [landing-conteudo.md](landing-conteudo.md).
@@ -213,6 +217,10 @@ cliente:
   redirecionamento automático**: o 302 do GitHub para o armazenamento (outro host, URL assinada) é seguido à
   mão, SEM o `Authorization`, para o token não sair do api.github.com. Os cabeçalhos da resposta são da API
   (`application/zip`, `attachment; filename=devkit-136.zip`, o `Content-Length`).
+- `GET /api/versoes/ultima/download` (US #467) é o **alias permanente** da última estável: o mesmo handler,
+  o mesmo streaming e a mesma cota por IP (503 sem versão estável). É o `href` do "Baixar o dev.kit" da
+  landing — a URL que o visitante copia continua valendo na próxima versão, o que o `/{versao}/download`
+  não faz.
 - **A regra de versão é pura, no Core** (`RegrasDeVersao`): a tag `vNNN` é o número; a legada `vX.Y.Z`
   vale X; prerelease, rascunho e tag ilegível ficam de fora; a ordem é numérica (v136 antes de v99), e duas
   tags da mesma versão ficam uma só (a publicada por último).
@@ -303,4 +311,4 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | `web/src/**/*.test.tsx` | Vitest + Testing Library + MSW: landing (ordem das seções, uma mídia por recurso, CTA, Entrar, sem explicar o dashboard, as sete etapas, a tabela comparativa acessível e completa, Para empresas), Midia (atributos, carregamento sob demanda, reduced-motion, fallback), conteúdo, formulário (validação, envio, 400, 429, falha), pedidos no dashboard (lista, exclusão, paginação), login (inclusive o gestor), expiração, troca, KPIs (inclusive as máquinas), filtros, divisor zero; exceções não classificadas (lista vazia, trace, PUT com a versão, exportação, cópia para o Bug, o gestor sem reação); o painel por papel (Colaborador e Exportar CSV do gestor, Empresas do admin); o ROI por work item (KPIs, gráfico com a dica do lead time, tabela, traço sem turno, estado vazio com o `devcli roi`, os filtros) |
 | US #405 | Core: `RegrasTests` (tag → versão, prerelease/rascunho/ilegível, ordem numérica, destaques, SHA-256, senha temporária, validação do usuário, papel dev sem escopo, os tipos novos e os cartões Impasses/Árbitro inclusive sem denominador); Infrastructure: `UsuariosTests` (senha temporária, redefinição, bloqueio pelo admin × temporário, dev sem painel, script do Azure SQL) e a qualidade com os eventos novos no escopo; Api: `VersoesApiTests` (GitHub de mentira: 200, cache, 401 anônimo, streaming do zip, o token só no api.github.com e nunca no armazenamento nem na resposta, 404, 503 sem REPO_KEY e com o GitHub fora do ar), `UsuariosApiTests` (401/403, senha só na criação/redefinição, `bloqueadoAte` no 423, dev 403 no painel) e `QualidadeDoFluxoApiTests`; web: `Landing.test.tsx` (proposta e download), `Usuarios.test.tsx`, os cartões em `Dashboard.test.tsx`; e2e: `usuarios.spec.ts` e `us405.spec.ts` |
 | US #425 | Core: `Ed25519Tests` (vetores do RFC 8032, adulterada, chave errada), `CatalogoTests` (tag, delta, vitrine, validação da publicação), `LicencasTests` (emitir/ler, janela do 7º dia, recusas, link, gateway); Infrastructure: `Us425Tests` (isolamento do catálogo por empresa, adesão, assento por usuário, link de uso único, trial pela impressão, licenças, webhook, script `Us425.sql`); Api: `CatalogoApiTests` (delta e 304, download, vitrine, admin), `ContaApiTests` (adesão, link, recusa com `codigo`, renovação do token cortada pelo bloqueio, política por empresa, gestor 403 na outra empresa), `LicencasApiTests` (renovação com JWT e chave, cada recusa, a janela) e `VersoesApiTests` (download anônimo com limite por IP); web: `Catalogo`, `Conta`, `Comprar` e `EmpresaDoGestor`; e2e: `us425.spec.ts` (as telas novas com as capturas) |
-| `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e vídeo do hero → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard |
+| `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

@@ -1,18 +1,19 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS, PRODUTOS_COMPARADOS,
-  RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA,
+  RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA, tituloDaJanela,
 } from './landing';
+import { MIDIAS } from '../../midia/roteiro.mjs';
 
 // Relativo a este arquivo (src/conteudo), e não à pasta de onde o Vitest foi chamado.
 const PUBLICO = join(__dirname, '..', '..', 'public');
 const arquivo = (url: string) => join(PUBLICO, ...url.split('/').filter(Boolean));
 
 describe('conteúdo da landing', () => {
-  it('as seções seguem a proposta da US #405, com o Catálogo e os Planos da US #425', () => {
+  it('as seções seguem a proposta da home (US #467): recursos logo depois do como funciona, e o por que depois deles', () => {
     expect(SECOES.map((s) => s.id)).toEqual([
-      'inicio', 'como-funciona', 'beneficios', 'recursos', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar',
+      'inicio', 'como-funciona', 'recursos', 'beneficios', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar',
     ]);
     // O menu e o rodapé só apontam para seções que existem.
     for (const id of [...MENU, ...RODAPE]) expect(SECOES.map((s) => s.id)).toContain(id);
@@ -42,9 +43,10 @@ describe('conteúdo da landing', () => {
 
   it('o fluxo é contado nas sete etapas da proposta, e o recurso Fluxos explica avaliadores, gatilhos e impasse', () => {
     expect(PASSOS.map((p) => p.titulo)).toEqual(['Clona', 'Implementa', 'Compila', 'Testa', 'Avalia', 'Commit e push', 'Pull Request']);
-    const fluxos = RECURSOS.find((r) => r.id === 'fluxos')!.texto;
-    for (const termo of ['ao enviar', 'ao revisar', 'ao cumprir o objetivo', 'ao aprovar', 'teto de rodadas', 'impasse', 'parâmetros', 'Exporte e importe'])
-      expect(fluxos).toContain(termo);
+    const fluxos = RECURSOS.find((r) => r.id === 'fluxos')!;
+    const texto = [fluxos.texto, ...fluxos.marcadores].join(' ');
+    for (const termo of ['ao enviar', 'ao revisar', 'ao cumprir o objetivo', 'ao aprovar', 'teto de rodadas', 'impasse', 'nota mínima', 'Exporte e importe'])
+      expect(texto).toContain(termo);
   });
 
   it('toda linha do comparativo tem valor para cada produto, e o dev.kit é a primeira coluna', () => {
@@ -65,20 +67,45 @@ describe('conteúdo da landing', () => {
     expect(EMPRESAS.itens.map((i) => i.titulo)).toEqual(expect.arrayContaining(['Consentimento do colaborador', 'Exportação auditada']));
   });
 
-  it('os sete recursos principais, cada um com vídeo, poster e texto alternativo', () => {
-    expect(RECURSOS.map((r) => r.id)).toEqual(['agente', 'fluxos', 'replicacao', 'agendamento', 'depurador', 'devcli', 'board']);
-    for (const { midia } of [...RECURSOS, HERO]) {
-      expect(midia.video).toBeDefined();
-      expect(midia.poster).toMatch(/\.jpg$/);
-      expect(midia.alt.trim().length).toBeGreaterThan(20);
+  it('os quatro recursos da proposta (US #467), numerados 01–04, com aba, marcadores, moldura e legenda', () => {
+    expect(RECURSOS.map((r) => r.id)).toEqual(['agente', 'fluxos', 'replicacao', 'board']);
+    expect(RECURSOS.map((r) => r.numero)).toEqual(['01', '02', '03', '04']);
+    expect(RECURSOS.map((r) => r.aba)).toEqual(['O agente sobre a task', 'Fluxos com avaliadores', 'Cherry-pick', 'Horas']);
+    expect(RECURSOS.map((r) => tituloDaJanela(r.janela))).toEqual(['dev.kit - Agente', 'dev.kit - Atividades', 'dev.kit - Cherry-pick', 'dev.kit - Board']);
+    expect(AMOSTRA_DO_BOARD.titulo).toBe('dev.kit - Board');
+    for (const recurso of RECURSOS) {
+      expect(recurso.marcadores.length).toBeGreaterThanOrEqual(2);
+      expect(recurso.legenda.trim().length).toBeGreaterThan(10);
+      expect(recurso.midia.video).toBeDefined();
+      expect(recurso.midia.poster).toMatch(/\.jpg$/);
+      expect(recurso.midia.alt.trim().length).toBeGreaterThan(20);
     }
   });
 
+  it('o como funciona não tem mais o vídeo do hero (a proposta não o tem)', () => {
+    expect(HERO).not.toHaveProperty('midia');
+  });
+
   it('toda mídia referenciada existe em public (vídeos, posters e capturas)', () => {
-    for (const { midia } of [...RECURSOS, HERO]) {
+    for (const { midia } of RECURSOS) {
       const urls = [midia.poster, midia.video!.webm, midia.video!.mp4, ...(midia.captura ? [midia.captura] : [])];
       for (const url of urls) expect(existsSync(arquivo(url)), url).toBe(true);
     }
+  });
+
+  it('o roteiro grava só as mídias que a home usa, e public/midia não guarda sobra', () => {
+    const usadas = RECURSOS.map((r) => r.midia.poster.replace('/midia/', '').replace('.jpg', ''));
+    expect(MIDIAS.map((m) => m.nome)).toEqual(usadas);
+    const arquivos = readdirSync(join(PUBLICO, 'midia')).map((f) => f.replace(/\.(mp4|webm|jpg)$/, ''));
+    expect([...new Set(arquivos)].sort()).toEqual([...usadas].sort());
+  });
+
+  it('as mídias regravadas não têm legenda por cima do vídeo: a legenda é a da página, abaixo da moldura', () => {
+    for (const midia of MIDIAS)
+      for (const slide of midia.slides) {
+        expect(slide.legenda).toBeUndefined();
+        for (const passo of slide.passos ?? []) expect(passo.legenda).toBeUndefined();
+      }
   });
 
   it('os blocos de texto não estão vazios', () => {

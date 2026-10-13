@@ -340,22 +340,36 @@ public static class Endpoints
                 $"/api/versoes/{ultima.Versao}/download", await EndpointsDaUs425.LoginObrigatorioAsync(http, quem, maquinas, contas, ct)));
         }).AllowAnonymous();
 
-        grupo.MapGet("/{versao:int}/download", async (int versao, HttpContext http, IReleasesDoDevKit releases, CancellationToken ct) =>
-        {
-            if (await releases.EstaveisAsync(ct) is not { Count: > 0 } estaveis)
-                return Indisponivel();
-            if (estaveis.FirstOrDefault(r => r.Versao == versao) is not { } release)
-                return Results.Problem($"A versão {versao} do dev.kit não existe (ou não é estável).", statusCode: StatusCodes.Status404NotFound);
+        grupo.MapGet("/{versao:int}/download", (int versao, HttpContext http, IReleasesDoDevKit releases, CancellationToken ct)
+            => BaixarVersaoAsync(versao, http, releases, ct)).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoDownload);
 
-            await using var pacote = await releases.AbrirPacoteAsync(release, ct);
-            if (pacote is null)
-                return Indisponivel();
+        // O ALIAS PERMANENTE da última versão (US #467 · task #471): é o endereço que a landing põe no href do
+        // "Baixar o dev.kit", para o visitante copiar e colar — e que continua valendo quando sair a próxima versão,
+        // o que o /{N}/download não faz. Mesmo handler, mesmo streaming e a MESMA cota por IP: é o mesmo download.
+        grupo.MapGet("/ultima/download", (HttpContext http, IReleasesDoDevKit releases, CancellationToken ct)
+            => BaixarVersaoAsync(null, http, releases, ct)).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoDownload);
+    }
 
-            // Os cabeçalhos são NOSSOS (nada do GitHub passa adiante) e o corpo é copiado em streaming:
-            // o zip nunca é bufferizado na API.
-            await EndpointsDaUs425.Transmitir(http, pacote, $"devkit-{versao}.zip", ct);
-            return Results.Empty;
-        }).AllowAnonymous().RequireRateLimiting(LimiteDeTaxa.PoliticaDoDownload);
+    /// <summary>
+    /// Transmite o zip de uma versão estável — a pedida, ou a última quando <paramref name="versao"/> é nulo (o alias
+    /// <c>/api/versoes/ultima/download</c>). 503 sem versão estável ou sem o pacote; 404 para a versão que não existe.
+    /// </summary>
+    private static async Task<IResult> BaixarVersaoAsync(int? versao, HttpContext http, IReleasesDoDevKit releases, CancellationToken ct)
+    {
+        if (await releases.EstaveisAsync(ct) is not { Count: > 0 } estaveis)
+            return Indisponivel();
+        var release = versao is null ? estaveis[0] : estaveis.FirstOrDefault(r => r.Versao == versao);
+        if (release is null)
+            return Results.Problem($"A versão {versao} do dev.kit não existe (ou não é estável).", statusCode: StatusCodes.Status404NotFound);
+
+        await using var pacote = await releases.AbrirPacoteAsync(release, ct);
+        if (pacote is null)
+            return Indisponivel();
+
+        // Os cabeçalhos são NOSSOS (nada do GitHub passa adiante) e o corpo é copiado em streaming:
+        // o zip nunca é bufferizado na API.
+        await EndpointsDaUs425.Transmitir(http, pacote, $"devkit-{release.Versao}.zip", ct);
+        return Results.Empty;
     }
 
     /// <summary>O 503 das versões: genérico, sem nada do GitHub (nem o corpo, nem o motivo, nem o token).</summary>

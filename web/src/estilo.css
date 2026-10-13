@@ -94,7 +94,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 .cta { padding: 12px 20px; }
 
 .midia { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; border: 1px solid var(--borda); background: #0d0d0d; }
-.hero-midia { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18); }
 
 .secao { max-width: 1200px; margin: 0 auto; padding: 48px 16px; }
 .secao-cabecalho { max-width: 720px; margin-bottom: 28px; }
@@ -292,12 +291,27 @@ input, select {
 .baixar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 22px; }
 .baixar-nota { color: var(--texto-mudo); font-size: 0.9rem; }
 
+/* O link discreto do hero (US #467): o download abaixo dos dois botões da proposta, com o endereço copiável. */
+.link-baixar { color: var(--texto); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.link-baixar:hover { color: var(--primaria); }
+.link-baixar.desabilitado { color: var(--texto-mudo); text-decoration: none; cursor: default; }
+.baixar-endereco { flex-basis: 100%; color: var(--texto-mudo); font-size: 0.85rem; }
+.baixar-endereco code { user-select: all; word-break: break-all; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--borda); background: var(--superficie); color: var(--texto-2); }
+
+/* A MOLDURA de janela do app (componente Janela, US #467): a da amostra do Board e a das mídias dos recursos. */
+.janela { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12); overflow: hidden; }
+.janela-barra { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--borda); background: var(--tinta-da-secao); font-size: 0.8rem; }
+.janela-barra span { width: 9px; height: 9px; border-radius: 50%; background: var(--grade); }
+.janela-barra em { font-style: normal; color: var(--texto-mudo); margin-left: 10px; }
+.janela-escura { background: #0d0d0d; border-color: #2c2c2a; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28); }
+.janela-escura .janela-barra { background: var(--escuro); border-bottom-color: #2c2c2a; }
+.janela-escura .janela-barra span { background: #383835; }
+.janela-escura .janela-barra em { color: #c3c2b7; }
+.janela .midia { border: 0; border-radius: 0; }
+
 /* A amostra do Board: a janela do app feita de HTML, com o selo da nota por cima. */
 .amostra { position: relative; margin: 0; }
-.amostra-janela { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12); overflow: hidden; font-size: 0.8rem; }
-.amostra-barra { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--borda); background: var(--tinta-da-secao); }
-.amostra-barra span { width: 9px; height: 9px; border-radius: 50%; background: var(--grade); }
-.amostra-barra em { font-style: normal; color: var(--texto-mudo); margin-left: 10px; }
+.amostra-janela { font-size: 0.8rem; }
 .amostra-corpo { display: flex; }
 .amostra-lateral { display: flex; flex-direction: column; gap: 10px; padding: 12px 8px; border-right: 1px solid var(--borda); }
 .amostra-lateral span { width: 18px; height: 18px; border-radius: 5px; background: var(--grade); }
@@ -347,7 +361,29 @@ input, select {
 .etapas li:last-child::before { background: var(--escuro); }
 .etapas h3 { margin: 0 0 6px; font-size: 1rem; }
 .etapas p { margin: 0; color: var(--texto-2); font-size: 0.9rem; line-height: 1.5; }
-.midia-do-fluxo { margin-top: 40px; max-width: 960px; }
+
+/* Os recursos da proposta (US #467): as abas 01–04 e os blocos alternados, separados por um fio. */
+.abas-dos-recursos ol { list-style: none; margin: 0 0 8px; padding: 0 0 28px; display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--borda); }
+.abas-dos-recursos a {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--borda);
+  background: var(--superficie); color: var(--texto-2); text-decoration: none; font-size: 0.85rem;
+}
+.abas-dos-recursos a:hover { border-color: var(--primaria); color: var(--texto); }
+.aba-numero, .recurso-numero { color: var(--primaria); font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; }
+.landing .recursos { gap: 0; }
+.landing .recurso { background: none; border: 0; border-radius: 0; padding: 40px 0; border-bottom: 1px solid var(--borda); scroll-margin-top: 80px; }
+.landing .recurso:last-child { border-bottom: 0; }
+.recurso-numero { margin: 0 0 10px !important; }
+.landing .recurso h3 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.015em; }
+.marcadores { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+.marcadores li { position: relative; padding-left: 26px; color: var(--texto-2); line-height: 1.5; font-size: 0.95rem; }
+.marcadores li::before {
+  content: ''; position: absolute; left: 3px; top: 0.3em; width: 10px; height: 5px; transform: rotate(-45deg);
+  border-left: 2px solid var(--primaria); border-bottom: 2px solid var(--primaria);
+}
+.recurso-midia { margin: 0; min-width: 0; }
+.recurso-midia figcaption { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--texto-mudo); font-size: 0.85rem; }
+.recurso-midia figcaption::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--primaria); }
 
 .grade-tres .cartao { padding: 26px; }
 .icone { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 9px; background: var(--primaria-tinta); color: var(--primaria); margin-bottom: 18px; }
@@ -374,6 +410,9 @@ input, select {
   .landing .hero { grid-template-columns: 1fr 1.05fr; gap: 56px; }
   .etapas { grid-template-columns: repeat(4, 1fr); }
   .grade-tres { grid-template-columns: repeat(3, 1fr); }
+  /* A mídia ganha mais da metade do bloco: a captura do app em tamanho maior, como na proposta. */
+  .landing .recurso { grid-template-columns: 1fr 1.45fr; gap: 56px; padding: 56px 0; }
+  .landing .recurso:nth-child(even) { grid-template-columns: 1.45fr 1fr; }
 }
 
 @media (min-width: 1100px) {

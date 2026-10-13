@@ -95,7 +95,8 @@ function slideDeTela(slide, id, inicio, total) {
   css += keyframes(`${id}-camera`, camera.map(([t, v]) => [t, `${v}; animation-timing-function: ease-in-out`]), total);
   css += keyframes(`${id}-cursor`, cursor, total);
 
-  const legendas = passos.map((p, i) => `<div class="legenda ${id}-l${i}">${escapar(p.legenda)}</div>`).join('');
+  // A legenda por cima do vídeo é OPCIONAL: as mídias da home (US #467) não a têm — a página a mostra abaixo.
+  const legendas = passos.map((p, i) => (p.legenda ? `<div class="legenda ${id}-l${i}">${escapar(p.legenda)}</div>` : '')).join('');
   return {
     css,
     html: `<div class="palco ${id}-camera"><div class="recorte" style="width:${tela.largura}px;height:${tela.altura}px">`
@@ -118,7 +119,8 @@ function slideDeTerminal(slide, id, inicio, total) {
   return {
     css,
     html: `<div class="terminal"><div class="barra"><i></i><i></i><i></i><span>${escapar(slide.titulo)}</span></div>`
-      + `<div class="saida">${linhas.join('')}</div></div><div class="legenda ${id}-legenda">${escapar(slide.legenda)}</div>`,
+      + `<div class="saida">${linhas.join('')}</div></div>`
+      + (slide.legenda ? `<div class="legenda ${id}-legenda">${escapar(slide.legenda)}</div>` : ''),
   };
 }
 
