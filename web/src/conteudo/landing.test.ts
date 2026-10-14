@@ -1,8 +1,8 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS, PRODUTOS_COMPARADOS,
-  RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA, tituloDaJanela,
+  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, CONCEITOS, EMPRESAS, FABRICA, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS,
+  PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SECOES, SEGURANCA, tituloDaJanela,
 } from './landing';
 import { MIDIAS } from '../../midia/roteiro.mjs';
 
@@ -13,11 +13,13 @@ const arquivo = (url: string) => join(PUBLICO, ...url.split('/').filter(Boolean)
 describe('conteúdo da landing', () => {
   it('as seções seguem a proposta da home (US #467): recursos logo depois do como funciona, e o por que depois deles', () => {
     expect(SECOES.map((s) => s.id)).toEqual([
-      'inicio', 'como-funciona', 'recursos', 'beneficios', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar',
+      'inicio', 'como-funciona', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas',
+      'planos', 'contato', 'faq', 'comecar',
     ]);
     // O menu e o rodapé só apontam para seções que existem.
     for (const id of [...MENU, ...RODAPE]) expect(SECOES.map((s) => s.id)).toContain(id);
-    expect(MENU.map(rotuloDaSecao)).toEqual(['Como funciona', 'Recursos', 'Catálogo', 'Integrações', 'Segurança', 'Planos', 'Perguntas']);
+    expect(MENU.map(rotuloDaSecao)).toEqual(['Como funciona', 'Recursos', 'Conceitos', 'Catálogo', 'Integrações', 'Segurança', 'Planos', 'Perguntas']);
+    expect(RODAPE.map(rotuloDaSecao)).toEqual(['Conceitos', 'Fábrica agêntica', 'Segurança', 'Comparativo', 'Empresas', 'Perguntas']);
   });
 
   it('os planos são o teste grátis, o individual e o de empresas, sem preço inventado na página (US #425)', () => {
@@ -34,7 +36,9 @@ describe('conteúdo da landing', () => {
   });
 
   it('nenhum texto da página explica o dashboard nem fala em métricas (US #381)', () => {
-    const textos = JSON.stringify([HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, CATALOGO, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PLANOS, PERGUNTAS]);
+    const textos = JSON.stringify([
+      HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, CONCEITOS, FABRICA, CATALOGO, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PLANOS, PERGUNTAS,
+    ]);
 
     expect(textos).not.toMatch(/dashboard/i);
     expect(textos).not.toMatch(/m[ée]tricas?/i);

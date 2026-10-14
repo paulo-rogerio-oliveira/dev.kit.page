@@ -294,15 +294,24 @@ export const handlersPadrao = [
     requisicoes.push(new URL(request.url));
     return HttpResponse.json(quantidade);
   }),
-  http.get(`${API}/api/dashboard/qualidade`, () => HttpResponse.json(qualidade)),
-  http.get(`${API}/api/dashboard/eventos`, () => HttpResponse.json(eventos)),
+  http.get(`${API}/api/dashboard/qualidade`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(qualidade);
+  }),
+  http.get(`${API}/api/dashboard/eventos`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(eventos);
+  }),
   http.post(`${API}/api/demonstracoes`, async ({ request }) => {
     pedidosRecebidos.push((await request.json()) as PedidoDeDemonstracao);
     return HttpResponse.json({ id: 8, recebidoEm: '2026-10-03T10:00:00Z' }, { status: 201 });
   }),
   http.get(`${API}/api/dashboard/demonstracoes`, () => HttpResponse.json(demonstracoes)),
   http.delete(`${API}/api/dashboard/demonstracoes/:id`, () => new HttpResponse(null, { status: 204 })),
-  http.get(`${API}/api/dashboard/erros`, () => HttpResponse.json(erros)),
+  http.get(`${API}/api/dashboard/erros`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(erros);
+  }),
   http.get(`${API}/api/dashboard/erros/:id`, () => HttpResponse.json(erroDetalhe)),
   http.put(`${API}/api/dashboard/erros/:id/estado`, async ({ params, request }) => {
     const corpo = (await request.json()) as { estado: string; versao: string | null };

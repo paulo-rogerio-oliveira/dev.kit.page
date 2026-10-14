@@ -3,7 +3,10 @@ import { garantirSenhaDefinitiva } from './admin';
 import { NOVA_SENHA } from './ambiente';
 
 /** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da home da US #467). */
-const ORDEM = ['inicio', 'como-funciona', 'recursos', 'beneficios', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar'];
+const ORDEM = [
+  'inicio', 'como-funciona', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas',
+  'planos', 'contato', 'faq', 'comecar',
+];
 
 /** A home inteira nas quatro combinações da entrega (US #467): desktop e celular, claro e escuro. */
 test('a home da proposta (US #467) em desktop e celular, nos temas claro e escuro', async ({ page }) => {
@@ -59,6 +62,17 @@ test('landing → seções e recursos da proposta → pedido de demonstração �
   await expect(page).toHaveURL(/#empresas$/);
   await page.locator('#empresas').screenshot({ path: 'test-results/capturas/14-para-empresas.png' });
   await page.locator('#como-funciona').screenshot({ path: 'test-results/capturas/15-como-funciona.png' });
+
+  // 1c. Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico.
+  await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Conceitos' }).click();
+  await expect(page).toHaveURL(/#conceitos$/);
+  await expect(page.locator('#conceitos article')).toHaveCount(3);
+  await expect(page.locator('#conceito-skill pre')).toContainText('name: compilar-angular');
+  await page.locator('#conceitos').screenshot({ path: 'test-results/capturas/18-conceitos.png' });
+  await page.getByRole('navigation', { name: 'Rodapé' }).getByRole('link', { name: 'Fábrica agêntica' }).click();
+  await expect(page).toHaveURL(/#fabrica$/);
+  await expect(page.getByRole('list', { name: 'Estações da fábrica' }).getByRole('listitem')).toHaveCount(6);
+  await page.locator('#fabrica').screenshot({ path: 'test-results/capturas/19-fabrica-agentica.png' });
   await page.goto('/');
 
   // 2. O CTA leva ao contato e o formulário valida antes de enviar.

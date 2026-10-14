@@ -26,6 +26,35 @@ public sealed class RegrasTests
     public void Versao_desconhecida_ou_outra_maquina_e_400(string versao, string maquina)
         => Assert.Equal(400, ValidadorDeLote.Validar(Lote(1, versao, maquina), "m1", 10)!.Status);
 
+    [Theory]
+    [InlineData("claude", "claude")]
+    [InlineData("kiro-cli", "kiro")]
+    [InlineData(" Kiro ", "kiro")]
+    [InlineData("GLM", "glm")]
+    [InlineData("codex", "codex")]
+    public void Harness_conhecido_e_normalizado(string pedido, string esperado)
+    {
+        Assert.True(RegrasDoHarness.TryNormalizar(pedido, out var harness));
+        Assert.Equal(esperado, harness);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Harness_vazio_e_sem_filtro(string? pedido)
+    {
+        Assert.True(RegrasDoHarness.TryNormalizar(pedido, out var harness));
+        Assert.Null(harness);
+    }
+
+    [Theory]
+    [InlineData("kimi")]
+    [InlineData("gpt")]
+    [InlineData("-cli")]
+    public void Harness_desconhecido_e_recusado(string pedido)
+        => Assert.False(RegrasDoHarness.TryNormalizar(pedido, out _));
+
     [Fact]
     public void Evento_sem_id_ou_com_quantidade_negativa_e_400()
     {

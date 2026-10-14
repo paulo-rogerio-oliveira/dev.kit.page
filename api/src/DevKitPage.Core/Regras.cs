@@ -501,6 +501,15 @@ public static partial class RegrasDeErro
         return "t" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(base_)))[..15];
     }
 
+    /// <summary>
+    /// O começo do tipo da falha de turno que nenhum detector reconheceu: o dev.kit (<c>TraceSanitizado.DoTexto</c>)
+    /// escreve <c>Falha de turno do &lt;cli&gt;</c> na primeira linha do trace — é por ele que o grupo tem harness.
+    /// </summary>
+    public const string PrefixoDaFalhaDeTurno = "Falha de turno do ";
+
+    /// <summary>O tipo dos grupos de falha de turno sem causa de um harness.</summary>
+    public static string TipoDaFalhaDeTurno(string harness) => PrefixoDaFalhaDeTurno + harness;
+
     /// <summary>O tipo da exceção: a primeira linha do trace até os dois-pontos.</summary>
     public static string Tipo(string trace)
     {
@@ -606,6 +615,42 @@ public sealed record EscopoDoPainel(int? EmpresaId)
                 => new EscopoDoPainel(id),
             _ => null,
         };
+}
+
+/// <summary>
+/// O RECORTE do log de eventos do painel: o tipo e o detalhe exatos e o harness da SESSÃO (a sessão que rodou
+/// turno nele — o <see cref="TiposDeEvento.TurnoExecutado"/> leva o CLI no detalhe). Vazio é sem recorte. É o que
+/// lista, uma a uma, as falhas de um tipo (ex.: <c>TurnoFalhou</c> com <c>nao-classificada</c>) que os totais só contam.
+/// </summary>
+public sealed record FiltroDoLog(string? Tipo = null, string? Detalhe = null, string? Harness = null)
+{
+    /// <summary>Sem recorte: o log inteiro do período.</summary>
+    public static FiltroDoLog Nenhum { get; } = new();
+}
+
+/// <summary>O filtro por harness (<see cref="Harnesses"/>) das rotas do painel.</summary>
+public static class RegrasDoHarness
+{
+    /// <summary>A recusa do harness desconhecido (400).</summary>
+    public static string Invalido { get; } = $"harness é {string.Join(", ", Harnesses.Conhecidos)}.";
+
+    /// <summary>
+    /// O harness pedido, normalizado: sem diferença de caixa e com o nome do produto (<c>kiro-cli</c>) valendo o do
+    /// recorte (<c>kiro</c>). Vazio é sem filtro (nulo, e verdadeiro); falso só para o desconhecido.
+    /// </summary>
+    public static bool TryNormalizar(string? pedido, out string? harness)
+    {
+        harness = null;
+        var texto = (pedido ?? string.Empty).Trim().ToLowerInvariant();
+        if (texto.Length == 0)
+            return true;
+        if (texto.EndsWith("-cli", StringComparison.Ordinal))
+            texto = texto[..^"-cli".Length];
+        if (!Harnesses.Conhecidos.Contains(texto))
+            return false;
+        harness = texto;
+        return true;
+    }
 }
 
 /// <summary>A validação de uma empresa nova e do convite de gestor, antes do banco.</summary>

@@ -6,8 +6,8 @@ import { Janela } from '../componentes/Janela';
 import { Midia } from '../componentes/Midia';
 import { Secao } from '../componentes/Secao';
 import {
-  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, EMPRESAS, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS, PLANOS,
-  PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
+  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, CONCEITOS, EMPRESAS, FABRICA, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS,
+  PLANOS, PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
 } from '../conteudo/landing';
 
 /** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca). */
@@ -84,7 +84,8 @@ function AmostraDoBoard() {
  * cabeçalho (marca, menu, Entrar e Pedir demonstração), hero com o selo, o título com "Pull Request" em
  * destaque, os dois botões, o link discreto de download e a amostra do Board → como funciona em sete
  * etapas → recursos (as abas 01–04 e, em blocos alternados, o texto com os marcadores e a mídia numa
- * moldura de janela com a legenda abaixo) → por que o dev.kit (três cartões) → as seções que o menu, o
+ * moldura de janela com a legenda abaixo) → por que o dev.kit (três cartões) → os conceitos (agente, skill e
+ * rule, cada um com o exemplo, e o exemplo de ponta a ponta) → a fábrica agêntica e o time agêntico → as seções que o menu, o
  * rodapé e o contato apontam (catálogo, comparativo, integrações, segurança, empresas, planos, contato,
  * FAQ) → CTA escuro → rodapé. O texto e as mídias vêm de conteudo/landing.ts, na ordem de SECOES. A
  * página vende o produto e NÃO explica a área logada.
@@ -166,6 +167,56 @@ export function Landing() {
               <li key={b.titulo} className="cartao"><Icone tipo={b.icone} /><h3>{b.titulo}</h3><p>{b.texto}</p></li>
             ))}
           </ul>
+        </Secao>
+
+        <Secao id="conceitos" rotulo={CONCEITOS.rotulo} titulo={CONCEITOS.titulo} subtitulo={CONCEITOS.subtitulo}>
+          <div className="conceitos">
+            {CONCEITOS.itens.map((c) => (
+              <article key={c.id} id={`conceito-${c.id}`} className="cartao conceito" aria-labelledby={`titulo-conceito-${c.id}`}>
+                <h3 id={`titulo-conceito-${c.id}`}>{c.titulo}</h3>
+                <p>{c.texto}</p>
+                <ul className="marcadores">
+                  {c.marcadores.map((m) => <li key={m}>{m}</li>)}
+                </ul>
+                <figure className="exemplo">
+                  <figcaption>Exemplo · <code>{c.exemplo.arquivo}</code></figcaption>
+                  <pre><code>{c.exemplo.codigo}</code></pre>
+                </figure>
+              </article>
+            ))}
+          </div>
+          <h3 className="subtitulo-da-secao" id="titulo-exemplo-de-ponta-a-ponta">{CONCEITOS.exemplo.titulo}</h3>
+          <ol className="etapas etapas-quatro" aria-labelledby="titulo-exemplo-de-ponta-a-ponta">
+            {CONCEITOS.exemplo.passos.map((p) => (
+              <li key={p.titulo}><h4>{p.titulo}</h4><p>{p.texto}</p></li>
+            ))}
+          </ol>
+        </Secao>
+
+        <Secao id="fabrica" rotulo={FABRICA.rotulo} titulo={FABRICA.titulo} subtitulo={FABRICA.subtitulo} className="secao-tinta">
+          <div className="fabrica">
+            <article aria-labelledby="titulo-fabrica-agentica">
+              <h3 id="titulo-fabrica-agentica">{FABRICA.fabrica.titulo}</h3>
+              <p>{FABRICA.fabrica.texto}</p>
+              <ol className="etapas etapas-seis" aria-label="Estações da fábrica">
+                {FABRICA.fabrica.estacoes.map((e) => (
+                  <li key={e.titulo}><h4>{e.titulo}</h4><p>{e.texto}</p></li>
+                ))}
+              </ol>
+              <ul className="marcadores">
+                {FABRICA.fabrica.marcadores.map((m) => <li key={m}>{m}</li>)}
+              </ul>
+            </article>
+            <article aria-labelledby="titulo-time-agentico">
+              <h3 id="titulo-time-agentico">{FABRICA.time.titulo}</h3>
+              <p>{FABRICA.time.texto}</p>
+              <ul className="grade-cartoes grade-tres" aria-label="Papéis do time agêntico">
+                {FABRICA.time.papeis.map((p) => (
+                  <li key={p.titulo} className="cartao"><h4>{p.titulo}</h4><p>{p.texto}</p></li>
+                ))}
+              </ul>
+            </article>
+          </div>
         </Secao>
 
         <Secao id="catalogo" rotulo="Catálogo" titulo={CATALOGO.titulo} subtitulo={CATALOGO.subtitulo} className="secao-tinta">

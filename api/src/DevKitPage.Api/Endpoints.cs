@@ -154,13 +154,20 @@ public static class Endpoints
         grupo.MapGet("/qualidade", (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.QualidadeAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, ct)), ct));
 
-        grupo.MapGet("/eventos", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
-            => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.EventosAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 50, ct)), ct));
+        // O log tem o recorte por tipo, detalhe e harness da sessão: é o que lista uma a uma as falhas que os
+        // totais só contam (ex.: tipo=TurnoFalhou&detalhe=nao-classificada&harness=claude).
+        grupo.MapGet("/eventos", (DateOnly? de, DateOnly? ate, int? maquina, string? tipo, string? detalhe, string? harness, int? pagina, int? tamanho,
+                ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComHarnessValido(harness, cli => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.EventosAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina,
+                    new FiltroDoLog(tipo?.Trim(), detalhe?.Trim(), cli), pagina ?? 1, tamanho ?? 50, ct)), ct)));
 
         // As exceções não classificadas (US #381): os grupos, o detalhe com o trace, a reação e a
-        // exportação — o dado para abrir o Bug ou escrever o detector que tira o grupo daqui.
-        grupo.MapGet("/erros", (DateOnly? de, DateOnly? ate, int? maquina, int? pagina, int? tamanho, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
-            => ComEscopo(quem, consultas, maquina, async escopo => Results.Ok(await consultas.ErrosAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, pagina ?? 1, tamanho ?? 20, ct)), ct));
+        // exportação — o dado para abrir o Bug ou escrever o detector que tira o grupo daqui. O harness
+        // deixa só as falhas de turno daquele CLI.
+        grupo.MapGet("/erros", (DateOnly? de, DateOnly? ate, int? maquina, string? harness, int? pagina, int? tamanho, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
+            => ComHarnessValido(harness, cli => ComEscopo(quem, consultas, maquina, async escopo =>
+                Results.Ok(await consultas.ErrosAsync(escopo, Periodo.Pedido(de, ate, Hoje(relogio)), maquina, cli, pagina ?? 1, tamanho ?? 20, ct)), ct)));
 
         grupo.MapGet("/erros/{id:long}", (long id, DateOnly? de, DateOnly? ate, ClaimsPrincipal quem, IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct)
             => ComErroVisivel(quem, consultas, id, async escopo =>
@@ -398,6 +405,12 @@ public static class Endpoints
             ? Task.FromResult(Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest))
             : consulta();
     }
+
+    /// <summary>Roda a consulta com o harness normalizado (<see cref="RegrasDoHarness.TryNormalizar"/>); o desconhecido é 400.</summary>
+    private static Task<IResult> ComHarnessValido(string? harness, Func<string?, Task<IResult>> consulta)
+        => RegrasDoHarness.TryNormalizar(harness, out var cli)
+            ? consulta(cli)
+            : Task.FromResult(Results.Problem(RegrasDoHarness.Invalido, statusCode: StatusCodes.Status400BadRequest));
 
     /// <summary>Roda a consulta de um grupo de erro só se ele tiver ocorrência no escopo — senão 403 para o gestor, 404 para o admin.</summary>
     private static async Task<IResult> ComErroVisivel(

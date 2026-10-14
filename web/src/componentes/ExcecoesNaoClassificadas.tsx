@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/cliente';
-import type { EstadoDoGrupo, Filtro, GrupoDeErroDetalhe, GrupoDeErroResumo, Pagina } from '../api/tipos';
+import type { EstadoDoGrupo, Filtro, GrupoDeErroDetalhe, GrupoDeErroResumo, Harness, Pagina } from '../api/tipos';
 import { copiarTexto } from '../areaDeTransferencia';
 import { salvarArquivo } from '../arquivos';
 import { formatar } from '../formatar';
@@ -42,9 +42,11 @@ const ROTULO_DO_ESTADO: Record<EstadoDoGrupo, string> = {
  * trace, as ocorrências por dia e a REAÇÃO. Marcar visto, resolver na versão e ignorar são do admin
  * (a API os recusa ao gestor); exportar o JSON e copiar o texto do Bug são de quem vê o grupo.
  */
-export function ExcecoesNaoClassificadas({ token, filtro, podeReagir, aoFalhar }: {
+export function ExcecoesNaoClassificadas({ token, filtro, harness = null, podeReagir, aoFalhar }: {
   token: string;
   filtro: Filtro;
+  /** O harness do filtro do dashboard: só as falhas de turno daquele CLI. */
+  harness?: Harness | null;
   podeReagir: boolean;
   aoFalhar: (falha: unknown) => void;
 }) {
@@ -59,11 +61,11 @@ export function ExcecoesNaoClassificadas({ token, filtro, podeReagir, aoFalhar }
   useEffect(() => {
     setPagina(1);
     setAberto(null);
-  }, [filtro.de, filtro.ate, filtro.maquina]);
+  }, [filtro.de, filtro.ate, filtro.maquina, harness]);
 
   const carregarLista = useCallback(
-    () => api.erros(token, filtro, pagina, GRUPOS_POR_PAGINA).then(setLista).catch(aoFalhar),
-    [token, filtro, pagina, aoFalhar],
+    () => api.erros(token, filtro, pagina, GRUPOS_POR_PAGINA, harness).then(setLista).catch(aoFalhar),
+    [token, filtro, pagina, harness, aoFalhar],
   );
 
   const carregarDetalhe = useCallback(

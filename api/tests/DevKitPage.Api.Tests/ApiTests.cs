@@ -165,6 +165,26 @@ public sealed class ApiTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace((await peloAdmin.Content.ReadFromJsonAsync<MachineRegistrationResponseV1>())!.Chave));
     }
 
+    [Fact]
+    public async Task Log_filtra_as_falhas_nao_classificadas_por_harness_e_o_harness_desconhecido_e_400()
+    {
+        var maquina = await _api.MaquinaAsync("maq-1");
+        await maquina.PostAsJsonAsync("/api/telemetria/lote", Lote("maq-1",
+            Evento("t1", TiposDeEvento.TurnoExecutado, 1000, "kiro"),
+            Evento("f1", TiposDeEvento.TurnoFalhou, detalhe: "nao-classificada"),
+            Evento("f2", TiposDeEvento.TurnoFalhou, detalhe: "limite-de-uso")));
+        var admin = await _api.AdminAsync();
+
+        var doKiro = (await admin.GetFromJsonAsync<Pagina<EventoDoLog>>("/api/dashboard/eventos?tipo=TurnoFalhou&detalhe=nao-classificada&harness=kiro-cli"))!;
+        var doClaude = (await admin.GetFromJsonAsync<Pagina<EventoDoLog>>("/api/dashboard/eventos?tipo=TurnoFalhou&harness=claude"))!;
+
+        Assert.Equal("f1", Assert.Single(doKiro.Itens).EventId);
+        Assert.Equal(0, doClaude.Total);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/dashboard/eventos?harness=kimi")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/dashboard/erros?harness=gpt")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/dashboard/erros?harness=codex")).StatusCode);
+    }
+
     private static TelemetryEventV1 Excecao(string id, string assinatura = "abc123")
         => new(id, TiposDeEvento.ExcecaoNaoClassificada, "s1", 1, null, assinatura, Hoje,
             "System.InvalidOperationException: Sequence contains no elements\n   at GitKit.Core.Services.Planejador.Escolher() linha 42", assinatura);

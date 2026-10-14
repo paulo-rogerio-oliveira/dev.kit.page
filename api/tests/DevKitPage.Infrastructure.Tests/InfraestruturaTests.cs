@@ -130,6 +130,55 @@ public sealed class InfraestruturaTests : IAsyncLifetime
         Assert.Equal("máquina m-1", pagina.Itens[0].Apelido);
     }
 
+    private static TelemetryEventV1 NaSessao(string id, string sessao, string tipo, string detalhe, DateTimeOffset em)
+        => new(id, tipo, sessao, 1, null, detalhe, em);
+
+    [Fact]
+    public async Task Log_filtra_por_tipo_detalhe_e_harness_da_sessao()
+    {
+        var m1 = await _base.MaquinaAsync("m-1");
+        var m2 = await _base.MaquinaAsync("m-2");
+        await Enviar(m1,
+            NaSessao("c1", "sc", TiposDeEvento.TurnoExecutado, Harnesses.Claude, Hoje),
+            NaSessao("c2", "sc", TiposDeEvento.TurnoFalhou, "nao-classificada", Hoje.AddMinutes(1)),
+            NaSessao("k1", "sk", TiposDeEvento.TurnoExecutado, Harnesses.Kiro, Hoje),
+            NaSessao("k2", "sk", TiposDeEvento.TurnoFalhou, "nao-classificada", Hoje.AddMinutes(2)),
+            NaSessao("k3", "sk", TiposDeEvento.TurnoFalhou, "limite-de-uso", Hoje.AddMinutes(3)));
+        // A mesma sessão em OUTRA máquina não empresta o harness: o "sc" da m-2 não rodou turno no claude.
+        await Enviar(m2, NaSessao("o1", "sc", TiposDeEvento.TurnoFalhou, "nao-classificada", Hoje.AddMinutes(4)));
+
+        Task<Pagina<EventoDoLog>> Log(FiltroDoLog filtro)
+            => _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().EventosAsync(EscopoDoPainel.Tudo, Outubro, null, filtro, 1, 50, default));
+
+        var naoClassificadas = await Log(new FiltroDoLog(TiposDeEvento.TurnoFalhou, "nao-classificada"));
+        var doClaude = await Log(new FiltroDoLog(TiposDeEvento.TurnoFalhou, "nao-classificada", Harnesses.Claude));
+        var doKiro = await Log(new FiltroDoLog(Harness: Harnesses.Kiro));
+        var doCodex = await Log(new FiltroDoLog(Harness: Harnesses.Codex));
+
+        Assert.Equal(new[] { "o1", "k2", "c2" }, naoClassificadas.Itens.Select(e => e.EventId));
+        Assert.Equal(new[] { "c2" }, doClaude.Itens.Select(e => e.EventId));
+        Assert.Equal(new[] { "k3", "k2", "k1" }, doKiro.Itens.Select(e => e.EventId));
+        Assert.Equal(0, doCodex.Total); // o harness do futuro: aceito, e vazio até o dev.kit mandar
+    }
+
+    [Fact]
+    public async Task Excecoes_filtram_pelo_harness_da_falha_de_turno_e_deixam_as_do_app_de_fora()
+    {
+        var maquina = await _base.MaquinaAsync("m-1");
+        await Enviar(maquina,
+            BaseDeTeste.Excecao("x1", Hoje, "falha-claude", "Falha de turno do claude: saiu com o código 1, sem saída de erro"),
+            BaseDeTeste.Excecao("x2", Hoje, "falha-kiro", "Falha de turno do kiro: erro de rede"),
+            BaseDeTeste.Excecao("x3", Hoje, "do-app", TraceDoDevKit));
+
+        Task<Pagina<GrupoDeErroResumo>> Grupos(string? harness)
+            => _base.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>().ErrosAsync(EscopoDoPainel.Tudo, Outubro, null, harness, 1, 20, default));
+
+        Assert.Equal(3, (await Grupos(null)).Total);
+        Assert.Equal("falha-claude", Assert.Single((await Grupos(Harnesses.Claude)).Itens).Assinatura);
+        Assert.Equal("Falha de turno do kiro", Assert.Single((await Grupos(Harnesses.Kiro)).Itens).Tipo);
+        Assert.Empty((await Grupos(Harnesses.Glm)).Itens);
+    }
+
     [Fact]
     public async Task Expurgo_remove_so_o_que_passou_da_retencao_e_mantem_os_totais()
     {

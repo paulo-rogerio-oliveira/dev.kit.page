@@ -359,7 +359,7 @@ input, select {
   background: var(--primaria-botao); color: #ffffff; font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; z-index: 1;
 }
 .etapas li:last-child::before { background: var(--escuro); }
-.etapas h3 { margin: 0 0 6px; font-size: 1rem; }
+.etapas h3, .etapas h4 { margin: 0 0 6px; font-size: 1rem; }
 .etapas p { margin: 0; color: var(--texto-2); font-size: 0.9rem; line-height: 1.5; }
 
 /* Os recursos da proposta (US #467): as abas 01–04 e os blocos alternados, separados por um fio. */
@@ -415,8 +415,29 @@ input, select {
   .landing .recurso:nth-child(even) { grid-template-columns: 1.45fr 1fr; }
 }
 
+/* Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico. */
+.conceitos { display: grid; gap: 16px; grid-template-columns: 1fr; }
+.conceito { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.conceito h3 { margin: 0; }
+.conceito .marcadores { margin: 0; }
+.exemplo { margin: auto 0 0; min-width: 0; }
+.exemplo figcaption { margin-bottom: 6px; color: var(--texto-mudo); font-size: 0.8rem; }
+.exemplo pre {
+  margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--escuro); color: #e9e7e1;
+  font-family: var(--mono); font-size: 0.78rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.subtitulo-da-secao { margin: 40px 0 18px; font-size: 1.15rem; }
+.fabrica { display: grid; gap: 48px; }
+.fabrica > article > h3 { margin: 0 0 8px; font-size: 1.3rem; }
+.fabrica > article > p { margin: 0 0 24px; max-width: 860px; color: var(--texto-2); line-height: 1.6; }
+.fabrica .marcadores { margin-top: 28px; }
+.cartao h4 { margin: 0 0 8px; font-size: 1.05rem; }
+@media (min-width: 1000px) { .conceitos { grid-template-columns: repeat(3, 1fr); } }
+
 @media (min-width: 1100px) {
   .etapas { grid-template-columns: repeat(7, 1fr); }
+  .etapas.etapas-quatro { grid-template-columns: repeat(4, 1fr); }
+  .etapas.etapas-seis { grid-template-columns: repeat(6, 1fr); }
   .etapas li:not(:last-child)::after {
     content: ''; position: absolute; top: 14px; left: 34px; right: -16px; height: 1px; background: var(--primaria); opacity: 0.45;
   }
