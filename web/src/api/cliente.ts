@@ -1,8 +1,8 @@
 import type {
   ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor,
-  EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, ImportacaoDoBasico,
+  EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, Harness, ImportacaoDoBasico,
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
-  PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RelatorioDePublicacao, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
+  PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
 
@@ -99,6 +99,11 @@ function consulta(filtro: Filtro, extra: Record<string, string> = {}): string {
   return parametros.toString();
 }
 
+/** Os parâmetros de um recorte, sem os vazios: o que não foi escolhido não vai na URL. */
+function preenchidos(valores: Record<string, string | null | undefined>): Record<string, string> {
+  return Object.fromEntries(Object.entries(valores).filter((par): par is [string, string] => !!par[1]?.trim()));
+}
+
 export const api = {
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
@@ -114,8 +119,12 @@ export const api = {
   qualidade: (token: string, filtro: Filtro) =>
     chamar<QualidadeResposta>(`/api/dashboard/qualidade?${consulta(filtro)}`, { token }),
 
-  eventos: (token: string, filtro: Filtro, pagina: number, tamanho = 20) =>
-    chamar<Pagina<EventoDoLog>>(`/api/dashboard/eventos?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+  // O recorte (tipo, detalhe e harness da sessão) lista uma a uma as falhas que a qualidade só conta.
+  eventos: (token: string, filtro: Filtro, pagina: number, tamanho = 20, recorte: RecorteDoLog = {}) =>
+    chamar<Pagina<EventoDoLog>>(
+      `/api/dashboard/eventos?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho), ...preenchidos({ ...recorte }) })}`,
+      { token },
+    ),
 
   // O ROI por work item (US #387): a foto mais recente de cada (máquina, item) no período.
   roi: (token: string, filtro: Filtro) =>
@@ -131,8 +140,12 @@ export const api = {
     chamar<void>(`/api/dashboard/demonstracoes/${id}`, { metodo: 'DELETE', token }),
 
   // As exceções não classificadas (US #381).
-  erros: (token: string, filtro: Filtro, pagina: number, tamanho = 10) =>
-    chamar<Pagina<GrupoDeErroResumo>>(`/api/dashboard/erros?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho) })}`, { token }),
+  // O harness deixa só as falhas de turno daquele CLI (as exceções do app não têm harness).
+  erros: (token: string, filtro: Filtro, pagina: number, tamanho = 10, harness: Harness | null = null) =>
+    chamar<Pagina<GrupoDeErroResumo>>(
+      `/api/dashboard/erros?${consulta(filtro, { pagina: String(pagina), tamanho: String(tamanho), ...preenchidos({ harness }) })}`,
+      { token },
+    ),
 
   erro: (token: string, id: number, filtro: Filtro) =>
     chamar<GrupoDeErroDetalhe>(`/api/dashboard/erros/${id}?${new URLSearchParams({ de: filtro.de, ate: filtro.ate })}`, { token }),

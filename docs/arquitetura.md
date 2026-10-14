@@ -188,6 +188,18 @@ servidor põe esse estado). Para coletar, `GET /api/dashboard/erros/{id}/exporta
 JSON (trace, ocorrências, linha do tempo, versões e máquinas). O ciclo fecha no dev.kit: um detector
 novo em `TurnFailures.Padrao` tira a falha de "não classificada", e o grupo para de crescer.
 
+**Recorte do log e filtro por harness.** A contagem das falhas por causa sai dos totais diários, que
+não têm sessão; para listar UMA A UMA as falhas que ela conta, o `GET /api/dashboard/eventos` aceita
+`tipo` e `detalhe` (exatos) e `harness` — o CLI de agente da SESSÃO: o evento entra quando a sessão
+dele, na mesma máquina, tem um `TurnoExecutado` com aquele CLI no recorte. O `GET /api/dashboard/erros`
+aceita o mesmo `harness`, que deixa só os grupos `Falha de turno do <cli>` (a primeira linha do trace
+que o `TraceSanitizado.DoTexto` do dev.kit escreve); as exceções do app não têm harness e ficam de fora.
+Os harnesses aceitos são `claude`, `kiro` (também `kiro-cli`), `glm` e `codex` (`Harnesses`); o codex é
+do suporte futuro — aceito, e vazio até o dev.kit mandá-lo —, e o desconhecido é 400. O harness NÃO
+filtra a quantidade nem a qualidade: os totais não guardam a sessão. Toda falha `nao-classificada` tem
+uma `ExcecaoNaoClassificada` gêmea na mesma sessão (o `JobTelemetria.Turno` do dev.kit manda as duas):
+`tipo=TurnoFalhou&detalhe=nao-classificada&harness=claude` dá as falhas, e o grupo dá o trace.
+
 **ROI por work item (US #387).** O dev.kit manda, na mesma ingestão do v1, o evento `RoiCalculado`
 (o `devcli roi --id N`) com o campo opcional `roi`: horas (do dev.kit, do board e do timesheet), turnos
 do agente, sessões, lead time e pull requests de um work item. Na ingestão, na MESMA transação:

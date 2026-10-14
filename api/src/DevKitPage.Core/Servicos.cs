@@ -93,13 +93,24 @@ public interface IConsultasDoPainel
 
     Task<QualidadeResposta> QualidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
 
-    Task<Pagina<EventoDoLog>> EventosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct);
+    Task<Pagina<EventoDoLog>> EventosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
+        => EventosAsync(escopo, periodo, maquina, FiltroDoLog.Nenhum, pagina, tamanho, ct);
+
+    /// <summary>O log de eventos do período com o <see cref="FiltroDoLog"/> (tipo, detalhe e harness da sessão).</summary>
+    Task<Pagina<EventoDoLog>> EventosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, FiltroDoLog filtro, int pagina, int tamanho, CancellationToken ct);
 
     /// <summary>
     /// Os grupos de exceção não classificada com ocorrência no período (US #381), do visto por último
     /// para o mais antigo. As contagens são do período, do escopo (e da máquina, quando filtrada).
     /// </summary>
-    Task<Pagina<GrupoDeErroResumo>> ErrosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct);
+    Task<Pagina<GrupoDeErroResumo>> ErrosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
+        => ErrosAsync(escopo, periodo, maquina, null, pagina, tamanho, ct);
+
+    /// <summary>
+    /// Os grupos do período, só os de falha de turno do harness quando ele vem (<c>Falha de turno do &lt;cli&gt;</c>,
+    /// <see cref="RegrasDeErro.TipoDaFalhaDeTurno"/>) — as exceções do app não têm harness e ficam de fora.
+    /// </summary>
+    Task<Pagina<GrupoDeErroResumo>> ErrosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, string? harness, int pagina, int tamanho, CancellationToken ct);
 
     /// <summary>O grupo existe e tem ocorrência em alguma máquina do escopo. Falso é 403 para o gestor.</summary>
     Task<bool> ErroVisivelAsync(EscopoDoPainel escopo, long id, CancellationToken ct);

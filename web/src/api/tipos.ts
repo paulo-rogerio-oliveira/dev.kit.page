@@ -544,3 +544,13 @@ export interface Filtro {
   ate: string;
   maquina: number | null;
 }
+
+/** O harness — o CLI de agente que roda o turno — dos filtros do log e das exceções (o codex é do suporte futuro). */
+export type Harness = 'claude' | 'kiro' | 'glm' | 'codex';
+
+/** O recorte do log de eventos: o tipo e o detalhe exatos e o harness da sessão — vazio é sem recorte. */
+export interface RecorteDoLog {
+  tipo?: string;
+  detalhe?: string;
+  harness?: Harness | null;
+}

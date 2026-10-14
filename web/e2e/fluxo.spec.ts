@@ -105,4 +105,33 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
   await expect(page.getByText('Marcado como resolvido na versão 1.5.0.')).toBeVisible();
   await expect(excecoes.locator('tbody .estado').first()).toHaveText('Resolvido');
   await excecoes.screenshot({ path: 'test-results/capturas/06-excecao-resolvida.png' });
+
+  // 9. As falhas não classificadas uma a uma: a falha de turno e a exceção gêmea na MESMA sessão (como o
+  //    JobTelemetria do dev.kit manda), e os filtros por harness e pelo recorte do log.
+  const falha = { ...evento('e2e-f1', 'TurnoFalhou', null, 'nao-classificada'), sessaoId: 'sessao-claude' };
+  const gemea = {
+    ...evento('e2e-f2', 'ExcecaoNaoClassificada', null, 'e2e0falhaclaude1'), sessaoId: 'sessao-claude',
+    trace: 'Falha de turno do claude: saiu com o código 1, sem saída de erro', assinatura: 'e2e0falhaclaude1',
+  };
+  const turno = { ...evento('e2e-f3', 'TurnoExecutado', 15000, 'claude'), sessaoId: 'sessao-claude' };
+  const falhas = await request.post(`${API}/api/telemetria/lote`, {
+    data: { versao: 'v1', maquinaId: MAQUINA, versaoDevKit: '1.4.0', eventos: [turno, falha, gemea] },
+    headers: { 'X-Machine-Key': chave },
+  });
+  expect(falhas.status()).toBe(202);
+
+  await page.reload();
+  await page.getByLabel('Harness').selectOption('claude');
+  await expect(excecoes.getByRole('button', { name: 'Falha de turno do claude' })).toBeVisible();
+  await expect(excecoes.getByRole('button', { name: 'System.InvalidOperationException' })).toHaveCount(0); // a do app não tem harness
+  const filtroDoLog = page.getByRole('form', { name: 'Filtrar o log' });
+  await filtroDoLog.getByLabel('Tipo').selectOption('TurnoFalhou');
+  await filtroDoLog.getByLabel('Detalhe').fill('nao-classificada');
+  await filtroDoLog.getByRole('button', { name: 'Filtrar' }).click();
+  const log = page.getByRole('region', { name: 'Eventos recentes' });
+  await expect(log.getByText(/1 eventos/)).toBeVisible();
+  await expect(log.getByRole('cell', { name: 'nao-classificada' })).toBeVisible();
+  await page.locator('.filtros[role="search"]').screenshot({ path: 'test-results/capturas/07-filtro-por-harness.png' });
+  await excecoes.screenshot({ path: 'test-results/capturas/08-excecoes-do-claude.png' });
+  await log.screenshot({ path: 'test-results/capturas/09-log-falhas-nao-classificadas.png' });
 });

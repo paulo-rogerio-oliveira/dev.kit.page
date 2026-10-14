@@ -91,6 +91,25 @@ public sealed record EventoDoLog(
 public sealed record Pagina<T>(IReadOnlyList<T> Itens, int Total, int NumeroDaPagina, int Tamanho);
 
 /// <summary>
+/// Os HARNESSES — o CLI de agente que roda o turno — que o painel filtra no log e nas exceções. É o recorte do
+/// <see cref="TiposDeEvento.TurnoExecutado"/> e o fim do tipo da falha de turno sem causa (<c>Falha de turno do
+/// &lt;cli&gt;</c>). O <see cref="Codex"/> é do suporte futuro: o filtro já o aceita, e fica vazio até o dev.kit o mandar.
+/// </summary>
+public static class Harnesses
+{
+    public const string Claude = "claude";
+
+    /// <summary>O Kiro CLI (o filtro aceita também <c>kiro-cli</c>).</summary>
+    public const string Kiro = "kiro";
+
+    public const string Glm = "glm";
+    public const string Codex = "codex";
+
+    /// <summary>Os harnesses que o filtro aceita, na ordem da tela.</summary>
+    public static IReadOnlyList<string> Conhecidos { get; } = [Claude, Kiro, Glm, Codex];
+}
+
+/// <summary>
 /// Os estados de um grupo de exceção não classificada (US #381) — o ciclo de reação, no padrão do
 /// Sentry. <see cref="Regrediu"/> só o servidor põe: o grupo resolvido voltou numa versão igual ou
 /// maior que a indicada.

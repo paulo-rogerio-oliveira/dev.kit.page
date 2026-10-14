@@ -49,7 +49,8 @@ describe('Dashboard', () => {
   it('mostra os eventos recentes', async () => {
     renderizar('/dashboard', tokenValido());
 
-    const tabela = (await screen.findByText('TurnoExecutado')).closest('table')!;
+    // A célula, e não o texto: o filtro Tipo do log também oferece "TurnoExecutado".
+    const tabela = (await screen.findByRole('cell', { name: 'TurnoExecutado' })).closest('table')!;
     expect(within(tabela).getByText('claude')).toBeInTheDocument();
     expect(within(tabela).getByText('máquina a1b2c3d4')).toBeInTheDocument();
     expect(screen.getByText(/Página 1 de 1 · 1 eventos/)).toBeInTheDocument();
@@ -71,7 +72,8 @@ describe('Dashboard', () => {
   it('os filtros de máquina e de período refazem a consulta', async () => {
     renderizar('/dashboard', tokenValido());
     await screen.findByRole('heading', { name: 'Quantidade de uso' });
-    await screen.findByRole('option', { name: /máquina a1b2c3d4/ });
+    // Só nas opções da Máquina: na página inteira, cada tentativa calcula o nome de todas as opções (harness, tipo do log).
+    await within(screen.getByLabelText('Máquina')).findByRole('option', { name: /máquina a1b2c3d4/ });
 
     await userEvent.selectOptions(screen.getByLabelText('Máquina'), '2');
     await waitFor(() => expect(requisicoes.at(-1)?.searchParams.get('maquina')).toBe('2'));
@@ -81,6 +83,39 @@ describe('Dashboard', () => {
       const ultima = requisicoes.at(-1)!;
       const dias = (Date.parse(ultima.searchParams.get('ate')!) - Date.parse(ultima.searchParams.get('de')!)) / 86_400_000 + 1;
       expect(dias).toBe(7);
+    });
+  });
+
+  /** A última requisição que chegou a uma rota do servidor de mentira. */
+  const ultima = (caminho: string) => requisicoes.filter((r) => r.pathname === caminho).at(-1)!;
+
+  it('o harness filtra o log e as exceções, e não os totais', async () => {
+    renderizar('/dashboard', tokenValido());
+    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+
+    await userEvent.selectOptions(screen.getByLabelText('Harness'), 'kiro');
+    await waitFor(() => {
+      expect(ultima('/api/dashboard/eventos').searchParams.get('harness')).toBe('kiro');
+      expect(ultima('/api/dashboard/erros').searchParams.get('harness')).toBe('kiro');
+    });
+    expect(ultima('/api/dashboard/qualidade').searchParams.has('harness')).toBe(false); // os totais não têm sessão
+    expect(within(screen.getByLabelText('Harness')).getByRole('option', { name: 'Codex' })).toBeInTheDocument();
+  });
+
+  it('o recorte do log leva o tipo e o detalhe', async () => {
+    renderizar('/dashboard', tokenValido());
+    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+
+    const log = within(screen.getByRole('form', { name: 'Filtrar o log' }));
+    await userEvent.selectOptions(log.getByLabelText('Tipo'), 'TurnoFalhou');
+    // Colado, e não digitado: cada tecla re-renderiza o Dashboard inteiro, e o teste passava do teto de 5 s.
+    await userEvent.click(log.getByLabelText('Detalhe'));
+    await userEvent.paste('nao-classificada');
+    await userEvent.click(log.getByRole('button', { name: 'Filtrar' }));
+
+    await waitFor(() => {
+      const eventos = ultima('/api/dashboard/eventos').searchParams;
+      expect([eventos.get('tipo'), eventos.get('detalhe')]).toEqual(['TurnoFalhou', 'nao-classificada']);
     });
   });
 
@@ -295,7 +330,7 @@ describe('Dashboard', () => {
   it('o ROI segue os filtros de máquina e de período', async () => {
     renderizar('/dashboard', tokenValido());
     await screen.findByRole('region', { name: 'ROI por work item' });
-    await screen.findByRole('option', { name: /máquina a1b2c3d4/ });
+    await within(screen.getByLabelText('Máquina')).findByRole('option', { name: /máquina a1b2c3d4/ });
 
     await userEvent.selectOptions(screen.getByLabelText('Máquina'), '2');
 

@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { BENEFICIOS, CATALOGO, COMPARATIVO, PASSOS, PLANOS, PRODUTOS_COMPARADOS, RECURSOS, SECOES, tituloDaJanela } from '../conteudo/landing';
+import { BENEFICIOS, CATALOGO, COMPARATIVO, CONCEITOS, FABRICA, PASSOS, PLANOS, PRODUTOS_COMPARADOS, RECURSOS, SECOES, tituloDaJanela } from '../conteudo/landing';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenDoDev } from '../testes/servidor';
 
@@ -96,7 +96,7 @@ describe('Landing', () => {
     renderizar('/');
 
     const menu = screen.getByRole('navigation', { name: 'Seções' });
-    expect(within(menu).getAllByRole('listitem').map((l) => l.textContent)).toEqual(['Como funciona', 'Recursos', 'Catálogo', 'Integrações', 'Segurança', 'Planos', 'Perguntas']);
+    expect(within(menu).getAllByRole('listitem').map((l) => l.textContent)).toEqual(['Como funciona', 'Recursos', 'Conceitos', 'Catálogo', 'Integrações', 'Segurança', 'Planos', 'Perguntas']);
     expect(within(menu).getByRole('link', { name: 'Recursos' })).toHaveAttribute('href', '#recursos');
     expect(within(menu).getByRole('link', { name: 'Perguntas' })).toHaveAttribute('href', '#faq');
     expect(within(menu).getByRole('link', { name: 'Pedir demonstração' })).toHaveAttribute('href', '#contato');
@@ -122,6 +122,39 @@ describe('Landing', () => {
     const colunas = within(tabela).getAllByRole('columnheader').map((c) => c.textContent);
     expect(colunas).toEqual(['Recurso', ...PRODUTOS_COMPARADOS.map((p) => p.nome)]);
     expect(within(tabela).getAllByRole('rowheader').map((c) => c.textContent)).toEqual(COMPARATIVO.map((l) => l.recurso));
+  });
+
+  it('os conceitos explicam agente, skill e rule, cada um com o exemplo no formato do arquivo, e o exemplo de ponta a ponta', () => {
+    renderizar('/');
+
+    const secao = screen.getByRole('region', { name: CONCEITOS.titulo });
+    for (const conceito of CONCEITOS.itens) {
+      const artigo = within(secao).getByRole('article', { name: conceito.titulo });
+      expect(within(artigo).getAllByRole('listitem').map((l) => l.textContent)).toEqual(conceito.marcadores);
+      const exemplo = within(artigo).getByRole('figure');
+      expect(exemplo).toHaveTextContent(`Exemplo · ${conceito.exemplo.arquivo}`);
+      expect(exemplo.querySelector('pre code')!.textContent).toBe(conceito.exemplo.codigo);
+    }
+    expect(within(secao).getAllByRole('article').map((a) => a.id)).toEqual(['conceito-agente', 'conceito-skill', 'conceito-rule']);
+    const pontaAPonta = within(secao).getByRole('list', { name: 'Um exemplo, de ponta a ponta' });
+    expect(within(pontaAPonta).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['O pedido', 'As rules', 'As skills', 'A entrega']);
+  });
+
+  it('a fábrica agêntica tem as estações em ordem e o time agêntico os papéis, com o rodapé apontando as duas seções', () => {
+    const { container } = renderizar('/');
+
+    const secao = screen.getByRole('region', { name: FABRICA.titulo });
+    const fabrica = within(secao).getByRole('article', { name: 'Fábrica agêntica' });
+    const estacoes = within(fabrica).getByRole('list', { name: 'Estações da fábrica' });
+    expect(within(estacoes).getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual(['Planejar', 'Implementar', 'Verificar', 'Avaliar', 'Arbitrar', 'Entregar']);
+    expect(fabrica).toHaveTextContent('Best-of-N');
+    const time = within(secao).getByRole('article', { name: 'Time agêntico' });
+    expect(within(within(time).getByRole('list', { name: 'Papéis do time agêntico' })).getAllByRole('heading', { level: 4 }).map((h) => h.textContent))
+      .toEqual(FABRICA.time.papeis.map((p) => p.titulo));
+
+    const rodape = within(container.querySelector('footer')!).getByRole('navigation', { name: 'Rodapé' });
+    expect(within(rodape).getByRole('link', { name: 'Conceitos' })).toHaveAttribute('href', '#conceitos');
+    expect(within(rodape).getByRole('link', { name: 'Fábrica agêntica' })).toHaveAttribute('href', '#fabrica');
   });
 
   it('a seção Para empresas leva ao formulário de contato', () => {

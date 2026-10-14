@@ -67,6 +67,18 @@ export interface PerguntaFrequente {
   resposta: string;
 }
 
+/**
+ * Um conceito de "trabalhar com agentes" (agente, skill, rule): o que é, como o dev.kit o usa e um EXEMPLO curto,
+ * no formato do arquivo em que ele mora — o exemplo é o que torna o conceito concreto.
+ */
+export interface Conceito {
+  id: string;
+  titulo: string;
+  texto: string;
+  marcadores: string[];
+  exemplo: { arquivo: string; codigo: string };
+}
+
 /** Uma seção da landing: a âncora (id) e o rótulo do menu do topo. */
 export interface SecaoDaLanding {
   id: string;
@@ -102,6 +114,8 @@ export const SECOES: SecaoDaLanding[] = [
   { id: 'como-funciona', rotulo: 'Como funciona' },
   { id: 'recursos', rotulo: 'Recursos' },
   { id: 'beneficios', rotulo: 'Por que o dev.kit' },
+  { id: 'conceitos', rotulo: 'Conceitos' },
+  { id: 'fabrica', rotulo: 'Fábrica agêntica' },
   { id: 'catalogo', rotulo: 'Catálogo' },
   { id: 'comparativo', rotulo: 'Comparativo' },
   { id: 'integracoes', rotulo: 'Integrações' },
@@ -113,11 +127,11 @@ export const SECOES: SecaoDaLanding[] = [
   { id: 'comecar', rotulo: 'Começar' },
 ];
 
-/** As seções do menu do topo (a proposta da US #405, com o Catálogo e os Planos da US #425), na ordem. */
-export const MENU = ['como-funciona', 'recursos', 'catalogo', 'integracoes', 'seguranca', 'planos', 'faq'] as const;
+/** As seções do menu do topo (a proposta da US #405, com o Catálogo e os Planos da US #425 e os Conceitos), na ordem. */
+export const MENU = ['como-funciona', 'recursos', 'conceitos', 'catalogo', 'integracoes', 'seguranca', 'planos', 'faq'] as const;
 
-/** As seções dos links do rodapé (a proposta da US #405), na ordem. */
-export const RODAPE = ['seguranca', 'comparativo', 'empresas', 'faq'] as const;
+/** As seções dos links do rodapé (a proposta da US #405, com os Conceitos e a Fábrica agêntica), na ordem. */
+export const RODAPE = ['conceitos', 'fabrica', 'seguranca', 'comparativo', 'empresas', 'faq'] as const;
 
 /** O rótulo de uma seção (o do menu e o do rodapé). */
 export const rotuloDaSecao = (id: string) => SECOES.find((s) => s.id === id)?.rotulo ?? id;
@@ -189,6 +203,135 @@ export const BENEFICIOS: (Beneficio & { icone: 'ramo' | 'nota' | 'relogio' })[] 
       'As horas do dia vão para os work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — sem planilha no fim do dia.',
   },
 ];
+
+/**
+ * A parte CONCEITUAL de trabalhar com agentes: o agente, a skill e a rule, cada um com um exemplo no formato em
+ * que ele vive no dev.kit, e um exemplo de ponta a ponta de como os três se juntam numa task.
+ */
+export const CONCEITOS = {
+  rotulo: 'Conceitos',
+  titulo: 'Trabalhar com agentes: agente, skill e rule',
+  subtitulo: 'Três peças simples. O agente faz; a skill ensina como; a rule diz o que nunca muda.',
+  itens: [
+    {
+      id: 'agente',
+      titulo: 'Agente',
+      texto:
+        'Um modelo de IA com ferramentas — ler e editar arquivos, rodar comandos, consultar o board — que trabalha em turnos sobre um pedido. Ele não adivinha o contexto: recebe o work item, o plano técnico e as regras do time.',
+      marcadores: [
+        'Recebe um pedido claro: o work item e o planejamento técnico',
+        'Age e verifica: implementa, compila e testa antes de dizer que terminou',
+        'Chama você só quando precisa: decisão, permissão ou aprovação',
+      ],
+      exemplo: {
+        arquivo: 'pedido.md',
+        codigo: [
+          'US #387 — Exportar o ROI em CSV',
+          '',
+          'Plano técnico:',
+          '- rota GET /api/roi/exportar?formato=csv',
+          '- reaproveitar ExportacaoCsv',
+          '- teste de API cobrindo o filtro por máquina',
+        ].join('\n'),
+      },
+    },
+    {
+      id: 'skill',
+      titulo: 'Skill',
+      texto:
+        'Um procedimento reutilizável, escrito uma vez e usado por qualquer agente: o nome, quando usar e os passos. É como o time ensina "do nosso jeito" — compilar, testar, abrir o bug, lançar as horas.',
+      marcadores: [
+        'Um arquivo SKILL.md por procedimento, com a descrição que diz quando usar',
+        'O agente escolhe a skill pelo assunto, ou o fluxo a manda rodar num roteiro',
+        'Versionada no catálogo: a correção chega a todas as máquinas',
+      ],
+      exemplo: {
+        arquivo: 'skills/compilar-angular/SKILL.md',
+        codigo: [
+          '---',
+          'name: compilar-angular',
+          'description: Compilar o projeto Angular após alterar arquivos .ts/.html/.scss',
+          '---',
+          '1. Rode `npx ng build` no projeto alterado.',
+          '2. Erro de tipo: corrija e compile de novo.',
+          '3. Relate o comando e o resultado.',
+        ].join('\n'),
+      },
+    },
+    {
+      id: 'rule',
+      titulo: 'Rule',
+      texto:
+        'As regras fixas do time, que valem em TODO turno, qualquer que seja o pedido. Onde a skill diz como fazer, a rule diz o limite: o que não se faz, o que sempre se relata, como tratar o encoding.',
+      marcadores: [
+        'Ficam no arquivo de regras do branch (o CLAUDE.md) e entram em toda conversa',
+        'Os Tech Plans somam os padrões do time: arquitetura, nomes, testes',
+        'O árbitro confere cada resposta contra elas e cobra o que faltou',
+      ],
+      exemplo: {
+        arquivo: 'CLAUDE.md',
+        codigo: [
+          '## Idioma e fluxo',
+          '- NÃO faça commit nem push: o dev.kit cuida disso após a aprovação do desenvolvedor.',
+          '',
+          '## Encoding dos arquivos',
+          '- Preserve o encoding original do arquivo (UTF-8 ou Windows-1252), sem converter.',
+        ].join('\n'),
+      },
+    },
+  ] satisfies Conceito[],
+  /** Um exemplo de ponta a ponta: as três peças numa task real. */
+  exemplo: {
+    titulo: 'Um exemplo, de ponta a ponta',
+    passos: [
+      { titulo: 'O pedido', texto: 'O work item #387 chega com o plano técnico: exportar o ROI em CSV.' },
+      { titulo: 'As rules', texto: 'Entram no primeiro turno: sem commit, encoding preservado, arquivos relatados.' },
+      { titulo: 'As skills', texto: 'O agente implementa e roda compilar-projeto e testar-dotnet, do jeito do time.' },
+      { titulo: 'A entrega', texto: 'O avaliador dá a nota; com a mínima, o resumo vai para você aprovar.' },
+    ] satisfies Passo[],
+  },
+};
+
+/**
+ * A FÁBRICA AGÊNTICA e o TIME AGÊNTICO: como os agentes se organizam além de uma task — em estações de uma linha
+ * de produção (os fluxos com gatilhos, avaliadores e árbitro) e, com as pessoas, em papéis de um mesmo time.
+ */
+export const FABRICA = {
+  rotulo: 'Fábrica agêntica',
+  titulo: 'Da fábrica agêntica ao time agêntico',
+  subtitulo: 'Agentes organizados como uma linha de produção — e pessoas e agentes no mesmo time, cada um no seu papel.',
+  fabrica: {
+    titulo: 'Fábrica agêntica',
+    texto:
+      'Uma linha de produção de software em que cada estação é um agente com um papel, uma entrada e um critério de aceite. O trabalho passa de estação em estação por gatilhos, e só segue com a nota mínima. No dev.kit, a fábrica é um fluxo salvo: roda pelo Board, por agendamento ou por gatilho.',
+    estacoes: [
+      { titulo: 'Planejar', texto: 'Um agente lê o work item e escreve o plano técnico e as tasks filhas.' },
+      { titulo: 'Implementar', texto: 'Outro agente executa o plano com as rules e as skills do time.' },
+      { titulo: 'Verificar', texto: 'Compila e testa o que mudou, no menor escopo que cobre a alteração.' },
+      { titulo: 'Avaliar', texto: 'Avaliadores dão nota de 0 a 100; abaixo da mínima, o trabalho volta.' },
+      { titulo: 'Arbitrar', texto: 'O árbitro cobra a regra quebrada, destrava o impasse e escala a você.' },
+      { titulo: 'Entregar', texto: 'Commit, push e Pull Request — para a pessoa revisar e aprovar.' },
+    ] satisfies Passo[],
+    marcadores: [
+      'Medida de ponta a ponta: falhas por causa, notas, impasses e custo por objetivo',
+      'Best-of-N: a mesma task em 2 a 4 agentes, e fica a execução de maior nota',
+      'Cada estação é trocável: outro agente, outro modelo, outra skill',
+    ],
+  },
+  time: {
+    titulo: 'Time agêntico',
+    texto:
+      'Pessoas e agentes no mesmo time, com papéis claros: o agente executa e se verifica, a pessoa define o pedido e decide o que entra. Ninguém revisa sozinho o próprio trabalho.',
+    papeis: [
+      { titulo: 'Desenvolvedor', texto: 'Escreve o pedido e o plano, responde quando é chamado e aprova a entrega.' },
+      { titulo: 'Agente executor', texto: 'Implementa, compila e testa na task, e relata o que mudou.' },
+      { titulo: 'Agente avaliador', texto: 'Dá a nota com um critério escrito. Não altera o código que avalia.' },
+      { titulo: 'Árbitro', texto: 'Confere as rules a cada resposta e cobra a correção antes de seguir.' },
+      { titulo: 'Agentes entre tasks', texto: 'Pedem e respondem uns aos outros pela fila de mensagens do dev.kit.' },
+      { titulo: 'Gestor', texto: 'Acompanha uso, qualidade e custo do time — com o consentimento de cada pessoa.' },
+    ] satisfies Beneficio[],
+  },
+};
 
 /**
  * O fluxo em SETE ETAPAS NOMEADAS (US #405, a proposta visual): o que o agente faz em cada uma, do clone

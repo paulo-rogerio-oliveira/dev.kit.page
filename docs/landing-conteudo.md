@@ -57,6 +57,14 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
 - **Como funciona (o fluxo, em sete etapas nomeadas):** work item → executor → avaliadores com nota
   mínima → gatilhos entre agentes (ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar) → objetivo
   cumprido → sua aprovação → fechamento com a PR.
+- **Conceitos (trabalhar com agentes):** as três peças, cada uma com um exemplo no formato do arquivo em
+  que mora — o **agente** (o `pedido.md` com o plano técnico), a **skill** (um `SKILL.md`, com o nome, quando
+  usar e os passos) e a **rule** (o `CLAUDE.md` com as regras fixas do time) — e um exemplo de ponta a ponta
+  em quatro passos (o pedido, as rules, as skills, a entrega).
+- **Fábrica agêntica e time agêntico:** a fábrica é a linha de produção de agentes — as estações Planejar,
+  Implementar, Verificar, Avaliar, Arbitrar e Entregar, ligadas por gatilhos, com a nota mínima como critério
+  de passagem (no produto, um fluxo salvo; com Best-of-N e a medida de falhas, notas, impasses e custo). O time
+  agêntico são os papéis: desenvolvedor, agente executor, agente avaliador, árbitro, agentes entre tasks e gestor.
 - **Comparativo:** a tabela acima.
 - **Para empresas:** o gestor acompanha o time, o colaborador consente no próprio dev.kit, a exportação
   é auditada e a adesão é por código, dentro dos assentos do plano.

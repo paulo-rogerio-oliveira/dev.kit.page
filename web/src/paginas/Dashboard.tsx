@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
-import type { ColaboradorResumo, EventoDoLog, Filtro, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import type { ColaboradorResumo, EventoDoLog, Filtro, Harness, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
 import { salvarArquivo } from '../arquivos';
 import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
 import { CartoesDoFluxo } from '../componentes/CartoesDoFluxo';
@@ -13,6 +13,21 @@ import { papelDa, useSessao } from '../sessao';
 
 /** Os períodos oferecidos no filtro. */
 export const PERIODOS = [7, 30, 90] as const;
+
+/** Os harnesses do filtro, na ordem da tela — o codex é do suporte futuro (a API já o aceita). */
+export const HARNESSES: { valor: Harness; rotulo: string }[] = [
+  { valor: 'claude', rotulo: 'Claude' },
+  { valor: 'kiro', rotulo: 'Kiro CLI' },
+  { valor: 'glm', rotulo: 'GLM' },
+  { valor: 'codex', rotulo: 'Codex' },
+];
+
+/** Os tipos do recorte do log — as falhas primeiro, que é para elas que o recorte existe. */
+export const TIPOS_DO_LOG = [
+  'TurnoFalhou', 'ExcecaoNaoClassificada', 'TurnoExecutado', 'SessaoIniciada', 'FluxoExecutado', 'FerramentaAcionada', 'ComandoDelegado',
+  'ArquivoAlterado', 'ObjetivoAvaliado', 'ObjetivoCumprido', 'ObjetivoRecusado', 'RoiCalculado', 'EntregaAvaliada', 'EntregaPronta',
+  'RevisaoHumana', 'TokensConsumidos', 'CustoEstimado', 'AgenteTrocado', 'ComandoNegado', 'ImpasseDetectado', 'ImpasseResolvido', 'ArbitroAgiu',
+] as const;
 
 interface Dados {
   quantidade: QuantidadeResposta;
@@ -40,6 +55,12 @@ export function Dashboard() {
   const [dias, setDias] = useState<number>(30);
   const [maquina, setMaquina] = useState<number | null>(null);
   const filtro = useMemo<Filtro>(() => ({ ...ultimosDias(dias), maquina }), [dias, maquina]);
+  // O harness e o recorte do log não mudam os totais (que não têm sessão): valem para o log e as exceções.
+  const [harness, setHarness] = useState<Harness | null>(null);
+  const [tipoDoLog, setTipoDoLog] = useState('');
+  const [detalheDoLog, setDetalheDoLog] = useState('');
+  const [detalheDigitado, setDetalheDigitado] = useState('');
+  const recorte = useMemo(() => ({ tipo: tipoDoLog, detalhe: detalheDoLog, harness }), [tipoDoLog, detalheDoLog, harness]);
   const [pagina, setPagina] = useState(1);
   const [opcoes, setOpcoes] = useState<OpcaoDoFiltro[] | null>(null);
   const [dados, setDados] = useState<Dados | null>(null);
@@ -78,14 +99,16 @@ export function Dashboard() {
     let vivo = true;
     setCarregando(true);
     setErro('');
-    Promise.all([api.quantidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina)])
+    Promise.all([api.quantidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
       .then(([quantidade, qualidade, eventos]) => vivo && setDados({ quantidade, qualidade, eventos }))
       .catch((falha) => vivo && tratar(falha))
       .finally(() => vivo && setCarregando(false));
     return () => {
       vivo = false;
     };
-  }, [token, filtro, pagina, tratar]);
+  }, [token, filtro, pagina, recorte, tratar]);
+
+  const filtrandoOLog = Boolean(tipoDoLog || detalheDoLog || harness);
 
   const q = dados?.quantidade;
   const ql = dados?.qualidade;
@@ -119,6 +142,13 @@ export function Dashboard() {
             Período
             <select value={dias} onChange={(e) => { setPagina(1); setDias(Number(e.target.value)); }}>
               {PERIODOS.map((p) => <option key={p} value={p}>Últimos {p} dias</option>)}
+            </select>
+          </label>
+          <label title="O CLI de agente da sessão: filtra o log de eventos e as exceções não classificadas.">
+            Harness
+            <select value={harness ?? ''} onChange={(e) => { setPagina(1); setHarness((e.target.value || null) as Harness | null); }}>
+              <option value="">Todos os harnesses</option>
+              {HARNESSES.map((h) => <option key={h.valor} value={h.valor}>{h.rotulo}</option>)}
             </select>
           </label>
           <button className="botao botao-fantasma" type="button" onClick={() => void exportar()}>Exportar uso (CSV)</button>
@@ -176,12 +206,30 @@ export function Dashboard() {
 
             <RoiPorWorkItem token={token} filtro={filtro} aoFalhar={tratar} />
 
-            <ExcecoesNaoClassificadas token={token} filtro={filtro} podeReagir={ehAdmin} aoFalhar={tratar} />
+            <ExcecoesNaoClassificadas token={token} filtro={filtro} harness={harness} podeReagir={ehAdmin} aoFalhar={tratar} />
 
             <section aria-labelledby="titulo-eventos">
               <h2 id="titulo-eventos">Eventos recentes</h2>
+              <form
+                className="filtros"
+                aria-label="Filtrar o log"
+                onSubmit={(e) => { e.preventDefault(); setPagina(1); setDetalheDoLog(detalheDigitado.trim()); }}
+              >
+                <label>
+                  Tipo
+                  <select value={tipoDoLog} onChange={(e) => { setPagina(1); setTipoDoLog(e.target.value); }}>
+                    <option value="">Todos os tipos</option>
+                    {TIPOS_DO_LOG.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Detalhe
+                  <input value={detalheDigitado} onChange={(e) => setDetalheDigitado(e.target.value)} placeholder="ex.: nao-classificada" maxLength={200} />
+                </label>
+                <button className="botao botao-fantasma" type="submit">Filtrar</button>
+              </form>
               {dados.eventos.total === 0 ? (
-                <p className="vazio">Nenhum evento no período.</p>
+                <p className="vazio">{filtrandoOLog ? 'Nenhum evento no período com este filtro.' : 'Nenhum evento no período.'}</p>
               ) : (
                 <>
                   <table className="tabela">

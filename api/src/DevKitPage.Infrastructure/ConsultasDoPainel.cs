@@ -77,7 +77,7 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
     public async Task<QualidadeResposta> QualidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct)
         => CalculoDeQualidade.Calcular(periodo, await SomasAsync(escopo, periodo, maquina, ct));
 
-    public async Task<Pagina<EventoDoLog>> EventosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
+    public async Task<Pagina<EventoDoLog>> EventosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, FiltroDoLog filtro, int pagina, int tamanho, CancellationToken ct)
     {
         pagina = Math.Max(1, pagina);
         tamanho = Math.Clamp(tamanho, 1, 200);
@@ -85,6 +85,14 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
         var consulta = Eventos(escopo)
             .Where(e => e.EmUtc >= de && e.EmUtc < ate && (maquina == null || e.MaquinaId == maquina));
+        if (filtro.Tipo is { Length: > 0 } tipo)
+            consulta = consulta.Where(e => e.Tipo == tipo);
+        if (filtro.Detalhe is { Length: > 0 } detalhe)
+            consulta = consulta.Where(e => e.Detalhe == detalhe);
+        // O harness é da SESSÃO: o evento entra quando a sessão dele (na mesma máquina) rodou turno no CLI pedido.
+        if (filtro.Harness is { Length: > 0 } harness)
+            consulta = consulta.Where(e => e.SessaoId != "" && db.Eventos.Any(t =>
+                t.MaquinaId == e.MaquinaId && t.SessaoId == e.SessaoId && t.Tipo == TiposDeEvento.TurnoExecutado && t.Detalhe == harness));
         var total = await consulta.CountAsync(ct);
         var linhas = await consulta
             .OrderByDescending(e => e.EmUtc).ThenByDescending(e => e.Id)
@@ -98,14 +106,17 @@ public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
         return new Pagina<EventoDoLog>(itens, total, pagina, tamanho);
     }
 
-    public async Task<Pagina<GrupoDeErroResumo>> ErrosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, int pagina, int tamanho, CancellationToken ct)
+    public async Task<Pagina<GrupoDeErroResumo>> ErrosAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, string? harness, int pagina, int tamanho, CancellationToken ct)
     {
         pagina = Math.Max(1, pagina);
         tamanho = Math.Clamp(tamanho, 1, 100);
 
         var contagens = await ContagensDeErroAsync(Totais(escopo, periodo, maquina), ct);
         var assinaturas = contagens.Keys.ToList();
-        var grupos = await db.GruposDeErro.AsNoTracking().Where(g => assinaturas.Contains(g.Assinatura)).ToListAsync(ct);
+        var tipo = string.IsNullOrEmpty(harness) ? null : RegrasDeErro.TipoDaFalhaDeTurno(harness);
+        var grupos = await db.GruposDeErro.AsNoTracking()
+            .Where(g => assinaturas.Contains(g.Assinatura) && (tipo == null || g.Tipo == tipo))
+            .ToListAsync(ct);
 
         var itens = grupos
             .OrderByDescending(g => g.UltimoVistoEmUtc).ThenByDescending(g => g.Id)
