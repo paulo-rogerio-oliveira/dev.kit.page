@@ -384,17 +384,32 @@ As rotas ficam sob `/api/empresa`, no `EscopoDaEmpresa` do token, mas abertas ao
   descricao}`): o agente do dev.kit grava o caminho e a descrição de cada repositório que usou ao terminar a task, e
   todos da empresa consultam para resolver o repositório de um pedido. Único por (empresa, caminho normalizado —
   minúsculas, sem barra nem `.git` no fim, `RegrasDoConhecimentoDaEmpresa.ChaveDaOrigem`): gravar de novo troca a
-  descrição. O filtro (caminho ou descrição, sem caixa) é em memória.
+  descrição. O filtro (caminho ou descrição, sem caixa) é em memória. `DELETE /api/empresa/repositorios?origem=`
+  tira um repositório do catálogo: do gestor, ou de quem o descreveu por último (os outros recebem 403; 404 se não
+  existe).
 - `GET /api/empresa/convencoes?time=` e `PUT /api/empresa/convencoes` (`ConvencaoV1 {nivel, chave, valor, time}`): as
-  convenções da EMPRESA e as do TIME — hoje o modelo do nome do branch (`branch.padrao`, `branch.bug`). O time é um
-  NOME, o que o dev declara na Equipe das Configurações do dev.kit, e não um cadastro desta API: a empresa não precisa
-  montar times aqui para compartilhar a convenção de um. A da empresa é do gestor (o dev recebe 403); a de um time, de
-  qualquer um da empresa; valor vazio apaga a do nível. A precedência (usuário &gt; time &gt; empresa) é do dev.kit, que
-  guarda a do usuário na máquina e lê estas na abertura do `devcli`.
+  convenções da EMPRESA, as do TIME e as do USUÁRIO — hoje o modelo do nome do branch, uma por TIPO DE BRANCH
+  (`branch.feature`, `branch.bug`, `branch.hotfix` ou `branch.<tipo do work item>`, chave em minúsculas sem acento; quem
+  escolhe qual vale é o dev.kit, pelo tipo do item ou pelo `tipo=` do comentário).
+  O time é um NOME, o que o dev declara na Equipe das Configurações do dev.kit, e não um cadastro desta API: a empresa
+  não precisa montar times aqui para compartilhar a convenção de um. A da empresa é do gestor (o dev recebe 403); a de
+  um time, de qualquer um da empresa; a do usuário, só do próprio (gravada no `UsuarioId` do token — não há como
+  gravar a de outro); valor vazio apaga a do nível. O GET devolve a da empresa, a do time pedido e as do próprio
+  usuário. A precedência (usuário &gt; time &gt; empresa) é do dev.kit, que lê estas na abertura do `devcli` — a do
+  usuário vale na máquina mesmo sem a API, e sobe para cá quando dá.
+- `GET /api/empresa/convencoes/todas` é a AUDITORIA: cada convenção com o nível, o time, de quem é (a do usuário), o
+  autor da última gravação e quando. O gestor vê todas, de todos; o dev vê as da empresa, as de todos os times e as
+  dele — as de outro usuário são pessoais.
+- A página `/empresa/conhecimento` do site (`EmpresaConhecimento.tsx`, do dev e do gestor — o admin vai para o
+  dashboard) é onde isso se audita e se edita: a aba Repositórios lista o catálogo com o autor e a data, edita a
+  descrição e (gestor) remove; a aba Convenções filtra por nível, grava e apaga, com o formulário oferecendo só os
+  níveis que o papel pode gravar (empresa, só o gestor).
 - O admin, sem empresa no token, recebe 403, como nas outras rotas da empresa. Serviço: `IConhecimentoDaEmpresa`
   (Core, `ServicosDaUs491.cs`) e `ConhecimentoDaEmpresa` (Infrastructure); modelo em `EntidadesDaUs491.cs`.
 
-Tabelas novas: migration `Us491ConhecimentoDaEmpresa` e `api/scripts/sqlserver/Us491.sql`.
+Tabelas novas: migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` (a coluna `UsuarioId` da
+convenção do usuário, no índice único) e `api/scripts/sqlserver/Us491.sql`, que também acrescenta a coluna numa base
+que rodou a primeira versão dele.
 
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de

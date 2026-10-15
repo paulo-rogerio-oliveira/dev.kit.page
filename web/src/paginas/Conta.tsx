@@ -23,11 +23,13 @@ export function Conta() {
   }, [sessao, sair]);
 
   const ehGestor = papelDa(sessao!) === 'gestor';
+  const daEmpresa = papelDa(sessao!) !== 'admin';
   return (
     <div className="pagina">
       <Topo secao="conta">
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
+        {daEmpresa && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
         <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>
       </Topo>
       <main className="painel conta">

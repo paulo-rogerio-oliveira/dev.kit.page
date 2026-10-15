@@ -30,6 +30,10 @@ export default defineConfig({
         Seed__AdminPassword: SENHA_INICIAL,
         Telemetria__CodigoDeRegistro: CODIGO_DE_REGISTRO,
         Cors__Origens__0: `http://localhost:${PORTA_DA_WEB}`,
+        // Os cenários dividem o MESMO admin, em sequência e dentro do mesmo minuto, e cada um cria empresa,
+        // gestor ou usuário — escritas da política Exportacao (10 por minuto por usuário): somadas, a de quem
+        // roda por último recebia 429. O limite em si é coberto pelo teste da API (Exportacao_em_laco_e_429).
+        Painel__ExportacoesPorMinuto: '100',
       },
     },
     {

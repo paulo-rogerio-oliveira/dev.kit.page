@@ -29,8 +29,11 @@ export function entraNoPainel(sessao: LoginResponse): boolean {
   return papelDa(sessao) !== 'dev';
 }
 
-/** As páginas que o dev abre (US #425): a conta dele e as públicas — o painel e a administração, não. */
-const DO_DEV = ['/', '/conta', '/catalogo'];
+/**
+ * As páginas que o dev abre (US #425): a conta dele e as públicas — o painel e a administração, não. Desde a US #491,
+ * também os repositórios e as convenções da empresa, que ele audita e edita.
+ */
+const DO_DEV = ['/', '/conta', '/catalogo', '/empresa/conhecimento'];
 
 /**
  * Para onde a sessão vai depois do login (e da troca de senha): a troca pendente primeiro; depois o

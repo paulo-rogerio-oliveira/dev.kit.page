@@ -120,9 +120,10 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(c => c.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
             e.Property(c => c.Chave).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaChave);
             e.Property(c => c.Valor).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoValor);
-            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.Chave }).IsUnique();
+            // O UsuarioId é o dono da convenção de nível usuário e vale 0 nos outros níveis: sem FK, de propósito.
+            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave }).IsUnique();
             e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(c => c.Autor).WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.

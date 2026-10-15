@@ -134,8 +134,12 @@ publica os resultados.
    `POST /api/empresa/repositorios` e `GET /api/empresa/repositorios?filtro=` (o dev, no escopo da empresa do token;
    o mesmo caminho escrito de dois jeitos é um repositório); `ConhecimentoApiTests` e `Us491Tests`. No git.kit:
    `devcli repositorios --url <origem> --descrever "..." --aplicar` e `devcli repositorios --catalogo`.
-2. **Convenções da empresa e do time, consultadas pelo devcli; usuário > time > empresa** — `GET/PUT
-   /api/empresa/convencoes?time=` (a da empresa só do gestor, a do time de qualquer um da empresa, vazio apaga);
-   `ConhecimentoApiTests` e `Us491Tests`. A precedência e a do usuário são do dev.kit (`devcli convencoes`).
-3. **A tabela no SQLite e no Azure SQL** — a migration `Us491ConhecimentoDaEmpresa` e
+2. **Convenções da empresa, do time e do usuário, consultadas pelo devcli; usuário > time > empresa** — `GET/PUT
+   /api/empresa/convencoes?time=` (a da empresa só do gestor, a do time de qualquer um da empresa, a do usuário só do
+   próprio, vazio apaga); `ConhecimentoApiTests` e `Us491Tests`. A precedência é do dev.kit (`devcli convencoes`).
+3. **Auditar e editar no site, em cada nível** — `/empresa/conhecimento` (aba Repositórios: autor, data, editar e,
+   o gestor, remover; aba Convenções: nível, de quem é, autor, data, filtro por nível, gravar e apagar), sobre
+   `GET /api/empresa/convencoes/todas` e `DELETE /api/empresa/repositorios?origem=`; `EmpresaConhecimento.test.tsx`,
+   `ConhecimentoApiTests` e `Us491Tests`.
+4. **A tabela no SQLite e no Azure SQL** — as migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` e
    `api/scripts/sqlserver/Us491.sql` ([publicação](docs/publicacao-azure.md#catálogo-de-repositórios-e-convenções-da-empresa-us-491)).

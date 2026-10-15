@@ -421,6 +421,34 @@ export interface UsuarioDaEmpresa {
   criadoEm: string;
 }
 
+/** Um repositório do catálogo da empresa (US #491): o caminho e a descrição que o agente do dev.kit grava. */
+export interface RepositorioDaEmpresa {
+  /** O caminho como o dev.kit o clona (URL do GitHub ou pasta). */
+  origem: string;
+  descricao: string;
+  /** Quem gravou a última descrição. */
+  autor: string;
+  atualizadoEm: string;
+}
+
+/** O nível de uma convenção (US #491): a precedência no dev.kit é usuário > time > empresa. */
+export type NivelDeConvencao = 'empresa' | 'time' | 'usuario';
+
+/** Uma convenção na auditoria do site (US #491), hoje o modelo do nome do branch da task. */
+export interface ConvencaoDaEmpresa {
+  nivel: NivelDeConvencao;
+  /** A convenção, uma por tipo de branch (branch.feature, branch.bug, branch.hotfix, branch.<tipo do item>). */
+  chave: string;
+  valor: string;
+  /** O time da convenção de nível time; vazio nos outros. */
+  time: string;
+  /** De quem é a convenção de nível usuário; vazio nos outros. */
+  usuario: string;
+  /** Quem a gravou por último. */
+  autor: string;
+  atualizadoEm: string | null;
+}
+
 /** A resposta da adesão e do pedido de link: a mensagem (o link vai por e-mail). */
 export interface Mensagem {
   mensagem: string;

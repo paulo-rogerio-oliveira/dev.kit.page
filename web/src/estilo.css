@@ -554,6 +554,7 @@ input, select {
 .com-avatar { display: inline-flex; align-items: center; gap: 10px; }
 .nome-e-login { display: inline-flex; flex-direction: column; gap: 2px; }
 .nome-e-login small { color: var(--texto-2); font-size: 0.78rem; }
+.nome-e-login .insignia { align-self: flex-start; }
 
 /* O selo (badge): uma pílula pequena com a cor da variante. */
 .insignia {

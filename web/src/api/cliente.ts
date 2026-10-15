@@ -1,8 +1,9 @@
 import type {
-  ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor,
+  ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor,
   EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, Harness, ImportacaoDoBasico,
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
-  PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RoiResposta, UsuarioComSenha,
+  NivelDeConvencao, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
+  RoiResposta, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
 
@@ -269,6 +270,21 @@ export const api = {
 
   politicaDaEmpresa: (token: string, loginObrigatorio: boolean | null) =>
     chamar<EmpresaDoGestor>('/api/empresa/politica', { metodo: 'PUT', corpo: { loginObrigatorio }, token }),
+
+  // O que a empresa compartilha com o dev.kit (US #491): o catálogo de repositórios e as convenções — do gestor e do dev.
+  repositoriosDaEmpresa: (token: string) => chamar<RepositorioDaEmpresa[]>('/api/empresa/repositorios', { token }),
+
+  gravarRepositorio: (token: string, origem: string, descricao: string) =>
+    chamar<RepositorioDaEmpresa>('/api/empresa/repositorios', { metodo: 'POST', corpo: { origem, descricao }, token }),
+
+  removerRepositorio: (token: string, origem: string) =>
+    chamar<RepositorioDaEmpresa>(`/api/empresa/repositorios?origem=${encodeURIComponent(origem)}`, { metodo: 'DELETE', token }),
+
+  convencoesDaEmpresa: (token: string) => chamar<ConvencaoDaEmpresa[]>('/api/empresa/convencoes/todas', { token }),
+
+  /** Grava a convenção no nível; valor vazio apaga. */
+  gravarConvencao: (token: string, nivel: NivelDeConvencao, chave: string, valor: string, time: string) =>
+    chamar<ConvencaoDaEmpresa>('/api/empresa/convencoes', { metodo: 'PUT', corpo: { nivel, chave, valor, time }, token }),
 
   // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
   checkout: (email: string, nome: string, plano: string) =>

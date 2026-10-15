@@ -51,11 +51,46 @@ public sealed class ConhecimentoApiTests : IDisposable
             (await gestor.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("empresa", "branch.padrao", "feature/{equipe}/{id}"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await ana.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("time", "branch.bug", "bug/{id}", "Vendas"))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,
+        Assert.Equal(HttpStatusCode.OK,
             (await ana.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("usuario", "branch.padrao", "eu/{id}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await ana.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("projeto", "branch.padrao", "x/{id}"))).StatusCode);
 
+        // O que o dev.kit lê: a da empresa, a do time declarado e a do próprio usuário.
         var deVendas = (await ana.GetFromJsonAsync<ConvencaoV1[]>("/api/empresa/convencoes?time=vendas"))!;
-        Assert.Equal(new[] { ("empresa", "branch.padrao"), ("time", "branch.bug") }, deVendas.Select(c => (c.Nivel!, c.Chave!)));
-        Assert.Single((await gestor.GetFromJsonAsync<ConvencaoV1[]>("/api/empresa/convencoes"))!); // sem time, só a da empresa
+        Assert.Equal(new[] { ("empresa", "branch.padrao"), ("time", "branch.bug"), ("usuario", "branch.padrao") },
+            deVendas.Select(c => (c.Nivel!, c.Chave!)));
+        Assert.Single((await gestor.GetFromJsonAsync<ConvencaoV1[]>("/api/empresa/convencoes"))!); // sem time e sem a sua, só a da empresa
+    }
+
+    /// <summary>
+    /// A AUDITORIA do site: o gestor vê todos os níveis — inclusive a convenção de cada usuário —, com o autor e a data;
+    /// o dev não vê a do colega. E o catálogo: remove o gestor ou quem gravou; o colega não.
+    /// </summary>
+    [Fact]
+    public async Task O_gestor_audita_todos_os_niveis_e_remove_do_catalogo()
+    {
+        var admin = await _api.AdminAsync();
+        var a = await ApiDeTeste.EmpresaAsync(admin, "Empresa A");
+        var (ana, _) = await _api.DevPorAdesaoAsync(a.CodigoDeAdesao, "ana@a.com");
+        var (bia, _) = await _api.DevPorAdesaoAsync(a.CodigoDeAdesao, "bia@a.com");
+        var gestor = await _api.GestorAsync(admin, a.Id, "gestor.a");
+
+        await ana.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("usuario", "branch.padrao", "ana/{id}"));
+        await bia.PutAsJsonAsync("/api/empresa/convencoes", new ConvencaoV1("time", "branch.padrao", "vendas/{id}", "vendas"));
+        await ana.PostAsJsonAsync("/api/empresa/repositorios", new GravacaoDeRepositorioV1("https://github.com/acme/gbl-2000", "ERP"));
+
+        var doGestor = (await gestor.GetFromJsonAsync<ConvencaoV1[]>("/api/empresa/convencoes/todas"))!;
+        Assert.Equal(2, doGestor.Length);
+        var daAna = doGestor.Single(c => c.Nivel == "usuario");
+        Assert.False(string.IsNullOrWhiteSpace(daAna.Usuario));
+        Assert.Equal(daAna.Usuario, daAna.Autor);
+        Assert.NotNull(daAna.AtualizadoEm);
+        Assert.Equal(new[] { "time" }, (await bia.GetFromJsonAsync<ConvencaoV1[]>("/api/empresa/convencoes/todas"))!.Select(c => c.Nivel!));
+
+        const string Rota = "/api/empresa/repositorios?origem=https%3A%2F%2Fgithub.com%2Facme%2Fgbl-2000";
+        Assert.Equal(HttpStatusCode.Forbidden, (await bia.DeleteAsync(Rota)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await gestor.DeleteAsync(Rota)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await gestor.DeleteAsync(Rota)).StatusCode);
     }
 }

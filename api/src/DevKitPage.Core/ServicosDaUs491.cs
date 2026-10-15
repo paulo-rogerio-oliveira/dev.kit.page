@@ -19,12 +19,27 @@ public interface IConhecimentoDaEmpresa
     /// </summary>
     Task<ResultadoDaGestao<RepositorioDaEmpresaV1>> GravarRepositorioAsync(EscopoDaEmpresa escopo, GravacaoDeRepositorioV1 gravacao, CancellationToken ct);
 
-    /// <summary>As convenções que valem para quem consulta: as da empresa e as do <paramref name="time"/> declarado.</summary>
+    /// <summary>
+    /// Remove o repositório do catálogo: o gestor, ou quem gravou a descrição atual. Caminho que não está no catálogo da
+    /// empresa é <see cref="FalhaNaGestao.NaoEncontrado"/>.
+    /// </summary>
+    Task<ResultadoDaGestao<RepositorioDaEmpresaV1>> RemoverRepositorioAsync(EscopoDaEmpresa escopo, string origem, CancellationToken ct);
+
+    /// <summary>
+    /// As convenções que valem para quem consulta — o que o dev.kit lê: as da empresa, as do <paramref name="time"/>
+    /// declarado e as do próprio usuário.
+    /// </summary>
     Task<IReadOnlyList<ConvencaoV1>> ConvencoesAsync(EscopoDaEmpresa escopo, string? time, CancellationToken ct);
 
     /// <summary>
+    /// TODAS as convenções que quem consulta pode auditar no site, com o autor e a data: o gestor vê todos os níveis
+    /// (inclusive as de cada usuário); o dev vê as da empresa, as de todos os times e as dele.
+    /// </summary>
+    Task<IReadOnlyList<ConvencaoV1>> AuditoriaDeConvencoesAsync(EscopoDaEmpresa escopo, CancellationToken ct);
+
+    /// <summary>
     /// Grava a convenção JÁ validada (<see cref="RegrasDoConhecimentoDaEmpresa.ValidarConvencao"/>); valor vazio apaga.
-    /// A da EMPRESA é do gestor; a de um TIME, de qualquer um da empresa.
+    /// A da EMPRESA é do gestor; a de um TIME, de qualquer um da empresa; a do USUÁRIO, dele mesmo.
     /// </summary>
     Task<ResultadoDaGestao<ConvencaoV1>> GravarConvencaoAsync(EscopoDaEmpresa escopo, ConvencaoV1 convencao, CancellationToken ct);
 }
@@ -80,10 +95,10 @@ public static class RegrasDoConhecimentoDaEmpresa
         var nivel = convencao?.Nivel?.Trim().ToLowerInvariant() ?? string.Empty;
         var chave = convencao?.Chave?.Trim().ToLowerInvariant() ?? string.Empty;
         var time = NormalizarTime(convencao?.Time);
-        if (nivel is not (NiveisDeConvencao.Empresa or NiveisDeConvencao.Time))
-            return $"O nível da convenção é '{NiveisDeConvencao.Empresa}' ou '{NiveisDeConvencao.Time}' (a do usuário fica na máquina dele).";
+        if (nivel is not (NiveisDeConvencao.Empresa or NiveisDeConvencao.Time or NiveisDeConvencao.Usuario))
+            return $"O nível da convenção é '{NiveisDeConvencao.Empresa}', '{NiveisDeConvencao.Time}' ou '{NiveisDeConvencao.Usuario}'.";
         if (chave.Length == 0 || chave.Length > TamanhoMaximoDaChave || !ChaveValida.IsMatch(chave))
-            return "A chave da convenção é um nome curto em minúsculas, como 'branch.padrao'.";
+            return "A chave da convenção é um nome curto em minúsculas, sem acento, como 'branch.hotfix'.";
         if ((convencao?.Valor?.Trim().Length ?? 0) > TamanhoMaximoDoValor)
             return $"O valor da convenção passa de {TamanhoMaximoDoValor} caracteres.";
         if (nivel == NiveisDeConvencao.Time && time.Length == 0)
