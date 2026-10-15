@@ -127,3 +127,15 @@ publica os resultados.
 8. **README, arquitetura e publicação atualizados** — esta seção, a tabela de configuração,
    [docs/arquitetura.md](docs/arquitetura.md#a-landing-us-283), [docs/landing-conteudo.md](docs/landing-conteudo.md)
    e [docs/publicacao-azure.md](docs/publicacao-azure.md#atualizar-uma-base-azure-sql-que-já-existe-us-283).
+
+## Como verificar cada critério da US #491
+
+1. **Ao terminar a task, o agente grava o caminho e a descrição do repositório; a empresa consulta** —
+   `POST /api/empresa/repositorios` e `GET /api/empresa/repositorios?filtro=` (o dev, no escopo da empresa do token;
+   o mesmo caminho escrito de dois jeitos é um repositório); `ConhecimentoApiTests` e `Us491Tests`. No git.kit:
+   `devcli repositorios --url <origem> --descrever "..." --aplicar` e `devcli repositorios --catalogo`.
+2. **Convenções da empresa e do time, consultadas pelo devcli; usuário > time > empresa** — `GET/PUT
+   /api/empresa/convencoes?time=` (a da empresa só do gestor, a do time de qualquer um da empresa, vazio apaga);
+   `ConhecimentoApiTests` e `Us491Tests`. A precedência e a do usuário são do dev.kit (`devcli convencoes`).
+3. **A tabela no SQLite e no Azure SQL** — a migration `Us491ConhecimentoDaEmpresa` e
+   `api/scripts/sqlserver/Us491.sql` ([publicação](docs/publicacao-azure.md#catálogo-de-repositórios-e-convenções-da-empresa-us-491)).

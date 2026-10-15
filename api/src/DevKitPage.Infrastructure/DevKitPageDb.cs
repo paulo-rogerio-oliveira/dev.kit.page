@@ -34,6 +34,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ItemDoCatalogoEditavel> ItensEditaveis => Set<ItemDoCatalogoEditavel>();
     public DbSet<VersaoDoCatalogo> VersoesDoCatalogo => Set<VersaoDoCatalogo>();
     public DbSet<PacoteDoCatalogo> PacotesDoCatalogo => Set<PacoteDoCatalogo>();
+    public DbSet<RepositorioDaEmpresa> RepositoriosDaEmpresa => Set<RepositorioDaEmpresa>();
+    public DbSet<ConvencaoDaEmpresa> ConvencoesDaEmpresa => Set<ConvencaoDaEmpresa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -96,6 +98,31 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(a => a.UsuarioId);
             e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // O catálogo de repositórios e as convenções da empresa (US #491). No Azure SQL as tabelas vêm de
+        // api/scripts/sqlserver/Us491.sql.
+        modelBuilder.Entity<RepositorioDaEmpresa>(e =>
+        {
+            e.ToTable("RepositoriosDaEmpresa");
+            e.Property(r => r.Origem).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaOrigem);
+            e.Property(r => r.Chave).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaOrigem);
+            e.Property(r => r.Descricao).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaDescricao);
+            e.HasIndex(r => new { r.EmpresaId, r.Chave }).IsUnique();
+            e.HasOne(r => r.Empresa).WithMany().HasForeignKey(r => r.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Autor).WithMany().HasForeignKey(r => r.AutorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ConvencaoDaEmpresa>(e =>
+        {
+            e.ToTable("ConvencoesDaEmpresa");
+            e.Property(c => c.Nivel).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoNivel);
+            e.Property(c => c.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
+            e.Property(c => c.Chave).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaChave);
+            e.Property(c => c.Valor).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoValor);
+            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.Chave }).IsUnique();
+            e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.

@@ -181,6 +181,12 @@ publicação é a `catalogo-v(N+1)`. Até lá, o básico continua saindo do GitH
 partir daí o git.kit não publica mais o básico: o `catalogo.yml` dele só confere o manifesto, e o
 `build/catalogo.ps1 -Baixar` traz o básico publicado no site para o pacote do instalador.
 
+### Catálogo de repositórios e convenções da empresa (US #491)
+
+Rode também `api/scripts/sqlserver/Us491.sql` (idempotente): cria `RepositoriosDaEmpresa` e `ConvencoesDaEmpresa`.
+Sem elas, `/api/empresa/repositorios` e `/api/empresa/convencoes` respondem 500 — e o dev.kit, que trata a falha
+como "a empresa ainda não compartilha isto", segue com o que a máquina já sabe. Nenhuma configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as
