@@ -7,7 +7,8 @@ namespace DevKitPage.Infrastructure;
 /// <summary>
 /// O catálogo de repositórios e as convenções da empresa (US #491). O isolamento é o <see cref="EscopoDaEmpresa"/>:
 /// toda consulta e toda gravação filtram pela empresa dele — o que é de outra empresa nem aparece, e gravar o mesmo
-/// caminho ou a mesma convenção noutra empresa é outra linha.
+/// caminho ou a mesma convenção noutra empresa é outra linha. A convenção de nível usuário é do próprio usuário: só o
+/// gestor a vê de todos, na auditoria.
 /// </summary>
 public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : IConhecimentoDaEmpresa
 {
@@ -61,15 +62,38 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         return new(Resumo(repositorio));
     }
 
+    public async Task<ResultadoDaGestao<RepositorioDaEmpresaV1>> RemoverRepositorioAsync(EscopoDaEmpresa escopo, string origem, CancellationToken ct)
+    {
+        var chave = RegrasDoConhecimentoDaEmpresa.ChaveDaOrigem(origem);
+        var repositorio = await db.RepositoriosDaEmpresa.Include(r => r.Autor)
+            .FirstOrDefaultAsync(r => r.EmpresaId == escopo.EmpresaId && r.Chave == chave, ct);
+        if (repositorio is null)
+            return ResultadoDaGestao<RepositorioDaEmpresaV1>.Falhou(FalhaNaGestao.NaoEncontrado, $"'{origem}' não está no catálogo de repositórios da empresa.");
+        if (repositorio.AutorId != escopo.UsuarioId && !escopo.EhGestor)
+            return ResultadoDaGestao<RepositorioDaEmpresaV1>.Falhou(FalhaNaGestao.Proibida, "Só o gestor, ou quem gravou a descrição atual, remove o repositório do catálogo.");
+
+        db.RepositoriosDaEmpresa.Remove(repositorio);
+        await db.SaveChangesAsync(ct);
+        return new(Resumo(repositorio));
+    }
+
     public async Task<IReadOnlyList<ConvencaoV1>> ConvencoesAsync(EscopoDaEmpresa escopo, string? time, CancellationToken ct)
     {
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
-        return await db.ConvencoesDaEmpresa.AsNoTracking()
-            .Where(c => c.EmpresaId == escopo.EmpresaId
-                && (c.Nivel == NiveisDeConvencao.Empresa || (doTime.Length > 0 && c.Nivel == NiveisDeConvencao.Time && c.Time == doTime)))
-            .OrderBy(c => c.Nivel).ThenBy(c => c.Chave)
-            .Select(c => new ConvencaoV1(c.Nivel, c.Chave, c.Valor, c.Time))
+        var convencoes = await Da(escopo)
+            .Where(c => c.Nivel == NiveisDeConvencao.Empresa
+                || (doTime.Length > 0 && c.Nivel == NiveisDeConvencao.Time && c.Time == doTime)
+                || (c.Nivel == NiveisDeConvencao.Usuario && c.UsuarioId == escopo.UsuarioId))
             .ToListAsync(ct);
+        return await ParaLeituraAsync(convencoes, ct);
+    }
+
+    public async Task<IReadOnlyList<ConvencaoV1>> AuditoriaDeConvencoesAsync(EscopoDaEmpresa escopo, CancellationToken ct)
+    {
+        var convencoes = await Da(escopo)
+            .Where(c => escopo.EhGestor || c.Nivel != NiveisDeConvencao.Usuario || c.UsuarioId == escopo.UsuarioId)
+            .ToListAsync(ct);
+        return await ParaLeituraAsync(convencoes, ct);
     }
 
     public async Task<ResultadoDaGestao<ConvencaoV1>> GravarConvencaoAsync(EscopoDaEmpresa escopo, ConvencaoV1 convencao, CancellationToken ct)
@@ -77,14 +101,16 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         var nivel = convencao.Nivel!.Trim().ToLowerInvariant();
         var chave = convencao.Chave!.Trim().ToLowerInvariant();
         var time = nivel == NiveisDeConvencao.Time ? RegrasDoConhecimentoDaEmpresa.NormalizarTime(convencao.Time) : string.Empty;
+        var usuario = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
         var valor = convencao.Valor?.Trim() ?? string.Empty;
 
-        // A da empresa vale para todos, então é do gestor; a de um time é de quem trabalha nele — qualquer um da empresa.
+        // A da empresa vale para todos, então é do gestor; a de um time é de quem trabalha nele — qualquer um da empresa;
+        // a do usuário é dele mesmo (o escopo decide o dono: não há como gravar a de outro).
         if (nivel == NiveisDeConvencao.Empresa && !escopo.EhGestor)
             return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "Só o gestor grava as convenções da empresa; a de um time, qualquer um da empresa grava.");
 
         var existente = await db.ConvencoesDaEmpresa.FirstOrDefaultAsync(
-            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.Chave == chave, ct);
+            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave, ct);
 
         if (valor.Length == 0)
         {
@@ -100,7 +126,7 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
 
         if (existente is null)
         {
-            existente = new ConvencaoDaEmpresa { EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, Chave = chave };
+            existente = new ConvencaoDaEmpresa { EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, UsuarioId = usuario, Chave = chave };
             db.ConvencoesDaEmpresa.Add(existente);
         }
 
@@ -117,11 +143,30 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
             return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Conflito, $"A convenção '{chave}' acabou de ser gravada por outra pessoa. Grave de novo.");
         }
 
-        return new(new ConvencaoV1(nivel, chave, valor, time));
+        await db.Entry(existente).Reference(c => c.Autor).LoadAsync(ct);
+        return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
     }
 
-    private static RepositorioDaEmpresaV1 Resumo(RepositorioDaEmpresa r) => new(
-        r.Origem, r.Descricao,
-        r.Autor is null ? string.Empty : r.Autor.Nome.Length > 0 ? r.Autor.Nome : r.Autor.Login,
-        DevKitPageDb.Utc(r.AtualizadoEmUtc));
+    /// <summary>As convenções da empresa do escopo, com o autor, na ordem da auditoria.</summary>
+    private IQueryable<ConvencaoDaEmpresa> Da(EscopoDaEmpresa escopo) => db.ConvencoesDaEmpresa.AsNoTracking().Include(c => c.Autor)
+        .Where(c => c.EmpresaId == escopo.EmpresaId)
+        .OrderBy(c => c.Nivel).ThenBy(c => c.Time).ThenBy(c => c.UsuarioId).ThenBy(c => c.Chave);
+
+    /// <summary>A leitura: o dono da de nível usuário e o autor pelo nome (ou login), e a data na borda.</summary>
+    private async Task<IReadOnlyList<ConvencaoV1>> ParaLeituraAsync(IReadOnlyList<ConvencaoDaEmpresa> convencoes, CancellationToken ct)
+    {
+        var donos = convencoes.Where(c => c.UsuarioId > 0).Select(c => c.UsuarioId).Distinct().ToArray();
+        var nomes = await db.Usuarios.AsNoTracking().Where(u => donos.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Nome.Length > 0 ? u.Nome : u.Login, ct);
+
+        return convencoes.Select(c => new ConvencaoV1(
+            c.Nivel, c.Chave, c.Valor, c.Time,
+            c.UsuarioId > 0 ? nomes.GetValueOrDefault(c.UsuarioId, string.Empty) : string.Empty,
+            Nome(c.Autor),
+            DevKitPageDb.Utc(c.AtualizadoEmUtc))).ToArray();
+    }
+
+    private static string Nome(Usuario? usuario) => usuario is null ? string.Empty : usuario.Nome.Length > 0 ? usuario.Nome : usuario.Login;
+
+    private static RepositorioDaEmpresaV1 Resumo(RepositorioDaEmpresa r) => new(r.Origem, r.Descricao, Nome(r.Autor), DevKitPageDb.Utc(r.AtualizadoEmUtc));
 }

@@ -206,6 +206,9 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Valor")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -215,7 +218,7 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.HasIndex("AutorId");
 
-                    b.HasIndex("EmpresaId", "Nivel", "Time", "Chave")
+                    b.HasIndex("EmpresaId", "Nivel", "Time", "UsuarioId", "Chave")
                         .IsUnique();
 
                     b.ToTable("ConvencoesDaEmpresa", (string)null);
@@ -1140,7 +1143,7 @@ namespace DevKitPage.Infrastructure.Migrations
 
             modelBuilder.Entity("DevKitPage.Core.ConvencaoDaEmpresa", b =>
                 {
-                    b.HasOne("DevKitPage.Core.Usuario", null)
+                    b.HasOne("DevKitPage.Core.Usuario", "Autor")
                         .WithMany()
                         .HasForeignKey("AutorId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -1151,6 +1154,8 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasForeignKey("EmpresaId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Autor");
 
                     b.Navigation("Empresa");
                 });

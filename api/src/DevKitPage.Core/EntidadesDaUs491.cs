@@ -28,10 +28,10 @@ public sealed class RepositorioDaEmpresa
 }
 
 /// <summary>
-/// Uma CONVENÇÃO compartilhada de uma empresa (US #491), no nível dela ou no de um time. Única por
-/// (<see cref="EmpresaId"/>, <see cref="Nivel"/>, <see cref="Time"/>, <see cref="Chave"/>). O time é um NOME — o que o
-/// dev declara nas Configurações do dev.kit, o mesmo do <c>{equipe}</c> do branch —, e não um cadastro: a empresa não
-/// precisa montar times aqui para compartilhar a convenção de um.
+/// Uma CONVENÇÃO de uma empresa (US #491), no nível dela, no de um time ou no de um usuário. Única por
+/// (<see cref="EmpresaId"/>, <see cref="Nivel"/>, <see cref="Time"/>, <see cref="UsuarioId"/>, <see cref="Chave"/>). O
+/// time é um NOME — o que o dev declara nas Configurações do dev.kit, o mesmo do <c>{equipe}</c> do branch —, e não um
+/// cadastro: a empresa não precisa montar times aqui para compartilhar a convenção de um.
 /// </summary>
 public sealed class ConvencaoDaEmpresa
 {
@@ -42,11 +42,15 @@ public sealed class ConvencaoDaEmpresa
     /// <summary><c>empresa</c> ou <c>time</c> (<c>NiveisDeConvencao</c>).</summary>
     public string Nivel { get; set; } = string.Empty;
 
-    /// <summary>O time (normalizado) da convenção de nível time; vazio na da empresa.</summary>
+    /// <summary>O time (normalizado) da convenção de nível time; vazio nos outros níveis.</summary>
     public string Time { get; set; } = string.Empty;
+
+    /// <summary>O dono da convenção de nível usuário; 0 nos outros níveis.</summary>
+    public int UsuarioId { get; set; }
 
     public string Chave { get; set; } = string.Empty;
     public string Valor { get; set; } = string.Empty;
     public int AutorId { get; set; }
+    public Usuario? Autor { get; set; }
     public DateTime AtualizadoEmUtc { get; set; }
 }

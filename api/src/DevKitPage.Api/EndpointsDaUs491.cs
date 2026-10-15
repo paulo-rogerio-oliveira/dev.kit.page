@@ -11,7 +11,8 @@ namespace DevKitPage.Api;
 /// <para>
 /// Ficam sob <c>/api/empresa</c>, no escopo da empresa do token, mas abertas ao DEV — e não só ao gestor, como as
 /// outras rotas dali: consultar e gravar o catálogo é de quem trabalha. A convenção da EMPRESA é do gestor; a do
-/// TIME, de qualquer um da empresa (o serviço decide). O admin, sem empresa no token, recebe 403.
+/// TIME, de qualquer um da empresa; a do USUÁRIO, dele mesmo (o serviço decide). A tela do site audita e edita tudo
+/// isso (<c>/convencoes/todas</c> traz o autor e a data). O admin, sem empresa no token, recebe 403.
 /// </para>
 /// </summary>
 public static class EndpointsDaUs491
@@ -32,8 +33,18 @@ public static class EndpointsDaUs491
                     : EndpointsDaUs425.Resultado(await conhecimento.GravarRepositorioAsync(escopo, gravacao!, ct));
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
 
+        // A origem vai na consulta, e não no caminho: é uma URL (ou uma pasta), cheia de barras.
+        grupo.MapDelete("/repositorios", (string? origem, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
+            => EndpointsDaUs425.ComEmpresa(quem, async escopo => string.IsNullOrWhiteSpace(origem)
+                ? Results.Problem("Informe a origem do repositório a remover (?origem=).", statusCode: StatusCodes.Status400BadRequest)
+                : EndpointsDaUs425.Resultado(await conhecimento.RemoverRepositorioAsync(escopo, origem, ct))));
+
         grupo.MapGet("/convencoes", (string? time, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
             => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.ConvencoesAsync(escopo, time, ct))));
+
+        // A AUDITORIA do site: todas as que quem consulta pode ver, com o autor e a data.
+        grupo.MapGet("/convencoes/todas", (ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
+            => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.AuditoriaDeConvencoesAsync(escopo, ct))));
 
         grupo.MapPut("/convencoes", (ConvencaoV1? convencao, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
             => EndpointsDaUs425.ComEmpresa(quem, async escopo =>

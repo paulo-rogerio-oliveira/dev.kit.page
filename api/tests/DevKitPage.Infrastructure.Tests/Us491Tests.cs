@@ -85,11 +85,48 @@ public sealed class Us491Tests : IAsyncLifetime
         var deVendas = await Conhecimento(c => c.ConvencoesAsync(ana, " VENDAS ", default));
         Assert.Equal(new[] { ("empresa", "feature/{equipe}/{id}", ""), ("time", "vendas/{id}", "vendas") },
             deVendas.Select(c => (c.Nivel!, c.Valor!, c.Time!)));
+        Assert.All(deVendas, c => Assert.NotNull(c.AtualizadoEm)); // a auditoria: quando, e quem
+        Assert.All(deVendas, c => Assert.False(string.IsNullOrWhiteSpace(c.Autor)));
         Assert.Single(await Conhecimento(c => c.ConvencoesAsync(ana, null, default))); // sem time, só a da empresa
 
         // Vazio apaga a do time: volta a valer a da empresa.
         await Conhecimento(c => c.GravarConvencaoAsync(ana, new ConvencaoV1("time", "branch.padrao", "", "vendas"), default));
         Assert.Single(await Conhecimento(c => c.ConvencoesAsync(ana, "vendas", default)));
+    }
+
+    /// <summary>
+    /// A do USUÁRIO é dele: cada um grava a sua, o dev.kit lê só a própria, e a auditoria do gestor vê a de todos (a do
+    /// dev, não a do colega).
+    /// </summary>
+    [Fact]
+    public async Task A_convencao_do_usuario_e_dele_e_o_gestor_audita_todas()
+    {
+        var a = await EmpresaAsync("Empresa A");
+        var ana = await DevAsync(a, "ana@a.com");
+        var bia = await DevAsync(a, "bia@a.com");
+        var gestor = await DevAsync(a, "gestor@a.com", gestor: true);
+
+        await Conhecimento(c => c.GravarConvencaoAsync(ana, new ConvencaoV1("usuario", "branch.padrao", "ana/{id}"), default));
+        await Conhecimento(c => c.GravarConvencaoAsync(bia, new ConvencaoV1("usuario", "branch.padrao", "bia/{id}"), default));
+
+        Assert.Equal(new[] { "ana/{id}" }, (await Conhecimento(c => c.ConvencoesAsync(ana, null, default))).Select(c => c.Valor!));
+        Assert.Equal(new[] { "bia/{id}" }, (await Conhecimento(c => c.AuditoriaDeConvencoesAsync(bia, default))).Select(c => c.Valor!));
+        var auditoria = await Conhecimento(c => c.AuditoriaDeConvencoesAsync(gestor, default));
+        Assert.Equal(2, auditoria.Count);
+        Assert.All(auditoria, c => Assert.Equal(c.Usuario, c.Autor));
+    }
+
+    [Fact]
+    public async Task Remove_do_catalogo_o_gestor_ou_quem_gravou()
+    {
+        var a = await EmpresaAsync("Empresa A");
+        var ana = await DevAsync(a, "ana@a.com");
+        var bia = await DevAsync(a, "bia@a.com");
+        await Conhecimento(c => c.GravarRepositorioAsync(ana, new GravacaoDeRepositorioV1("https://github.com/acme/gbl-2000", "ERP"), default));
+
+        Assert.Equal(FalhaNaGestao.Proibida, (await Conhecimento(c => c.RemoverRepositorioAsync(bia, "https://github.com/acme/GBL-2000.git", default))).Falha);
+        Assert.NotNull((await Conhecimento(c => c.RemoverRepositorioAsync(ana, "https://github.com/acme/gbl-2000/", default))).Valor);
+        Assert.Equal(FalhaNaGestao.NaoEncontrado, (await Conhecimento(c => c.RemoverRepositorioAsync(ana, "https://github.com/acme/gbl-2000", default))).Falha);
     }
 
     [Theory]
