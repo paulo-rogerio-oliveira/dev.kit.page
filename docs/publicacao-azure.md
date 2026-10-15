@@ -183,9 +183,11 @@ partir daí o git.kit não publica mais o básico: o `catalogo.yml` dele só con
 
 ### Catálogo de repositórios e convenções da empresa (US #491)
 
-Rode também `api/scripts/sqlserver/Us491.sql` (idempotente): cria `RepositoriosDaEmpresa` e `ConvencoesDaEmpresa`.
+Rode também `api/scripts/sqlserver/Us491.sql` (idempotente): cria `RepositoriosDaEmpresa` e `ConvencoesDaEmpresa` —
+e, numa base que já rodou a primeira versão dele, acrescenta a coluna `UsuarioId` e troca o índice único.
 Sem elas, `/api/empresa/repositorios` e `/api/empresa/convencoes` respondem 500 — e o dev.kit, que trata a falha
-como "a empresa ainda não compartilha isto", segue com o que a máquina já sabe. Nenhuma configuração nova.
+como "a empresa ainda não compartilha isto", segue com o que a máquina já sabe. Nenhuma configuração nova; a página
+`/empresa/conhecimento` do site usa as mesmas tabelas.
 
 ## Web
 
