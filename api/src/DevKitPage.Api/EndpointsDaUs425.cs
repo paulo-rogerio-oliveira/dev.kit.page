@@ -258,13 +258,15 @@ public static class EndpointsDaUs425
     private static IResult CatalogoIndisponivel()
         => Results.Problem("O catálogo do dev.kit está indisponível no momento. Tente de novo em alguns minutos.", statusCode: StatusCodes.Status503ServiceUnavailable);
 
-    private static Task<IResult> ComEmpresa(ClaimsPrincipal quem, Func<EscopoDaEmpresa, Task<IResult>> acao)
+    /// <summary>A ação no escopo da empresa do token; sem empresa (o admin, ou o usuário avulso), 403.</summary>
+    internal static Task<IResult> ComEmpresa(ClaimsPrincipal quem, Func<EscopoDaEmpresa, Task<IResult>> acao)
         => Seguranca.EscopoDaEmpresa(quem) is { } escopo ? acao(escopo) : Task.FromResult(Results.Forbid());
 
     private static Task<IResult> ComGestor(ClaimsPrincipal quem, Func<EscopoDaEmpresa, Task<IResult>> acao)
         => Seguranca.EscopoDaEmpresa(quem) is { EhGestor: true } escopo ? acao(escopo) : Task.FromResult(Results.Forbid());
 
-    private static IResult Resultado<T>(ResultadoDaGestao<T> resultado) where T : class
+    /// <summary>O valor em 200, ou a falha no status dela.</summary>
+    internal static IResult Resultado<T>(ResultadoDaGestao<T> resultado) where T : class
         => resultado.Valor is { } valor ? Results.Ok(valor) : Falha(resultado);
 
     /// <summary>A falha no status HTTP: 404, 409, 403 ou 400, sempre com a mensagem.</summary>
