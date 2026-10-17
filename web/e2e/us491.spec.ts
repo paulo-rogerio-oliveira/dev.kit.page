@@ -1,23 +1,11 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
-import { garantirSenhaDefinitiva } from './admin';
+import { expect, test } from '@playwright/test';
+import { garantirSenhaDefinitiva, gestorDefinitivo } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
-
-/** O gestor da empresa com a senha definitiva (o convite traz a inicial, de troca obrigatória); devolve o token dele. */
-async function gestorDefinitivo(request: APIRequestContext, token: string, empresa: number, login: string) {
-  const convite = await request.post(`${API}/api/empresas/${empresa}/gestores`, { data: { login }, headers: { Authorization: `Bearer ${token}` } });
-  expect(convite.ok()).toBeTruthy();
-  const { senhaInicial } = (await convite.json()) as { senhaInicial: string };
-  const inicial = (await (await request.post(`${API}/api/auth/login`, { data: { login, senha: senhaInicial } })).json()) as { token: string };
-  const troca = await request.post(`${API}/api/auth/trocar-senha`, {
-    data: { senhaAtual: senhaInicial, novaSenha: NOVA_SENHA }, headers: { Authorization: `Bearer ${inicial.token}` },
-  });
-  expect(troca.ok()).toBeTruthy();
-  return ((await (await request.post(`${API}/api/auth/login`, { data: { login, senha: NOVA_SENHA } })).json()) as { token: string }).token;
-}
 
 /**
  * A US #491 no navegador, com as capturas da entrega: o que o dev.kit gravou na empresa (o catálogo de repositórios, as
- * convenções da empresa, do time e do usuário) auditado e editado pelo gestor em /empresa/conhecimento.
+ * convenções da empresa, do time e do usuário) auditado e editado pelo gestor em /empresa/conhecimento. Desde a US #556 as
+ * convenções gravadas pelo dev.kit antigo (/api/empresa/convencoes) aparecem no contexto (/contexto).
  */
 test('o gestor audita e edita o catálogo de repositórios e as convenções em seus níveis', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -62,8 +50,8 @@ test('o gestor audita e edita o catálogo de repositórios e as convenções em 
   await expect(page.getByText('API de vendas e pedidos (.NET 8)')).toBeVisible();
   await page.screenshot({ path: 'test-results/capturas/61-conhecimento-repositorio-editado.png', fullPage: true });
 
-  // 4. As convenções nos três níveis, com de quem são e o autor.
-  await page.getByRole('tab', { name: 'Convenções' }).click();
+  // 4. As convenções nos três níveis — gravadas pela rota antiga — aparecem como instruções do contexto.
+  await page.getByRole('link', { name: 'Contexto' }).click();
   await expect(page.getByText('vendas/{id}')).toBeVisible();
   await expect(page.getByText('bug/{id}')).toBeVisible();
   await page.screenshot({ path: 'test-results/capturas/62-conhecimento-convencoes.png', fullPage: true });

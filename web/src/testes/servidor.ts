@@ -1,10 +1,10 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
-  ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
-  RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
-  Vitrine,
+  CatalogoNomeado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GravacaoDeContexto, GrupoDeErroDetalhe, GrupoDeErroResumo,
+  ItemDaEmpresa, ItemDeContexto, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, ParticipanteDeEquipe, PedidoDeDemonstracao, QualidadeResposta,
+  QuantidadeResposta, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo,
+  VersaoDoDevKit, VisaoDoContexto, Vitrine,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -276,12 +276,60 @@ export const repositoriosDaEmpresa: RepositorioDaEmpresa[] = [
   { origem: 'https://github.com/acme/vendas-api', descricao: 'API de vendas (.NET 8)', autor: 'Ana Souza', atualizadoEm: '2026-10-14T10:00:00Z' },
 ];
 
-/** As convenções em seus níveis, como a auditoria as devolve (US #491). */
-export const convencoesDaEmpresa: ConvencaoDaEmpresa[] = [
-  { nivel: 'empresa', chave: 'branch.feature', valor: 'feature/{equipe}/{id}', time: '', usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-14T09:00:00Z' },
-  { nivel: 'time', chave: 'branch.feature', valor: 'vendas/{id}', time: 'vendas', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-14T09:30:00Z' },
-  { nivel: 'usuario', chave: 'branch.bug', valor: 'ana/bug-{id}', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-14T09:45:00Z' },
+// ----- US #556: o contexto do dev.kit -----
+
+/** Um item do contexto, com o que não importa ao teste preenchido. */
+const item = (parcial: Partial<ItemDeContexto> & Pick<ItemDeContexto, 'id' | 'nivel' | 'chave' | 'valor'>): ItemDeContexto => ({
+  equipe: '', usuario: '', origem: 'usuario', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:00:00Z', versao: 1, ...parcial,
+});
+
+export const contextoDaEmpresa = item({ id: 1, nivel: 'empresa', chave: 'contexto.stack', valor: '.NET 10 e React 19', autor: 'Gestor A' });
+export const contextoDeVendas = item({ id: 2, nivel: 'equipe', chave: 'branch.feature', valor: 'vendas/{id}', equipe: 'vendas', versao: 2 });
+export const contextoDoFinanceiro = item({ id: 5, nivel: 'equipe', chave: 'contexto.revisao', valor: 'Dois revisores no PR', equipe: 'financeiro', autor: 'Gestor A' });
+/** A instrução da Ana e a SUGESTÃO que um agente anotou sobre o mesmo tema. */
+export const instrucaoDaAna = item({ id: 3, nivel: 'usuario', chave: 'contexto.testes', valor: 'Prefiro testes pequenos', usuario: 'Ana Souza' });
+export const sugestaoDoAgente = item({ id: 4, nivel: 'usuario', chave: 'contexto.testes', valor: 'Rode só a suíte do projeto alterado', usuario: 'Ana Souza', origem: 'agente' });
+
+/** A visão do dev: o dele, o da equipe aprovada (vendas), o da empresa — e o pedido do financeiro aguardando. */
+export const visaoDoDev: VisaoDoContexto = {
+  papel: 'dev', itens: [contextoDaEmpresa, contextoDeVendas, instrucaoDaAna, sugestaoDoAgente], equipes: ['vendas'], equipesPendentes: ['financeiro'],
+  participantes: [], editaEmpresa: false,
+};
+
+export const participantes: ParticipanteDeEquipe[] = [
+  { usuarioId: 2, usuario: 'Ana Souza', equipe: 'financeiro', situacao: 'pendente', atualizadoEm: '2026-10-16T08:00:00Z' },
+  { usuarioId: 2, usuario: 'Ana Souza', equipe: 'vendas', situacao: 'aprovado', atualizadoEm: '2026-10-15T08:00:00Z' },
 ];
+
+/** A visão do gestor: a empresa (editável), todas as equipes e os pedidos — não o contexto pessoal da Ana. */
+export const visaoDoGestor: VisaoDoContexto = {
+  papel: 'gestor', itens: [contextoDaEmpresa, contextoDoFinanceiro, contextoDeVendas], equipes: ['financeiro', 'vendas'], equipesPendentes: [],
+  participantes, editaEmpresa: true,
+};
+
+/** A visão do admin sobre a Empresa A: tudo, inclusive o contexto pessoal e a sugestão do agente. */
+export const visaoDoAdmin: VisaoDoContexto = {
+  ...visaoDoGestor, papel: 'admin', itens: [contextoDaEmpresa, contextoDoFinanceiro, contextoDeVendas, instrucaoDaAna, sugestaoDoAgente],
+};
+
+/** O 409 do servidor de mentira: a edição de branch.feature feita sobre a versão 1, que já é a 2. */
+const conflito = (atual: ItemDeContexto) => HttpResponse.json(
+  { mensagem: `'${atual.chave}' foi alterado por outra pessoa depois da sua leitura (versão ${atual.versao}, a sua era 1).`, atual: { ...atual, valor: 'vendas/v2/{id}', autor: 'Bia' } },
+  { status: 409 },
+);
+
+/** A gravação no servidor de mentira: o segredo é 422 (sem ecoar o valor); a versão velha, 409; o resto volta como item. */
+async function gravarContexto(request: Request, caminho: string) {
+  const corpo = (await request.json()) as GravacaoDeContexto;
+  escritas.push({ metodo: 'PUT', caminho, corpo });
+  if (corpo.valor.includes('ghp_'))
+    return HttpResponse.json({ detail: 'O texto parece conter uma credencial (token, senha, connection string ou chave privada). Remova-a e grave de novo.' }, { status: 422 });
+  if (corpo.chave === 'branch.feature' && corpo.versaoEsperada === 1) return conflito(contextoDeVendas);
+  return HttpResponse.json(item({ id: 99, ...corpo, origem: 'usuario', versao: (corpo.versaoEsperada ?? 0) + 1 }));
+}
+
+/** O item excluído ou promovido (pelo id), de qualquer visão. */
+const peloId = (id: unknown) => visaoDoAdmin.itens.find((i) => String(i.id) === String(id)) ?? contextoDaEmpresa;
 
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
@@ -478,7 +526,7 @@ export const handlersPadrao = [
     escritas.push({ metodo: 'PUT', caminho: '/api/empresa/politica', corpo });
     return HttpResponse.json({ ...empresaDoGestor, loginObrigatorio: corpo.loginObrigatorio, loginObrigatorioEfetivo: corpo.loginObrigatorio ?? false });
   }),
-  // US #491: o catálogo de repositórios e as convenções da empresa.
+  // US #491: o catálogo de repositórios da empresa.
   http.get(`${API}/api/empresa/repositorios`, () => HttpResponse.json(repositoriosDaEmpresa)),
   http.post(`${API}/api/empresa/repositorios`, async ({ request }) => {
     const corpo = (await request.json()) as { origem: string; descricao: string };
@@ -490,11 +538,39 @@ export const handlersPadrao = [
     escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/repositorios?origem=${origem}`, corpo: null });
     return HttpResponse.json(repositoriosDaEmpresa.find((r) => r.origem === origem) ?? repositoriosDaEmpresa[0]);
   }),
-  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json(convencoesDaEmpresa)),
-  http.put(`${API}/api/empresa/convencoes`, async ({ request }) => {
-    const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string };
-    escritas.push({ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo });
-    return HttpResponse.json({ ...corpo, usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
+  // US #556: o contexto — a visão de cada papel (pelo token), gravar, excluir, promover e a participação nas equipes;
+  // e as mesmas rotas do admin sobre uma empresa (a 5 não tem contexto).
+  http.get(`${API}/api/contexto/visao`, ({ request }) =>
+    HttpResponse.json(request.headers.get('Authorization') === 'Bearer token-gestor' ? visaoDoGestor : visaoDoDev)),
+  http.put(`${API}/api/contexto`, ({ request }) => gravarContexto(request, '/api/contexto')),
+  http.delete(`${API}/api/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/contexto/${params.id}`, corpo: null });
+    return HttpResponse.json(peloId(params.id));
+  }),
+  http.post(`${API}/api/contexto/:id/promover`, ({ params }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/contexto/${params.id}/promover`, corpo: null });
+    return HttpResponse.json({ ...peloId(params.id), origem: 'usuario' });
+  }),
+  http.put(`${API}/api/contexto/equipes/:equipe/participantes`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { usuarioId: number; situacao: string };
+    escritas.push({ metodo: 'PUT', caminho: `/api/contexto/equipes/${params.equipe}/participantes`, corpo });
+    return HttpResponse.json({ ...participantes[0], equipe: String(params.equipe), situacao: corpo.situacao });
+  }),
+  http.get(`${API}/api/admin/empresas/:empresa/contexto`, ({ params }) =>
+    HttpResponse.json(params.empresa === '4' ? visaoDoAdmin : { ...visaoDoAdmin, itens: [], equipes: [], participantes: [] })),
+  http.put(`${API}/api/admin/empresas/:empresa/contexto`, ({ params, request }) => gravarContexto(request, `/api/admin/empresas/${params.empresa}/contexto`)),
+  http.delete(`${API}/api/admin/empresas/:empresa/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/admin/empresas/${params.empresa}/contexto/${params.id}`, corpo: null });
+    return HttpResponse.json(peloId(params.id));
+  }),
+  http.post(`${API}/api/admin/empresas/:empresa/contexto/:id/promover`, ({ params }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/admin/empresas/${params.empresa}/contexto/${params.id}/promover`, corpo: null });
+    return HttpResponse.json({ ...peloId(params.id), origem: 'usuario' });
+  }),
+  http.put(`${API}/api/admin/empresas/:empresa/contexto/equipes/:equipe/participantes`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { usuarioId: number; situacao: string };
+    escritas.push({ metodo: 'PUT', caminho: `/api/admin/empresas/${params.empresa}/contexto/equipes/${params.equipe}/participantes`, corpo });
+    return HttpResponse.json({ ...participantes[0], equipe: String(params.equipe), situacao: corpo.situacao });
   }),
   http.post(`${API}/api/pagamentos/checkout`, async ({ request }) => {
     const corpo = (await request.json()) as { plano: string };

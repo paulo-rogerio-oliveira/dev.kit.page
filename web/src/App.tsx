@@ -16,6 +16,8 @@ import { CompraConcluida } from './paginas/CompraConcluida';
 import { EmpresaUsuarios } from './paginas/EmpresaUsuarios';
 import { EmpresaCatalogo } from './paginas/EmpresaCatalogo';
 import { EmpresaConhecimento } from './paginas/EmpresaConhecimento';
+import { MeuContexto } from './paginas/MeuContexto';
+import { AdminContexto } from './paginas/AdminContexto';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
@@ -65,6 +67,9 @@ export function App() {
       <Route path="/empresa/usuarios" element={<RotaProtegida soGestor><EmpresaUsuarios /></RotaProtegida>} />
       <Route path="/empresa/catalogo" element={<RotaProtegida soGestor><EmpresaCatalogo /></RotaProtegida>} />
       <Route path="/empresa/conhecimento" element={<RotaProtegida daEmpresa><EmpresaConhecimento /></RotaProtegida>} />
+      {/* O contexto do dev.kit (US #556): o de quem é da empresa (o dev e o gestor) e o de qualquer empresa (o admin). */}
+      <Route path="/contexto" element={<RotaProtegida daEmpresa><MeuContexto /></RotaProtegida>} />
+      <Route path="/admin/contexto" element={<RotaProtegida soAdmin><AdminContexto /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

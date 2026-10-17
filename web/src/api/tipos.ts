@@ -431,22 +431,71 @@ export interface RepositorioDaEmpresa {
   atualizadoEm: string;
 }
 
-/** O nível de uma convenção (US #491): a precedência no dev.kit é usuário > time > empresa. */
-export type NivelDeConvencao = 'empresa' | 'time' | 'usuario';
+/** O nível de um item de contexto (US #556): a precedência no dev.kit é usuário > equipe > empresa. */
+export type NivelDeContexto = 'usuario' | 'equipe' | 'empresa';
 
-/** Uma convenção na auditoria do site (US #491), hoje o modelo do nome do branch da task. */
-export interface ConvencaoDaEmpresa {
-  nivel: NivelDeConvencao;
-  /** A convenção, uma por tipo de branch (branch.feature, branch.bug, branch.hotfix, branch.<tipo do item>). */
+/** Quem escreveu o item: o usuário (INSTRUÇÃO, obrigatória) ou um agente ao fim de uma execução (SUGESTÃO, opcional). */
+export type OrigemDoContexto = 'usuario' | 'agente';
+
+/** Um item do contexto do dev.kit (US #556, no lugar das convenções da US #491). */
+export interface ItemDeContexto {
+  id: number;
+  nivel: NivelDeContexto;
+  /** O tema: contexto.testes, branch.hotfix, nota.<slug> (a nota do agente). */
   chave: string;
   valor: string;
-  /** O time da convenção de nível time; vazio nos outros. */
-  time: string;
-  /** De quem é a convenção de nível usuário; vazio nos outros. */
+  /** A equipe do item de nível equipe; vazio nos outros. */
+  equipe: string;
+  /** De quem é o item de nível usuário; vazio nos outros. */
   usuario: string;
-  /** Quem a gravou por último. */
+  origem: OrigemDoContexto;
+  /** Quem o gravou por último. */
   autor: string;
-  atualizadoEm: string | null;
+  atualizadoEm: string;
+  /** Soma 1 a cada gravação: editar sobre a versão velha é conflito (409). */
+  versao: number;
+}
+
+/** O que o site manda para gravar um item. */
+export interface GravacaoDeContexto {
+  nivel: NivelDeContexto;
+  chave: string;
+  valor: string;
+  equipe: string;
+  /** A versão sobre a qual a edição foi feita; ausente no item novo. */
+  versaoEsperada?: number;
+  /** Só o admin do board: de quem é o item de nível usuário. */
+  usuarioId?: number;
+}
+
+/** Situação de quem participa de uma equipe: o dev pede (pendente), o gestor aprova. */
+export type SituacaoDeParticipacao = 'pendente' | 'aprovado';
+
+export interface ParticipanteDeEquipe {
+  usuarioId: number;
+  usuario: string;
+  equipe: string;
+  situacao: SituacaoDeParticipacao;
+  atualizadoEm: string;
+}
+
+/** O que a landing do contexto mostra ao papel: o dev, o dele + equipes + empresa; o gestor, + todas as equipes; o admin, tudo. */
+export interface VisaoDoContexto {
+  papel: Papel;
+  itens: ItemDeContexto[];
+  /** As equipes que o perfil vê (as aprovadas do dev; todas para o gestor e o admin). */
+  equipes: string[];
+  /** As equipes que o dev pediu e o gestor ainda não aprovou. */
+  equipesPendentes: string[];
+  /** Os pedidos e as participações — só para o gestor e o admin. */
+  participantes: ParticipanteDeEquipe[];
+  editaEmpresa: boolean;
+}
+
+/** O corpo do 409: a edição foi sobre uma versão velha; o item atual vem junto (nulo, se foi excluído). */
+export interface ConflitoDeContexto {
+  mensagem: string;
+  atual: ItemDeContexto | null;
 }
 
 /** A resposta da adesão e do pedido de link: a mensagem (o link vai por e-mail). */

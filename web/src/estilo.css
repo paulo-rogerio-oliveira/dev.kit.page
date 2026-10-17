@@ -674,3 +674,11 @@ input, select {
 .problemas ul { margin: 0; padding-left: 20px; line-height: 1.6; }
 .problemas p { margin: 8px 0 0; font-size: 0.85rem; color: var(--texto-2); }
 .publicacao .acoes { margin-top: 12px; }
+
+/* O contexto do dev.kit (US #556): o texto em várias linhas, o contador do teto, o conflito (409) para reaplicar e o seletor de empresa do admin. */
+.texto-do-contexto { white-space: pre-wrap; min-width: 240px; max-width: 520px; }
+.contador-do-contexto { margin-top: -8px; text-align: right; }
+.conflito-do-contexto { margin: 0; padding: 12px 18px; background: var(--primaria-tinta); border-bottom: 1px solid var(--grade); }
+.conflito-do-contexto p { margin: 0 0 8px; }
+.seletor-de-empresa { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--texto-2); }
+.com-lateral + .com-lateral { margin-top: 24px; }

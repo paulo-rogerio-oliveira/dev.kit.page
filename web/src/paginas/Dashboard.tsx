@@ -124,7 +124,9 @@ export function Dashboard() {
           {ehAdmin && <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>}
           {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
           {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
-          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
+          {!ehAdmin && <Link className="botao botao-fantasma" to="/contexto">Contexto</Link>}
+          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios</Link>}
+          {ehAdmin && <Link className="botao botao-fantasma" to="/admin/contexto">Contexto</Link>}
           <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>
           <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
         </nav>

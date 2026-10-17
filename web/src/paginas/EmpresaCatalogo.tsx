@@ -51,7 +51,8 @@ export function EmpresaCatalogo() {
       <Topo secao="catálogo da empresa">
         <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
         <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>
-        <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>
+        <Link className="botao botao-fantasma" to="/contexto">Contexto</Link>
+        <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios</Link>
       </Topo>
       <main className="painel">
         <section aria-labelledby="titulo-catalogo-da-empresa">

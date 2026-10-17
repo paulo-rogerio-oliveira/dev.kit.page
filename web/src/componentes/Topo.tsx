@@ -30,7 +30,10 @@ export function Topo({ secao, children }: { secao: string; children?: ReactNode 
 
 const classeDoLink = ({ isActive }: { isActive: boolean }) => `botao botao-fantasma${isActive ? ' link-ativo' : ''}`;
 
-/** Os links do admin entre as páginas dele (US #461): Uso (o dashboard), Empresas, Usuários e Catálogo — o atual destacado. */
+/**
+ * Os links do admin entre as páginas dele (US #461): Uso (o dashboard), Empresas, Usuários, Catálogo e, desde a US #556,
+ * o Contexto das empresas — o atual destacado.
+ */
 export function MenuDoAdmin() {
   return (
     <>
@@ -38,6 +41,7 @@ export function MenuDoAdmin() {
       <NavLink className={classeDoLink} to="/empresas">Empresas</NavLink>
       <NavLink className={classeDoLink} to="/usuarios">Usuários</NavLink>
       <NavLink className={classeDoLink} to="/catalogo">Catálogo</NavLink>
+      <NavLink className={classeDoLink} to="/admin/contexto">Contexto</NavLink>
     </>
   );
 }

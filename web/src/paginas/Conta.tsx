@@ -29,7 +29,8 @@ export function Conta() {
       <Topo secao="conta">
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
-        {daEmpresa && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
+        {daEmpresa && <Link className="botao botao-fantasma" to="/contexto">Contexto</Link>}
+        {daEmpresa && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios</Link>}
         <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>
       </Topo>
       <main className="painel conta">

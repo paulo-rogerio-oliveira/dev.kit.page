@@ -1,10 +1,10 @@
 import type {
-  ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor,
+  ArquivoBaixado, CatalogoDisponivel, CatalogoNomeado, CatalogoNovo, CheckoutCriado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, GravacaoDeContexto, ItemDeContexto,
   EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, Harness, ImportacaoDoBasico,
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
-  NivelDeConvencao, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
+  ParticipanteDeEquipe, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
   RoiResposta, UsuarioComSenha,
-  UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
+  UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, VisaoDoContexto, Vitrine,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -103,6 +103,11 @@ function consulta(filtro: Filtro, extra: Record<string, string> = {}): string {
 /** Os parâmetros de um recorte, sem os vazios: o que não foi escolhido não vai na URL. */
 function preenchidos(valores: Record<string, string | null | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(valores).filter((par): par is [string, string] => !!par[1]?.trim()));
+}
+
+/** A raiz das rotas do contexto (US #556): a do token, ou a do admin sobre uma empresa. */
+function raizDoContexto(empresaDoAdmin?: number): string {
+  return empresaDoAdmin === undefined ? '/api/contexto' : `/api/admin/empresas/${empresaDoAdmin}/contexto`;
 }
 
 export const api = {
@@ -271,7 +276,7 @@ export const api = {
   politicaDaEmpresa: (token: string, loginObrigatorio: boolean | null) =>
     chamar<EmpresaDoGestor>('/api/empresa/politica', { metodo: 'PUT', corpo: { loginObrigatorio }, token }),
 
-  // O que a empresa compartilha com o dev.kit (US #491): o catálogo de repositórios e as convenções — do gestor e do dev.
+  // O que a empresa compartilha com o dev.kit (US #491): o catálogo de repositórios — do gestor e do dev.
   repositoriosDaEmpresa: (token: string) => chamar<RepositorioDaEmpresa[]>('/api/empresa/repositorios', { token }),
 
   gravarRepositorio: (token: string, origem: string, descricao: string) =>
@@ -280,11 +285,28 @@ export const api = {
   removerRepositorio: (token: string, origem: string) =>
     chamar<RepositorioDaEmpresa>(`/api/empresa/repositorios?origem=${encodeURIComponent(origem)}`, { metodo: 'DELETE', token }),
 
-  convencoesDaEmpresa: (token: string) => chamar<ConvencaoDaEmpresa[]>('/api/empresa/convencoes/todas', { token }),
+  // O contexto do dev.kit (US #556). Sem `empresaDoAdmin`, as rotas do token (o dev e o gestor, na empresa deles); com
+  // ela, as do admin do board sobre a empresa escolhida — o mesmo serviço, e a permissão é sempre da API.
+  visaoDoContexto: (token: string, empresaDoAdmin?: number) =>
+    chamar<VisaoDoContexto>(empresaDoAdmin === undefined ? '/api/contexto/visao' : raizDoContexto(empresaDoAdmin), { token }),
 
-  /** Grava a convenção no nível; valor vazio apaga. */
-  gravarConvencao: (token: string, nivel: NivelDeConvencao, chave: string, valor: string, time: string) =>
-    chamar<ConvencaoDaEmpresa>('/api/empresa/convencoes', { metodo: 'PUT', corpo: { nivel, chave, valor, time }, token }),
+  /** Grava o item; o 409 (editado por outra pessoa) traz o ConflitoDeContexto no ErroDaApi.corpo. */
+  gravarContexto: (token: string, gravacao: GravacaoDeContexto, empresaDoAdmin?: number) =>
+    chamar<ItemDeContexto>(raizDoContexto(empresaDoAdmin), { metodo: 'PUT', corpo: gravacao, token }),
+
+  /** Exclui o item — descartar a sugestão de um agente é isto. */
+  excluirContexto: (token: string, id: number, empresaDoAdmin?: number) =>
+    chamar<ItemDeContexto>(`${raizDoContexto(empresaDoAdmin)}/${id}`, { metodo: 'DELETE', token }),
+
+  /** A sugestão do agente vira a instrução da mesma chave. */
+  promoverContexto: (token: string, id: number, empresaDoAdmin?: number) =>
+    chamar<ItemDeContexto>(`${raizDoContexto(empresaDoAdmin)}/${id}/promover`, { metodo: 'POST', token }),
+
+  /** O gestor (ou o admin) aprova ou recusa a participação de um usuário numa equipe. */
+  decidirParticipacao: (token: string, equipe: string, usuarioId: number, situacao: 'aprovado' | 'recusado', empresaDoAdmin?: number) =>
+    chamar<ParticipanteDeEquipe>(`${raizDoContexto(empresaDoAdmin)}/equipes/${encodeURIComponent(equipe)}/participantes`, {
+      metodo: 'PUT', corpo: { usuarioId, situacao }, token,
+    }),
 
   // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
   checkout: (email: string, nome: string, plano: string) =>
