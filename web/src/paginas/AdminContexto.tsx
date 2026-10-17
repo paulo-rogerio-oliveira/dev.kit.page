@@ -61,12 +61,13 @@ export function AdminContexto() {
         titulo="Contexto das empresas"
         subtitulo="O admin do board vê e altera o contexto de qualquer empresa: o dela, o das equipes, o de cada usuário e as sugestões dos agentes."
         acao={(
-          <label className="seletor-de-empresa">
-            Empresa
-            <select value={empresaId ?? ''} onChange={(e) => setEmpresaId(Number(e.target.value))} disabled={!empresas?.length}>
+          // O rótulo fora do select: dentro dele, o nome acessível levaria junto o texto da empresa escolhida.
+          <div className="seletor-de-empresa">
+            <label htmlFor="empresa-do-contexto">Empresa</label>
+            <select id="empresa-do-contexto" value={empresaId ?? ''} onChange={(e) => setEmpresaId(Number(e.target.value))} disabled={!empresas?.length}>
               {(empresas ?? []).map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
             </select>
-          </label>
+          </div>
         )}
       >
         {erro && <p className="erro" role="alert">{erro}</p>}

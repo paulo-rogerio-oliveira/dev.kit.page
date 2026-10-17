@@ -166,7 +166,7 @@ adaptador, e a aba Convenções virou a página `/contexto`.
    `AgentFixedRules.AnotarContexto`); `ContextoToolTests` e `AgentFixedRulesTests`.
 7. **A landing por perfil** — `/contexto` (o dev: o dele, o das equipes e o da empresa só leitura; o gestor: a empresa
    e os participantes) e `/admin/contexto` (o admin: tudo, de qualquer empresa); `MeuContexto.test.tsx`,
-   `AdminContexto.test.tsx`, `ParticipantesDaEquipe.test.tsx` e o e2e `contexto.spec.ts` (capturas
+   `AdminContexto.test.tsx`, `ParticipantesDaEquipe.test.tsx` e o e2e `us556.spec.ts` (capturas
    `test-results/capturas/70-73-*.png`).
 8. **O dev.kit antigo continua** — `/api/empresa/convencoes` como adaptador (`ConhecimentoApiTests`) e `devcli
    convencoes` como alias (no git.kit, `ConvencoesToolTests`).

@@ -96,7 +96,7 @@ test('o contexto de usuário, equipe e empresa: instrução × sugestão, por pe
   // 8. O admin do board escolhe a empresa, vê tudo — inclusive o contexto pessoal da Ana — e altera.
   await entrar(page, 'admin');
   await page.goto('/admin/contexto');
-  await page.getByLabel('Empresa').selectOption({ label: empresa.nome });
+  await page.getByLabel('Empresa', { exact: true }).selectOption({ label: empresa.nome });
   await expect(page.getByText('Prefiro testes pequenos, um por regra.').or(page.getByText('Rode só a suíte do projeto alterado'))).toBeVisible();
   const doAdminForm = page.getByRole('form', { name: 'Gravar no contexto' });
   await doAdminForm.getByLabel('Chave').fill('contexto.seguranca');
