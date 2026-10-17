@@ -10,9 +10,10 @@ namespace DevKitPage.Api;
 /// para resolver o repositório de um pedido) e as CONVENÇÕES da empresa e dos times (hoje, o nome do branch da task).
 /// <para>
 /// Ficam sob <c>/api/empresa</c>, no escopo da empresa do token, mas abertas ao DEV — e não só ao gestor, como as
-/// outras rotas dali: consultar e gravar o catálogo é de quem trabalha. A convenção da EMPRESA é do gestor; a do
-/// TIME, de qualquer um da empresa; a do USUÁRIO, dele mesmo (o serviço decide). A tela do site audita e edita tudo
-/// isso (<c>/convencoes/todas</c> traz o autor e a data). O admin, sem empresa no token, recebe 403.
+/// outras rotas dali: consultar e gravar o catálogo é de quem trabalha. Desde a US #556 as convenções são o CONTEXTO
+/// (<see cref="EndpointsDoContexto"/>), e as rotas de convenção daqui são o adaptador dele para o dev.kit antigo — com as
+/// permissões do contexto: a da EMPRESA é do gestor; a da EQUIPE (o time), de quem participa dela aprovado; a do USUÁRIO,
+/// dele mesmo. O admin, sem empresa no token, recebe 403.
 /// </para>
 /// </summary>
 public static class EndpointsDaUs491
@@ -39,20 +40,45 @@ public static class EndpointsDaUs491
                 ? Results.Problem("Informe a origem do repositório a remover (?origem=).", statusCode: StatusCodes.Status400BadRequest)
                 : EndpointsDaUs425.Resultado(await conhecimento.RemoverRepositorioAsync(escopo, origem, ct))));
 
-        grupo.MapGet("/convencoes", (string? time, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
-            => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.ConvencoesAsync(escopo, time, ct))));
+        // OBSOLETAS desde a US #556: as convenções viraram o contexto (EndpointsDoContexto). Estas três rotas ficam como
+        // adaptador fino do MESMO serviço, para o dev.kit já instalado: só as instruções, time = equipe.
+        grupo.MapGet("/convencoes", (string? time, ClaimsPrincipal quem, IContextoDaEmpresa contexto, CancellationToken ct)
+            => EndpointsDoContexto.ComContexto(quem, async escopo
+                => Results.Ok(AdaptadorDeConvencoes.Convencoes((await contexto.ComporAsync(escopo, time, ct)).Itens))));
 
-        // A AUDITORIA do site: todas as que quem consulta pode ver, com o autor e a data.
-        grupo.MapGet("/convencoes/todas", (ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
-            => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.AuditoriaDeConvencoesAsync(escopo, ct))));
+        grupo.MapGet("/convencoes/todas", (ClaimsPrincipal quem, IContextoDaEmpresa contexto, CancellationToken ct)
+            => EndpointsDoContexto.ComContexto(quem, async escopo
+                => Results.Ok(AdaptadorDeConvencoes.Convencoes((await contexto.VisaoAsync(escopo, ct))!.Itens))));
 
-        grupo.MapPut("/convencoes", (ConvencaoV1? convencao, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
-            => EndpointsDaUs425.ComEmpresa(quem, async escopo =>
+        grupo.MapPut("/convencoes", (ConvencaoV1? convencao, ClaimsPrincipal quem, IContextoDaEmpresa contexto, CancellationToken ct)
+            => EndpointsDoContexto.ComContexto(quem, async escopo =>
             {
-                var problema = RegrasDoConhecimentoDaEmpresa.ValidarConvencao(convencao);
-                return problema.Length > 0
-                    ? Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest)
-                    : EndpointsDaUs425.Resultado(await conhecimento.GravarConvencaoAsync(escopo, convencao!, ct));
+                if (convencao is null)
+                    return Results.Problem("Informe a convenção.", statusCode: StatusCodes.Status400BadRequest);
+                var gravacao = AdaptadorDeConvencoes.ParaGravacao(convencao);
+                if (!string.IsNullOrWhiteSpace(convencao.Valor))
+                {
+                    var gravada = await EndpointsDoContexto.GravarAsync(contexto, escopo, gravacao, ct);
+                    return gravada is IValueHttpResult { Value: ContextoV1 item } ? Results.Ok(AdaptadorDeConvencoes.ParaConvencao(item)) : gravada;
+                }
+
+                // Vazio APAGA a convenção do nível (a regra da US #491): volta a valer a de baixo. A visão só traz o item de
+                // nível usuário do próprio usuário, então o alvo é sempre o dele.
+                var problema = RegrasDoContexto.Validar(gravacao with { Valor = "-" });
+                if (problema.Length > 0)
+                    return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
+                var equipe = gravacao.Nivel == NiveisDeContexto.Equipe ? RegrasDoContexto.NormalizarEquipe(gravacao.Equipe) : string.Empty;
+                var chave = gravacao.Chave!.Trim().ToLowerInvariant();
+                var alvo = (await contexto.VisaoAsync(escopo, ct))!.Itens.FirstOrDefault(i => i.Nivel == gravacao.Nivel && i.Equipe == equipe
+                    && i.Chave == chave && i.Origem == OrigensDeContexto.Usuario);
+                if (alvo is not null)
+                {
+                    var excluida = EndpointsDoContexto.Resultado(await contexto.ExcluirAsync(escopo, alvo.Id, ct));
+                    if (excluida is not IValueHttpResult { Value: ContextoV1 })
+                        return excluida;
+                }
+
+                return Results.Ok(new ConvencaoV1(convencao.Nivel!.Trim().ToLowerInvariant(), chave, string.Empty, equipe));
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
     }
 }

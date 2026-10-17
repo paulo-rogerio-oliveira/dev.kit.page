@@ -1,3 +1,4 @@
+using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,7 +36,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<VersaoDoCatalogo> VersoesDoCatalogo => Set<VersaoDoCatalogo>();
     public DbSet<PacoteDoCatalogo> PacotesDoCatalogo => Set<PacoteDoCatalogo>();
     public DbSet<RepositorioDaEmpresa> RepositoriosDaEmpresa => Set<RepositorioDaEmpresa>();
-    public DbSet<ConvencaoDaEmpresa> ConvencoesDaEmpresa => Set<ConvencaoDaEmpresa>();
+    public DbSet<ItemDeContexto> Contextos => Set<ItemDeContexto>();
+    public DbSet<ParticipanteDeEquipe> ParticipantesDeEquipe => Set<ParticipanteDeEquipe>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -100,8 +102,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // O catálogo de repositórios e as convenções da empresa (US #491). No Azure SQL as tabelas vêm de
-        // api/scripts/sqlserver/Us491.sql.
+        // O catálogo de repositórios da empresa (US #491). No Azure SQL a tabela vem de api/scripts/sqlserver/Us491.sql.
         modelBuilder.Entity<RepositorioDaEmpresa>(e =>
         {
             e.ToTable("RepositoriosDaEmpresa");
@@ -113,17 +114,34 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(r => r.Autor).WithMany().HasForeignKey(r => r.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<ConvencaoDaEmpresa>(e =>
+        // O contexto (US #556): a tabela das convenções da US #491 renomeada e estendida, sem perda de dados. No Azure SQL
+        // ela vem de api/scripts/sqlserver/ContextoNoLugarDasConvencoes.sql.
+        modelBuilder.Entity<ItemDeContexto>(e =>
         {
-            e.ToTable("ConvencoesDaEmpresa");
-            e.Property(c => c.Nivel).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoNivel);
-            e.Property(c => c.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
-            e.Property(c => c.Chave).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaChave);
-            e.Property(c => c.Valor).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoValor);
-            // O UsuarioId é o dono da convenção de nível usuário e vale 0 nos outros níveis: sem FK, de propósito.
-            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave }).IsUnique();
+            e.ToTable("Contextos");
+            e.Property(c => c.Nivel).HasMaxLength(LimitesDoContexto.TamanhoMaximoDoNivel);
+            e.Property(c => c.Equipe).HasMaxLength(LimitesDoContexto.TamanhoMaximoDaEquipe);
+            e.Property(c => c.Chave).HasMaxLength(LimitesDoContexto.TamanhoMaximoDaChave);
+            e.Property(c => c.Valor).HasMaxLength(LimitesDoContexto.TamanhoMaximoDoValor);
+            e.Property(c => c.Origem).HasMaxLength(LimitesDoContexto.TamanhoMaximoDaOrigem);
+            // A versão é o token de concorrência: duas edições sobre a mesma versão, a segunda é conflito.
+            e.Property(c => c.Versao).IsConcurrencyToken();
+            // O UsuarioId é o dono do item de nível usuário e vale 0 nos outros níveis: sem FK, de propósito. A origem
+            // está no índice: a instrução e a sugestão do mesmo tema coexistem.
+            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Equipe, c.UsuarioId, c.Chave, c.Origem }).IsUnique();
             e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Autor).WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ParticipanteDeEquipe>(e =>
+        {
+            e.ToTable("ParticipantesDeEquipe");
+            e.Property(p => p.Equipe).HasMaxLength(LimitesDoContexto.TamanhoMaximoDaEquipe);
+            e.Property(p => p.Situacao).HasMaxLength(LimitesDoContexto.TamanhoMaximoDaOrigem);
+            e.HasIndex(p => new { p.EmpresaId, p.UsuarioId, p.Equipe }).IsUnique();
+            e.HasIndex(p => new { p.EmpresaId, p.Equipe });
+            e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Usuario).WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.

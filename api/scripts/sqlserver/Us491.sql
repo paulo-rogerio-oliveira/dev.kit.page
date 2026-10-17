@@ -32,7 +32,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RepositoriosDaEmpresa
     CREATE INDEX [IX_RepositoriosDaEmpresa_AutorId] ON [dbo].[RepositoriosDaEmpresa] ([AutorId]);
 GO
 
-IF OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]', N'U') IS NULL
+-- Desde a US #556 a tabela das convenções é a Contextos (ContextoNoLugarDasConvencoes.sql a renomeia): rodar este script
+-- de novo depois daquele não recria a tabela antiga.
+IF OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]', N'U') IS NULL AND OBJECT_ID(N'[dbo].[Contextos]', N'U') IS NULL
 BEGIN
     CREATE TABLE [dbo].[ConvencoesDaEmpresa] (
         [Id] bigint NOT NULL IDENTITY,
@@ -53,7 +55,7 @@ GO
 
 -- A convenção do USUÁRIO (migration Us491ConvencaoDoUsuario): numa base que rodou a primeira versão deste script, a
 -- tabela já existe sem a coluna — ela entra com 0 (as da empresa e dos times) e o índice único passa a incluí-la.
-IF COL_LENGTH(N'[dbo].[ConvencoesDaEmpresa]', N'UsuarioId') IS NULL
+IF OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]', N'U') IS NOT NULL AND COL_LENGTH(N'[dbo].[ConvencoesDaEmpresa]', N'UsuarioId') IS NULL
     ALTER TABLE [dbo].[ConvencoesDaEmpresa] ADD [UsuarioId] int NOT NULL CONSTRAINT [DF_ConvencoesDaEmpresa_UsuarioId] DEFAULT 0;
 GO
 
@@ -61,10 +63,12 @@ IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ConvencoesDaEmpresa_Empre
     DROP INDEX [IX_ConvencoesDaEmpresa_EmpresaId_Nivel_Time_Chave] ON [dbo].[ConvencoesDaEmpresa];
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ConvencoesDaEmpresa_EmpresaId_Nivel_Time_UsuarioId_Chave' AND object_id = OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]'))
+IF OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ConvencoesDaEmpresa_EmpresaId_Nivel_Time_UsuarioId_Chave' AND object_id = OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]'))
     CREATE UNIQUE INDEX [IX_ConvencoesDaEmpresa_EmpresaId_Nivel_Time_UsuarioId_Chave] ON [dbo].[ConvencoesDaEmpresa] ([EmpresaId], [Nivel], [Time], [UsuarioId], [Chave]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ConvencoesDaEmpresa_AutorId' AND object_id = OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]'))
+IF OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ConvencoesDaEmpresa_AutorId' AND object_id = OBJECT_ID(N'[dbo].[ConvencoesDaEmpresa]'))
     CREATE INDEX [IX_ConvencoesDaEmpresa_AutorId] ON [dbo].[ConvencoesDaEmpresa] ([AutorId]);
 GO

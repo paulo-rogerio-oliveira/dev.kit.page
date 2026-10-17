@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace DevKitPage.Api.Tests;
 
@@ -72,9 +73,13 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <summary>Os e-mails que a API "enviou" (US #425): o falso guarda as mensagens, e o teste lê o link.</summary>
     public EmailsDeTeste Emails { get; } = new();
 
+    /// <summary>Tudo o que a API escreveu no log (US #556): o teste confere que uma credencial recusada não foi parar nele.</summary>
+    public LogsDeTeste Logs { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_ambiente);
+        builder.ConfigureLogging(l => l.AddProvider(Logs));
         // As variáveis de ambiente da US #405, como chegam no Azure — vazias quando o teste não as quer
         // (uma REPO_KEY na máquina de quem roda o teste não muda o resultado).
         builder.UseSetting("REPO_KEY", _repoKey ?? string.Empty);
@@ -208,6 +213,20 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         var resposta = (await login.Content.ReadFromJsonAsync<LoginResponse>())!;
         cliente.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", resposta.Token);
         return (cliente, resposta);
+    }
+
+    /// <summary>
+    /// A participação do dev na equipe (US #556), como acontece de verdade: o dev.kit dele sincroniza declarando a equipe
+    /// (vira um pedido pendente) e o gestor aprova o pedido que vê na visão dele. Devolve o id do dev.
+    /// </summary>
+    public static async Task<int> AprovarNaEquipeAsync(HttpClient gestor, HttpClient dev, string email, string equipe)
+    {
+        (await dev.GetAsync($"/api/contexto?equipe={Uri.EscapeDataString(equipe)}")).EnsureSuccessStatusCode();
+        var visao = (await gestor.GetFromJsonAsync<VisaoDoContextoV1>("/api/contexto/visao"))!;
+        var pedido = visao.Participantes.Single(p => p.Usuario == $"Nome de {email}" && p.Equipe == equipe.Trim().ToLowerInvariant());
+        (await gestor.PutAsJsonAsync($"/api/contexto/equipes/{Uri.EscapeDataString(equipe)}/participantes",
+            new DecisaoDeParticipacaoV1(pedido.UsuarioId, SituacoesDeParticipacao.Aprovado))).EnsureSuccessStatusCode();
+        return pedido.UsuarioId;
     }
 
     protected override void Dispose(bool disposing)

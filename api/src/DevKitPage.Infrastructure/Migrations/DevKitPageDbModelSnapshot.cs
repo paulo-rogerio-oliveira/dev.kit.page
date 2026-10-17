@@ -176,54 +176,6 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("Catalogos", (string)null);
                 });
 
-            modelBuilder.Entity("DevKitPage.Core.ConvencaoDaEmpresa", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("AtualizadoEmUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("AutorId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Chave")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("EmpresaId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Nivel")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Time")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("UsuarioId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Valor")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AutorId");
-
-                    b.HasIndex("EmpresaId", "Nivel", "Time", "UsuarioId", "Chave")
-                        .IsUnique();
-
-                    b.ToTable("ConvencoesDaEmpresa", (string)null);
-                });
-
             modelBuilder.Entity("DevKitPage.Core.Empresa", b =>
                 {
                     b.Property<int>("Id")
@@ -466,6 +418,63 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ItensDeCatalogo", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ItemDeContexto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Chave")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Equipe")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Valor")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Versao")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutorId");
+
+                    b.HasIndex("EmpresaId", "Nivel", "Equipe", "UsuarioId", "Chave", "Origem")
+                        .IsUnique();
+
+                    b.ToTable("Contextos", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ItemDoCatalogoEditavel", b =>
@@ -715,6 +724,43 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasKey("VersaoId");
 
                     b.ToTable("PacotesDoCatalogo", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ParticipanteDeEquipe", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Equipe")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Situacao")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("EmpresaId", "Equipe");
+
+                    b.HasIndex("EmpresaId", "UsuarioId", "Equipe")
+                        .IsUnique();
+
+                    b.ToTable("ParticipantesDeEquipe", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.PedidoDeDemonstracao", b =>
@@ -1141,7 +1187,18 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Maquina");
                 });
 
-            modelBuilder.Entity("DevKitPage.Core.ConvencaoDaEmpresa", b =>
+            modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Maquina", "Maquina")
+                        .WithMany()
+                        .HasForeignKey("MaquinaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Maquina");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ItemDeCatalogo", b =>
                 {
                     b.HasOne("DevKitPage.Core.Usuario", "Autor")
                         .WithMany()
@@ -1160,18 +1217,7 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
-            modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>
-                {
-                    b.HasOne("DevKitPage.Core.Maquina", "Maquina")
-                        .WithMany()
-                        .HasForeignKey("MaquinaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Maquina");
-                });
-
-            modelBuilder.Entity("DevKitPage.Core.ItemDeCatalogo", b =>
+            modelBuilder.Entity("DevKitPage.Core.ItemDeContexto", b =>
                 {
                     b.HasOne("DevKitPage.Core.Usuario", "Autor")
                         .WithMany()
@@ -1259,6 +1305,25 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasForeignKey("DevKitPage.Core.PacoteDoCatalogo", "VersaoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ParticipanteDeEquipe", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Empresa");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.RepositorioDaEmpresa", b =>

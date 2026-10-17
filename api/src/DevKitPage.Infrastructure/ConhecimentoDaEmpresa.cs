@@ -5,10 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace DevKitPage.Infrastructure;
 
 /// <summary>
-/// O catálogo de repositórios e as convenções da empresa (US #491). O isolamento é o <see cref="EscopoDaEmpresa"/>:
-/// toda consulta e toda gravação filtram pela empresa dele — o que é de outra empresa nem aparece, e gravar o mesmo
-/// caminho ou a mesma convenção noutra empresa é outra linha. A convenção de nível usuário é do próprio usuário: só o
-/// gestor a vê de todos, na auditoria.
+/// O catálogo de repositórios da empresa (US #491). O isolamento é o <see cref="EscopoDaEmpresa"/>: toda consulta e toda
+/// gravação filtram pela empresa dele — o que é de outra empresa nem aparece, e gravar o mesmo caminho noutra empresa é
+/// outra linha. As convenções viraram o contexto (<see cref="ContextoDaEmpresa"/>, US #556).
 /// </summary>
 public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : IConhecimentoDaEmpresa
 {
@@ -77,96 +76,8 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         return new(Resumo(repositorio));
     }
 
-    public async Task<IReadOnlyList<ConvencaoV1>> ConvencoesAsync(EscopoDaEmpresa escopo, string? time, CancellationToken ct)
-    {
-        var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
-        var convencoes = await Da(escopo)
-            .Where(c => c.Nivel == NiveisDeConvencao.Empresa
-                || (doTime.Length > 0 && c.Nivel == NiveisDeConvencao.Time && c.Time == doTime)
-                || (c.Nivel == NiveisDeConvencao.Usuario && c.UsuarioId == escopo.UsuarioId))
-            .ToListAsync(ct);
-        return await ParaLeituraAsync(convencoes, ct);
-    }
-
-    public async Task<IReadOnlyList<ConvencaoV1>> AuditoriaDeConvencoesAsync(EscopoDaEmpresa escopo, CancellationToken ct)
-    {
-        var convencoes = await Da(escopo)
-            .Where(c => escopo.EhGestor || c.Nivel != NiveisDeConvencao.Usuario || c.UsuarioId == escopo.UsuarioId)
-            .ToListAsync(ct);
-        return await ParaLeituraAsync(convencoes, ct);
-    }
-
-    public async Task<ResultadoDaGestao<ConvencaoV1>> GravarConvencaoAsync(EscopoDaEmpresa escopo, ConvencaoV1 convencao, CancellationToken ct)
-    {
-        var nivel = convencao.Nivel!.Trim().ToLowerInvariant();
-        var chave = convencao.Chave!.Trim().ToLowerInvariant();
-        var time = nivel == NiveisDeConvencao.Time ? RegrasDoConhecimentoDaEmpresa.NormalizarTime(convencao.Time) : string.Empty;
-        var usuario = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
-        var valor = convencao.Valor?.Trim() ?? string.Empty;
-
-        // A da empresa vale para todos, então é do gestor; a de um time é de quem trabalha nele — qualquer um da empresa;
-        // a do usuário é dele mesmo (o escopo decide o dono: não há como gravar a de outro).
-        if (nivel == NiveisDeConvencao.Empresa && !escopo.EhGestor)
-            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "Só o gestor grava as convenções da empresa; a de um time, qualquer um da empresa grava.");
-
-        var existente = await db.ConvencoesDaEmpresa.FirstOrDefaultAsync(
-            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave, ct);
-
-        if (valor.Length == 0)
-        {
-            // Vazio APAGA a convenção do nível: volta a valer a de baixo.
-            if (existente is not null)
-            {
-                db.ConvencoesDaEmpresa.Remove(existente);
-                await db.SaveChangesAsync(ct);
-            }
-
-            return new(new ConvencaoV1(nivel, chave, string.Empty, time));
-        }
-
-        if (existente is null)
-        {
-            existente = new ConvencaoDaEmpresa { EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, UsuarioId = usuario, Chave = chave };
-            db.ConvencoesDaEmpresa.Add(existente);
-        }
-
-        existente.Valor = valor;
-        existente.AutorId = escopo.UsuarioId;
-        existente.AtualizadoEmUtc = relogio.GetUtcNow().UtcDateTime;
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Conflito, $"A convenção '{chave}' acabou de ser gravada por outra pessoa. Grave de novo.");
-        }
-
-        await db.Entry(existente).Reference(c => c.Autor).LoadAsync(ct);
-        return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
-    }
-
-    /// <summary>As convenções da empresa do escopo, com o autor, na ordem da auditoria.</summary>
-    private IQueryable<ConvencaoDaEmpresa> Da(EscopoDaEmpresa escopo) => db.ConvencoesDaEmpresa.AsNoTracking().Include(c => c.Autor)
-        .Where(c => c.EmpresaId == escopo.EmpresaId)
-        .OrderBy(c => c.Nivel).ThenBy(c => c.Time).ThenBy(c => c.UsuarioId).ThenBy(c => c.Chave);
-
-    /// <summary>A leitura: o dono da de nível usuário e o autor pelo nome (ou login), e a data na borda.</summary>
-    private async Task<IReadOnlyList<ConvencaoV1>> ParaLeituraAsync(IReadOnlyList<ConvencaoDaEmpresa> convencoes, CancellationToken ct)
-    {
-        var donos = convencoes.Where(c => c.UsuarioId > 0).Select(c => c.UsuarioId).Distinct().ToArray();
-        var nomes = await db.Usuarios.AsNoTracking().Where(u => donos.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.Nome.Length > 0 ? u.Nome : u.Login, ct);
-
-        return convencoes.Select(c => new ConvencaoV1(
-            c.Nivel, c.Chave, c.Valor, c.Time,
-            c.UsuarioId > 0 ? nomes.GetValueOrDefault(c.UsuarioId, string.Empty) : string.Empty,
-            Nome(c.Autor),
-            DevKitPageDb.Utc(c.AtualizadoEmUtc))).ToArray();
-    }
-
-    private static string Nome(Usuario? usuario) => usuario is null ? string.Empty : usuario.Nome.Length > 0 ? usuario.Nome : usuario.Login;
+    /// <summary>O nome de exibição (o nome, ou o login sem nome) — o mesmo do contexto.</summary>
+    internal static string Nome(Usuario? usuario) => usuario is null ? string.Empty : usuario.Nome.Length > 0 ? usuario.Nome : usuario.Login;
 
     private static RepositorioDaEmpresaV1 Resumo(RepositorioDaEmpresa r) => new(r.Origem, r.Descricao, Nome(r.Autor), DevKitPageDb.Utc(r.AtualizadoEmUtc));
 }
