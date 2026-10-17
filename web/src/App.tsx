@@ -15,20 +15,23 @@ import { Comprar } from './paginas/Comprar';
 import { CompraConcluida } from './paginas/CompraConcluida';
 import { EmpresaUsuarios } from './paginas/EmpresaUsuarios';
 import { EmpresaCatalogo } from './paginas/EmpresaCatalogo';
+import { EmpresaConhecimento } from './paginas/EmpresaConhecimento';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
  * pendente, só a troca é acessível — a mesma regra que a API aplica (403). `soAdmin` (US #381)
  * leva o gestor de volta ao dashboard da empresa dele; `doPainel` (US #405) leva o dev — que não
  * entra no painel — à conta dele (US #425); `soGestor` (US #425) é a administração da empresa: o admin
- * (que não é de empresa nenhuma) volta ao dashboard, e o dev à conta.
+ * (que não é de empresa nenhuma) volta ao dashboard, e o dev à conta. `daEmpresa` (US #491) é de quem é DA empresa —
+ * o gestor e o dev —: o admin volta ao dashboard.
  */
-export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin = false, doPainel = false, soGestor = false }: {
+export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin = false, doPainel = false, soGestor = false, daEmpresa = false }: {
   children: ReactNode;
   permiteTrocaPendente?: boolean;
   soAdmin?: boolean;
   doPainel?: boolean;
   soGestor?: boolean;
+  daEmpresa?: boolean;
 }) {
   const { sessao } = useSessao();
   const local = useLocation();
@@ -38,6 +41,7 @@ export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin 
   if ((doPainel || soAdmin || soGestor) && !entraNoPainel(sessao)) return <Navigate to="/conta" replace />;
   if (soAdmin && papelDa(sessao) !== 'admin') return <Navigate to="/dashboard" replace />;
   if (soGestor && papelDa(sessao) !== 'gestor') return <Navigate to="/dashboard" replace />;
+  if (daEmpresa && papelDa(sessao) === 'admin') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -60,6 +64,7 @@ export function App() {
       <Route path="/catalogo-base" element={<RotaProtegida soAdmin><Navigate to="/catalogo?aba=releases" replace /></RotaProtegida>} />
       <Route path="/empresa/usuarios" element={<RotaProtegida soGestor><EmpresaUsuarios /></RotaProtegida>} />
       <Route path="/empresa/catalogo" element={<RotaProtegida soGestor><EmpresaCatalogo /></RotaProtegida>} />
+      <Route path="/empresa/conhecimento" element={<RotaProtegida daEmpresa><EmpresaConhecimento /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

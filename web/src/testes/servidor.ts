@@ -1,9 +1,10 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type {
-  CatalogoNomeado, ColaboradorResumo, Conta, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo, ItemDaEmpresa,
-  ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta, RelatorioDePublicacao,
-  ReleaseDoCatalogo, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
+  CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
+  ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
+  RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
+  Vitrine,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -270,6 +271,18 @@ export const usuariosDaEmpresa: UsuarioDaEmpresa[] = [
 /** O que chegou às rotas de escrita da US #425 (o método, o caminho e o corpo). */
 export const escritas: { metodo: string; caminho: string; corpo: unknown }[] = [];
 
+/** O catálogo de repositórios da empresa (US #491). */
+export const repositoriosDaEmpresa: RepositorioDaEmpresa[] = [
+  { origem: 'https://github.com/acme/vendas-api', descricao: 'API de vendas (.NET 8)', autor: 'Ana Souza', atualizadoEm: '2026-10-14T10:00:00Z' },
+];
+
+/** As convenções em seus níveis, como a auditoria as devolve (US #491). */
+export const convencoesDaEmpresa: ConvencaoDaEmpresa[] = [
+  { nivel: 'empresa', chave: 'branch.feature', valor: 'feature/{equipe}/{id}', time: '', usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-14T09:00:00Z' },
+  { nivel: 'time', chave: 'branch.feature', valor: 'vendas/{id}', time: 'vendas', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-14T09:30:00Z' },
+  { nivel: 'usuario', chave: 'branch.bug', valor: 'ana/bug-{id}', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-14T09:45:00Z' },
+];
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -464,6 +477,24 @@ export const handlersPadrao = [
     const corpo = (await request.json()) as { loginObrigatorio: boolean | null };
     escritas.push({ metodo: 'PUT', caminho: '/api/empresa/politica', corpo });
     return HttpResponse.json({ ...empresaDoGestor, loginObrigatorio: corpo.loginObrigatorio, loginObrigatorioEfetivo: corpo.loginObrigatorio ?? false });
+  }),
+  // US #491: o catálogo de repositórios e as convenções da empresa.
+  http.get(`${API}/api/empresa/repositorios`, () => HttpResponse.json(repositoriosDaEmpresa)),
+  http.post(`${API}/api/empresa/repositorios`, async ({ request }) => {
+    const corpo = (await request.json()) as { origem: string; descricao: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/empresa/repositorios', corpo });
+    return HttpResponse.json({ ...corpo, autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
+  }),
+  http.delete(`${API}/api/empresa/repositorios`, ({ request }) => {
+    const origem = new URL(request.url).searchParams.get('origem');
+    escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/repositorios?origem=${origem}`, corpo: null });
+    return HttpResponse.json(repositoriosDaEmpresa.find((r) => r.origem === origem) ?? repositoriosDaEmpresa[0]);
+  }),
+  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json(convencoesDaEmpresa)),
+  http.put(`${API}/api/empresa/convencoes`, async ({ request }) => {
+    const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string };
+    escritas.push({ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo });
+    return HttpResponse.json({ ...corpo, usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
   }),
   http.post(`${API}/api/pagamentos/checkout`, async ({ request }) => {
     const corpo = (await request.json()) as { plano: string };
