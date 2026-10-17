@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderizar } from '../testes/renderizar';
 import { entregues } from '../testes/navegador';
-import { cadastros, tokenDoGestor, tokenValido } from '../testes/servidor';
+import { cadastros, escritas, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 describe('Empresas (US #381; visual da US #461)', () => {
   it('lista as empresas com o plano, os assentos em uso, o código de adesão e o gestor', async () => {
@@ -73,6 +73,33 @@ describe('Empresas (US #381; visual da US #461)', () => {
 
     expect(screen.queryByLabelText('Login do gestor de Empresa A')).not.toBeInTheDocument();
     expect(cadastros.gestores).toEqual([]);
+  });
+
+  it('o painel Contexto (US #550): o admin vê os três níveis e grava o contexto de um usuário da empresa', { timeout: 15_000 }, async () => {
+    renderizar('/empresas', tokenValido());
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Contexto de Empresa A' }));
+    const painel = await screen.findByRole('complementary', { name: 'Contexto de Empresa A' });
+    expect(await within(painel).findByText('.NET 10 na API e React 19 na web.')).toBeInTheDocument();
+    expect(within(painel).getByText(/Angular 19 no front/)).toBeInTheDocument();
+
+    // Os usuários são os da empresa (o admin, sem empresa, fica de fora); o contexto da Ana aparece e é editável.
+    const usuarios = within(painel).getByRole('region', { name: 'Usuários' });
+    expect(within(within(usuarios).getByLabelText('Usuário')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Ana Souza (ana.dev)']);
+    expect(within(usuarios).getByText('Respostas curtas, com o porquê.')).toBeInTheDocument();
+    const formulario = within(usuarios).getByRole('form', { name: 'Gravar no contexto de ana souza' });
+    await userEvent.type(within(formulario).getByLabelText('Tema'), 'estilo');
+    await userEvent.type(within(formulario).getByLabelText('Texto'), 'Explique o porquê.');
+    await userEvent.click(within(formulario).getByRole('button', { name: 'Gravar' }));
+
+    expect(await within(painel).findByText('Tema estilo gravado.')).toBeInTheDocument();
+    expect(escritas).toEqual([{
+      metodo: 'PUT', caminho: '/api/empresas/4/convencoes',
+      corpo: { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Explique o porquê.', time: '', usuario: 'ana.dev' },
+    }]);
+
+    await userEvent.click(within(painel).getByRole('button', { name: 'Fechar' }));
+    expect(screen.getByRole('complementary', { name: 'Nova empresa' })).toBeInTheDocument();
   });
 
   it('o gestor que abre Empresas volta ao dashboard da empresa dele', async () => {

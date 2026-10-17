@@ -437,7 +437,10 @@ export type NivelDeConvencao = 'empresa' | 'time' | 'usuario';
 /** Uma convenção na auditoria do site (US #491), hoje o modelo do nome do branch da task. */
 export interface ConvencaoDaEmpresa {
   nivel: NivelDeConvencao;
-  /** A convenção, uma por tipo de branch (branch.feature, branch.bug, branch.hotfix, branch.<tipo do item>). */
+  /**
+   * A convenção, uma por tipo de branch (branch.feature, branch.bug, branch.hotfix, branch.<tipo do item>), ou um tema
+   * do contexto do dev.kit (contexto.<tema>, US #550).
+   */
   chave: string;
   valor: string;
   /** O time da convenção de nível time; vazio nos outros. */

@@ -101,13 +101,32 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         var nivel = convencao.Nivel!.Trim().ToLowerInvariant();
         var chave = convencao.Chave!.Trim().ToLowerInvariant();
         var time = nivel == NiveisDeConvencao.Time ? RegrasDoConhecimentoDaEmpresa.NormalizarTime(convencao.Time) : string.Empty;
-        var usuario = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
         var valor = convencao.Valor?.Trim() ?? string.Empty;
 
-        // A da empresa vale para todos, então é do gestor; a de um time é de quem trabalha nele — qualquer um da empresa;
-        // a do usuário é dele mesmo (o escopo decide o dono: não há como gravar a de outro).
-        if (nivel == NiveisDeConvencao.Empresa && !escopo.EhGestor)
-            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "Só o gestor grava as convenções da empresa; a de um time, qualquer um da empresa grava.");
+        // O dono da de nível usuário é quem grava (o escopo decide); só o admin geral escolhe outro, pelo login, e só
+        // entre os usuários da empresa do caminho.
+        var usuario = 0;
+        if (nivel == NiveisDeConvencao.Usuario)
+        {
+            usuario = escopo.UsuarioId;
+            var login = convencao.Usuario?.Trim() ?? string.Empty;
+            if (escopo.EhAdmin && login.Length > 0)
+            {
+                var alvo = await db.Usuarios.AsNoTracking()
+                    .Where(u => u.EmpresaId == escopo.EmpresaId && u.Login == login)
+                    .Select(u => (int?)u.Id).FirstOrDefaultAsync(ct);
+                if (alvo is null)
+                    return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.NaoEncontrado, $"'{login}' não é usuário desta empresa.");
+                usuario = alvo.Value;
+            }
+        }
+
+        // A regra de quem grava é uma só (RegrasDoConhecimentoDaEmpresa.PodeGravar): a da empresa e o contexto da equipe
+        // são do gestor; o branch de um time, de qualquer um; a do usuário, do dono — e o admin geral, tudo.
+        if (!RegrasDoConhecimentoDaEmpresa.PodeGravar(escopo, nivel, chave, usuario))
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, nivel == NiveisDeConvencao.Empresa
+                ? "Só o gestor grava as convenções da empresa; a de um time, qualquer um da empresa grava."
+                : "Só o gestor grava o contexto da empresa e o das equipes.");
 
         var existente = await db.ConvencoesDaEmpresa.FirstOrDefaultAsync(
             c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave, ct);
@@ -146,6 +165,12 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         await db.Entry(existente).Reference(c => c.Autor).LoadAsync(ct);
         return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
     }
+
+    public async Task<IReadOnlyList<string>> EquipesAsync(EscopoDaEmpresa escopo, CancellationToken ct)
+        => await db.ConvencoesDaEmpresa.AsNoTracking()
+            .Where(c => c.EmpresaId == escopo.EmpresaId && c.Nivel == NiveisDeConvencao.Time && c.Time != string.Empty)
+            .Select(c => c.Time).Distinct().OrderBy(t => t)
+            .ToListAsync(ct);
 
     /// <summary>As convenções da empresa do escopo, com o autor, na ordem da auditoria.</summary>
     private IQueryable<ConvencaoDaEmpresa> Da(EscopoDaEmpresa escopo) => db.ConvencoesDaEmpresa.AsNoTracking().Include(c => c.Autor)

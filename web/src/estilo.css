@@ -674,3 +674,14 @@ input, select {
 .problemas ul { margin: 0; padding-left: 20px; line-height: 1.6; }
 .problemas p { margin: 8px 0 0; font-size: 0.85rem; color: var(--texto-2); }
 .publicacao .acoes { margin-top: 12px; }
+
+/* O contexto por nível (US #550): o EditorDeContexto, em /conta, na aba Contexto e no painel do admin. */
+.editor-de-contexto { display: flex; flex-direction: column; gap: 16px; }
+.lista-de-contexto { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.lista-de-contexto li { border: 1px solid var(--borda); border-radius: 8px; padding: 10px 12px; background: var(--pagina); }
+.cabecalho-do-tema { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cabecalho-do-tema small { color: var(--texto-2); font-size: 0.78rem; }
+.cabecalho-do-tema .acoes { margin-left: auto; }
+.texto-do-contexto { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; line-height: 1.5; }
+.secoes-do-contexto { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.secoes-do-contexto > section h2, .secoes-do-contexto > section h3 { margin-top: 0; font-size: 1rem; }

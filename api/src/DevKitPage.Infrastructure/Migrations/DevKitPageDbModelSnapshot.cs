@@ -211,7 +211,7 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<string>("Valor")
                         .IsRequired()
-                        .HasMaxLength(200)
+                        .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

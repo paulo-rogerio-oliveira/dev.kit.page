@@ -1,14 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, ErroDaApi } from '../api/cliente';
-import type { Conta as DadosDaConta } from '../api/tipos';
+import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
+import type { ConvencaoDaEmpresa, Conta as DadosDaConta } from '../api/tipos';
+import { EditorDeContexto, ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Topo } from '../componentes/Topo';
 import { papelDa, useSessao } from '../sessao';
 
 /**
  * A conta de quem está logado (US #425, /conta) — o destino do dev depois do login: quem é, a empresa, a política
  * de login que vale para ele e, na assinatura individual, o "Gerenciar assinatura" (o portal do gateway). O gestor
- * chega daqui à administração da empresa.
+ * chega daqui à administração da empresa. Desde a US #550, é aqui que cada um cadastra o PRÓPRIO contexto do dev.kit.
  */
 export function Conta() {
   const { sessao, sair } = useSessao();
@@ -56,6 +57,7 @@ export function Conta() {
             <a className="botao botao-primario" href={conta.urlGerenciarAssinatura} target="_blank" rel="noreferrer">Gerenciar assinatura</a>
           </section>
         )}
+        {conta && daEmpresa && <MeuContexto token={sessao!.token} temEmpresa={!!conta.empresa} sair={sair} />}
         <section aria-labelledby="titulo-baixar">
           <h2 id="titulo-baixar">O dev.kit</h2>
           <p className="nota-da-secao">Entre no dev.kit com o mesmo login: a licença se renova sozinha enquanto a assinatura estiver ativa.</p>
@@ -63,5 +65,69 @@ export function Conta() {
         </section>
       </main>
     </div>
+  );
+}
+
+/**
+ * O contexto do dev.kit NO NÍVEL DO USUÁRIO (US #550): o que os agentes do dev.kit dele recebem em toda task, por
+ * cima do da equipe e do da empresa — em conflito, vale o dele. Sem empresa, não há a quem o dev.kit pedir o contexto.
+ */
+function MeuContexto({ token, temEmpresa, sair }: { token: string; temEmpresa: boolean; sair: (motivo?: 'expirou') => void }) {
+  const [convencoes, setConvencoes] = useState<ConvencaoDaEmpresa[] | null>(null);
+  const [erro, setErro] = useState('');
+  const [aviso, setAviso] = useState('');
+
+  const tratar = useCallback((falha: unknown) => {
+    if (falha instanceof ErroDaApi && falha.status === 401) sair('expirou');
+    else setErro(mensagemDaFalha(falha));
+  }, [sair]);
+
+  const carregar = useCallback(() => api.minhasConvencoes(token).then(setConvencoes).catch(tratar), [token, tratar]);
+
+  useEffect(() => {
+    if (temEmpresa) void carregar();
+  }, [temEmpresa, carregar]);
+
+  async function gravar(chave: string, valor: string) {
+    setErro('');
+    setAviso('');
+    try {
+      await api.gravarConvencao(token, 'usuario', chave, valor, '');
+      setAviso(valor ? `Tema ${temaDa(chave)} gravado no seu contexto.` : `Tema ${temaDa(chave)} removido do seu contexto.`);
+      await carregar();
+      return true;
+    } catch (falha) {
+      tratar(falha);
+      return false;
+    }
+  }
+
+  const meus = (convencoes ?? []).filter((c) => c.nivel === 'usuario' && ehContexto(c.chave));
+  const daEmpresa = (convencoes ?? []).filter((c) => c.nivel === 'empresa' && ehContexto(c.chave));
+  return (
+    <section aria-labelledby="titulo-meu-contexto">
+      <h2 id="titulo-meu-contexto">Meu contexto</h2>
+      <p className="nota-da-secao">
+        O que os agentes do seu dev.kit devem saber de você em toda task: como prefere as respostas, o que revisar, o que
+        evitar. Ele chega por cima do contexto da equipe e do da empresa — num tema em conflito, vale o seu.
+      </p>
+      {!temEmpresa ? (
+        <p className="vazio">O seu usuário não é de uma empresa: o contexto do dev.kit é compartilhado pela empresa.</p>
+      ) : (
+        <>
+          {erro && <p className="erro" role="alert">{erro}</p>}
+          {aviso && <p className="aviso" role="status">{aviso}</p>}
+          {!convencoes ? (
+            !erro && <p className="carregando" role="status">Carregando…</p>
+          ) : (
+            <EditorDeContexto rotulo="Seu contexto" itens={meus} editavel aoGravar={gravar}
+              vazio="Nenhum tema ainda: o dev.kit usa só o contexto da equipe e o da empresa." />
+          )}
+          {daEmpresa.length > 0 && (
+            <p className="nota-da-secao">A empresa já define: {daEmpresa.map((c) => temaDa(c.chave)).join(', ')}.</p>
+          )}
+        </>
+      )}
+    </section>
   );
 }

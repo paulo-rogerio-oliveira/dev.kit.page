@@ -91,6 +91,56 @@ describe('Repositórios e convenções da empresa (US #491)', () => {
     expect(screen.queryByRole('button', { name: /^Remover/ })).not.toBeInTheDocument();
   });
 
+  it('aba Contexto (US #550): o gestor grava o da empresa e o da equipe e só lê o dos usuários', { timeout: 15_000 }, async () => {
+    renderizar('/empresa/conhecimento?aba=contexto', tokenDoGestor());
+
+    const empresa = await screen.findByRole('region', { name: 'Empresa' });
+    expect(within(empresa).getByText('.NET 10 na API e React 19 na web.')).toBeInTheDocument();
+    const equipe = screen.getByRole('region', { name: 'Equipe' });
+    expect(within(equipe).getByLabelText('Equipe')).toHaveValue('vendas');
+    expect(within(equipe).getByText(/Angular 19 no front\.\s+Testes com Jasmine\./)).toBeInTheDocument();
+    const usuarios = screen.getByRole('region', { name: 'Usuários' });
+    expect(within(usuarios).getByText('Respostas curtas, com o porquê.')).toBeInTheDocument();
+    expect(within(usuarios).queryByRole('button')).not.toBeInTheDocument();
+
+    const doFormulario = within(empresa).getByRole('form', { name: 'Gravar no contexto da empresa' });
+    await userEvent.type(within(doFormulario).getByLabelText('Tema'), 'revisao');
+    await userEvent.type(within(doFormulario).getByLabelText('Texto'), 'Checklist do time.');
+    await userEvent.click(within(doFormulario).getByRole('button', { name: 'Gravar' }));
+    expect(await screen.findByText('Tema revisao gravado no contexto.')).toBeInTheDocument();
+
+    // Uma equipe nova é digitada.
+    const campo = within(screen.getByRole('region', { name: 'Equipe' })).getByLabelText('Equipe');
+    await userEvent.clear(campo);
+    await userEvent.type(campo, 'Financeiro');
+    const daEquipe = within(screen.getByRole('region', { name: 'Equipe' })).getByRole('form', { name: 'Gravar no contexto da equipe financeiro' });
+    await userEvent.type(within(daEquipe).getByLabelText('Tema'), 'stack');
+    await userEvent.type(within(daEquipe).getByLabelText('Texto'), 'Power BI.');
+    await userEvent.click(within(daEquipe).getByRole('button', { name: 'Gravar' }));
+
+    await waitFor(() => expect(escritas.map((e) => e.corpo)).toEqual([
+      { nivel: 'empresa', chave: 'contexto.revisao', valor: 'Checklist do time.', time: '' },
+      { nivel: 'time', chave: 'contexto.stack', valor: 'Power BI.', time: 'financeiro' },
+    ]));
+  });
+
+  it('aba Contexto (US #550): o dev lê o da empresa e o da equipe, sem editar', async () => {
+    renderizar('/empresa/conhecimento?aba=contexto', tokenDoDev());
+
+    const empresa = await screen.findByRole('region', { name: 'Empresa' });
+    expect(within(empresa).getByText('.NET 10 na API e React 19 na web.')).toBeInTheDocument();
+    expect(screen.queryByRole('form')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Editar o tema/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Só o gestor edita o da empresa e o das equipes\./)).toBeInTheDocument();
+  });
+
+  it('a aba Convenções não mistura o contexto', async () => {
+    renderizar('/empresa/conhecimento?aba=convencoes', tokenDoGestor());
+
+    expect(await screen.findByText('feature/{equipe}/{id}')).toBeInTheDocument();
+    expect(screen.queryByText('contexto.stack')).not.toBeInTheDocument();
+  });
+
   it('o admin, que não é de empresa, vai para o dashboard', async () => {
     renderizar('/empresa/conhecimento', tokenValido());
     expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();

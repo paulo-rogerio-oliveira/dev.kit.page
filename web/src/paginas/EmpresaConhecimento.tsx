@@ -4,6 +4,8 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, NivelDeConvencao, RepositorioDaEmpresa } from '../api/tipos';
 import { Abas } from '../componentes/Abas';
 import { Chips } from '../componentes/Chips';
+import { ContextoPorNivel } from '../componentes/ContextoPorNivel';
+import { ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
@@ -11,11 +13,14 @@ import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
-/** As abas da página: o catálogo de repositórios e as convenções. A ativa fica na URL (?aba=). */
+/** As abas da página: o catálogo de repositórios, as convenções e o contexto (US #550). A ativa fica na URL (?aba=). */
 const ABAS = [
   { id: 'repositorios', rotulo: 'Repositórios' },
   { id: 'convencoes', rotulo: 'Convenções' },
+  { id: 'contexto', rotulo: 'Contexto' },
 ];
+
+type IdDaAba = 'repositorios' | 'convencoes' | 'contexto';
 
 const NOME_DO_NIVEL: Record<NivelDeConvencao, string> = { empresa: 'Empresa', time: 'Time', usuario: 'Usuário' };
 
@@ -35,7 +40,8 @@ export function EmpresaConhecimento() {
   const token = sessao!.token;
   const ehGestor = papelDa(sessao!) === 'gestor';
   const [busca, setBusca] = useSearchParams();
-  const aba = busca.get('aba') === 'convencoes' ? 'convencoes' : 'repositorios';
+  const pedida = busca.get('aba');
+  const aba: IdDaAba = pedida === 'convencoes' || pedida === 'contexto' ? pedida : 'repositorios';
 
   const [repositorios, setRepositorios] = useState<RepositorioDaEmpresa[] | null>(null);
   const [convencoes, setConvencoes] = useState<ConvencaoDaEmpresa[] | null>(null);
@@ -89,9 +95,9 @@ export function EmpresaConhecimento() {
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
         <Abas rotulo="Conhecimento da empresa" abas={ABAS} ativa={aba} aoMudar={(id) => { setAviso(''); setErro(''); setBusca({ aba: id }, { replace: true }); }} prefixo="conhecimento">
-          {aba === 'repositorios'
-            ? <AbaRepositorios repositorios={repositorios} ehGestor={ehGestor} token={token} escrever={escrever} />
-            : <AbaConvencoes convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} />}
+          {aba === 'repositorios' && <AbaRepositorios repositorios={repositorios} ehGestor={ehGestor} token={token} escrever={escrever} />}
+          {aba === 'convencoes' && <AbaConvencoes convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} />}
+          {aba === 'contexto' && <AbaContexto convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} tratar={tratar} />}
         </Abas>
       </Pagina>
     </div>
@@ -185,7 +191,8 @@ function AbaConvencoes({ convencoes, ehGestor, token, escrever }: {
   const [chave, setChave] = useState('branch.feature');
   const [valor, setValor] = useState('');
 
-  const lista = convencoes ?? [];
+  // O contexto (contexto.<tema>) tem a aba dele: aqui ficam as convenções de branch.
+  const lista = (convencoes ?? []).filter((c) => !ehContexto(c.chave));
   const visiveis = filtro === 'todas' ? lista : lista.filter((c) => c.nivel === filtro);
   const contagem = (n: NivelDeConvencao) => lista.filter((c) => c.nivel === n).length;
 
@@ -311,5 +318,32 @@ function AbaConvencoes({ convencoes, ehGestor, token, escrever }: {
         </form>
       </PainelLateral>
     </div>
+  );
+}
+
+/**
+ * O contexto do dev.kit da empresa (US #550): o gestor grava o da empresa e o de cada equipe e lê o dos usuários; o
+ * dev lê o da empresa e o das equipes (o dele, ele edita em /conta).
+ */
+function AbaContexto({ convencoes, ehGestor, token, escrever, tratar }: {
+  convencoes: ConvencaoDaEmpresa[] | null; ehGestor: boolean; token: string; escrever: Escrever; tratar: (falha: unknown) => void;
+}) {
+  const [equipes, setEquipes] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    api.equipesDaEmpresa(token).then(setEquipes).catch(tratar);
+  }, [token, tratar]);
+
+  if (!convencoes || !equipes) return <p className="carregando" role="status">Carregando…</p>;
+  return (
+    <section className="cartao" aria-label="Contexto da empresa por nível">
+      <p className="nota-do-formulario">
+        O que os agentes do dev.kit recebem em toda task, composto empresa → equipe → usuário: num tema em conflito, vale o
+        nível mais específico.{!ehGestor && ' Só o gestor edita o da empresa e o das equipes.'}
+      </p>
+      <ContextoPorNivel convencoes={convencoes} equipes={equipes} podeGerir={ehGestor}
+        aoGravar={(nivel, chave, valor, time) => escrever(() => api.gravarConvencao(token, nivel, chave, valor, time),
+          valor ? `Tema ${temaDa(chave)} gravado no contexto.` : `Tema ${temaDa(chave)} removido do contexto.`)} />
+    </section>
   );
 }

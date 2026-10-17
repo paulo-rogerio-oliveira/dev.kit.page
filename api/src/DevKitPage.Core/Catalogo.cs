@@ -137,8 +137,15 @@ public static partial class RegrasDoCatalogoDaEmpresa
 /// <param name="EmpresaId">A empresa de quem consulta.</param>
 /// <param name="UsuarioId">Quem consulta (o autor de uma publicação).</param>
 /// <param name="EhGestor">O gestor administra a empresa: retira o item de qualquer autor e bloqueia usuários.</param>
-public sealed record EscopoDaEmpresa(int EmpresaId, int UsuarioId, bool EhGestor)
+/// <param name="EhAdmin">
+/// O admin geral agindo NUMA empresa (US #550, <see cref="DoAdmin"/>): vale como gestor dela e grava também o nível
+/// usuário de quem é dela. Nunca vem das claims — só das rotas do admin, que dizem a empresa no caminho.
+/// </param>
+public sealed record EscopoDaEmpresa(int EmpresaId, int UsuarioId, bool EhGestor, bool EhAdmin = false)
 {
+    /// <summary>O escopo do admin geral na empresa <paramref name="empresaId"/> (US #550): gestor dela, e mais.</summary>
+    public static EscopoDaEmpresa DoAdmin(int empresaId, int adminId) => new(empresaId, adminId, EhGestor: true, EhAdmin: true);
+
     /// <summary>O escopo das claims do token: gestor ou dev COM empresa; qualquer outra combinação é nula.</summary>
     public static EscopoDaEmpresa? DasClaims(string? papel, string? empresa, string? usuario)
     {
