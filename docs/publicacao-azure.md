@@ -189,6 +189,16 @@ Sem elas, `/api/empresa/repositorios` e `/api/empresa/convencoes` respondem 500 
 como "a empresa ainda não compartilha isto", segue com o que a máquina já sabe. Nenhuma configuração nova; a página
 `/empresa/conhecimento` do site usa as mesmas tabelas.
 
+### O contexto do dev.kit: usuário, equipe e empresa (US #556)
+
+Depois do `Us491.sql`, rode `api/scripts/sqlserver/ContextoNoLugarDasConvencoes.sql` (idempotente — cada passo confere o
+estado antes de mudar): ele RENOMEIA `ConvencoesDaEmpresa` para `Contextos` (nada é apagado; as restrições acompanham o
+nome novo), troca `Time` por `Equipe` (e o nível `time` por `equipe`), acrescenta `Origem` (as convenções existentes
+viram instruções do usuário) e `Versao`, passa `Valor` a 4000 caracteres, recria o índice único com a origem e cria
+`ParticipantesDeEquipe` — quem já gravou a convenção de um time entra aprovado nele. Rode-o ANTES de publicar a versão da
+API com as rotas `/api/contexto` e `/api/admin/empresas/{id}/contexto`: sem ele, essas rotas e as antigas
+`/api/empresa/convencoes` (que viraram o adaptador do contexto) respondem 500. Nenhuma configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

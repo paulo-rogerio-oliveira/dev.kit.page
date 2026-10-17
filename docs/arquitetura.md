@@ -387,29 +387,54 @@ As rotas ficam sob `/api/empresa`, no `EscopoDaEmpresa` do token, mas abertas ao
   descrição. O filtro (caminho ou descrição, sem caixa) é em memória. `DELETE /api/empresa/repositorios?origem=`
   tira um repositório do catálogo: do gestor, ou de quem o descreveu por último (os outros recebem 403; 404 se não
   existe).
-- `GET /api/empresa/convencoes?time=` e `PUT /api/empresa/convencoes` (`ConvencaoV1 {nivel, chave, valor, time}`): as
-  convenções da EMPRESA, as do TIME e as do USUÁRIO — hoje o modelo do nome do branch, uma por TIPO DE BRANCH
-  (`branch.feature`, `branch.bug`, `branch.hotfix` ou `branch.<tipo do work item>`, chave em minúsculas sem acento; quem
-  escolhe qual vale é o dev.kit, pelo tipo do item ou pelo `tipo=` do comentário).
-  O time é um NOME, o que o dev declara na Equipe das Configurações do dev.kit, e não um cadastro desta API: a empresa
-  não precisa montar times aqui para compartilhar a convenção de um. A da empresa é do gestor (o dev recebe 403); a de
-  um time, de qualquer um da empresa; a do usuário, só do próprio (gravada no `UsuarioId` do token — não há como
-  gravar a de outro); valor vazio apaga a do nível. O GET devolve a da empresa, a do time pedido e as do próprio
-  usuário. A precedência (usuário &gt; time &gt; empresa) é do dev.kit, que lê estas na abertura do `devcli` — a do
-  usuário vale na máquina mesmo sem a API, e sobe para cá quando dá.
-- `GET /api/empresa/convencoes/todas` é a AUDITORIA: cada convenção com o nível, o time, de quem é (a do usuário), o
-  autor da última gravação e quando. O gestor vê todas, de todos; o dev vê as da empresa, as de todos os times e as
-  dele — as de outro usuário são pessoais.
 - A página `/empresa/conhecimento` do site (`EmpresaConhecimento.tsx`, do dev e do gestor — o admin vai para o
-  dashboard) é onde isso se audita e se edita: a aba Repositórios lista o catálogo com o autor e a data, edita a
-  descrição e (gestor) remove; a aba Convenções filtra por nível, grava e apaga, com o formulário oferecendo só os
-  níveis que o papel pode gravar (empresa, só o gestor).
-- O admin, sem empresa no token, recebe 403, como nas outras rotas da empresa. Serviço: `IConhecimentoDaEmpresa`
-  (Core, `ServicosDaUs491.cs`) e `ConhecimentoDaEmpresa` (Infrastructure); modelo em `EntidadesDaUs491.cs`.
+  dashboard) audita e edita o catálogo: o autor e a data, editar a descrição e (gestor) remover. O admin, sem empresa
+  no token, recebe 403, como nas outras rotas da empresa. Serviço: `IConhecimentoDaEmpresa` (Core, `ServicosDaUs491.cs`)
+  e `ConhecimentoDaEmpresa` (Infrastructure); modelo em `EntidadesDaUs491.cs`.
+- As CONVENÇÕES que a US #491 também trouxe viraram o CONTEXTO (US #556, abaixo); `GET/PUT /api/empresa/convencoes` e
+  `/convencoes/todas` ficaram como ADAPTADOR fino do serviço novo, para o dev.kit já instalado: respondem `ConvencaoV1`
+  (time = equipe, só as instruções), com as permissões do contexto, e valor vazio continua apagando o item do nível.
 
-Tabelas novas: migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` (a coluna `UsuarioId` da
-convenção do usuário, no índice único) e `api/scripts/sqlserver/Us491.sql`, que também acrescenta a coluna numa base
-que rodou a primeira versão dele.
+Tabelas novas: migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` e `api/scripts/sqlserver/Us491.sql`
+(desde a US #556 ele não recria a tabela das convenções numa base em que ela já virou `Contextos`).
+
+**O CONTEXTO do dev.kit: usuário, equipe e empresa (US #556).** O que o usuário, a equipe e a empresa querem que os
+agentes (e os avaliadores) do dev.kit considerem ao decidir. Cada item (`ItemDeContexto`, `ContextoV1`) tem um NÍVEL
+(`usuario`, `equipe`, `empresa` — no dev.kit vale o mais específico) e uma ORIGEM: o que uma PESSOA escreveu é
+INSTRUÇÃO; o que um AGENTE anotou ao fim de uma execução (`devcli contexto --anotar`) é SUGESTÃO, opcional. A instrução e
+a sugestão da mesma chave coexistem (o índice único inclui a origem); o usuário PROMOVE a sugestão a instrução ou a
+DESCARTA. Os temas: `contexto.<tema>` (texto livre, até 4000 caracteres; a nota do agente, até 1000), `nota.<slug>` (as
+notas) e `branch.<tipo>` (o nome do branch, que segue valendo).
+- **Permissões numa regra pura, conferidas no servidor** (`RegrasDoContexto.PodeVer`/`PodeGravar`, Core, sem banco, usadas
+  por toda rota e pelo serviço; nada no front): o DEV vê o dele, o das equipes de que participa APROVADO e o da empresa
+  (só leitura), e grava o dele e o dessas equipes; o GESTOR (admin da empresa) também vê e grava o da empresa e o de
+  todas as equipes, mas não o contexto pessoal de cada dev; o ADMIN do board vê e altera tudo, de qualquer empresa, pelas
+  rotas `/api/admin/empresas/{id}/contexto` (`PoliticaAdmin`), sobre o MESMO serviço (`EscopoDoContexto.DoAdmin`). Item
+  de outra empresa é 404 (não revela); equipe sem participação ou item de outro dono, 403.
+- **Participação aprovada pelo gestor** (`ParticipanteDeEquipe`): o dev só PEDE — a Equipe das Configurações chega na
+  sincronização (`GET /api/contexto?equipe=`) e vira um pedido `pendente`, sem acesso a nada; quem aprova (ou recusa, ou
+  cadastra direto) é o gestor ou o admin, em `PUT /api/contexto/equipes/{equipe}/participantes`. Sem isso, qualquer dev
+  entraria em qualquer equipe trocando a configuração.
+- **Segredos nunca entram**: `RegrasDoContexto.ContemSegredo` recusa o que parece credencial (PAT, `Bearer`, JWT,
+  `password=`, connection string com senha, chave privada, sequência de alta entropia) em TODA gravação, com 422 e sem
+  ecoar o valor — nem na resposta, nem no log. A lista (`SegredosNoContexto`, Contracts) é espelhada no dev.kit, que
+  recusa antes de enviar e de pôr na fila offline; as duas suítes conferem os mesmos exemplos.
+- **Rotas**: `GET /api/contexto?equipe=` (o composto que o dev.kit sincroniza: empresa + equipe aprovada + usuário),
+  `GET /api/contexto/visao` (o que a landing mostra ao papel), `GET /api/contexto/equipes/{equipe}`, `PUT /api/contexto`
+  (com `versaoEsperada`: diferente da atual, 409 com o item atual — nada se sobrescreve em silêncio), `DELETE
+  /api/contexto/{id}` (descartar a sugestão é isto) e `POST /api/contexto/{id}/promover`.
+- **A landing por perfil**: `/contexto` (`MeuContexto.tsx`, do dev e do gestor; o pedido pendente aparece como
+  "aguardando aprovação"; o gestor decide os participantes) e `/admin/contexto` (`AdminContexto.tsx`, o admin escolhe a
+  empresa), as duas sobre o componente `EditorDeContexto` (selo Instrução × Sugestão, promover, descartar, excluir, o
+  contador do teto, o conflito 409 com o valor atual para reaplicar e a recusa 422) e o `ParticipantesDaEquipe`.
+- Serviço: `IContextoDaEmpresa` (Core, `ServicosDoContexto.cs`) e `ContextoDaEmpresa` (Infrastructure); modelo em
+  `EntidadesDoContexto.cs`; rotas em `EndpointsDoContexto.cs`.
+
+Migração sem perda: a migration `ContextoNoLugarDasConvencoes` RENOMEIA `ConvencoesDaEmpresa` para `Contextos` (nada é
+apagado), `Time` → `Equipe` (e o nível `time` → `equipe`), acrescenta `Origem` (as convenções existentes viram instruções
+do usuário) e `Versao`, recria o índice único com a origem e cria `ParticipantesDeEquipe` — quem já gravou a convenção de
+um time entra APROVADO nele, para não perder o acesso. No Azure SQL, o mesmo é o `api/scripts/sqlserver/ContextoNoLugarDasConvencoes.sql`,
+idempotente (cada passo protegido por um `IF`), que se roda depois do `Us491.sql`.
 
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
@@ -421,7 +446,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #556, `ContextoNoLugarDasConvencoes.sql` (que RENOMEIA a tabela das convenções em vez de criar). Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -444,5 +469,6 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | US #425 | Core: `Ed25519Tests` (vetores do RFC 8032, adulterada, chave errada), `CatalogoTests` (tag, delta, vitrine, validação da publicação), `LicencasTests` (emitir/ler, janela do 7º dia, recusas, link, gateway); Infrastructure: `Us425Tests` (isolamento do catálogo por empresa, adesão, assento por usuário, link de uso único, trial pela impressão, licenças, webhook, script `Us425.sql`); Api: `CatalogoApiTests` (delta e 304, download, vitrine, admin), `ContaApiTests` (adesão, link, recusa com `codigo`, renovação do token cortada pelo bloqueio, política por empresa, gestor 403 na outra empresa), `LicencasApiTests` (renovação com JWT e chave, cada recusa, a janela) e `VersoesApiTests` (download anônimo com limite por IP); web: `Catalogo`, `Conta`, `Comprar` e `EmpresaDoGestor`; e2e: `us425.spec.ts` (as telas novas com as capturas) |
 | US #461 (API) | Core: `GeradorDoManifestoTests` (paridade com o `catalogo/base` v2 do git.kit em `Fixtures/catalogo-v2`: mesmos hashes, dependências, `requer` e manifesto regravado igual; versão + 1, retirados, o que volta, sem mudança), `FormatosDoCatalogoTests` (os 58 arquivos do git.kit regravados no formato canônico com o mesmo hash, a ordem do `SkillJson`, as mensagens do app), `RegrasDosCatalogosTests` (slug, nome do app, situação do rascunho, dependências, colisões) e `ContratoDoManifestoTests` (o conjunto de fixtures compartilhado com o git.kit); Infrastructure: `Us461Tests` (básico semeado, slug único, rascunho → release → versão nova só do alterado → retirada, o zip e o manifesto, a dependência que recusa, as colisões, o isolamento da distribuição, o gestor e os assentos de Empresas, script `Us461.sql`); Api: `CatalogosApiTests` (só o admin gere; a empresa vinculada vê, baixa e recebe 304, a outra e o anônimo recebem 404; o SHA-256 do zip; o 409 com o relatório; a importação do GitHub e as rotas antigas servindo o básico do site na `catalogo-v3`; o histórico 3, 2, 1) |
 | US #461 (web) | Vitest: `componentes/Compartilhados.test.tsx` (iniciais, selo, barra de uso, copiar, abas pelo teclado, chips, página e painel lateral), `Empresas.test.tsx` (assentos em uso, gestor, copiar o código, painel lateral, convite na linha), `Usuarios.test.tsx` (busca e filtros, menu ⋯, painel lateral), `Catalogo.test.tsx` (vitrine com busca, chips e categorias; a rota antiga na aba Releases; o cartão da release, o copiar do SHA-256, o manifesto e o zip; o seletor de catálogo), `catalogo/conteudo.test.ts` (o JSON da skill e do plan na ordem do dev.kit, as mensagens do app, o envelope do fluxo e a prévia) e `catalogo/Catalogos.test.tsx` (cadastro, slug, empresas e a colisão, itens, editor, retirar, publicação com o 409 da dependência e o sucesso indo para Releases); e2e: `us461.spec.ts` (catálogo → empresa → skill e fluxo → publicar → release e manifesto → `/api/catalogos/meus` só para a empresa relacionada; o nome por US faz ele rodar depois do `fluxo.spec.ts`, que pressupõe a base nova com a senha inicial do admin) e `usuarios.spec.ts` no layout novo |
-| US #491 | Infrastructure: `Us491Tests` (o mesmo caminho escrito de dois jeitos é um repositório e gravar de novo troca a descrição, o filtro, o isolamento entre empresas, a convenção da empresa só do gestor e a do time de qualquer um, cada time vê só a dele, vazio apaga, script `Us491.sql`); Api: `ConhecimentoApiTests` (o dev grava e consulta o catálogo, 400 sem descrição, a outra empresa não vê, admin 403 e anônimo 401; a convenção da empresa 403 ao dev e 200 ao gestor, a do time do dev, o nível do usuário 400, o `?time=` trazendo a da empresa e a do time) |
+| US #491 | Infrastructure: `Us491Tests` (o mesmo caminho escrito de dois jeitos é um repositório e gravar de novo troca a descrição, o filtro, o isolamento entre empresas, a remoção pelo gestor ou por quem gravou, script `Us491.sql`); Api: `ConhecimentoApiTests` (o dev grava e consulta o catálogo, 400 sem descrição, a outra empresa não vê, admin 403 e anônimo 401; as rotas antigas das convenções como adaptador do contexto: a da empresa 403 ao dev e 200 ao gestor, a da equipe só depois da participação aprovada, a sugestão do agente fora, vazio apaga, a auditoria pela visão do contexto) |
+| US #556 | Core: `RegrasDoContextoTests` (a matriz papel × nível × origem de `PodeVer`/`PodeGravar`, a equipe só aprovada, a validação e os tetos, os exemplos de credencial e de texto comum de `SegredosNoContexto`, o adaptador das convenções); Infrastructure: `ContextoDaEmpresaTests` (CRUD com a versão e o 409 com o item atual, instrução e sugestão da mesma chave, promover e descartar, a equipe declarada vira pedido pendente até o gestor aprovar, a visão de cada papel, o admin pelo mesmo serviço, outra empresa 404, a credencial barrada no serviço) e `ContextoMigracaoTests` (as convenções semeadas antes da migration viram contexto com os mesmos valores e autores, o participante aprovado de quem gravou a do time, o índice único com a origem, o script do Azure SQL com as colunas do modelo e cada passo protegido); Api: `ContextoApiTests` (cada papel vê o que lhe cabe, 401/403, o admin vê e altera tudo e 404 na empresa inexistente, o agente só grava sugestão, o 409, a equipe alheia pendente e 403 até aprovar, o gestor de outra empresa 404, a credencial 422 sem o valor na resposta nem no log, excluir e descartar); web: `EditorDeContexto.test.tsx`, `ParticipantesDaEquipe.test.tsx`, `MeuContexto.test.tsx`, `AdminContexto.test.tsx` e `EmpresaConhecimento.test.tsx` (o link antigo); e2e: `contexto.spec.ts` (o pedido e a aprovação, a nota do agente pela API, instrução × sugestão na tela, promover, a empresa pelo gestor, o admin, o composto do dev.kit) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

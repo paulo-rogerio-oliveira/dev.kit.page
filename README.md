@@ -143,3 +143,30 @@ publica os resultados.
    `ConhecimentoApiTests` e `Us491Tests`.
 4. **A tabela no SQLite e no Azure SQL** — as migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` e
    `api/scripts/sqlserver/Us491.sql` ([publicação](docs/publicacao-azure.md#catálogo-de-repositórios-e-convenções-da-empresa-us-491)).
+
+Desde a US #556 as convenções dos itens 2 e 3 são o CONTEXTO (abaixo): as rotas de convenção continuam respondendo, como
+adaptador, e a aba Convenções virou a página `/contexto`.
+
+## Como verificar cada critério da US #556
+
+1. **Contexto (usuário, equipe, empresa) no lugar das convenções, sem perder o que existia** — a migration
+   `ContextoNoLugarDasConvencoes` e o `api/scripts/sqlserver/ContextoNoLugarDasConvencoes.sql`
+   ([publicação](docs/publicacao-azure.md#o-contexto-do-devkit-usuário-equipe-e-empresa-us-556)); `ContextoMigracaoTests`.
+   O nome do branch segue igual (no git.kit, `ContextoDoBranchTests` e `CacheDoContextoTests`).
+2. **Instrução (o usuário) × sugestão (o agente); promover e descartar** — `PUT /api/contexto` (com `origem`),
+   `POST /api/contexto/{id}/promover`, `DELETE /api/contexto/{id}`; `ContextoDaEmpresaTests`, `ContextoApiTests` e
+   `EditorDeContexto.test.tsx`.
+3. **Permissões no servidor; participação aprovada pelo gestor; nenhuma credencial** — `RegrasDoContextoTests`,
+   `ContextoApiTests` (403/404, a equipe alheia pendente até aprovar, o 422 sem o valor na resposta nem no log).
+4. **Sincronização na abertura do dev.kit (app, devcli, agendador), offline e conflito** — no git.kit,
+   `SincronizacaoDoContextoTests`, `ContextoNaAberturaTests` e `ContextoToolTests`.
+5. **Todo agente e todo avaliador recebem o contexto** — no git.kit, `ContextoDoDevKitTests`, `AgentRulesFileTests`,
+   `JobWorkspaceFilesTests`, `HookFiringTests` e `AgentHookRunnerTaskAbertaTests`.
+6. **O agente anota ao fim da execução** — `devcli contexto --anotar "..." --aplicar` (a regra fixa
+   `AgentFixedRules.AnotarContexto`); `ContextoToolTests` e `AgentFixedRulesTests`.
+7. **A landing por perfil** — `/contexto` (o dev: o dele, o das equipes e o da empresa só leitura; o gestor: a empresa
+   e os participantes) e `/admin/contexto` (o admin: tudo, de qualquer empresa); `MeuContexto.test.tsx`,
+   `AdminContexto.test.tsx`, `ParticipantesDaEquipe.test.tsx` e o e2e `contexto.spec.ts` (capturas
+   `test-results/capturas/70-73-*.png`).
+8. **O dev.kit antigo continua** — `/api/empresa/convencoes` como adaptador (`ConhecimentoApiTests`) e `devcli
+   convencoes` como alias (no git.kit, `ConvencoesToolTests`).
