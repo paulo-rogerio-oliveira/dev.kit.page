@@ -377,6 +377,40 @@ inclusive do básico — é a única forma de "editar pelo site, gerar o manifes
 
 Tabelas novas: migration `Us461CatalogosNomeados` e `api/scripts/sqlserver/Us461.sql`.
 
+**O que a empresa compartilha com o dev.kit: o catálogo de repositórios e as convenções (US #491).** Duas coisas que
+uma task aprende valem para a próxima — inclusive a do colega: QUAL repositório é qual, e COMO se nomeia o branch.
+As rotas ficam sob `/api/empresa`, no `EscopoDaEmpresa` do token, mas abertas ao DEV (as outras dali são do gestor):
+- `GET /api/empresa/repositorios?filtro=` e `POST /api/empresa/repositorios` (`GravacaoDeRepositorioV1 {origem,
+  descricao}`): o agente do dev.kit grava o caminho e a descrição de cada repositório que usou ao terminar a task, e
+  todos da empresa consultam para resolver o repositório de um pedido. Único por (empresa, caminho normalizado —
+  minúsculas, sem barra nem `.git` no fim, `RegrasDoConhecimentoDaEmpresa.ChaveDaOrigem`): gravar de novo troca a
+  descrição. O filtro (caminho ou descrição, sem caixa) é em memória. `DELETE /api/empresa/repositorios?origem=`
+  tira um repositório do catálogo: do gestor, ou de quem o descreveu por último (os outros recebem 403; 404 se não
+  existe).
+- `GET /api/empresa/convencoes?time=` e `PUT /api/empresa/convencoes` (`ConvencaoV1 {nivel, chave, valor, time}`): as
+  convenções da EMPRESA, as do TIME e as do USUÁRIO — hoje o modelo do nome do branch, uma por TIPO DE BRANCH
+  (`branch.feature`, `branch.bug`, `branch.hotfix` ou `branch.<tipo do work item>`, chave em minúsculas sem acento; quem
+  escolhe qual vale é o dev.kit, pelo tipo do item ou pelo `tipo=` do comentário).
+  O time é um NOME, o que o dev declara na Equipe das Configurações do dev.kit, e não um cadastro desta API: a empresa
+  não precisa montar times aqui para compartilhar a convenção de um. A da empresa é do gestor (o dev recebe 403); a de
+  um time, de qualquer um da empresa; a do usuário, só do próprio (gravada no `UsuarioId` do token — não há como
+  gravar a de outro); valor vazio apaga a do nível. O GET devolve a da empresa, a do time pedido e as do próprio
+  usuário. A precedência (usuário &gt; time &gt; empresa) é do dev.kit, que lê estas na abertura do `devcli` — a do
+  usuário vale na máquina mesmo sem a API, e sobe para cá quando dá.
+- `GET /api/empresa/convencoes/todas` é a AUDITORIA: cada convenção com o nível, o time, de quem é (a do usuário), o
+  autor da última gravação e quando. O gestor vê todas, de todos; o dev vê as da empresa, as de todos os times e as
+  dele — as de outro usuário são pessoais.
+- A página `/empresa/conhecimento` do site (`EmpresaConhecimento.tsx`, do dev e do gestor — o admin vai para o
+  dashboard) é onde isso se audita e se edita: a aba Repositórios lista o catálogo com o autor e a data, edita a
+  descrição e (gestor) remove; a aba Convenções filtra por nível, grava e apaga, com o formulário oferecendo só os
+  níveis que o papel pode gravar (empresa, só o gestor).
+- O admin, sem empresa no token, recebe 403, como nas outras rotas da empresa. Serviço: `IConhecimentoDaEmpresa`
+  (Core, `ServicosDaUs491.cs`) e `ConhecimentoDaEmpresa` (Infrastructure); modelo em `EntidadesDaUs491.cs`.
+
+Tabelas novas: migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` (a coluna `UsuarioId` da
+convenção do usuário, no índice único) e `api/scripts/sqlserver/Us491.sql`, que também acrescenta a coluna numa base
+que rodou a primeira versão dele.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -387,7 +421,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -410,4 +444,5 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | US #425 | Core: `Ed25519Tests` (vetores do RFC 8032, adulterada, chave errada), `CatalogoTests` (tag, delta, vitrine, validação da publicação), `LicencasTests` (emitir/ler, janela do 7º dia, recusas, link, gateway); Infrastructure: `Us425Tests` (isolamento do catálogo por empresa, adesão, assento por usuário, link de uso único, trial pela impressão, licenças, webhook, script `Us425.sql`); Api: `CatalogoApiTests` (delta e 304, download, vitrine, admin), `ContaApiTests` (adesão, link, recusa com `codigo`, renovação do token cortada pelo bloqueio, política por empresa, gestor 403 na outra empresa), `LicencasApiTests` (renovação com JWT e chave, cada recusa, a janela) e `VersoesApiTests` (download anônimo com limite por IP); web: `Catalogo`, `Conta`, `Comprar` e `EmpresaDoGestor`; e2e: `us425.spec.ts` (as telas novas com as capturas) |
 | US #461 (API) | Core: `GeradorDoManifestoTests` (paridade com o `catalogo/base` v2 do git.kit em `Fixtures/catalogo-v2`: mesmos hashes, dependências, `requer` e manifesto regravado igual; versão + 1, retirados, o que volta, sem mudança), `FormatosDoCatalogoTests` (os 58 arquivos do git.kit regravados no formato canônico com o mesmo hash, a ordem do `SkillJson`, as mensagens do app), `RegrasDosCatalogosTests` (slug, nome do app, situação do rascunho, dependências, colisões) e `ContratoDoManifestoTests` (o conjunto de fixtures compartilhado com o git.kit); Infrastructure: `Us461Tests` (básico semeado, slug único, rascunho → release → versão nova só do alterado → retirada, o zip e o manifesto, a dependência que recusa, as colisões, o isolamento da distribuição, o gestor e os assentos de Empresas, script `Us461.sql`); Api: `CatalogosApiTests` (só o admin gere; a empresa vinculada vê, baixa e recebe 304, a outra e o anônimo recebem 404; o SHA-256 do zip; o 409 com o relatório; a importação do GitHub e as rotas antigas servindo o básico do site na `catalogo-v3`; o histórico 3, 2, 1) |
 | US #461 (web) | Vitest: `componentes/Compartilhados.test.tsx` (iniciais, selo, barra de uso, copiar, abas pelo teclado, chips, página e painel lateral), `Empresas.test.tsx` (assentos em uso, gestor, copiar o código, painel lateral, convite na linha), `Usuarios.test.tsx` (busca e filtros, menu ⋯, painel lateral), `Catalogo.test.tsx` (vitrine com busca, chips e categorias; a rota antiga na aba Releases; o cartão da release, o copiar do SHA-256, o manifesto e o zip; o seletor de catálogo), `catalogo/conteudo.test.ts` (o JSON da skill e do plan na ordem do dev.kit, as mensagens do app, o envelope do fluxo e a prévia) e `catalogo/Catalogos.test.tsx` (cadastro, slug, empresas e a colisão, itens, editor, retirar, publicação com o 409 da dependência e o sucesso indo para Releases); e2e: `us461.spec.ts` (catálogo → empresa → skill e fluxo → publicar → release e manifesto → `/api/catalogos/meus` só para a empresa relacionada; o nome por US faz ele rodar depois do `fluxo.spec.ts`, que pressupõe a base nova com a senha inicial do admin) e `usuarios.spec.ts` no layout novo |
+| US #491 | Infrastructure: `Us491Tests` (o mesmo caminho escrito de dois jeitos é um repositório e gravar de novo troca a descrição, o filtro, o isolamento entre empresas, a convenção da empresa só do gestor e a do time de qualquer um, cada time vê só a dele, vazio apaga, script `Us491.sql`); Api: `ConhecimentoApiTests` (o dev grava e consulta o catálogo, 400 sem descrição, a outra empresa não vê, admin 403 e anônimo 401; a convenção da empresa 403 ao dev e 200 ao gestor, a do time do dev, o nível do usuário 400, o `?time=` trazendo a da empresa e a do time) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

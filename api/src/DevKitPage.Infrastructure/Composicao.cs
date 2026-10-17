@@ -73,6 +73,7 @@ public static class Composicao
         servicos.AddScoped<IPedidosDeDemonstracao, PedidosDeDemonstracao>();
         servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
         servicos.AddScoped<ICatalogoDaEmpresa, CatalogoDaEmpresa>();
+        servicos.AddScoped<IConhecimentoDaEmpresa, ConhecimentoDaEmpresa>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
