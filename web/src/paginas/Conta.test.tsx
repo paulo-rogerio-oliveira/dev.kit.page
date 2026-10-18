@@ -101,6 +101,32 @@ describe('Conta (US #425)', () => {
     expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument();
   });
 
+  it('Meu contexto (US #550): lista o do usuário e grava um tema novo no nível usuário', async () => {
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Meu contexto' });
+    expect(await within(secao).findByText('Respostas curtas, com o porquê.')).toBeInTheDocument();
+    expect(within(secao).getByText('A empresa já define: stack.')).toBeInTheDocument();
+
+    const formulario = within(secao).getByRole('form', { name: 'Gravar no seu contexto' });
+    await userEvent.type(within(formulario).getByLabelText('Tema'), 'revisao');
+    await userEvent.type(within(formulario).getByLabelText('Texto'), 'Sempre com testes.');
+    await userEvent.click(within(formulario).getByRole('button', { name: 'Gravar' }));
+
+    expect(await within(secao).findByText('Tema revisao gravado no seu contexto.')).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo: { nivel: 'usuario', chave: 'contexto.revisao', valor: 'Sempre com testes.', time: '' } }]);
+  });
+
+  it('Meu contexto (US #550): sem empresa, avisa e não mostra o editor', async () => {
+    servidor.use(http.get(`${API}/api/conta`, () => HttpResponse.json({ ...contaIndividual, empresa: null })));
+
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Meu contexto' });
+    expect(within(secao).getByText(/não é de uma empresa/)).toBeInTheDocument();
+    expect(within(secao).queryByRole('form')).not.toBeInTheDocument();
+  });
+
   it('o 401 da API encerra a sessão', async () => {
     servidor.use(http.get(`${API}/api/conta`, () => new HttpResponse(null, { status: 401 })));
 

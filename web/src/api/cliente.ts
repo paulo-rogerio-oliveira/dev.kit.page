@@ -286,6 +286,22 @@ export const api = {
   gravarConvencao: (token: string, nivel: NivelDeConvencao, chave: string, valor: string, time: string) =>
     chamar<ConvencaoDaEmpresa>('/api/empresa/convencoes', { metodo: 'PUT', corpo: { nivel, chave, valor, time }, token }),
 
+  // O contexto por nível (US #550): as chaves contexto.<tema> das mesmas convenções. As de quem consulta (a da empresa
+  // e a dele — o que o dev.kit lê sem time) e as equipes conhecidas.
+  minhasConvencoes: (token: string) => chamar<ConvencaoDaEmpresa[]>('/api/empresa/convencoes', { token }),
+
+  equipesDaEmpresa: (token: string) => chamar<string[]>('/api/empresa/equipes', { token }),
+
+  // O admin geral numa empresa (sem empresa no token, ele fica fora de /api/empresa/*): todos os níveis, inclusive o de
+  // um usuário, pelo login.
+  convencoesDaEmpresaDoAdmin: (token: string, empresa: number) =>
+    chamar<ConvencaoDaEmpresa[]>(`/api/empresas/${empresa}/convencoes/todas`, { token }),
+
+  equipesDaEmpresaDoAdmin: (token: string, empresa: number) => chamar<string[]>(`/api/empresas/${empresa}/equipes`, { token }),
+
+  gravarConvencaoDoAdmin: (token: string, empresa: number, nivel: NivelDeConvencao, chave: string, valor: string, time: string, usuario: string) =>
+    chamar<ConvencaoDaEmpresa>(`/api/empresas/${empresa}/convencoes`, { metodo: 'PUT', corpo: { nivel, chave, valor, time, usuario }, token }),
+
   // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
   checkout: (email: string, nome: string, plano: string) =>
     chamar<CheckoutCriado>('/api/pagamentos/checkout', { metodo: 'POST', corpo: { email, nome, plano } }),

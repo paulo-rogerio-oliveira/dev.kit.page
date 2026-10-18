@@ -189,6 +189,12 @@ Sem elas, `/api/empresa/repositorios` e `/api/empresa/convencoes` respondem 500 
 como "a empresa ainda não compartilha isto", segue com o que a máquina já sabe. Nenhuma configuração nova; a página
 `/empresa/conhecimento` do site usa as mesmas tabelas.
 
+### Contexto por nível (US #550)
+
+Rode também `api/scripts/sqlserver/Us550.sql` (idempotente, depois do `Us491.sql`): a coluna `Valor` de
+`ConvencoesDaEmpresa` passa a `nvarchar(4000)`, o teto do texto do contexto (`contexto.<tema>`). Sem ele, gravar um
+contexto com mais de 200 caracteres responde 500. Nenhuma tabela nem configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

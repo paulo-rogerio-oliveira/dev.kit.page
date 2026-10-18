@@ -404,12 +404,40 @@ As rotas ficam sob `/api/empresa`, no `EscopoDaEmpresa` do token, mas abertas ao
   dashboard) é onde isso se audita e se edita: a aba Repositórios lista o catálogo com o autor e a data, edita a
   descrição e (gestor) remove; a aba Convenções filtra por nível, grava e apaga, com o formulário oferecendo só os
   níveis que o papel pode gravar (empresa, só o gestor).
-- O admin, sem empresa no token, recebe 403, como nas outras rotas da empresa. Serviço: `IConhecimentoDaEmpresa`
+- O admin, sem empresa no token, recebe 403, como nas outras rotas da empresa (o contexto, US #550, ganhou rotas
+  próprias para ele, abaixo). Serviço: `IConhecimentoDaEmpresa`
   (Core, `ServicosDaUs491.cs`) e `ConhecimentoDaEmpresa` (Infrastructure); modelo em `EntidadesDaUs491.cs`.
 
 Tabelas novas: migrations `Us491ConhecimentoDaEmpresa` e `Us491ConvencaoDoUsuario` (a coluna `UsuarioId` da
 convenção do usuário, no índice único) e `api/scripts/sqlserver/Us491.sql`, que também acrescenta a coluna numa base
 que rodou a primeira versão dele.
+
+**O contexto do dev.kit, gerenciável por nível (US #550).** O que os agentes do dev.kit devem saber da empresa, da
+equipe e do usuário em toda task. Não há tabela nova: o contexto é a família de chaves `contexto.<tema>` das MESMAS
+convenções da #491 — a tabela `ConvencoesDaEmpresa`, o contrato `ConvencaoV1` e a rota que o dev.kit já lê
+(`GET /api/empresa/convencoes?time=`, que não muda: o dev.kit antigo ignora as chaves que não conhece).
+- **Teto próprio.** `RegrasDoConhecimentoDaEmpresa.EhContexto`/`TetoDoValor`: o texto do contexto vai até 4000
+  caracteres (`TamanhoMaximoDoValorDeContexto`); as convenções de branch continuam com 200. A coluna `Valor` passou a
+  `nvarchar(4000)` — migration `Us550ContextoPorNivel` (sem DDL no SQLite, cujo `TEXT` não tem tamanho) e
+  `api/scripts/sqlserver/Us550.sql` (idempotente: altera só enquanto a coluna for menor).
+- **Quem grava, numa regra pura** (`RegrasDoConhecimentoDaEmpresa.PodeGravar`, no Core, testada sem banco): a da
+  EMPRESA é do gestor; num TIME, o CONTEXTO da equipe é do gestor e o branch (#491) continua de qualquer um; a do
+  USUÁRIO é do dono — o gestor a vê na auditoria, mas não a edita; o admin geral grava tudo.
+- **O admin geral** não tem empresa no token e continua recebendo 403 em `/api/empresa/*`. Em vez de afrouxar aquelas
+  rotas, as dele dizem a empresa no caminho, sob a `PoliticaAdmin` (`EndpointsDaUs550.cs`): `GET
+  /api/empresas/{id}/convencoes/todas`, `PUT /api/empresas/{id}/convencoes` e `GET /api/empresas/{id}/equipes`. Elas
+  montam o `EscopoDaEmpresa.DoAdmin` (gestor naquela empresa, e mais) e usam o MESMO `ConhecimentoDaEmpresa`. O nível
+  usuário de outro vai pelo login em `ConvencaoV1.Usuario` — só o admin escolhe o dono; para o dev e o gestor o dono
+  continua sendo o do token. Empresa inexistente é 404; login de outra empresa também (sem revelar que existe).
+- **As equipes conhecidas** (`GET /api/empresa/equipes`, e a rota do admin): os times distintos, normalizados, já
+  gravados nas convenções da empresa. A equipe continua um nome livre — a lista só ajuda a escolher.
+- **As telas** usam um editor só (`componentes/EditorDeContexto.tsx`: temas, texto com o contador do teto, remover =
+  gravar vazio) e, para os três níveis, `componentes/ContextoPorNivel.tsx`: a seção **Meu contexto** em `/conta` (o
+  do próprio usuário; sem empresa, o aviso), a aba **Contexto** de `/empresa/conhecimento` (o gestor edita empresa e
+  equipes e lê os usuários; o dev só lê) e o painel **Contexto** de cada empresa em `/empresas` (o admin, os três
+  níveis, inclusive escolher um usuário e editar o dele). A aba Convenções passou a mostrar só as de branch.
+- No dev.kit, a composição é a do `ContextoDoDevKit` (empresa → equipe → usuário; num tema em conflito, vale o mais
+  específico), que entra no arquivo de regras de toda task.
 
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
@@ -421,7 +449,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna). Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de

@@ -39,9 +39,17 @@ public interface IConhecimentoDaEmpresa
 
     /// <summary>
     /// Grava a convenção JÁ validada (<see cref="RegrasDoConhecimentoDaEmpresa.ValidarConvencao"/>); valor vazio apaga.
-    /// A da EMPRESA é do gestor; a de um TIME, de qualquer um da empresa; a do USUÁRIO, dele mesmo.
+    /// Quem pode é a <see cref="RegrasDoConhecimentoDaEmpresa.PodeGravar"/>. O admin geral (<see cref="EscopoDaEmpresa.EhAdmin"/>)
+    /// grava o nível usuário de quem é da empresa pelo login em <see cref="ConvencaoV1.Usuario"/>: login que não é
+    /// dela é <see cref="FalhaNaGestao.NaoEncontrado"/>, sem revelar se existe noutra.
     /// </summary>
     Task<ResultadoDaGestao<ConvencaoV1>> GravarConvencaoAsync(EscopoDaEmpresa escopo, ConvencaoV1 convencao, CancellationToken ct);
+
+    /// <summary>
+    /// As EQUIPES CONHECIDAS da empresa (US #550): os times distintos, já normalizados, das convenções gravadas nela. A
+    /// equipe continua um nome livre — a lista só ajuda a escolher, e uma equipe nova entra ao gravar a primeira.
+    /// </summary>
+    Task<IReadOnlyList<string>> EquipesAsync(EscopoDaEmpresa escopo, CancellationToken ct);
 }
 
 /// <summary>As regras puras do catálogo de repositórios e das convenções da empresa (US #491): validação e normalização.</summary>
@@ -52,6 +60,15 @@ public static class RegrasDoConhecimentoDaEmpresa
     public const int TamanhoMaximoDaChave = 60;
     public const int TamanhoMaximoDoValor = 200;
     public const int TamanhoMaximoDoTime = 80;
+
+    /// <summary>
+    /// O CONTEXTO do dev.kit (US #550) é a família de chaves <c>contexto.&lt;tema&gt;</c> das mesmas convenções: texto que
+    /// os agentes recebem no arquivo de regras de toda task, composto empresa → equipe → usuário.
+    /// </summary>
+    public const string PrefixoDoContexto = "contexto.";
+
+    /// <summary>O teto do valor de uma chave de contexto: texto de várias linhas, e não um modelo de nome de branch.</summary>
+    public const int TamanhoMaximoDoValorDeContexto = 4000;
 
     /// <summary>Nível de convenção (o maior dos dois nomes).</summary>
     public const int TamanhoMaximoDoNivel = 10;
@@ -72,6 +89,32 @@ public static class RegrasDoConhecimentoDaEmpresa
 
     /// <summary>O time como chave: sem espaço nas pontas e em minúsculas ("Vendas" e "vendas" são o mesmo time).</summary>
     public static string NormalizarTime(string? time) => (time ?? string.Empty).Trim().ToLowerInvariant();
+
+    /// <summary>A chave é do contexto do dev.kit (<see cref="PrefixoDoContexto"/>), e não de uma convenção como a do branch.</summary>
+    public static bool EhContexto(string? chave)
+        => (chave ?? string.Empty).Trim().ToLowerInvariant().StartsWith(PrefixoDoContexto, StringComparison.Ordinal);
+
+    /// <summary>O teto do valor da chave: o do contexto, ou o das outras convenções.</summary>
+    public static int TetoDoValor(string? chave) => EhContexto(chave) ? TamanhoMaximoDoValorDeContexto : TamanhoMaximoDoValor;
+
+    /// <summary>
+    /// Quem grava a convenção (US #550), numa regra só, sem banco. O admin geral grava tudo. A da EMPRESA é do gestor. A
+    /// de um TIME: o CONTEXTO da equipe é do gestor; as outras (o branch, da #491), de qualquer um da empresa. A do
+    /// USUÁRIO é do dono — o gestor a vê na auditoria, mas não a edita.
+    /// </summary>
+    /// <param name="usuarioAlvo">O dono da de nível usuário; 0 é o próprio de quem grava.</param>
+    public static bool PodeGravar(EscopoDaEmpresa escopo, string? nivel, string? chave, int usuarioAlvo = 0)
+    {
+        if (escopo.EhAdmin)
+            return true;
+        return (nivel ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            NiveisDeConvencao.Empresa => escopo.EhGestor,
+            NiveisDeConvencao.Time => escopo.EhGestor || !EhContexto(chave),
+            NiveisDeConvencao.Usuario => usuarioAlvo == 0 || usuarioAlvo == escopo.UsuarioId,
+            _ => false,
+        };
+    }
 
     /// <summary>O erro da gravação de repositório, ou vazio quando ela vale.</summary>
     public static string ValidarRepositorio(GravacaoDeRepositorioV1? gravacao)
@@ -99,8 +142,10 @@ public static class RegrasDoConhecimentoDaEmpresa
             return $"O nível da convenção é '{NiveisDeConvencao.Empresa}', '{NiveisDeConvencao.Time}' ou '{NiveisDeConvencao.Usuario}'.";
         if (chave.Length == 0 || chave.Length > TamanhoMaximoDaChave || !ChaveValida.IsMatch(chave))
             return "A chave da convenção é um nome curto em minúsculas, sem acento, como 'branch.hotfix'.";
-        if ((convencao?.Valor?.Trim().Length ?? 0) > TamanhoMaximoDoValor)
-            return $"O valor da convenção passa de {TamanhoMaximoDoValor} caracteres.";
+        if ((convencao?.Valor?.Trim().Length ?? 0) > TetoDoValor(chave))
+            return EhContexto(chave)
+                ? $"O texto do contexto passa de {TamanhoMaximoDoValorDeContexto} caracteres."
+                : $"O valor da convenção passa de {TamanhoMaximoDoValor} caracteres.";
         if (nivel == NiveisDeConvencao.Time && time.Length == 0)
             return "Informe o time da convenção (a Equipe das Configurações do dev.kit).";
         return time.Length > TamanhoMaximoDoTime ? $"O nome do time passa de {TamanhoMaximoDoTime} caracteres." : string.Empty;

@@ -283,6 +283,13 @@ export const convencoesDaEmpresa: ConvencaoDaEmpresa[] = [
   { nivel: 'usuario', chave: 'branch.bug', valor: 'ana/bug-{id}', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-14T09:45:00Z' },
 ];
 
+/** O contexto do dev.kit nos três níveis (US #550): as chaves contexto.<tema> das mesmas convenções. */
+export const contextosDaEmpresa: ConvencaoDaEmpresa[] = [
+  { nivel: 'empresa', chave: 'contexto.stack', valor: '.NET 10 na API e React 19 na web.', time: '', usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-16T09:00:00Z' },
+  { nivel: 'time', chave: 'contexto.stack', valor: 'Angular 19 no front.\nTestes com Jasmine.', time: 'vendas', usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-16T09:10:00Z' },
+  { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Respostas curtas, com o porquê.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:20:00Z' },
+];
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -490,11 +497,21 @@ export const handlersPadrao = [
     escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/repositorios?origem=${origem}`, corpo: null });
     return HttpResponse.json(repositoriosDaEmpresa.find((r) => r.origem === origem) ?? repositoriosDaEmpresa[0]);
   }),
-  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json(convencoesDaEmpresa)),
+  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa])),
   http.put(`${API}/api/empresa/convencoes`, async ({ request }) => {
     const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string };
     escritas.push({ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo });
     return HttpResponse.json({ ...corpo, usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
+  }),
+  // US #550: o que o dev.kit lê sem time (a da empresa e a de quem consulta), as equipes conhecidas e as rotas do admin.
+  http.get(`${API}/api/empresa/convencoes`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa].filter((c) => c.nivel !== 'time'))),
+  http.get(`${API}/api/empresa/equipes`, () => HttpResponse.json(['vendas'])),
+  http.get(`${API}/api/empresas/:id/convencoes/todas`, ({ params }) => HttpResponse.json(params.id === '4' ? [...convencoesDaEmpresa, ...contextosDaEmpresa] : [])),
+  http.get(`${API}/api/empresas/:id/equipes`, ({ params }) => HttpResponse.json(params.id === '4' ? ['vendas'] : [])),
+  http.put(`${API}/api/empresas/:id/convencoes`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string; usuario: string };
+    escritas.push({ metodo: 'PUT', caminho: `/api/empresas/${params.id}/convencoes`, corpo });
+    return HttpResponse.json({ ...corpo, autor: 'admin', atualizadoEm: '2026-10-16T10:00:00Z' });
   }),
   http.post(`${API}/api/pagamentos/checkout`, async ({ request }) => {
     const corpo = (await request.json()) as { plano: string };

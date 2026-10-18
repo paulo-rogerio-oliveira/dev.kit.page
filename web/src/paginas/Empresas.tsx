@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { EmpresaResumo, GestorCriado } from '../api/tipos';
+import type { ConvencaoDaEmpresa, EmpresaResumo, GestorCriado } from '../api/tipos';
 import { Avatar } from '../componentes/Avatar';
 import { BarraDeUso } from '../componentes/BarraDeUso';
 import { BotaoCopiar } from '../componentes/BotaoCopiar';
+import { ContextoPorNivel, type GravarContexto, type UsuarioDoContexto } from '../componentes/ContextoPorNivel';
+import { temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
@@ -24,7 +26,8 @@ export function resumoDasEmpresas(empresas: EmpresaResumo[]): string {
  * As empresas do plano empresarial (US #381; visual da US #461) — só do admin. A tabela mostra o plano, os
  * assentos EM USO (os devs ativos, a mesma conta do login), o CÓDIGO DE ADESÃO que o gestor entrega ao time (com o
  * copiar) e o gestor — ou "Sem gestor" e o Convidar: a senha inicial do convidado aparece UMA vez, e o primeiro
- * acesso dele exige a troca. O cadastro fica no painel lateral.
+ * acesso dele exige a troca. O cadastro fica no painel lateral — e, desde a US #550, o Contexto do dev.kit de cada
+ * empresa, nos três níveis.
  */
 export function Empresas() {
   const { sessao, sair } = useSessao();
@@ -36,6 +39,7 @@ export function Empresas() {
   const [convidando, setConvidando] = useState<number | null>(null);
   const [loginDoGestor, setLoginDoGestor] = useState('');
   const [criado, setCriado] = useState<(GestorCriado & { empresa: string }) | null>(null);
+  const [contextoDe, setContextoDe] = useState<EmpresaResumo | null>(null);
   const [erro, setErro] = useState('');
 
   const tratar = useCallback((falha: unknown) => {
@@ -142,6 +146,10 @@ export function Empresas() {
                               <button className="botao botao-fantasma botao-pequeno" type="button" aria-label={`Convidar o gestor de ${e.nome}`} onClick={() => abrirConvite(e)}>
                                 Convidar
                               </button>
+                              <button className="botao botao-fantasma botao-pequeno" type="button" aria-label={`Contexto de ${e.nome}`}
+                                onClick={() => { setErro(''); setContextoDe(e); }}>
+                                Contexto
+                              </button>
                             </span>
                           )}
                         </td>
@@ -153,30 +161,88 @@ export function Empresas() {
             )}
           </section>
 
-          <PainelLateral id="titulo-nova-empresa" titulo="Nova empresa">
-            <form className="formulario-lateral" onSubmit={criar} aria-label="Nova empresa">
-              <label>
-                Nome
-                <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={100} placeholder="Nome da empresa" required />
-              </label>
-              <div className="campos-lado-a-lado">
+          {contextoDe ? (
+            <ContextoDaEmpresa empresa={contextoDe} token={token} tratar={tratar} aoFechar={() => setContextoDe(null)} />
+          ) : (
+            <PainelLateral id="titulo-nova-empresa" titulo="Nova empresa">
+              <form className="formulario-lateral" onSubmit={criar} aria-label="Nova empresa">
                 <label>
-                  Plano
-                  <select value={plano} onChange={(e) => setPlano(e.target.value)}>
-                    {PLANOS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  Nome
+                  <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={100} placeholder="Nome da empresa" required />
                 </label>
-                <label>
-                  Assentos
-                  <input type="number" min={1} value={assentos} onChange={(e) => setAssentos(Number(e.target.value))} required />
-                </label>
-              </div>
-              <p className="nota-do-formulario">Ao criar, a empresa recebe um código de adesão para os devs entrarem.</p>
-              <button className="botao botao-primario botao-largo" type="submit">Criar empresa</button>
-            </form>
-          </PainelLateral>
+                <div className="campos-lado-a-lado">
+                  <label>
+                    Plano
+                    <select value={plano} onChange={(e) => setPlano(e.target.value)}>
+                      {PLANOS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Assentos
+                    <input type="number" min={1} value={assentos} onChange={(e) => setAssentos(Number(e.target.value))} required />
+                  </label>
+                </div>
+                <p className="nota-do-formulario">Ao criar, a empresa recebe um código de adesão para os devs entrarem.</p>
+                <button className="botao botao-primario botao-largo" type="submit">Criar empresa</button>
+              </form>
+            </PainelLateral>
+          )}
         </div>
       </Pagina>
     </div>
+  );
+}
+
+/**
+ * O painel Contexto de uma empresa (US #550) — o admin geral vê e gerencia os TRÊS níveis do contexto do dev.kit dela:
+ * a empresa, cada equipe e cada usuário (pelo login), pelas rotas /api/empresas/{id}/... — ele não tem empresa no
+ * token e fica fora de /api/empresa/*.
+ */
+function ContextoDaEmpresa({ empresa, token, tratar, aoFechar }: {
+  empresa: EmpresaResumo; token: string; tratar: (falha: unknown) => void; aoFechar: () => void;
+}) {
+  const [dados, setDados] = useState<{ convencoes: ConvencaoDaEmpresa[]; equipes: string[]; usuarios: UsuarioDoContexto[] } | null>(null);
+  const [aviso, setAviso] = useState('');
+
+  const carregar = useCallback(async () => {
+    try {
+      const [convencoes, equipes, usuarios] = await Promise.all([
+        api.convencoesDaEmpresaDoAdmin(token, empresa.id), api.equipesDaEmpresaDoAdmin(token, empresa.id), api.usuarios(token),
+      ]);
+      setDados({ convencoes, equipes, usuarios: usuarios.filter((u) => u.empresaId === empresa.id).map((u) => ({ login: u.login, nome: u.nome })) });
+    } catch (falha) {
+      tratar(falha);
+    }
+  }, [token, empresa.id, tratar]);
+
+  useEffect(() => {
+    setDados(null);
+    setAviso('');
+    void carregar();
+  }, [carregar]);
+
+  const gravar: GravarContexto = async (nivel, chave, valor, time, usuario) => {
+    setAviso('');
+    try {
+      await api.gravarConvencaoDoAdmin(token, empresa.id, nivel, chave, valor, time, usuario);
+      setAviso(valor ? `Tema ${temaDa(chave)} gravado.` : `Tema ${temaDa(chave)} removido.`);
+      await carregar();
+      return true;
+    } catch (falha) {
+      tratar(falha);
+      return false;
+    }
+  };
+
+  return (
+    <PainelLateral id="titulo-contexto-da-empresa" titulo={`Contexto de ${empresa.nome}`}>
+      <button className="botao botao-fantasma botao-pequeno" type="button" onClick={aoFechar}>Fechar</button>
+      {aviso && <p className="aviso" role="status">{aviso}</p>}
+      {!dados ? (
+        <p className="carregando" role="status">Carregando…</p>
+      ) : (
+        <ContextoPorNivel key={empresa.id} convencoes={dados.convencoes} equipes={dados.equipes} podeGerir usuarios={dados.usuarios} aoGravar={gravar} />
+      )}
+    </PainelLateral>
   );
 }
