@@ -756,6 +756,83 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("PedidosDeDemonstracao", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.Relato", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Captura")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Categoria")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ChaveDoCliente")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Contexto")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RespondidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("RespondidoPorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Resposta")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VersaoDevKit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CriadoEmUtc");
+
+                    b.HasIndex("RespondidoPorId");
+
+                    b.HasIndex("EmpresaId", "CriadoEmUtc");
+
+                    b.HasIndex("UsuarioId", "ChaveDoCliente")
+                        .IsUnique()
+                        .HasFilter("[ChaveDoCliente] <> ''");
+
+                    b.ToTable("Relatos", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.RepositorioDaEmpresa", b =>
                 {
                     b.Property<long>("Id")
@@ -1259,6 +1336,31 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasForeignKey("DevKitPage.Core.PacoteDoCatalogo", "VersaoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.Relato", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DevKitPage.Core.Usuario", "RespondidoPor")
+                        .WithMany()
+                        .HasForeignKey("RespondidoPorId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Empresa");
+
+                    b.Navigation("RespondidoPor");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.RepositorioDaEmpresa", b =>

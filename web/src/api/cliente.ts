@@ -3,6 +3,7 @@ import type {
   EmpresaNova, EmpresaResumo, EstadoDoGrupo, EventoDoLog, Filtro, GestorCriado, GrupoDeErroDetalhe, GrupoDeErroResumo, Harness, ImportacaoDoBasico,
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
   NivelDeConvencao, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
+  EstadoDoRelato, FiltroDeRelatos, MeuRelato, RelatoDetalhe, RelatoNovo, RelatoRecebido, RelatoResumo,
   RoiResposta, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
@@ -305,6 +306,29 @@ export const api = {
   // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
   checkout: (email: string, nome: string, plano: string) =>
     chamar<CheckoutCriado>('/api/pagamentos/checkout', { metodo: 'POST', corpo: { email, nome, plano } }),
+
+  // Os relatos (US #602): quem está logado relata e acompanha os seus; a gestão é do admin geral (todos) e do gestor (os
+  // da empresa dele) — o dev recebe 403, e o relato de outra empresa é 404. O filtro de empresa só vale para o admin.
+  relatar: (token: string, relato: RelatoNovo) =>
+    chamar<RelatoRecebido>('/api/relatos', { metodo: 'POST', corpo: relato, token }),
+
+  meusRelatos: (token: string) => chamar<MeuRelato[]>('/api/relatos/meus', { token }),
+
+  relatos: (token: string, filtro: FiltroDeRelatos, pagina: number, tamanho = 20) =>
+    chamar<Pagina<RelatoResumo>>(`/api/relatos?${new URLSearchParams({
+      ...preenchidos({
+        estado: filtro.estado, categoria: filtro.categoria, empresa: filtro.empresa === null ? null : String(filtro.empresa), de: filtro.de, ate: filtro.ate,
+      }),
+      pagina: String(pagina), tamanho: String(tamanho),
+    })}`, { token }),
+
+  relato: (token: string, id: number) => chamar<RelatoDetalhe>(`/api/relatos/${id}`, { token }),
+
+  alterarEstadoDoRelato: (token: string, id: number, estado: EstadoDoRelato) =>
+    chamar<RelatoDetalhe>(`/api/relatos/${id}/estado`, { metodo: 'PATCH', corpo: { estado }, token }),
+
+  responderRelato: (token: string, id: number, texto: string) =>
+    chamar<RelatoDetalhe>(`/api/relatos/${id}/resposta`, { metodo: 'POST', corpo: { texto }, token }),
 
   // A gestão de usuários (US #405) — só o admin.
   usuarios: (token: string) => chamar<UsuarioResumo[]>('/api/usuarios', { token }),

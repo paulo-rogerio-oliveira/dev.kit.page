@@ -563,6 +563,92 @@ export interface CatalogoDisponivel {
   publicadaEm: string | null;
 }
 
+// ----- US #602: os relatos dos usuários do dev.kit -----
+
+/** A categoria de um relato (CategoriasDeRelato). */
+export type CategoriaDeRelato = 'defeito' | 'sugestao' | 'duvida';
+
+/** O estado de um relato (EstadosDeRelato): chega novo, e quem administra o leva a em análise e a resolvido. */
+export type EstadoDoRelato = 'novo' | 'em-analise' | 'resolvido';
+
+/** O relato que o dev.kit manda (POST /api/relatos): o usuário e a empresa vêm do token. */
+export interface RelatoNovo {
+  categoria: CategoriaDeRelato;
+  texto: string;
+  contexto?: string | null;
+  /** PNG ou JPEG em base64. */
+  captura?: string | null;
+  versaoDevKit?: string | null;
+  /** O id da fila do dev.kit: o reenvio devolve o mesmo relato. */
+  chaveDoCliente?: string | null;
+}
+
+export interface RelatoRecebido {
+  id: number;
+  estado: EstadoDoRelato;
+  recebidoEm: string;
+}
+
+/** Um relato na lista da gestão (o admin geral e o gestor da empresa). */
+export interface RelatoResumo {
+  id: number;
+  categoria: CategoriaDeRelato;
+  estado: EstadoDoRelato;
+  /** O começo do texto. */
+  resumo: string;
+  autor: string;
+  empresaId: number | null;
+  empresa: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  temCaptura: boolean;
+  respondido: boolean;
+}
+
+/** O relato inteiro, no detalhe da gestão. */
+export interface RelatoDetalhe {
+  id: number;
+  categoria: CategoriaDeRelato;
+  estado: EstadoDoRelato;
+  texto: string;
+  /** Mascarado; vazio quando o usuário não consentiu. */
+  contexto: string;
+  /** Base64; nula sem captura. */
+  captura: string | null;
+  versaoDevKit: string;
+  autor: string;
+  empresaId: number | null;
+  empresa: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  /** Vazia enquanto não houver. */
+  resposta: string;
+  respondidoPor: string;
+  respondidoEm: string | null;
+}
+
+/** Um relato do próprio usuário (GET /api/relatos/meus). */
+export interface MeuRelato {
+  id: number;
+  categoria: CategoriaDeRelato;
+  estado: EstadoDoRelato;
+  texto: string;
+  criadoEm: string;
+  atualizadoEm: string;
+  resposta: string;
+  respondidoEm: string | null;
+  chaveDoCliente: string | null;
+}
+
+/** O filtro da lista de relatos: vazio (ou nulo) é sem filtro; a empresa só vale para o admin; de/até em AAAA-MM-DD. */
+export interface FiltroDeRelatos {
+  estado: EstadoDoRelato | '';
+  categoria: CategoriaDeRelato | '';
+  empresa: number | null;
+  de: string;
+  ate: string;
+}
+
 /** Um arquivo baixado da API: o conteúdo e o nome sugerido. */
 export interface ArquivoBaixado {
   conteudo: Blob;
