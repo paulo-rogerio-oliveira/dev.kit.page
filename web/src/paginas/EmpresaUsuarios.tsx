@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import type { EmpresaDoGestor, UsuarioDaEmpresa } from '../api/tipos';
-import { Topo } from '../componentes/Topo';
+import { iniciais } from '../componentes/Avatar';
+import { Selo } from '../componentes/Selo';
+import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 
@@ -83,62 +84,83 @@ export function EmpresaUsuarios() {
   const politica: Politica = empresa === null || empresa.loginObrigatorio === null ? 'padrao' : empresa.loginObrigatorio ? 'sim' : 'nao';
   return (
     <div className="pagina">
-      <Topo secao="empresa">
-        <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
-        <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>
-        <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>
-      </Topo>
+      <Topo secao="empresa"><MenuDaEmpresa /></Topo>
       <main className="painel">
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
-        <section aria-labelledby="titulo-empresa">
-          <h1 id="titulo-empresa">{empresa?.nome ?? 'Empresa'}</h1>
+        <section aria-labelledby="titulo-empresa" className="secao-da-empresa">
+          <header className="cabecalho-da-pagina">
+            <div className="cabecalho-textos">
+              <p className="rotulo-da-pagina">Empresa</p>
+              <h1 id="titulo-empresa">{empresa?.nome ?? 'Empresa'}</h1>
+            </div>
+          </header>
           {empresa && (
-            <div className="filtros">
-              <p className="kpi" data-testid="assentos">{empresa.assentosOcupados} de {empresa.assentos} assentos ocupados</p>
-              <p>Código de adesão: <code>{empresa.codigoDeAdesao}</code></p>
-              <button className="botao botao-fantasma" type="button" onClick={() => void novoCodigo()}>Gerar código novo</button>
-              <label>
-                Login no dev.kit
-                <select value={politica} onChange={(e) => void mudarPolitica(e.target.value as Politica)}>
-                  <option value="padrao">Padrão do dev.kit{empresa.loginObrigatorio === null ? ` (${empresa.loginObrigatorioEfetivo ? 'obrigatório' : 'opcional'})` : ''}</option>
-                  <option value="sim">Obrigatório</option>
-                  <option value="nao">Opcional</option>
-                </select>
-              </label>
+            <div className="cartoes-da-empresa">
+              <div className="kpi kpi-destaque">
+                <span className="kpi-rotulo">Assentos ocupados</span>
+                <p className="kpi-valor" data-testid="assentos">
+                  {empresa.assentosOcupados} <small>de {empresa.assentos}</small><span className="visualmente-oculto"> assentos ocupados</span>
+                </p>
+                <span className="barra-de-uso" aria-hidden="true">
+                  <span className="trilho"><span className={`barra${empresa.assentosOcupados >= empresa.assentos ? ' barra-cheia' : ''}`} style={{ width: `${empresa.assentos > 0 ? Math.min(1, empresa.assentosOcupados / empresa.assentos) * 100 : 0}%` }} /></span>
+                </span>
+              </div>
+              <div className="kpi">
+                <span className="kpi-rotulo">Código de adesão</span>
+                <div className="kpi-linha">
+                  <code className="codigo-de-adesao">{empresa.codigoDeAdesao}</code>
+                  <button className="botao botao-fantasma" type="button" onClick={() => void novoCodigo()}>Gerar código novo</button>
+                </div>
+                <span className="kpi-nota">O time adere em /aderir com o código e o e-mail.</span>
+              </div>
+              <div className="kpi">
+                <label>
+                  Login no dev.kit
+                  <select value={politica} onChange={(e) => void mudarPolitica(e.target.value as Politica)}>
+                    <option value="padrao">Padrão do dev.kit{empresa.loginObrigatorio === null ? ` (${empresa.loginObrigatorioEfetivo ? 'obrigatório' : 'opcional'})` : ''}</option>
+                    <option value="sim">Obrigatório</option>
+                    <option value="nao">Opcional</option>
+                  </select>
+                </label>
+              </div>
             </div>
           )}
-          <p className="nota-da-secao">Cada dev ativo ocupa um assento; bloquear libera o assento. O time adere em /aderir com o código e o e-mail.</p>
+          <p className="nota-da-secao">Cada dev ativo ocupa um assento; bloquear libera o assento.</p>
         </section>
 
         <section aria-labelledby="titulo-usuarios-da-empresa">
-          <h2 id="titulo-usuarios-da-empresa">Usuários</h2>
+          <h2 id="titulo-usuarios-da-empresa" className="titulo-com-fio">Usuários</h2>
           {!usuarios ? (
             <p className="carregando" role="status">Carregando…</p>
           ) : (
-            <table className="tabela">
-              <thead>
-                <tr><th>Login</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Desde</th><th>Ações</th></tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.login}</td>
-                    <td>{u.nome || '—'}</td>
-                    <td>{u.papel === 'gestor' ? 'Gestor' : 'Dev'}</td>
-                    <td><span className={`estado ${u.bloqueado ? 'estado-regrediu' : 'estado-resolvido'}`}>{u.bloqueado ? 'Bloqueado' : 'Ativo'}</span></td>
-                    <td>{formatar.dataHora(u.criadoEm)}</td>
-                    <td>
-                      {u.login !== sessao!.login && (
-                        <button className="botao botao-fantasma" type="button" aria-label={`${u.bloqueado ? 'Desbloquear' : 'Bloquear'} ${u.login}`} onClick={() => void alternar(u)}>
-                          {u.bloqueado ? 'Desbloquear' : 'Bloquear'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="cartao cartao-de-tabela">
+              <div className="tabela-rolavel-simples">
+                <table className="tabela tabela-do-cartao">
+                  <thead>
+                    <tr><th>Login</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Desde</th><th>Ações</th></tr>
+                  </thead>
+                  <tbody>
+                    {usuarios.map((u) => (
+                      <tr key={u.id}>
+                        <td><span className="login-com-iniciais fonte-mono" data-iniciais={iniciais(u.login)}>{u.login}</span></td>
+                        <td>{u.nome || '—'}</td>
+                        <td><Selo variante={u.papel === 'gestor' ? 'marca' : 'neutro'}>{u.papel === 'gestor' ? 'Gestor' : 'Dev'}</Selo></td>
+                        <td><Selo variante={u.bloqueado ? 'aviso' : 'sucesso'} ponto>{u.bloqueado ? 'Bloqueado' : 'Ativo'}</Selo></td>
+                        <td>{formatar.dataHora(u.criadoEm)}</td>
+                        <td>
+                          {u.login === sessao!.login ? <span className="texto-mudo">você</span> : (
+                            <button className="botao botao-fantasma" type="button" aria-label={`${u.bloqueado ? 'Desbloquear' : 'Bloquear'} ${u.login}`} onClick={() => void alternar(u)}>
+                              {u.bloqueado ? 'Desbloquear' : 'Bloquear'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </section>
       </main>

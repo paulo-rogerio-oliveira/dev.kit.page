@@ -38,6 +38,12 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDaConta = "Conta";
 
+    /// <summary>
+    /// A política do envio de relatos (US #602): por USUÁRIO do token, com <see cref="OpcoesDosRelatos.EnviosPorHora"/>
+    /// numa janela de uma hora. O 429 não perde o relato: o dev.kit o mantém na fila e tenta de novo depois.
+    /// </summary>
+    public const string PoliticaDosRelatos = "Relatos";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -90,6 +96,17 @@ public static class LimiteDeTaxa
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDosRelatos, http =>
+            {
+                var porHora = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDosRelatos>>().Value.EnviosPorHora);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("relatos:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porHora,
+                    Window = TimeSpan.FromHours(1),
                     QueueLimit = 0,
                 });
             });

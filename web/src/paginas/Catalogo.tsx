@@ -94,6 +94,7 @@ export function Catalogo() {
     <div className="pagina">
       <Topo secao="catálogo">{ehAdmin && <MenuDoAdmin />}</Topo>
       <Pagina
+        rotulo="Catálogo"
         titulo="Catálogo do dev.kit"
         subtitulo="Skills, tech plans e fluxos que vêm com o dev.kit. Chegam sozinhos a cada máquina quando sai uma versão nova."
         acao={pilula}

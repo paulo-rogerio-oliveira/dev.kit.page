@@ -9,7 +9,7 @@ import { ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
-import { Topo } from '../componentes/Topo';
+import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -88,10 +88,9 @@ export function EmpresaConhecimento() {
   return (
     <div className="pagina">
       <Topo secao="conhecimento da empresa">
-        {ehGestor ? <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link> : <Link className="botao botao-fantasma" to="/conta">Conta</Link>}
-        {ehGestor && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
+        {ehGestor ? <MenuDaEmpresa /> : <Link className="botao botao-fantasma" to="/conta">Conta</Link>}
       </Topo>
-      <Pagina titulo="Repositórios e convenções" subtitulo="O que a empresa compartilha com o dev.kit: auditado aqui, com quem gravou e quando, e editável.">
+      <Pagina rotulo={sessao!.empresa ?? 'Empresa'} titulo="Repositórios e convenções"subtitulo="O que a empresa compartilha com o dev.kit: auditado aqui, com quem gravou e quando, e editável.">
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
         <Abas rotulo="Conhecimento da empresa" abas={ABAS} ativa={aba} aoMudar={(id) => { setAviso(''); setErro(''); setBusca({ aba: id }, { replace: true }); }} prefixo="conhecimento">

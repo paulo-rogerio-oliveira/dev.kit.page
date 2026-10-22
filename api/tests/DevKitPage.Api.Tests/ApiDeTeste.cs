@@ -45,6 +45,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly bool _loginObrigatorio;
     private readonly bool _comLicenca;
     private readonly int _downloadsPorHora;
+    private readonly int _relatosPorHora;
 
     /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
     /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
@@ -52,10 +53,13 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <param name="loginObrigatorio">O <c>DEVKIT_LOGIN_OBRIGATORIO</c> (US #405).</param>
     /// <param name="comLicenca">A chave privada da licença configurada (US #425); sem ela, as rotas de licença respondem 503.</param>
     /// <param name="downloadsPorHora">O limite de downloads anônimos por IP (US #425).</param>
+    /// <param name="relatosPorHora">O limite de relatos por usuário (US #602).</param>
     public ApiDeTeste(
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
-        string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100)
+        string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100,
+        int relatosPorHora = 100)
     {
+        _relatosPorHora = relatosPorHora;
         _ambiente = ambiente;
         _comSegredo = comSegredo;
         _ipDaConexao = ipDaConexao;
@@ -92,6 +96,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         builder.UseSetting("Conta:UrlDoSite", UrlDoSite);
         builder.UseSetting("Conta:LimitePorMinuto", "100");
         builder.UseSetting("Atualizacao:DownloadsPorHora", _downloadsPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting("Relatos:EnviosPorHora", _relatosPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (_redeConfiavel is not null)
             builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
         if (_ipDaConexao is not null)

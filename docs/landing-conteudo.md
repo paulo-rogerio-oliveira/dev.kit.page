@@ -97,6 +97,16 @@ saíram de `public/`, e o `landing.test.ts` confere que o roteiro e a pasta só 
 | `fluxos` | 12 s | Abas de estado → task em execução → task pronta para enviar | Com a nota mínima de cada avaliador, o trabalho segue para o push |
 | `replicacao` | 12 s | Branches de origem/destino → commits marcados → Replicar selecionados | Marque os commits a replicar |
 | `board` | 12 s | Board: horas de hoje → hoje/ontem/semanal/mensal → os work items do "Precisa de você" (captura `tela-board.png`, a `tela-board-precisa-de-voce` do gerador) | Horas de hoje, já rateadas |
+| `codex` | 12 s | Pré-execução de uma tarefa avulsa: o seletor do Modelo (o agente da task) → o modelo no Resumo → Executar com o agente (captura `tela-codex.png`) | O modelo da task, no resumo antes de executar |
+| `design` | 12 s | Painel Design do Orquestrador: as telas (captura e proposta) → a galeria lado a lado → o agente avisando que gravou as propostas (captura `tela-design.png`) | A proposta aparece como versão nova, ao lado da captura |
+
+**Desde a versão 5 do dev.kit** a home tem SETE recursos: o Orquestrador, o Codex e o Design entraram
+(marcados "novo" na aba). O **Orquestrador** não é gravado pelo roteiro: é o GIF das Novidades da versão 5
+(`src/GitKit.Core/Updates/Novidades/versao-5.gif` do git.kit, em `public/midia/orquestrador.gif`), com o
+primeiro quadro como poster (`orquestrador.jpg`, o que fica parado com *prefers-reduced-motion*). As capturas
+do `codex` e do `design` são as **escuras** (v001) do projeto de design do git.kit @ `feature/dev/semana4`,
+recortadas sem a margem branca — nunca a v002 do login do app, que mostra um usuário real. O hero ganhou a
+fala do Orquestrador no topo da amostra do Board.
 
 O texto alternativo completo de cada uma está no campo `alt` da mídia em `landing.ts`, e a legenda no
 campo `legenda` do recurso.
@@ -116,6 +126,9 @@ campo `legenda` do recurso.
    npm run midia                  # todas as mídias e a imagem de compartilhamento
    npm run midia -- agente board  # só estas
    ```
+
+   Com `--gif=<pasta>` (ex.: `npm run midia -- codex design --gif=../saida/gifs`), ele grava também um
+   GIF curto de cada mídia (12 fps, 800px), fora de `public` — para as notas da versão e a entrega.
 
    O gravador pausa as animações CSS de cada cena e fotografa quadro a quadro (o resultado não
    depende da velocidade da máquina). Os comandos de conversão que ele roda, por mídia:
