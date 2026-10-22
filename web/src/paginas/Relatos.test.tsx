@@ -29,7 +29,8 @@ describe('Relatos (US #602)', { timeout: 30_000 }, () => {
     renderizar('/relatos', tokenValido());
 
     const defeito = await linhaDoRelato(41);
-    expect(within(defeito).getByText('Defeito')).toHaveClass('insignia-aviso');
+    // A paleta da marca (versão 5): o defeito no vermelho da marca.
+    expect(within(defeito).getByText('Defeito')).toHaveClass('insignia-marca');
     expect(within(defeito).getByText('Novo')).toBeInTheDocument();
     expect(within(defeito).getByText('Ana Souza')).toBeInTheDocument();
     expect(within(defeito).getByText('Empresa A')).toBeInTheDocument();

@@ -92,7 +92,7 @@ export function Empresas() {
     <div className="pagina">
       <Topo secao="empresas"><MenuDoAdmin /></Topo>
 
-      <Pagina titulo="Empresas" subtitulo={empresas ? resumoDasEmpresas(empresas) : undefined} emLinha>
+      <Pagina rotulo="Administração" titulo="Empresas"subtitulo={empresas ? resumoDasEmpresas(empresas) : undefined} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}
         {criado && (
           <p className="aviso senha-temporaria" role="status">

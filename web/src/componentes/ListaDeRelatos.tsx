@@ -4,7 +4,7 @@ import { Selo, type VarianteDoSelo } from './Selo';
 
 /** As categorias na ordem dos filtros, com o rótulo em português e a cor do selo. */
 export const CATEGORIAS_DE_RELATO: { valor: CategoriaDeRelato; rotulo: string; variante: VarianteDoSelo }[] = [
-  { valor: 'defeito', rotulo: 'Defeito', variante: 'aviso' },
+  { valor: 'defeito', rotulo: 'Defeito', variante: 'marca' },
   { valor: 'sugestao', rotulo: 'Sugestão', variante: 'info' },
   { valor: 'duvida', rotulo: 'Dúvida', variante: 'papel' },
 ];
@@ -25,7 +25,7 @@ export function SeloDaCategoria({ categoria }: { categoria: string }) {
 /** O selo do estado. */
 export function SeloDoEstado({ estado }: { estado: string }) {
   const e = ESTADOS_DE_RELATO.find((x) => x.valor === estado);
-  return <Selo variante={e?.variante ?? 'neutro'} ponto={estado === 'resolvido'}>{e?.rotulo ?? estado}</Selo>;
+  return <Selo variante={e?.variante ?? 'neutro'} ponto={estado === 'resolvido' || estado === 'novo'}>{e?.rotulo ?? estado}</Selo>;
 }
 
 /**

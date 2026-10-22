@@ -26,7 +26,7 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 A landing é a página de venda, na disposição da proposta da home (US #467, que reorganizou a da US #405):
 hero (selo "Para times no Azure DevOps", o título com "Pull Request" em destaque, os dois botões, o link
 discreto "Baixar o dev.kit versão N" e a amostra do Board feita em HTML) → como funciona (sete etapas, de
-Clona a Pull Request) → recursos (as abas 01–04 e quatro blocos alternados: o texto com os marcadores e a
+Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Codex e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
 mídia numa moldura de janela do app — o componente `Janela`, o mesmo da amostra do Board —, com a legenda
 abaixo) → por que o dev.kit (três cartões) → catálogo → comparativo → integrações → segurança → para
 empresas → planos → contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit"
@@ -89,6 +89,15 @@ caminho para regravar estão em [landing-conteudo.md](landing-conteudo.md).
 
 O visual de Empresas, Usuários e Catálogo segue os prints anexados à US #461, sobre os MESMOS tokens de
 `web/src/estilo.css` (as variantes de cor novas — sucesso, alerta, info, papel — entram ali, com o tema escuro).
+
+**A identidade de marca da versão 5** (as propostas do projeto de design do site): o site é só ESCURO — o
+grafite `#0d0d0e` com as superfícies `#151517`–`#1d1d20`, o brilho vermelho e a grade sutil no fundo (o
+`.pagina::before`) — e o vermelho da marca `#e2261c` preenche o botão, o selo "dK" e o indicador do item ativo
+(o texto vermelho usa `#ff4a3d`, que dá AA sobre o grafite). O `Topo` traz a `Marca` (selo, ponto vermelho e a
+seção numa pílula mono) e agrupa os links no menu (`MenuDoAdmin`, `MenuDaEmpresa`); a `Pagina` aceita o `rotulo`
+(o eyebrow em mono vermelho). Os formulários são MAIORES: campos de 52px, rótulos de 14px semibold, foco com a
+borda e o anel vermelhos e botões de 52px; o login, a adesão e a compra usam a `TelaDeAcesso` (o painel da marca à
+esquerda e o formulário num cartão à direita; no celular, um embaixo do outro). Os gráficos seguem na série azul.
 Nada de biblioteca de componentes: os compartilhados novos ficam em `web/src/componentes`:
 
 | Componente | Papel |

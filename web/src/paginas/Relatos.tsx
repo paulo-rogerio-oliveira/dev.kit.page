@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CategoriaDeRelato, EmpresaResumo, EstadoDoRelato, FiltroDeRelatos, Pagina as PaginaDaApi, RelatoDetalhe, RelatoResumo } from '../api/tipos';
 import { CATEGORIAS_DE_RELATO, ESTADOS_DE_RELATO, ListaDeRelatos, SeloDaCategoria, SeloDoEstado } from '../componentes/ListaDeRelatos';
 import { Pagina } from '../componentes/Pagina';
-import { MenuDoAdmin, Topo } from '../componentes/Topo';
+import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -119,16 +118,11 @@ export function Relatos() {
   return (
     <div className="pagina">
       <Topo secao="relatos">
-        {ehAdmin ? <MenuDoAdmin /> : (
-          <>
-            <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
-            <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>
-            <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>
-          </>
-        )}
+        {ehAdmin ? <MenuDoAdmin /> : <MenuDaEmpresa />}
       </Topo>
 
       <Pagina
+        rotulo="Suporte"
         titulo="Relatos"
         subtitulo={ehAdmin
           ? 'Defeitos, sugestões e dúvidas que os usuários mandaram pelo dev.kit.'

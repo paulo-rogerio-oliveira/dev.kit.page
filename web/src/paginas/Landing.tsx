@@ -10,11 +10,11 @@ import {
   PLANOS, PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
 } from '../conteudo/landing';
 
-/** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca). */
+/** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca e o ponto vermelho). */
 function Marca() {
   return (
     <a className="marca marca-landing" href="#inicio">
-      <span className="marca-icone" aria-hidden="true">dK</span>dev.kit
+      <span className="marca-icone" aria-hidden="true">dK</span><span>dev<span className="marca-ponto">.</span>kit</span>
     </a>
   );
 }
@@ -41,11 +41,15 @@ function Icone({ tipo }: { tipo: 'ramo' | 'nota' | 'relogio' }) {
 function AmostraDoBoard() {
   const b = AMOSTRA_DO_BOARD;
   return (
-    <figure className="amostra" role="img" aria-label={`Amostra do Board do dev.kit: Precisa de você com ${b.precisaDeVoce.length} itens; ${b.nota.valor}, ${b.nota.texto.toLowerCase()}; ${b.horas.texto}.`}>
+    <figure className="amostra" role="img" aria-label={`Amostra do Board do dev.kit: o ${b.orquestrador.autor} diz "${b.orquestrador.texto}"; Precisa de você com ${b.precisaDeVoce.length} itens; ${b.nota.valor}, ${b.nota.texto.toLowerCase()}; ${b.horas.texto}.`}>
       <Janela titulo={b.titulo} className="amostra-janela" aria-hidden="true">
         <div className="amostra-corpo">
           <div className="amostra-lateral"><span /><span /><span /><span /></div>
           <div className="amostra-conteudo">
+            <div className="amostra-cartao amostra-orquestrador">
+              <span className="amostra-o">O</span>
+              <span className="amostra-texto"><b>{b.orquestrador.autor}</b><small>{b.orquestrador.texto}</small></span>
+            </div>
             <div className="amostra-cartao">
               <strong>Precisa de você <span className="amostra-contagem">3</span></strong>
               {b.precisaDeVoce.map((item, i) => (
@@ -131,11 +135,15 @@ export function Landing() {
           </ol>
         </Secao>
 
-        <Secao id="recursos" rotulo={CABECALHOS.recursos.rotulo} titulo={CABECALHOS.recursos.titulo}>
+        <Secao id="recursos" rotulo={CABECALHOS.recursos.rotulo} titulo={CABECALHOS.recursos.titulo} subtitulo={CABECALHOS.recursos.subtitulo}>
           <nav className="abas-dos-recursos" aria-label="Recursos em destaque">
             <ol>
               {RECURSOS.map((r) => (
-                <li key={r.id}><a href={`#recurso-${r.id}`}><span className="aba-numero">{r.numero}</span> {r.aba}</a></li>
+                <li key={r.id}>
+                  <a href={`#recurso-${r.id}`}>
+                    <span className="aba-numero">{r.numero}</span> {r.aba}{r.novo && <span className="recurso-novo">novo</span>}
+                  </a>
+                </li>
               ))}
             </ol>
           </nav>
