@@ -389,10 +389,21 @@ describe('Dashboard', () => {
   });
 
   it('o dev não entra no painel: o dashboard leva à conta dele (US #405, US #425)', async () => {
-    renderizar('/dashboard', tokenDoDev());
+    // Só as chamadas COM O TOKEN DO DEV: a lista global também recebe a chamada que o teste anterior (o do admin) ainda
+    // tinha em voo quando a limpeza rodou — e o teste falhava às vezes no CI por isso, sem o dev ter chamado nada.
+    const doDev: string[] = [];
+    const ouvir = ({ request }: { request: Request }) => {
+      if (request.headers.get('Authorization') === `Bearer ${tokenDoDev().token}`) doDev.push(new URL(request.url).pathname);
+    };
+    servidor.events.on('request:start', ouvir);
+    try {
+      renderizar('/dashboard', tokenDoDev());
 
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Sua conta');
-    expect(requisicoes.filter((r) => r.pathname.startsWith('/api/dashboard'))).toEqual([]);
+      expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Sua conta');
+      expect(doDev.filter((caminho) => caminho.startsWith('/api/dashboard'))).toEqual([]);
+    } finally {
+      servidor.events.removeListener('request:start', ouvir);
+    }
   });
 
   it('sem máquinas, explica como ligar o envio', async () => {
