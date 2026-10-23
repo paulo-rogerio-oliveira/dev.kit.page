@@ -37,6 +37,9 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<RepositorioDaEmpresa> RepositoriosDaEmpresa => Set<RepositorioDaEmpresa>();
     public DbSet<ConvencaoDaEmpresa> ConvencoesDaEmpresa => Set<ConvencaoDaEmpresa>();
     public DbSet<Relato> Relatos => Set<Relato>();
+    public DbSet<ProjetoDeDesign> ProjetosDeDesign => Set<ProjetoDeDesign>();
+    public DbSet<TelaDeDesign> TelasDeDesign => Set<TelaDeDesign>();
+    public DbSet<VersaoDeDesign> VersoesDeDesign => Set<VersaoDeDesign>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -148,6 +151,53 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(r => r.Usuario).WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(r => r.Empresa).WithMany().HasForeignKey(r => r.EmpresaId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(r => r.RespondidoPor).WithMany().HasForeignKey(r => r.RespondidoPorId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // O design compartilhado (US #669). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us669.sql. As imagens NÃO
+        // ficam aqui: vão para o armazém (o Blob Storage), e a versão guarda a chave e o hash.
+        modelBuilder.Entity<ProjetoDeDesign>(e =>
+        {
+            e.ToTable("ProjetosDeDesign");
+            e.Property(p => p.Espaco).HasMaxLength(40);
+            e.Property(p => p.Nivel).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoNivel);
+            e.Property(p => p.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
+            e.Property(p => p.Repositorio).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRepositorio);
+            e.Property(p => p.Chave).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRepositorio);
+            // O UsuarioId é o dono do nível usuário e vale 0 nos outros: sem FK, como na convenção.
+            e.HasIndex(p => new { p.Espaco, p.Nivel, p.Time, p.UsuarioId, p.Chave }).IsUnique();
+            e.HasIndex(p => new { p.EmpresaId, p.AtualizadoEmUtc });
+            e.HasIndex(p => new { p.UsuarioId, p.AtualizadoEmUtc });
+            e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Telas).WithOne(t => t.Projeto).HasForeignKey(t => t.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelaDeDesign>(e =>
+        {
+            e.ToTable("TelasDeDesign");
+            e.Property(t => t.Identificador).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoId);
+            e.Property(t => t.Nome).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoNome);
+            e.Property(t => t.Estado).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoEstado);
+            e.HasIndex(t => new { t.ProjetoId, t.Identificador }).IsUnique();
+            e.HasMany(t => t.Versoes).WithOne(v => v.Tela).HasForeignKey(v => v.TelaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<VersaoDeDesign>(e =>
+        {
+            e.ToTable("VersoesDeDesign");
+            e.Property(v => v.Tipo).HasMaxLength(20);
+            e.Property(v => v.Tema).HasMaxLength(10);
+            e.Property(v => v.Origem).HasMaxLength(20);
+            e.Property(v => v.Alvo).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoAlvo);
+            e.Property(v => v.Branch).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoBranch);
+            e.Property(v => v.Commit).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoCommit);
+            e.Property(v => v.Descricao).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDaDescricao);
+            e.Property(v => v.AutorTipo).HasMaxLength(20);
+            e.Property(v => v.Runner).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRunner);
+            e.Property(v => v.Sha256).HasMaxLength(64);
+            e.Property(v => v.ChaveDaImagem).HasMaxLength(300);
+            // O número ÚNICO na tela é o que torna o reenvio da fila do dev.kit inofensivo (o hash decide 200 ou 409).
+            e.HasIndex(v => new { v.TelaId, v.Numero }).IsUnique();
+            e.HasOne(v => v.Autor).WithMany().HasForeignKey(v => v.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.

@@ -19,6 +19,8 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
     <!-- Só para subir a versão do que o SqlClient traz (ver Directory.Packages.props): não é usado direto. -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- As imagens do design (US #669) no Azure Blob Storage. -->
+    <PackageReference Include="Azure.Storage.Blobs" />
   </ItemGroup>
 
 </Project>

@@ -195,6 +195,15 @@ Rode também `api/scripts/sqlserver/Us550.sql` (idempotente, depois do `Us491.sq
 `ConvencoesDaEmpresa` passa a `nvarchar(4000)`, o teto do texto do contexto (`contexto.<tema>`). Sem ele, gravar um
 contexto com mais de 200 caracteres responde 500. Nenhuma tabela nem configuração nova.
 
+### Design compartilhado (US #669)
+
+Rode também `api/scripts/sqlserver/Us669.sql` (idempotente): cria `ProjetosDeDesign`, `TelasDeDesign` e
+`VersoesDeDesign`. As IMAGENS não vão para o banco: crie uma Storage Account (ou use a existente) e configure na API
+`Design__Armazem=blob` e o segredo `Design__ConexaoDoBlob` (a connection string, do Key Vault); o contêiner
+`Design__Conteiner` (padrão `design`) é criado privado na primeira gravação. O teto por plano é ajustável sem código
+(`Design__Tetos__Empresarial__Versoes`, `Design__Tetos__Empresarial__MegaBytes`, `Design__TetoPadrao__*`). Sem o
+`Design__Armazem=blob`, as imagens vão para a pasta `Design__Pasta` do contêiner da API — e se perdem a cada nova revisão.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

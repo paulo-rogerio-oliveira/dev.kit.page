@@ -77,6 +77,13 @@ public static class Composicao
         // Os relatos dos usuários do dev.kit (US #602).
         servicos.Configure<OpcoesDosRelatos>(configuracao.GetSection(OpcoesDosRelatos.Secao));
         servicos.AddScoped<IRelatos, Relatos>();
+        // O design compartilhado (US #669): as imagens no Blob Storage em produção, numa pasta fora dela.
+        servicos.Configure<OpcoesDoDesign>(configuracao.GetSection(OpcoesDoDesign.Secao));
+        servicos.TryAddSingleton<IArmazemDeImagens>(sp =>
+            string.Equals(sp.GetRequiredService<IOptions<OpcoesDoDesign>>().Value.Armazem, OpcoesDoDesign.Blob, StringComparison.OrdinalIgnoreCase)
+                ? new ArmazemDeImagensNoBlob(sp.GetRequiredService<IOptions<OpcoesDoDesign>>())
+                : new ArmazemDeImagensEmDisco(sp.GetRequiredService<IOptions<OpcoesDoDesign>>()));
+        servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();

@@ -44,6 +44,12 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDosRelatos = "Relatos";
 
+    /// <summary>
+    /// A política do envio de versões de design (US #669): por USUÁRIO do token, com <see cref="OpcoesDoDesign.EnviosPorMinuto"/>.
+    /// A migração do dev.kit sobe centenas de versões: o 429 só a espaça, a fila tenta de novo.
+    /// </summary>
+    public const string PoliticaDoDesign = "Design";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -107,6 +113,17 @@ public static class LimiteDeTaxa
                 {
                     PermitLimit = porHora,
                     Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDoDesign, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoDesign>>().Value.EnviosPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("design:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                 });
             });

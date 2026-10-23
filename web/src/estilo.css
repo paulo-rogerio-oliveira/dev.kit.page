@@ -921,6 +921,66 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
 .amostra-orquestrador .amostra-texto b { color: var(--primaria); }
 .amostra-o { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #1d2b44; color: #8dbdf5; font-weight: 800; font-size: 0.7rem; }
 
+/* O design compartilhado (US #669): a aba Design de /empresa/conhecimento e a página /design (a proposta v002). */
+.design { display: flex; flex-direction: column; gap: 16px; }
+.design .nota-da-secao { margin: 0; color: var(--texto-2); }
+.design-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+/* O rótulo e o valor na MESMA linha ("Repositório github.com/acme/portal ▾"): o label global é uma coluna de formulário. */
+.campo-embutido { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; padding: 2px 4px 2px 12px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); color: var(--texto-mudo); font-size: 0.85rem; font-weight: 400; }
+.campo-embutido select { min-height: 36px; border: 0; background-color: transparent; color: var(--texto); font: inherit; font-family: var(--mono); font-weight: 700; padding: 0 30px 0 0; background-position: right 8px center; }
+.campo-embutido input[type='range'] { min-height: 0; padding: 0; border: 0; background: transparent; }
+.campo-embutido select option { background: var(--superficie); }
+.segmentado { display: inline-flex; border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; background: var(--superficie); }
+.segmentado button { border: 0; border-right: 1px solid var(--borda); background: transparent; color: var(--texto-2); font: inherit; font-size: 0.85rem; padding: 8px 14px; cursor: pointer; }
+.segmentado button:last-child { border-right: 0; }
+.segmentado button[aria-pressed='true'] { background: var(--superficie-2); color: var(--texto); font-weight: 700; }
+.design-uso { margin-left: auto; display: flex; flex-direction: column; gap: 6px; min-width: 300px; font-size: 0.78rem; color: var(--texto-2); text-align: right; }
+.design-uso .trilho { display: block; height: 4px; border-radius: 3px; background: var(--grade); overflow: hidden; }
+.design-uso .barra { display: block; height: 100%; min-width: 2px; background: var(--marca); }
+.design-uso .barra-cheia { background: var(--alerta); }
+.design-corpo { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.design-rotulo { margin: 0; font-family: var(--mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--texto-mudo); }
+.design-telas { padding: 0; overflow: hidden; }
+.design-telas .design-rotulo { padding: 16px 18px; border-bottom: 1px solid var(--grade); }
+.design-telas ul { list-style: none; margin: 0; padding: 0; }
+.design-telas li button { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px 18px; border: 0; border-bottom: 1px solid var(--grade); border-left: 3px solid transparent; background: transparent; color: var(--texto); font: inherit; text-align: left; cursor: pointer; }
+.design-telas li button[aria-current='true'] { border-left-color: var(--marca); background: var(--marca-tinta); }
+.design-telas li span { color: var(--texto-mudo); font-size: 0.78rem; }
+.design-comparacao { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.design-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.design-cabecalho h3 { margin: 0; font-size: 1.15rem; font-weight: 800; }
+.design-cabecalho h3 small { margin-left: 6px; color: var(--texto-mudo); font-size: 0.85rem; font-weight: 400; }
+.design-colunas { display: grid; gap: 12px; }
+.design-versao { display: flex; flex-direction: column; gap: 10px; padding: 0 0 12px; border: 1px solid var(--borda); border-radius: 10px; background: var(--pagina); overflow: hidden; }
+.design-versao-destaque { border-color: var(--papel); }
+.design-versao header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--grade); font-size: 0.85rem; }
+.design-versao > .design-meta, .design-versao > .design-descricao, .design-versao > .acoes, .design-versao > .design-imagem { margin-left: 12px; margin-right: 12px; }
+.design-legenda { margin-left: auto; color: var(--texto-mudo); }
+.design-imagem { display: block; width: calc(100% - 24px); height: auto; border-radius: 6px; background: var(--superficie-2); }
+.design-pagina-da-versao .design-imagem, .design-uma .design-imagem, .design-pilha .design-imagem { width: 100%; margin: 0; }
+.design-imagem-carregando, .design-imagem-falhou { aspect-ratio: 16 / 10; display: grid; place-items: center; color: var(--texto-mudo); font-size: 0.8rem; }
+.design-meta { margin: 0; color: var(--texto-mudo); font-size: 0.78rem; line-height: 1.6; }
+.design-meta code { color: var(--texto-2); font-family: var(--mono); font-weight: 700; }
+.design-descricao { margin: 0; color: var(--texto-2); font-size: 0.82rem; }
+.design-versao .acoes { align-items: center; }
+.botao-perigo { color: var(--marca-texto); }
+.selo-do-design { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+.selo-do-design-captura, .selo-do-design-recaptura { background: var(--sucesso-tinta); color: var(--sucesso); }
+.selo-do-design-proposta { background: var(--papel-tinta); color: var(--papel); }
+.design-uma, .design-sobrepor { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.design-uma .design-versao { width: 100%; }
+.design-pilha { position: relative; width: 100%; }
+.design-por-cima { position: absolute; inset: 0; }
+.design-link { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px dashed var(--borda); border-radius: 10px; }
+.design-link code { font-family: var(--mono); font-weight: 700; font-size: 0.85rem; }
+.design-link small { color: var(--texto-mudo); }
+.design-link .botao { margin-left: auto; }
+.design-pagina-da-versao { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 960px) {
+  .design-corpo { grid-template-columns: minmax(0, 1fr); }
+  .design-uso { margin-left: 0; text-align: left; }
+}
+
 /* A home no celular (390px): o título e os botões inteiros, sem corte. */
 @media (max-width: 560px) {
   .topo { padding: 12px 16px; }

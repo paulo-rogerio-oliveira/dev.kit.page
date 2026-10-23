@@ -3,6 +3,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 export interface Aba {
   id: string;
   rotulo: string;
+  /** A aba recém-chegada leva o selo "novo" ao lado do rótulo (a Design da US #669). */
+  novo?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export function Abas({ rotulo, abas, ativa, aoMudar, prefixo = 'aba', children }
             onKeyDown={(e) => teclar(e, indice)}
           >
             {aba.rotulo}
+            {aba.novo && <span className="recurso-novo" aria-hidden="true">novo</span>}
           </button>
         ))}
       </div>
