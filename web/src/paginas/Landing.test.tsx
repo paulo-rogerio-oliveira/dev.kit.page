@@ -54,10 +54,10 @@ describe('Landing', () => {
     renderizar('/');
 
     const recursos = screen.getByRole('region', { name: 'Cada recurso com a sua demonstração' });
-    expect(recursos).toHaveTextContent('Novo na versão 5: o Orquestrador, o Codex como agente e o Design.');
+    expect(recursos).toHaveTextContent('Novo na versão 5: o Orquestrador, a escolha do provedor cognitivo e o Design.');
     const abas = within(within(recursos).getByRole('navigation', { name: 'Recursos em destaque' })).getAllByRole('link');
     expect(abas.map((a) => a.textContent)).toEqual([
-      '01 Orquestradornovo', '02 O agente sobre a task', '03 Codex como agentenovo', '04 Designnovo', '05 Fluxos com avaliadores', '06 Cherry-pick', '07 Horas',
+      '01 Orquestradornovo', '02 O agente sobre a task', '03 Provedor cognitivonovo', '04 Designnovo', '05 Fluxos com avaliadores', '06 Cherry-pick', '07 Horas',
     ]);
     expect(abas.filter((a) => a.querySelector('.recurso-novo'))).toHaveLength(3);
     for (const [i, recurso] of RECURSOS.entries()) {

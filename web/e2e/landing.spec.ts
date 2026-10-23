@@ -15,7 +15,7 @@ test('a home da proposta (US #467) em desktop e celular, nos temas claro e escur
       await page.setViewportSize({ width: largura, height: altura });
       await page.emulateMedia({ colorScheme: tema, reducedMotion: 'reduce' });
       await page.goto('/');
-      // Os sete recursos desde a versão 5 (o Orquestrador, o Codex e o Design entraram). O site é só escuro desde a
+      // Os sete recursos desde a versão 5 (o Orquestrador, o provedor cognitivo e o Design entraram). O site é só escuro desde a
       // marca da versão 5: o tema claro do sistema dá a mesma página.
       await expect(page.locator('#recursos article')).toHaveCount(7);
       // Com menos movimento entra o poster (o primeiro quadro, também o do GIF do Orquestrador): a captura não depende do vídeo carregar.

@@ -8,7 +8,7 @@ import {
 import { NOME_DO_TIPO } from './tipos';
 
 /** O título do editor de um item novo (o gênero muda com o tipo). */
-const NOVO: Record<TipoDeItem, string> = { skill: 'Nova skill', plan: 'Novo tech plan', fluxo: 'Novo fluxo' };
+const NOVO: Record<TipoDeItem, string> = { skill: 'Nova skill', plan: 'Nova Rule', fluxo: 'Novo fluxo' };
 
 /** Uma marcação (checkbox) do formulário, com o texto do que ela muda no dev.kit. */
 function Marcacao({ rotulo, valor, aoMudar }: { rotulo: string; valor: boolean; aoMudar: (valor: boolean) => void }) {
@@ -21,7 +21,7 @@ function Marcacao({ rotulo, valor, aoMudar }: { rotulo: string; valor: boolean; 
 }
 
 /**
- * O editor de um item do catálogo (US #461). Skill e Tech Plan são formulários com os campos do editor do dev.kit
+ * O editor de um item do catálogo (US #461). Skill e Rule (o tipo `plan`) são formulários com os campos do editor do dev.kit
  * desktop, e o que vai para a API é o JSON que o app grava (`montarSkill`/`montarPlano`, na mesma ordem de campos).
  * O fluxo é o envelope `devkit-fluxo` como texto — o desenho gráfico continua no dev.kit —, com a conferência local
  * e a prévia dos passos. Salvar grava RASCUNHO; quem leva às máquinas é o Publicar.
@@ -90,7 +90,8 @@ export function EditorDeItem({ token, slug, tipo, item, aoSalvar, aoCancelar, tr
     }
   }
 
-  const titulo = item ? `Editar ${NOME_DO_TIPO[tipo].toLowerCase()} ${item.nome}` : NOVO[tipo];
+  // A Rule é nome do produto e fica com maiúscula; skill e fluxo, em minúscula no meio da frase.
+  const titulo = item ? `Editar ${tipo === 'plan' ? NOME_DO_TIPO[tipo] : NOME_DO_TIPO[tipo].toLowerCase()} ${item.nome}` : NOVO[tipo];
 
   return (
     <section className="cartao editor-de-item" aria-labelledby="titulo-do-editor">
@@ -172,7 +173,7 @@ export function EditorDeItem({ token, slug, tipo, item, aoSalvar, aoCancelar, tr
               </div>
               <details className="json-montado">
                 <summary>Ver o JSON que vai para o dev.kit</summary>
-                <pre className="trace" aria-label="JSON do tech plan">{montarPlano(plano)}</pre>
+                <pre className="trace" aria-label="JSON da Rule">{montarPlano(plano)}</pre>
               </details>
             </>
           )}
@@ -206,7 +207,7 @@ export function EditorDeItem({ token, slug, tipo, item, aoSalvar, aoCancelar, tr
                       <li key={p.id}><code>{p.id}</code> → {p.kind}{p.skillName ? <> → <code>{p.skillName}</code></> : null}</li>
                     ))}
                   </ol>
-                  {lido.planos > 0 && <p className="texto-mudo">{lido.planos} Tech Plan(s) embutido(s) vão junto com o fluxo.</p>}
+                  {lido.planos > 0 && <p className="texto-mudo">{lido.planos} Rule(s) embutida(s) vão junto com o fluxo.</p>}
                 </div>
               )}
             </>

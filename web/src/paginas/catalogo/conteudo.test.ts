@@ -35,13 +35,13 @@ describe('Conteúdo dos itens do catálogo (US #461) — o formato do dev.kit', 
     expect(validarSkill({ ...SKILL_VAZIA, name: 'compilar-uau-2', content: 'x' })).toEqual([]);
   });
 
-  it('monta o Tech Plan como o TechPlanJson: a chave abre, as marcações fecham', () => {
+  it('monta a Rule como o TechPlanJson: a chave abre, as marcações fecham', () => {
     const json = montarPlano({ ...PLANO_VAZIO, key: 'geral', description: 'Regras gerais', content: 'Siga.', isRequired: true });
 
     expect(Object.keys(JSON.parse(json))).toEqual(['key', 'description', 'content', 'repository', 'onlyWithWorkItem', 'isRequired', 'isAgentInstruction']);
     expect(JSON.parse(json)).toMatchObject({ key: 'geral', isRequired: true, isAgentInstruction: false });
-    expect(validarPlano(PLANO_VAZIO)).toContain('O Tech Plan está sem descrição (campo "description").');
-    expect(validarPlano({ ...PLANO_VAZIO, description: 'Regras' })).toEqual(['O Tech Plan "Regras" veio sem conteúdo (campo "content").']);
+    expect(validarPlano(PLANO_VAZIO)).toContain('A Rule está sem descrição (campo "description").');
+    expect(validarPlano({ ...PLANO_VAZIO, description: 'Regras' })).toEqual(['A Rule "Regras" veio sem conteúdo (campo "content").']);
   });
 
   it('lê de volta o que montou (e o conteúdo guardado como objeto)', () => {

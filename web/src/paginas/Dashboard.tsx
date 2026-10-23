@@ -14,7 +14,7 @@ import { papelDa, useSessao } from '../sessao';
 /** Os períodos oferecidos no filtro. */
 export const PERIODOS = [7, 30, 90] as const;
 
-/** Os harnesses do filtro, na ordem da tela — o codex é do suporte futuro (a API já o aceita). */
+/** Os harnesses do filtro (o provedor cognitivo que rodou o turno), na ordem da tela — o Codex entrou na versão 5. */
 export const HARNESSES: { valor: Harness; rotulo: string }[] = [
   { valor: 'claude', rotulo: 'Claude' },
   { valor: 'kiro', rotulo: 'Kiro CLI' },
