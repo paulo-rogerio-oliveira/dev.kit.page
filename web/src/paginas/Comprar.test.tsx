@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { renderizar } from '../testes/renderizar';
 import { escritas } from '../testes/servidor';
 
-describe('Compra individual (US #425)', () => {
+// As consultas por papel no jsdom, com o painel da marca e o topo na tela (a tela dividida da versão 5), passam do
+// padrão de 5 s quando a suíte inteira roda junto — como em Relatos.test.tsx.
+describe('Compra individual (US #425)', { timeout: 30_000 }, () => {
   it('o plano, o e-mail e o nome vão ao checkout; o simulado leva à compra concluída', async () => {
     renderizar('/comprar');
 

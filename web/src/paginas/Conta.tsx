@@ -34,8 +34,11 @@ export function Conta() {
         <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>
       </Topo>
       <main className="painel conta">
-        <section aria-labelledby="titulo-conta">
+        <header className="cabecalho-da-conta">
+          <p className="rotulo-da-pagina">Conta</p>
           <h1 id="titulo-conta">Sua conta</h1>
+        </header>
+        <section aria-labelledby="titulo-conta" className="cartao dados-da-conta">
           {erro && <p className="erro" role="alert">{erro}</p>}
           {!conta ? (
             !erro && <p className="carregando" role="status">Carregando…</p>
@@ -51,14 +54,14 @@ export function Conta() {
           )}
         </section>
         {conta?.urlGerenciarAssinatura && (
-          <section aria-labelledby="titulo-assinatura">
+          <section aria-labelledby="titulo-assinatura" className="cartao">
             <h2 id="titulo-assinatura">Assinatura</h2>
             <p className="nota-da-secao">Troque o cartão, veja as faturas ou cancele no portal de pagamento.</p>
             <a className="botao botao-primario" href={conta.urlGerenciarAssinatura} target="_blank" rel="noreferrer">Gerenciar assinatura</a>
           </section>
         )}
         {conta && daEmpresa && <MeuContexto token={sessao!.token} temEmpresa={!!conta.empresa} sair={sair} />}
-        <section aria-labelledby="titulo-baixar">
+        <section aria-labelledby="titulo-baixar" className="cartao">
           <h2 id="titulo-baixar">O dev.kit</h2>
           <p className="nota-da-secao">Entre no dev.kit com o mesmo login: a licença se renova sozinha enquanto a assinatura estiver ativa.</p>
           <Link className="botao botao-fantasma" to="/">Baixar o dev.kit</Link>
@@ -105,7 +108,8 @@ function MeuContexto({ token, temEmpresa, sair }: { token: string; temEmpresa: b
   const meus = (convencoes ?? []).filter((c) => c.nivel === 'usuario' && ehContexto(c.chave));
   const daEmpresa = (convencoes ?? []).filter((c) => c.nivel === 'empresa' && ehContexto(c.chave));
   return (
-    <section aria-labelledby="titulo-meu-contexto">
+    <section aria-labelledby="titulo-meu-contexto" className="cartao secao-do-contexto">
+      <p className="rotulo-da-pagina">Contexto</p>
       <h2 id="titulo-meu-contexto">Meu contexto</h2>
       <p className="nota-da-secao">
         O que os agentes do seu dev.kit devem saber de você em toda task: como prefere as respostas, o que revisar, o que

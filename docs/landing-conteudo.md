@@ -58,8 +58,8 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
   mínima → gatilhos entre agentes (ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar) → objetivo
   cumprido → sua aprovação → fechamento com a PR.
 - **Conceitos (trabalhar com agentes):** as três peças, cada uma com um exemplo no formato do arquivo em
-  que mora — o **agente** (o `pedido.md` com o plano técnico), a **skill** (um `SKILL.md`, com o nome, quando
-  usar e os passos) e a **rule** (o `CLAUDE.md` com as regras fixas do time) — e um exemplo de ponta a ponta
+  que mora — o **agente** (o `pedido.md` com o planejamento técnico), a **skill** (um `SKILL.md`, com o nome, quando
+  usar e os passos) e a **rule** (o `CLAUDE.md` com as Rules do time; as do catálogo somam os padrões) — e um exemplo de ponta a ponta
   em quatro passos (o pedido, as rules, as skills, a entrega).
 - **Fábrica agêntica e time agêntico:** a fábrica é a linha de produção de agentes — as estações Planejar,
   Implementar, Verificar, Avaliar, Arbitrar e Entregar, ligadas por gatilhos, com a nota mínima como critério
@@ -68,13 +68,19 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
 - **Comparativo:** a tabela acima.
 - **Para empresas:** o gestor acompanha o time, o colaborador consente no próprio dev.kit, a exportação
   é auditada e a adesão é por código, dentro dos assentos do plano.
-- **Integrações:** Azure DevOps, GitHub, as CLIs claude/kiro/kimi/glm, TortoiseGit, o serviço do Windows.
+- **Provedor cognitivo:** o usuário escolhe o melhor provedor e modelo para cada papel (o agente que implementa,
+  o avaliador, o Orquestrador) — Claude Code, Codex (OpenAI), Kiro, Kimi e GLM. O Codex é um dos provedores, e
+  não "o" agente; a página só cita provedor que o produto suporta.
+- **Nomes do produto:** Rules (o antigo Tech Plan; o tipo `plan` do contrato não muda), skill, fluxo, gatilho,
+  avaliador e nota mínima, Orquestrador, catálogo (básico e da empresa), Design, entrega.
+- **Integrações:** Azure DevOps, GitHub, os provedores cognitivos (Claude Code, Codex, Kiro, Kimi e GLM),
+  TortoiseGit, o serviço do Windows.
 - **Segurança e privacidade:** o agente nunca vê o token; gravar é explícito (simula por padrão);
   o código fica na máquina; a telemetria é anônima, vem ligada e o usuário a desliga — o trace de erro
   vai sem caminhos, e-mails nem URLs, e o nome só é compartilhado com o gestor com o consentimento.
 - **Contato:** o formulário *Quero uma demonstração* (nome, e-mail, empresa e mensagem opcionais,
   consentimento LGPD obrigatório) — ver [arquitetura](arquitetura.md#pedido-de-demonstração).
-- **FAQ:** processo no Azure DevOps, agentes suportados, commit e push sozinho, onde o código roda,
+- **FAQ:** processo no Azure DevOps, provedores suportados, commit e push sozinho, onde o código roda,
   como funciona o plano para empresas, o que acontece com os dados do pedido.
 
 ## Roteiro das mídias
@@ -97,6 +103,16 @@ saíram de `public/`, e o `landing.test.ts` confere que o roteiro e a pasta só 
 | `fluxos` | 12 s | Abas de estado → task em execução → task pronta para enviar | Com a nota mínima de cada avaliador, o trabalho segue para o push |
 | `replicacao` | 12 s | Branches de origem/destino → commits marcados → Replicar selecionados | Marque os commits a replicar |
 | `board` | 12 s | Board: horas de hoje → hoje/ontem/semanal/mensal → os work items do "Precisa de você" (captura `tela-board.png`, a `tela-board-precisa-de-voce` do gerador) | Horas de hoje, já rateadas |
+| `codex` | 12 s | Pré-execução de uma tarefa avulsa: o seletor do Modelo (o provedor da task) → o modelo no Resumo → Executar com o agente (captura `tela-codex.png`); é a mídia do recurso "Provedor cognitivo" | O provedor e o modelo da task, no resumo antes de executar |
+| `design` | 12 s | Painel Design do Orquestrador: as telas (captura e proposta) → a galeria lado a lado → o agente avisando que gravou as propostas (captura `tela-design.png`) | A proposta aparece como versão nova, ao lado da captura |
+
+**Desde a versão 5 do dev.kit** a home tem SETE recursos: o Orquestrador, o Provedor cognitivo (a escolha do
+provedor de cada papel; o Codex entrou como um deles) e o Design entraram (marcados "novo" na aba). O **Orquestrador** não é gravado pelo roteiro: é o GIF das Novidades da versão 5
+(`src/GitKit.Core/Updates/Novidades/versao-5.gif` do git.kit, em `public/midia/orquestrador.gif`), com o
+primeiro quadro como poster (`orquestrador.jpg`, o que fica parado com *prefers-reduced-motion*). As capturas
+do `codex` e do `design` são as **escuras** (v001) do projeto de design do git.kit @ `feature/dev/semana4`,
+recortadas sem a margem branca — nunca a v002 do login do app, que mostra um usuário real. O hero ganhou a
+fala do Orquestrador no topo da amostra do Board.
 
 O texto alternativo completo de cada uma está no campo `alt` da mídia em `landing.ts`, e a legenda no
 campo `legenda` do recurso.
@@ -116,6 +132,9 @@ campo `legenda` do recurso.
    npm run midia                  # todas as mídias e a imagem de compartilhamento
    npm run midia -- agente board  # só estas
    ```
+
+   Com `--gif=<pasta>` (ex.: `npm run midia -- codex design --gif=../saida/gifs`), ele grava também um
+   GIF curto de cada mídia (12 fps, 800px), fora de `public` — para as notas da versão e a entrega.
 
    O gravador pausa as animações CSS de cada cena e fotografa quadro a quadro (o resultado não
    depende da velocidade da máquina). Os comandos de conversão que ele roda, por mídia:

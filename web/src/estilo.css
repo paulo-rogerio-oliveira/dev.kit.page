@@ -1,47 +1,32 @@
 /*
-  Tokens: a marca é a do design system do dev.kit (o "Rosso" #da291c / #e8392b, de
-  Styles/Theme.Light.xaml e Theme.Dark.xaml do git.kit); os dados usam a série azul validada
-  (#2a78d6 claro / #3987e5 escuro) — vermelho em dado leria como status crítico.
+  Tokens: a identidade de marca do dev.kit (versão 5) — o site é ESCURO, como as propostas de marca: fundo
+  grafite #0d0d0e, superfícies #151517–#1d1d20 e o vermelho da marca #e2261c nos preenchimentos (botão, selo,
+  indicador). O texto em vermelho usa um tom mais claro (#ff4a3d), que dá contraste AA sobre o grafite. Os dados
+  usam a série azul validada (#3987e5) — vermelho em dado leria como status crítico.
 */
 :root {
-  color-scheme: light;
-  --primaria: #da291c;
-  --primaria-hover: #c8241a;
-  --primaria-tinta: #fbe4e1;
-  /* O fundo do botão primário: o vermelho que dá contraste AA (4.5:1) com o texto branco nos dois temas. */
-  --primaria-botao: #da291c;
-  --primaria-botao-hover: #b51f14;
-  --pagina: #f9f9f7;
-  --superficie: #fcfcfb;
-  --texto: #0b0b0b;
-  --texto-2: #52514e;
-  --texto-mudo: #898781;
-  --grade: #e1e0d9;
-  --base: #c3c2b7;
-  --borda: rgba(11, 11, 11, 0.1);
-  --serie-1: #2a78d6;
-  --erro: #d03b3b;
+  color-scheme: dark;
+  --marca: #e2261c;
+  --primaria: #ff4a3d;
+  --primaria-hover: #ff6b60;
+  --primaria-tinta: #2a1311;
+  /* O fundo do botão primário: o vermelho da marca, com contraste AA (4.6:1) com o texto branco. */
+  --primaria-botao: #e2261c;
+  --primaria-botao-hover: #c81f16;
+  --pagina: #0d0d0e;
+  --superficie: #151517;
+  --superficie-2: #1d1d20;
+  --texto: #f5f5f6;
+  --texto-2: #b9b9c0;
+  --texto-mudo: #8b8b93;
+  --grade: #26262a;
+  --base: #3a3a40;
+  --borda: rgba(255, 255, 255, 0.09);
+  --serie-1: #3987e5;
+  --erro: #ff6b61;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--texto);
   background: var(--pagina);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --primaria: #e8392b;
-    --primaria-hover: #ff5347;
-    --primaria-tinta: #3a1b18;
-    --pagina: #0d0d0d;
-    --superficie: #1a1a19;
-    --texto: #ffffff;
-    --texto-2: #c3c2b7;
-    --grade: #2c2c2a;
-    --base: #383835;
-    --borda: rgba(255, 255, 255, 0.1);
-    --serie-1: #3987e5;
-    --erro: #e66767;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -119,10 +104,13 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 .recurso p { margin: 0; color: var(--texto-2); line-height: 1.6; }
 
 .formulario.formulario-contato { max-width: 640px; }
-textarea { font: inherit; color: var(--texto); background: var(--pagina); border: 1px solid var(--borda); border-radius: 6px; padding: 8px 10px; resize: vertical; }
+textarea {
+  font: inherit; color: var(--texto); background-color: #0b0b0c; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px;
+  padding: 14px 16px; resize: vertical; min-height: 52px; font-weight: 400; transition: border-color 0.15s, box-shadow 0.15s;
+}
 input[aria-invalid='true'], textarea[aria-invalid='true'] { border-color: var(--erro); }
-.campo { display: flex; flex-direction: column; gap: 6px; }
-.campo label { font-size: 0.9rem; color: var(--texto-2); }
+.campo { display: flex; flex-direction: column; gap: 8px; }
+.campo label { font-size: 0.875rem; font-weight: 600; color: var(--texto); }
 .consentimento label { flex-direction: row; gap: 10px; align-items: flex-start; line-height: 1.5; }
 .consentimento input { margin-top: 3px; }
 .contato-sucesso { max-width: 640px; }
@@ -167,14 +155,26 @@ input[aria-invalid='true'], textarea[aria-invalid='true'] { border-color: var(--
   .integracoes { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* ---------- Formulários ---------- */
-.cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 28px; }
+/* ---------- Formulários (a marca da versão 5: campos de 52px, rótulos de 14px semibold, foco vermelho) ---------- */
+.cartao { background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; padding: 28px; }
 .formulario { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 14px; }
 .formulario h1 { margin: 4px 0; font-size: 1.5rem; }
-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; color: var(--texto-2); }
+label { display: flex; flex-direction: column; gap: 8px; font-size: 0.875rem; font-weight: 600; color: var(--texto); }
 input, select {
-  font: inherit; color: var(--texto); background: var(--pagina);
-  border: 1px solid var(--borda); border-radius: 6px; padding: 8px 10px;
+  font: inherit; color: var(--texto); background-color: #0b0b0c;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; padding: 0 16px; min-height: 52px; font-weight: 400;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type='checkbox'], input[type='radio'] { min-height: 0; padding: 0; accent-color: var(--marca); width: 18px; height: 18px; }
+select {
+  appearance: none; padding-right: 44px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 6l4.5 4.5L12.5 6' fill='none' stroke='%23b9b9c0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 16px center; background-size: 16px;
+}
+select option { background: var(--superficie); color: var(--texto); }
+input::placeholder, textarea::placeholder { color: #6f6f78; }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--marca); box-shadow: 0 0 0 3px rgba(226, 38, 28, 0.28);
 }
 .erro { color: var(--erro); margin: 0; }
 .aviso { margin: 0; padding: 8px 12px; border-radius: 6px; background: var(--primaria-tinta); color: var(--texto); }
@@ -266,8 +266,7 @@ input, select {
 }
 
 /* ---------- Landing repaginada (US #405): a proposta visual ---------- */
-.landing { --tinta-da-secao: #f4f4f2; --escuro: #1d1f24; }
-@media (prefers-color-scheme: dark) { .landing { --tinta-da-secao: #141413; --escuro: #24262c; } }
+.landing { --tinta-da-secao: #121214; --escuro: #1d1d20; }
 
 .marca-landing { display: inline-flex; align-items: center; gap: 10px; font-size: 1.25rem; }
 .marca-icone {
@@ -475,22 +474,15 @@ input, select {
 .conta dd { margin: 0; }
 
 /* ---------- Componentes compartilhados e telas do admin (US #461, os prints) ---------- */
+/* A paleta dos selos (verde, âmbar, azul, violeta e o vermelho da marca), no escuro da marca. */
 :root {
   --mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  --sucesso: #1b7a43; --sucesso-tinta: #e3f4ec;
-  --alerta: #8a5a00; --alerta-tinta: #fff3cd;
-  --info: #1f5fae; --info-tinta: #e8f1fc;
-  --papel: #5b3fc4; --papel-tinta: #ece9fb;
-  --neutro-tinta: #efeeea;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --sucesso: #7fd6a3; --sucesso-tinta: #17321f;
-    --alerta: #f2c66d; --alerta-tinta: #3a2c0c;
-    --info: #8dbdf5; --info-tinta: #152a44;
-    --papel: #b9a8f5; --papel-tinta: #2a2342;
-    --neutro-tinta: #2a2a28;
-  }
+  --sucesso: #5fe08f; --sucesso-tinta: #11291b;
+  --alerta: #f7c14d; --alerta-tinta: #33270b;
+  --info: #8dbdf5; --info-tinta: #14263f;
+  --papel: #bba9ff; --papel-tinta: #261f40;
+  --marca-texto: #ff7268; --marca-tinta: #2e1412;
+  --neutro-tinta: #232327;
 }
 
 .fonte-mono, .codigo, .nome-do-item { font-family: var(--mono); }
@@ -524,7 +516,7 @@ input, select {
 .painel-lateral { padding: 20px; }
 .painel-lateral h2 { font-size: 1rem; margin: 0 0 14px; }
 .formulario-lateral, .formulario-do-editor { display: flex; flex-direction: column; gap: 14px; }
-.formulario-lateral label, .formulario-do-editor label { font-size: 0.8rem; font-weight: 600; color: var(--texto); }
+.formulario-lateral label, .formulario-do-editor label { font-size: 0.875rem; font-weight: 600; color: var(--texto); }
 .formulario-lateral input, .formulario-lateral select, .formulario-lateral textarea,
 .formulario-do-editor input:not([type='checkbox']), .formulario-do-editor textarea { width: 100%; font-weight: 400; }
 .campos-lado-a-lado { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
@@ -601,7 +593,7 @@ input, select {
 /* A barra de filtros (a busca e os seletores). */
 .barra-de-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cartao-de-tabela > .barra-de-filtros { padding: 12px 18px; border-bottom: 1px solid var(--grade); }
-.campo-de-busca { flex: 1 1 220px; min-width: 0; max-width: 380px; padding-left: 30px; background: var(--superficie) no-repeat 10px center / 14px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='%23898781' stroke-width='1.6'/%3E%3Cpath d='M11 11l3.5 3.5' stroke='%23898781' stroke-width='1.6'/%3E%3C/svg%3E"); }
+.campo-de-busca { flex: 1 1 220px; min-width: 0; max-width: 380px; padding-left: 44px; background: #0b0b0c no-repeat 16px center / 16px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='5' fill='none' stroke='%23898781' stroke-width='1.6'/%3E%3Cpath d='M11 11l3.5 3.5' stroke='%23898781' stroke-width='1.6'/%3E%3C/svg%3E"); }
 .campo-em-linha { flex-direction: row; align-items: center; gap: 8px; font-size: 0.85rem; }
 
 /* O menu ⋯ da linha. */
@@ -688,3 +680,255 @@ input, select {
 .texto-do-contexto { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; line-height: 1.5; }
 .secoes-do-contexto { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .secoes-do-contexto > section h2, .secoes-do-contexto > section h3 { margin-top: 0; font-size: 1rem; }
+
+/* =====================================================================================================
+   A identidade de marca do dev.kit (versão 5, as propostas do projeto de design do site): o grafite com o
+   brilho vermelho e a grade sutil no fundo, o selo "dK", os títulos pesados com o rótulo em mono vermelho,
+   o menu com o indicador vermelho, os selos na paleta e os formulários maiores (52px, botões de 50–54px).
+   ===================================================================================================== */
+body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
+.pagina { position: relative; isolation: isolate; }
+.pagina::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(900px 560px at 100% 0%, rgba(226, 38, 28, 0.11), transparent 62%),
+    radial-gradient(760px 520px at 0% 100%, rgba(226, 38, 28, 0.08), transparent 62%),
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 56px 56px,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px) 0 0 / 56px 56px;
+}
+
+/* O topo: a marca com o selo, o menu agrupado e quem está logado. */
+.topo {
+  gap: 16px 24px; flex-wrap: wrap; min-height: 76px; padding: 14px 40px;
+  background: rgba(13, 13, 14, 0.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--borda);
+}
+.topo nav { flex-wrap: wrap; justify-content: flex-end; gap: 12px 16px; }
+.marca { display: inline-flex; align-items: center; gap: 10px; font-size: 1.35rem; font-weight: 900; letter-spacing: -0.04em; color: var(--texto); text-decoration: none; }
+.marca-ponto { color: var(--marca); }
+.marca-icone {
+  display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 9px;
+  background: var(--marca); color: #ffffff; font-size: 0.82rem; font-weight: 900; letter-spacing: -0.04em;
+  box-shadow: 0 6px 22px rgba(226, 38, 28, 0.45);
+}
+.marca-secao, .marca small {
+  margin-left: 6px; padding: 2px 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px;
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 500; letter-spacing: 0.02em; color: var(--texto-2); white-space: nowrap;
+}
+.topo-menu {
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 4px; border: 1px solid var(--borda); border-radius: 12px;
+  background: rgba(21, 21, 23, 0.85);
+}
+.topo-menu .botao { border: 0; background: transparent; color: var(--texto-2); font-weight: 500; padding: 9px 16px; border-radius: 9px; }
+.topo-menu .botao:hover { background: var(--superficie-2); color: var(--texto); }
+.topo-menu .link-ativo { background: var(--superficie-2); color: var(--texto); font-weight: 700; box-shadow: inset 0 -2px 0 var(--marca); }
+.topo .usuario { color: var(--texto-2); font-size: 0.9rem; }
+.topo .usuario .avatar { width: 32px; height: 32px; background: var(--marca-tinta); color: var(--marca-texto); border: 1px solid rgba(226, 38, 28, 0.55); font-weight: 800; }
+
+/* Os botões: arredondados, o primário com o brilho vermelho e o fantasma com o fio. */
+.botao { border-radius: 10px; padding: 10px 18px; transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.botao-primario { background: var(--primaria-botao); box-shadow: 0 8px 24px rgba(226, 38, 28, 0.28); }
+.botao-primario:hover:not(:disabled) { background: var(--primaria-botao-hover); }
+.botao-fantasma { background: rgba(255, 255, 255, 0.02); border-color: rgba(255, 255, 255, 0.14); color: var(--texto); }
+.botao-fantasma:hover:not(:disabled) { background: var(--superficie-2); border-color: rgba(255, 255, 255, 0.24); }
+.botao:focus-visible, .link:focus-visible, a:focus-visible { outline: 2px solid var(--primaria); outline-offset: 3px; }
+.botao-grande { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 52px; font-size: 1rem; font-weight: 800; }
+.botao-pequeno { padding: 6px 12px; }
+
+/* O cabeçalho das páginas: o rótulo em mono vermelho e o título pesado. */
+.rotulo-da-pagina {
+  margin: 0 0 8px; color: var(--primaria); font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+.painel { padding: 40px 40px 72px; gap: 28px; }
+.painel h1, .cabecalho-da-pagina h1 { margin: 0; font-size: clamp(1.9rem, 3.2vw, 2.6rem); font-weight: 900; letter-spacing: -0.035em; line-height: 1.08; }
+.painel h2 { font-weight: 800; letter-spacing: -0.015em; }
+.cabecalho-em-linha .cabecalho-textos { flex-wrap: wrap; }
+.cabecalho-em-linha .rotulo-da-pagina { flex-basis: 100%; }
+.subtitulo { font-size: 1rem; line-height: 1.55; }
+.cabecalho-do-painel { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 32px; }
+.titulo-com-fio { border-left: 3px solid var(--marca); padding-left: 12px; }
+.pilula { padding: 8px 14px; font-size: 0.85rem; border-color: rgba(255, 255, 255, 0.16); }
+.aviso { padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(226, 38, 28, 0.35); }
+
+/* Os cartões, os KPIs e as tabelas. */
+.kpi { border-radius: 16px; padding: 20px 22px; gap: 8px; background: var(--superficie); }
+.kpi-valor { margin: 0; font-size: 2.1rem; font-weight: 900; letter-spacing: -0.03em; }
+.kpi-valor small { font-size: 1.1rem; font-weight: 600; color: var(--texto-2); letter-spacing: 0; }
+.kpi-destaque { border-color: rgba(226, 38, 28, 0.45); background: linear-gradient(180deg, rgba(226, 38, 28, 0.12), transparent 75%), var(--superficie); }
+.kpi-destaque .barra { background: var(--marca); }
+.kpi-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.kpis { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.tabela .link { color: var(--texto); font-weight: 700; }
+.tabela .link:hover { color: var(--primaria); }
+.cartao-de-tabela .paginacao { margin: 0; padding: 14px 22px 18px; border-top: 1px solid var(--grade); }
+.kpis .kpi:first-child { border-color: rgba(226, 38, 28, 0.45); background: linear-gradient(180deg, rgba(226, 38, 28, 0.12), transparent 75%), var(--superficie); }
+.cartoes-da-empresa { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 20px; }
+.secao-da-empresa .nota-da-secao { margin: 14px 0 0; }
+.codigo-de-adesao { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; letter-spacing: 0.12em; color: var(--texto-2); }
+.login-com-iniciais { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.login-com-iniciais::before {
+  content: attr(data-iniciais); display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16); background: var(--superficie-2); font-family: system-ui, sans-serif; font-size: 0.72rem; font-weight: 800;
+}
+.grafico, .detalhe-do-erro, .cartao-do-painel { border-radius: 16px; }
+.tabela { background: transparent; }
+.tabela th { font-family: var(--mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texto-mudo); }
+.tabela-do-cartao th { background: transparent; padding: 16px 22px; }
+.tabela-do-cartao td { padding: 16px 22px; }
+.tabela-do-cartao tbody tr:hover td { background: rgba(255, 255, 255, 0.015); }
+/* O caminho longo (a origem do repositório) quebra na célula, e a tabela ao lado do painel usa um respiro menor. */
+.tabela-do-cartao .codigo { overflow-wrap: anywhere; }
+.com-lateral .tabela-do-cartao th, .com-lateral .tabela-do-cartao td { padding-left: 16px; padding-right: 16px; }
+.cartao-de-tabela > .barra-de-filtros { padding: 20px 22px; }
+.painel-lateral { padding: 28px; }
+.painel-lateral h2 { font-size: 1.2rem; font-weight: 900; }
+
+/* Os selos na paleta (verde, azul, âmbar, violeta e o vermelho da marca), com o fio da cor. */
+.insignia { padding: 3px 10px; font-weight: 700; border: 1px solid rgba(255, 255, 255, 0.14); }
+.insignia-sucesso { border-color: rgba(95, 224, 143, 0.35); }
+.insignia-aviso { border-color: rgba(247, 193, 77, 0.35); }
+.insignia-info { border-color: rgba(141, 189, 245, 0.35); }
+.insignia-papel { border-color: rgba(187, 169, 255, 0.4); }
+.insignia-marca { background: var(--marca-tinta); color: var(--marca-texto); border-color: rgba(226, 38, 28, 0.5); }
+
+/* As abas, os chips e as categorias: o ativo com o vermelho da marca. */
+.aba[aria-selected='true'] { border-bottom-color: var(--marca); }
+.chips { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 4px; }
+.chip { padding: 8px 14px; border-radius: 9px; font-weight: 600; }
+.chip[aria-pressed='true'] { background: var(--marca); color: #ffffff; box-shadow: 0 6px 18px rgba(226, 38, 28, 0.3); }
+.categorias h2 { font-family: var(--mono); letter-spacing: 0.16em; color: var(--texto-mudo); }
+.categoria { padding: 10px 14px; border-left-width: 3px; }
+.categoria[aria-pressed='true'] { background: var(--superficie-2); font-weight: 700; border-left-color: var(--marca); }
+.grupo-do-catalogo h2 { border-left: 3px solid var(--marca); padding-left: 10px; font-size: 1.1rem; font-weight: 900; }
+.cartao-do-item { border-radius: 16px; padding: 20px; }
+.botao-icone:focus-visible, .aba:focus-visible, .chip:focus-visible, .categoria:focus-visible { outline-color: var(--primaria); }
+
+/* O estado vazio (o catálogo da empresa sem itens): o ícone, o título e o comando que resolve. */
+.estado-vazio { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 56px 24px; text-align: center; }
+.estado-vazio .icone { width: 64px; height: 64px; margin: 0; border-radius: 16px; border: 1px solid rgba(226, 38, 28, 0.45); background: var(--marca-tinta); color: var(--primaria); }
+.estado-vazio h2 { margin: 6px 0 0; font-size: 1.6rem; font-weight: 900; letter-spacing: -0.03em; }
+.estado-vazio p { margin: 0; max-width: 540px; color: var(--texto-2); line-height: 1.6; }
+.comando { margin-top: 8px; padding: 14px 18px; border-radius: 10px; border: 1px solid var(--borda); background: #0b0b0c; font-family: var(--mono); font-size: 0.9rem; overflow-wrap: anywhere; }
+.comando span { color: var(--primaria); }
+
+/* A conta: o perfil e "O dev.kit" à esquerda, o "Meu contexto" num cartão à direita (uma coluna no celular). */
+.cabecalho-da-conta { margin-bottom: -8px; }
+.cartao .rotulo-da-pagina { margin: 0 0 8px; color: var(--primaria); }
+.cartao .erro { color: var(--erro); font-weight: 600; }
+.cartao .aviso { color: var(--texto); }
+.conta .cartao h2 { margin: 0 0 8px; font-size: 1.25rem; font-weight: 900; }
+.conta .cartao .nota-da-secao { margin: 0 0 14px; }
+.dados-da-conta dl { grid-template-columns: max-content 1fr; gap: 14px 24px; }
+.dados-da-conta dd { text-align: right; font-weight: 600; }
+@media (min-width: 1000px) {
+  .painel.conta { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); align-items: start; gap: 24px; }
+  .conta > .cabecalho-da-conta { grid-column: 1 / -1; }
+  .conta > section { grid-column: 1; }
+  .conta > .secao-do-contexto { grid-column: 2; grid-row: 2 / span 4; }
+}
+
+/* O topo numa linha só a partir de 1200px: o menu e quem está logado mais compactos (o gestor tem cinco links). */
+@media (min-width: 1200px) {
+  .topo { flex-wrap: nowrap; }
+  .topo nav { flex-wrap: nowrap; }
+  .topo-menu { flex-wrap: nowrap; }
+  .topo-menu .botao { padding: 8px 12px; font-size: 0.92rem; white-space: nowrap; }
+  .topo .usuario > span:last-child { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ---------- A tela dividida do login, da adesão e da compra ---------- */
+.tela-de-acesso { min-height: 100vh; }
+.acesso { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; display: grid; gap: 40px; padding: 32px 20px 48px; align-items: center; }
+.acesso-marca { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
+.acesso-titulo { margin: 0 0 18px; font-size: clamp(2.1rem, 4.6vw, 3.6rem); font-weight: 900; letter-spacing: -0.045em; line-height: 1.04; overflow-wrap: break-word; }
+.acesso-texto { margin: 0; max-width: 560px; color: var(--texto-2); font-size: 1.12rem; line-height: 1.6; }
+.acesso-itens { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 16px; }
+.acesso-itens li { position: relative; padding-left: 40px; line-height: 1.6; color: var(--texto); }
+.acesso-itens li::before {
+  content: '✓'; position: absolute; left: 0; top: 0; width: 26px; height: 26px; display: grid; place-items: center;
+  border: 1px solid rgba(226, 38, 28, 0.6); border-radius: 7px; background: var(--marca-tinta); color: var(--primaria); font-size: 0.8rem; font-weight: 900;
+}
+.acesso-rodape { margin: 0; font-family: var(--mono); font-size: 0.8rem; color: var(--texto-mudo); }
+.acesso-formulario { display: flex; justify-content: center; min-width: 0; }
+.formulario-de-acesso {
+  position: relative; max-width: 520px; gap: 18px; padding: 40px 28px 36px; border-radius: 20px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%), var(--superficie);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+.formulario-de-acesso::before { content: ''; position: absolute; top: 0; left: 44px; right: 44px; height: 3px; border-radius: 0 0 3px 3px; background: var(--marca); }
+.formulario-cabecalho { margin-bottom: 4px; }
+.formulario-de-acesso h1, .formulario-cabecalho h1 { margin: 0 0 6px; font-size: 2rem; font-weight: 900; letter-spacing: -0.035em; }
+.formulario-cabecalho p { margin: 0; color: var(--texto-2); }
+.campo-com-acao { position: relative; display: flex; }
+.campo-com-acao input { flex: 1; padding-right: 96px; min-width: 0; }
+.campo-acao {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 0; border-radius: 8px; padding: 8px 10px;
+  background: transparent; color: var(--texto-2); font: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.campo-acao:hover { color: var(--texto); background: var(--superficie-2); }
+.campo-acao:focus-visible { outline: 2px solid var(--primaria); }
+.campo-codigo { font-family: var(--mono); letter-spacing: 0.14em; }
+.dica-do-campo { margin: -10px 0 0; color: var(--texto-mudo); font-size: 0.8rem; }
+.link-do-formulario { align-self: flex-end; margin-top: -6px; color: var(--primaria); font-weight: 700; text-decoration: none; }
+.link-do-formulario:hover { text-decoration: underline; }
+.divisor { display: flex; align-items: center; gap: 14px; margin: 4px 0; color: var(--texto-mudo); font-size: 0.85rem; }
+.divisor::before, .divisor::after { content: ''; flex: 1; height: 1px; background: var(--borda); }
+.centralizada { text-align: center; }
+.tela-de-acesso .topo + .acesso { padding-top: 24px; }
+@media (max-width: 959px) {
+  .acesso-itens, .acesso-rodape { display: none; }
+  .acesso-texto { font-size: 1rem; }
+}
+@media (min-width: 960px) {
+  .acesso { grid-template-columns: minmax(0, 1.1fr) minmax(440px, 520px); gap: 80px; padding: 56px 40px; }
+  .acesso-marca { align-self: stretch; justify-content: space-between; min-height: min(760px, calc(100vh - 112px)); }
+  .tela-de-acesso .topo + .acesso .acesso-marca { justify-content: center; }
+  .formulario-de-acesso { padding: 48px 44px 40px; }
+}
+
+/* ---------- A landing na marca ---------- */
+.landing .topo { background: rgba(13, 13, 14, 0.82); }
+.landing .hero { background: transparent; }
+.landing .hero h1 { font-weight: 900; letter-spacing: -0.045em; line-height: 1.04; }
+.landing .secao-cabecalho h2 { font-weight: 900; letter-spacing: -0.035em; }
+.secao-rotulo { font-weight: 700; letter-spacing: 0.18em; }
+.secao-tinta { background: rgba(255, 255, 255, 0.012); box-shadow: 0 0 0 100vmax rgba(255, 255, 255, 0.012); }
+.cta { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 52px; padding: 12px 24px; font-size: 1.02rem; font-weight: 800; }
+.landing .topo .cta { min-height: 42px; padding: 9px 18px; font-size: 0.95rem; }
+.link-entrar { font-weight: 700; }
+.selo { background: rgba(21, 21, 23, 0.8); border-color: rgba(255, 255, 255, 0.14); }
+.janela { border-radius: 16px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+.janela-escura { background: #0d0d0e; border-color: rgba(255, 255, 255, 0.09); }
+.abas-dos-recursos a { padding: 8px 16px; font-weight: 600; }
+.abas-dos-recursos a:hover { border-color: var(--marca); }
+.recurso-novo { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--marca); color: #ffffff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.etapas li::before, .passos li::before { box-shadow: 0 4px 14px rgba(226, 38, 28, 0.35); }
+.landing .cta-final {
+  border: 1px solid rgba(226, 38, 28, 0.35);
+  background: radial-gradient(640px 320px at 100% 0%, rgba(226, 38, 28, 0.28), transparent 70%), var(--escuro);
+}
+.comparativo thead th:nth-child(2), .comparativo td:nth-child(2) { background: var(--marca-tinta); }
+
+/* A amostra do Board no hero, no escuro: o contador âmbar, a nota verde e a fala do Orquestrador. */
+.amostra-contagem { background: var(--alerta-tinta); color: var(--alerta); border: 1px solid rgba(247, 193, 77, 0.35); }
+.amostra-avatar { background: #2a2a30; }
+.amostra-avatar-1 { background: #1d3a2a; }
+.amostra-acao-forte { background: var(--marca); border-color: var(--marca); }
+.nota-boa { background: var(--sucesso-tinta); color: var(--sucesso); }
+.nota-baixa { background: var(--marca-tinta); color: var(--marca-texto); }
+.amostra-check { background: var(--sucesso-tinta); color: var(--sucesso); }
+.amostra-orquestrador { display: flex; flex-direction: row; gap: 10px; align-items: center; border-color: rgba(226, 38, 28, 0.35); background: linear-gradient(180deg, rgba(226, 38, 28, 0.08), transparent), var(--superficie); }
+.amostra-orquestrador .amostra-texto b { color: var(--primaria); }
+.amostra-o { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #1d2b44; color: #8dbdf5; font-weight: 800; font-size: 0.7rem; }
+
+/* A home no celular (390px): o título e os botões inteiros, sem corte. */
+@media (max-width: 560px) {
+  .topo { padding: 12px 16px; }
+  .nav-acoes .cta { display: none; }
+  .landing .hero { padding-top: 28px; gap: 28px; }
+  .landing .hero h1 { font-size: 2.15rem; margin: 14px 0 16px; }
+  .hero .ctas { flex-direction: column; align-items: stretch; }
+  .hero .ctas .cta { width: 100%; }
+  .painel { padding: 28px 16px 56px; }
+  .formulario-de-acesso { padding: 36px 20px 28px; }
+}

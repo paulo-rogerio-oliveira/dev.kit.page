@@ -25,6 +25,9 @@ describe('Landing', () => {
     const amostra = within(hero).getByRole('img', { name: /Amostra do Board/ });
     expect(amostra).toHaveAccessibleName(/Precisa de você/);
     expect(amostra).toHaveAccessibleName(/Nota 92\/100, aceito: acima da nota mínima/);
+    // A versão 5: o Orquestrador no topo do Board, destravando uma task.
+    expect(amostra).toHaveAccessibleName(/o Orquestrador diz "Destravei a #509/);
+    expect(amostra.querySelector('.amostra-orquestrador')).toHaveTextContent('Orquestrador');
     expect(within(hero).getByRole('link', { name: 'Quero uma demonstração' })).toHaveAttribute('href', '#contato');
     expect(within(hero).getByRole('link', { name: 'Ver como funciona' })).toHaveAttribute('href', '#como-funciona');
   });
@@ -47,12 +50,16 @@ describe('Landing', () => {
     expect(within(secao).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(BENEFICIOS.map((b) => b.titulo));
   });
 
-  it('os recursos têm as abas 01–04, e cada aba leva ao seu bloco (US #467)', () => {
+  it('os recursos têm as abas 01–07, com o novo da versão 5 marcado, e cada aba leva ao seu bloco (US #467)', () => {
     renderizar('/');
 
     const recursos = screen.getByRole('region', { name: 'Cada recurso com a sua demonstração' });
+    expect(recursos).toHaveTextContent('Novo na versão 5: o Orquestrador, a escolha do provedor cognitivo e o Design.');
     const abas = within(within(recursos).getByRole('navigation', { name: 'Recursos em destaque' })).getAllByRole('link');
-    expect(abas.map((a) => a.textContent)).toEqual(['01 O agente sobre a task', '02 Fluxos com avaliadores', '03 Cherry-pick', '04 Horas']);
+    expect(abas.map((a) => a.textContent)).toEqual([
+      '01 Orquestradornovo', '02 O agente sobre a task', '03 Provedor cognitivonovo', '04 Designnovo', '05 Fluxos com avaliadores', '06 Cherry-pick', '07 Horas',
+    ]);
+    expect(abas.filter((a) => a.querySelector('.recurso-novo'))).toHaveLength(3);
     for (const [i, recurso] of RECURSOS.entries()) {
       expect(abas[i]).toHaveAttribute('href', `#recurso-${recurso.id}`);
       expect(within(recursos).getByRole('article', { name: recurso.titulo })).toHaveAttribute('id', `recurso-${recurso.id}`);
@@ -68,13 +75,20 @@ describe('Landing', () => {
       expect(within(artigo).getAllByRole('listitem').map((l) => l.textContent)).toEqual(recurso.marcadores);
       const moldura = artigo.querySelector('.janela')!;
       expect(moldura.querySelector('.janela-barra')).toHaveTextContent(tituloDaJanela(recurso.janela));
-      const video = moldura.querySelector('video')!;
-      expect(video).toHaveAttribute('poster', recurso.midia.poster);
-      expect(video).toHaveAccessibleName(recurso.midia.alt);
+      if (recurso.midia.video) {
+        const video = moldura.querySelector('video')!;
+        expect(video).toHaveAttribute('poster', recurso.midia.poster);
+        expect(video).toHaveAccessibleName(recurso.midia.alt);
+      } else {
+        // O Orquestrador: o GIF das Novidades da versão 5, animado, com o texto alternativo.
+        const gif = within(moldura as HTMLElement).getByRole('img', { name: recurso.midia.alt });
+        expect(gif).toHaveAttribute('src', recurso.midia.captura);
+      }
       expect(artigo.querySelector('figure > figcaption')).toHaveTextContent(recurso.legenda);
     }
-    expect(recursos.querySelectorAll('video')).toHaveLength(4);
-    expect(document.querySelectorAll('main video')).toHaveLength(4);
+    expect(recursos.querySelectorAll('video')).toHaveLength(6);
+    expect(document.querySelectorAll('main video')).toHaveLength(6);
+    expect(recursos.querySelector('#recurso-orquestrador img')).toHaveAttribute('src', '/midia/orquestrador.gif');
   });
 
   it('a amostra do Board do hero usa a mesma moldura de janela dos recursos', () => {

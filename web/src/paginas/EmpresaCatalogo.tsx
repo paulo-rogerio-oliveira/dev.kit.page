@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ItemDaEmpresa } from '../api/tipos';
-import { Topo } from '../componentes/Topo';
+import { Selo } from '../componentes/Selo';
+import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 import { NOME_DO_TIPO } from './catalogo/tipos';
@@ -48,46 +48,57 @@ export function EmpresaCatalogo() {
 
   return (
     <div className="pagina">
-      <Topo secao="catálogo da empresa">
-        <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
-        <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>
-        <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>
-        <Link className="botao botao-fantasma" to="/relatos">Relatos</Link>
-      </Topo>
+      <Topo secao="catálogo da empresa"><MenuDaEmpresa /></Topo>
       <main className="painel">
-        <section aria-labelledby="titulo-catalogo-da-empresa">
-          <h1 id="titulo-catalogo-da-empresa">Catálogo da empresa</h1>
-          <p className="nota-da-secao">O time publica com o devcli (skills --publicar) e assina o que usa; a sincronia do dev.kit traz os itens assinados.</p>
+        <section aria-labelledby="titulo-catalogo-da-empresa" className="painel-da-aba">
+          <header className="cabecalho-da-pagina">
+            <div className="cabecalho-textos">
+              {sessao!.empresa && <p className="rotulo-da-pagina">{sessao!.empresa}</p>}
+              <h1 id="titulo-catalogo-da-empresa">Catálogo da empresa</h1>
+              <p className="subtitulo">O time publica com o devcli (skills --publicar) e assina o que usa; a sincronia do dev.kit traz os itens assinados.</p>
+            </div>
+          </header>
           {erro && <p className="erro" role="alert">{erro}</p>}
           {aviso && <p className="aviso" role="status">{aviso}</p>}
           {!itens ? (
             <p className="carregando" role="status">Carregando…</p>
           ) : itens.length === 0 ? (
-            <p className="vazio">Nenhum item publicado ainda.</p>
+            <div className="cartao estado-vazio">
+              <span className="icone" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M9 10h6M9 14h6" /></svg>
+              </span>
+              <h2>Nenhum item publicado ainda.</h2>
+              <p>Publique uma skill, um fluxo ou uma Rule do time pelo devcli. Depois de publicada, ela aparece aqui para os devs da empresa assinarem.</p>
+              <code className="comando"><span aria-hidden="true">$ </span>devcli skills --nome &lt;skill&gt; --publicar --aplicar</code>
+            </div>
           ) : (
-            <table className="tabela">
-              <thead>
-                <tr><th>Item</th><th>Tipo</th><th className="numero">Versão</th><th>Autor</th><th className="numero">Assinantes</th><th>Atualizado em</th><th>Situação</th><th>Ações</th></tr>
-              </thead>
-              <tbody>
-                {itens.map((i) => (
-                  <tr key={i.id}>
-                    <td>{i.nome}</td>
-                    <td>{NOME_DO_TIPO[i.tipo] ?? i.tipo}</td>
-                    <td className="numero">{i.versao}</td>
-                    <td>{i.autor || '—'}</td>
-                    <td className="numero">{i.assinantes}</td>
-                    <td>{formatar.dataHora(i.publicadoEm)}</td>
-                    <td><span className={`estado ${i.retirado ? 'estado-ignorado' : 'estado-resolvido'}`}>{i.retirado ? 'Retirado' : 'Publicado'}</span></td>
-                    <td>
-                      {!i.retirado && (
-                        <button className="botao botao-fantasma" type="button" aria-label={`Retirar ${i.nome}`} onClick={() => void retirar(i)}>Retirar</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="cartao cartao-de-tabela">
+              <div className="tabela-rolavel-simples">
+                <table className="tabela tabela-do-cartao">
+                  <thead>
+                    <tr><th>Item</th><th>Tipo</th><th className="numero">Versão</th><th>Autor</th><th className="numero">Assinantes</th><th>Atualizado em</th><th>Situação</th><th>Ações</th></tr>
+                  </thead>
+                  <tbody>
+                    {itens.map((i) => (
+                      <tr key={i.id}>
+                        <td className="nome-do-item">{i.nome}</td>
+                        <td><Selo variante="sucesso">{NOME_DO_TIPO[i.tipo] ?? i.tipo}</Selo></td>
+                        <td className="numero">{i.versao}</td>
+                        <td>{i.autor || '—'}</td>
+                        <td className="numero">{i.assinantes}</td>
+                        <td>{formatar.dataHora(i.publicadoEm)}</td>
+                        <td><Selo variante={i.retirado ? 'neutro' : 'sucesso'} ponto={!i.retirado}>{i.retirado ? 'Retirado' : 'Publicado'}</Selo></td>
+                        <td>
+                          {!i.retirado && (
+                            <button className="botao botao-fantasma" type="button" aria-label={`Retirar ${i.nome}`} onClick={() => void retirar(i)}>Retirar</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </section>
       </main>

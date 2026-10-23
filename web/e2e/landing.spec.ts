@@ -15,9 +15,11 @@ test('a home da proposta (US #467) em desktop e celular, nos temas claro e escur
       await page.setViewportSize({ width: largura, height: altura });
       await page.emulateMedia({ colorScheme: tema, reducedMotion: 'reduce' });
       await page.goto('/');
-      await expect(page.locator('#recursos article')).toHaveCount(4);
-      // Com menos movimento entra o poster (o primeiro quadro): a captura não depende do vídeo carregar.
-      await expect(page.locator('#recursos .janela img')).toHaveCount(4);
+      // Os sete recursos desde a versão 5 (o Orquestrador, o provedor cognitivo e o Design entraram). O site é só escuro desde a
+      // marca da versão 5: o tema claro do sistema dá a mesma página.
+      await expect(page.locator('#recursos article')).toHaveCount(7);
+      // Com menos movimento entra o poster (o primeiro quadro, também o do GIF do Orquestrador): a captura não depende do vídeo carregar.
+      await expect(page.locator('#recursos .janela img')).toHaveCount(7);
       await page.screenshot({ path: `test-results/capturas/16-home-${tela}-${tema === 'light' ? 'claro' : 'escuro'}.png`, fullPage: true });
     }
   }
@@ -40,9 +42,11 @@ test('landing → seções e recursos da proposta → pedido de demonstração �
   await expect(page.getByRole('img', { name: /Amostra do Board/ })).toBeVisible();
   await expect(page.locator('#como-funciona ol > li')).toHaveCount(7);
   await expect(page.locator('#como-funciona video')).toHaveCount(0);
-  // Os quatro recursos, com as abas 01–04: a aba leva ao bloco, e a mídia toca dentro da moldura de janela.
-  await expect(page.locator('#recursos video')).toHaveCount(4);
-  await page.getByRole('navigation', { name: 'Recursos em destaque' }).getByRole('link', { name: '03 Cherry-pick' }).click();
+  // Os sete recursos, com as abas 01–07: a aba leva ao bloco, e a mídia toca dentro da moldura de janela (seis vídeos e o
+  // GIF do Orquestrador).
+  await expect(page.locator('#recursos video')).toHaveCount(6);
+  await expect(page.locator('#recurso-orquestrador img')).toHaveAttribute('src', '/midia/orquestrador.gif');
+  await page.getByRole('navigation', { name: 'Recursos em destaque' }).getByRole('link', { name: '06 Cherry-pick' }).click();
   await expect(page).toHaveURL(/#recurso-replicacao$/);
   const cherryPick = page.locator('#recurso-replicacao');
   await expect(cherryPick.locator('.janela-barra')).toHaveText('dev.kit - Cherry-pick');

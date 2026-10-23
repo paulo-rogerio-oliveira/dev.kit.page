@@ -6,7 +6,7 @@ export interface Chip<T extends string> {
 }
 
 /**
- * Os chips de filtro (US #461 — Todos/Skills/Tech plans/Fluxos): um grupo de botões em que só um vale, com a
+ * Os chips de filtro (US #461 — Todos/Skills/Rules/Fluxos): um grupo de botões em que só um vale, com a
  * contagem de cada um. O `aria-pressed` diz ao leitor de tela qual está escolhido.
  */
 export function Chips<T extends string>({ rotulo, opcoes, valor, aoMudar }: {

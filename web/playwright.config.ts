@@ -16,6 +16,13 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
+  // O fluxo.spec é o cenário da BASE NOVA (o admin com a senha inicial e nenhuma máquina): roda primeiro, e os
+  // demais — que trocam a senha do admin pela API (admin.ts) e gravam dados — depois dele. Sem isso a ordem era a
+  // alfabética, e um cenário com nome anterior (o conceitos.spec) já encontrava a senha trocada.
+  projects: [
+    { name: 'base-nova', testMatch: 'fluxo.spec.ts' },
+    { name: 'cenarios', testIgnore: 'fluxo.spec.ts', dependencies: ['base-nova'] },
+  ],
   webServer: [
     {
       // A API de verdade, com a configuração por ambiente — o mesmo caminho do Azure.

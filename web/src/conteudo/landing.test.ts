@@ -71,19 +71,50 @@ describe('conteúdo da landing', () => {
     expect(EMPRESAS.itens.map((i) => i.titulo)).toEqual(expect.arrayContaining(['Consentimento do colaborador', 'Exportação auditada']));
   });
 
-  it('os quatro recursos da proposta (US #467), numerados 01–04, com aba, marcadores, moldura e legenda', () => {
-    expect(RECURSOS.map((r) => r.id)).toEqual(['agente', 'fluxos', 'replicacao', 'board']);
-    expect(RECURSOS.map((r) => r.numero)).toEqual(['01', '02', '03', '04']);
-    expect(RECURSOS.map((r) => r.aba)).toEqual(['O agente sobre a task', 'Fluxos com avaliadores', 'Cherry-pick', 'Horas']);
-    expect(RECURSOS.map((r) => tituloDaJanela(r.janela))).toEqual(['dev.kit - Agente', 'dev.kit - Atividades', 'dev.kit - Cherry-pick', 'dev.kit - Board']);
+  it('os recursos da proposta (US #467) com os da versão 5 (Orquestrador, provedor cognitivo e Design), numerados 01–07, com aba, marcadores, moldura e legenda', () => {
+    expect(RECURSOS.map((r) => r.id)).toEqual(['orquestrador', 'agente', 'provedor', 'design', 'fluxos', 'replicacao', 'board']);
+    expect(RECURSOS.map((r) => r.numero)).toEqual(['01', '02', '03', '04', '05', '06', '07']);
+    expect(RECURSOS.map((r) => r.aba)).toEqual(['Orquestrador', 'O agente sobre a task', 'Provedor cognitivo', 'Design', 'Fluxos com avaliadores', 'Cherry-pick', 'Horas']);
+    expect(RECURSOS.filter((r) => r.novo).map((r) => r.id)).toEqual(['orquestrador', 'provedor', 'design']);
+    expect(RECURSOS.map((r) => tituloDaJanela(r.janela))).toEqual([
+      'dev.kit - Orquestrador', 'dev.kit - Agente', 'dev.kit - Tarefa avulsa', 'dev.kit - Orquestrador · Design', 'dev.kit - Atividades', 'dev.kit - Cherry-pick', 'dev.kit - Board',
+    ]);
     expect(AMOSTRA_DO_BOARD.titulo).toBe('dev.kit - Board');
+    expect(AMOSTRA_DO_BOARD.orquestrador.autor).toBe('Orquestrador');
     for (const recurso of RECURSOS) {
       expect(recurso.marcadores.length).toBeGreaterThanOrEqual(2);
       expect(recurso.legenda.trim().length).toBeGreaterThan(10);
-      expect(recurso.midia.video).toBeDefined();
+      // Cada recurso se mexe: o vídeo gravado pelo roteiro ou o GIF pronto do produto (o do Orquestrador).
+      expect(Boolean(recurso.midia.video) || /\.gif$/.test(recurso.midia.captura ?? '')).toBe(true);
       expect(recurso.midia.poster).toMatch(/\.jpg$/);
       expect(recurso.midia.alt.trim().length).toBeGreaterThan(20);
     }
+  });
+
+  it('o Orquestrador usa o GIF das Novidades da versão 5, e o provedor cognitivo e o Design, vídeos novos com a captura do app v5', () => {
+    const porId = (id: string) => RECURSOS.find((r) => r.id === id)!.midia;
+    expect(porId('orquestrador')).toMatchObject({ captura: '/midia/orquestrador.gif', poster: '/midia/orquestrador.jpg' });
+    expect(porId('orquestrador').video).toBeUndefined();
+    expect(porId('provedor')).toMatchObject({ video: { webm: '/midia/codex.webm', mp4: '/midia/codex.mp4' }, captura: '/capturas/tela-codex.png' });
+    expect(porId('design')).toMatchObject({ video: { webm: '/midia/design.webm', mp4: '/midia/design.mp4' }, captura: '/capturas/tela-design.png' });
+  });
+
+  it('os conceitos usam os nomes do produto: Rules no lugar de Tech Plans, e a escolha do provedor cognitivo sem destacar um só', () => {
+    const textos = JSON.stringify([
+      HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, CONCEITOS, FABRICA, CATALOGO, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PLANOS, PERGUNTAS,
+    ]);
+    expect(textos).not.toMatch(/tech ?plans?/i);
+    expect(textos).not.toMatch(/Codex como agente/);
+    expect(CATALOGO.titulo).toBe('Catálogo de skills, Rules e fluxos');
+    // Os provedores citados são só os que o produto suporta, e cada lugar que os lista traz todos.
+    const provedores = ['Claude Code', 'Codex', 'Kiro', 'Kimi', 'GLM'];
+    const listas = [
+      RECURSOS.find((r) => r.id === 'provedor')!.texto,
+      RECURSOS.find((r) => r.id === 'agente')!.marcadores.join(' '),
+      INTEGRACOES.find((i) => i.nome === 'Provedores cognitivos')!.texto,
+      PERGUNTAS.find((p) => p.pergunta === 'Quais provedores de IA ele usa?')!.resposta,
+    ];
+    for (const lista of listas) for (const provedor of provedores) expect(lista, lista).toContain(provedor);
   });
 
   it('o como funciona não tem mais o vídeo do hero (a proposta não o tem)', () => {
@@ -92,16 +123,16 @@ describe('conteúdo da landing', () => {
 
   it('toda mídia referenciada existe em public (vídeos, posters e capturas)', () => {
     for (const { midia } of RECURSOS) {
-      const urls = [midia.poster, midia.video!.webm, midia.video!.mp4, ...(midia.captura ? [midia.captura] : [])];
+      const urls = [midia.poster, ...(midia.video ? [midia.video.webm, midia.video.mp4] : []), ...(midia.captura ? [midia.captura] : [])];
       for (const url of urls) expect(existsSync(arquivo(url)), url).toBe(true);
     }
   });
 
-  it('o roteiro grava só as mídias que a home usa, e public/midia não guarda sobra', () => {
-    const usadas = RECURSOS.map((r) => r.midia.poster.replace('/midia/', '').replace('.jpg', ''));
-    expect(MIDIAS.map((m) => m.nome)).toEqual(usadas);
-    const arquivos = readdirSync(join(PUBLICO, 'midia')).map((f) => f.replace(/\.(mp4|webm|jpg)$/, ''));
-    expect([...new Set(arquivos)].sort()).toEqual([...usadas].sort());
+  it('o roteiro grava só os vídeos que a home usa, e public/midia não guarda sobra', () => {
+    const nome = (r: (typeof RECURSOS)[number]) => r.midia.poster.replace('/midia/', '').replace('.jpg', '');
+    expect(MIDIAS.map((m) => m.nome)).toEqual(RECURSOS.filter((r) => r.midia.video).map(nome));
+    const arquivos = readdirSync(join(PUBLICO, 'midia')).map((f) => f.replace(/\.(mp4|webm|jpg|gif)$/, ''));
+    expect([...new Set(arquivos)].sort()).toEqual(RECURSOS.map(nome).sort());
   });
 
   it('as mídias regravadas não têm legenda por cima do vídeo: a legenda é a da página, abaixo da moldura', () => {

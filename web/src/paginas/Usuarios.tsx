@@ -18,7 +18,7 @@ export const PAPEIS: { valor: Papel; rotulo: string; dica: string }[] = [
 ];
 
 const NOME_DO_PAPEL: Record<Papel, string> = { dev: 'Dev', gestor: 'Gestor', admin: 'Admin' };
-const COR_DO_PAPEL: Record<Papel, VarianteDoSelo> = { dev: 'neutro', gestor: 'info', admin: 'papel' };
+const COR_DO_PAPEL: Record<Papel, VarianteDoSelo> = { dev: 'neutro', gestor: 'marca', admin: 'papel' };
 
 /** A senha temporária acabada de gerar: aparece UMA vez, com o login a quem ela pertence. */
 interface SenhaMostrada {
@@ -198,7 +198,7 @@ export function Usuarios() {
     <div className="pagina">
       <Topo secao="usuários"><MenuDoAdmin /></Topo>
 
-      <Pagina titulo="Usuários" subtitulo={usuarios ? resumoDosUsuarios(usuarios) : undefined} emLinha>
+      <Pagina rotulo="Administração" titulo="Usuários"subtitulo={usuarios ? resumoDosUsuarios(usuarios) : undefined} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
         {senha && (

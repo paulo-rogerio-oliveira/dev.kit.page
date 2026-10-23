@@ -334,7 +334,7 @@ export interface RoiResposta {
 
 // ----- US #425: o catálogo, a conta, a licença e a compra -----
 
-/** O tipo de um item de catálogo: a skill, o Tech Plan ou o fluxo. */
+/** O tipo de um item de catálogo: a skill, a Rule (`plan`, o nome do contrato desde o antigo Tech Plan) ou o fluxo. */
 export type TipoDeItem = 'skill' | 'plan' | 'fluxo';
 
 /** Um item da vitrine pública do catálogo básico. */
@@ -501,7 +501,7 @@ export interface CatalogoNovo {
 export type SituacaoDoItem = 'novo' | 'alterado' | 'publicado' | 'retirada-pendente' | 'retirado';
 
 /**
- * Um item editável (skill, Tech Plan ou fluxo). O `conteudo` é o MESMO JSON que o dev.kit grava (SkillJson,
+ * Um item editável (skill, Rule ou fluxo). O `conteudo` é o MESMO JSON que o dev.kit grava (SkillJson,
  * TechPlanJson, o envelope devkit-fluxo), como texto: nulo na lista, inteiro no detalhe.
  */
 export interface ItemEditavel {
@@ -662,7 +662,7 @@ export interface Filtro {
   maquina: number | null;
 }
 
-/** O harness — o CLI de agente que roda o turno — dos filtros do log e das exceções (o codex é do suporte futuro). */
+/** O harness — o CLI do provedor cognitivo que roda o turno — dos filtros do log e das exceções (o codex desde a versão 5). */
 export type Harness = 'claude' | 'kiro' | 'glm' | 'codex';
 
 /** O recorte do log de eventos: o tipo e o detalhe exatos e o harness da sessão — vazio é sem recorte. */

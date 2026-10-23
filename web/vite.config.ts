@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => ({
     setupFiles: ['./src/testes/setup.ts'],
     env: { VITE_API_URL: 'http://api.test' },
     include: ['src/**/*.test.{ts,tsx}'],
+    // O teto por teste acima da espera dos findBy* (5 s, em testes/setup.ts): a suíte inteira em paralelo é mais lenta.
+    testTimeout: 20_000,
     reporters: ['default', 'junit'],
     outputFile: { junit: './test-results/vitest-junit.xml' },
   },

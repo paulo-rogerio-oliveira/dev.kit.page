@@ -2,6 +2,8 @@
 // compartilhamento (public/compartilhar.jpg) a partir do roteiro.mjs.
 //
 //   npm run midia                     (todas)        npm run midia -- agente fluxos   (só estas)
+//   npm run midia -- codex design --gif=<pasta>       (e também um GIF curto de cada uma, na pasta dada —
+//                                                       fora de public: é para as notas da versão e a entrega)
 //
 // Requer o Chromium do Playwright (npx playwright install chromium) e um ffmpeg com libx264 e
 // libvpx-vp9 no PATH ou na variável FFMPEG. Cada cena é HTML com animações CSS; o gravador PARA as
@@ -22,6 +24,8 @@ const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const FPS = 24;
 const LARGURA = 1280;
 const ALTURA = 720;
+/** A pasta do --gif=<pasta>, quando pedida: além do vídeo, um GIF de cada mídia gravada. */
+const PASTA_DOS_GIFS = process.argv.find((a) => a.startsWith('--gif='))?.slice('--gif='.length);
 
 /** O orçamento do repositório (docs/arquitetura.md): por arquivo e no total da pasta. */
 export const ORCAMENTO = { porArquivo: 1.5 * 1024 * 1024, total: 25 * 1024 * 1024 };
@@ -185,7 +189,13 @@ async function gravar(pagina, midia) {
     ffmpeg(...entrada, '-c:v', 'libx264', '-preset', 'slow', '-crf', '27', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', destino('mp4'));
     ffmpeg(...entrada, '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', '-pix_fmt', 'yuv420p', '-an', destino('webm'));
     ffmpeg('-i', join(quadros, '0000.png'), '-q:v', '4', destino('jpg'));
-    console.log(`${midia.nome}: ${n} quadros (${total}s) → mp4, webm, jpg`);
+    if (PASTA_DOS_GIFS) {
+      // O GIF: metade dos quadros e 800px de largura, com a paleta tirada do próprio vídeo (128 cores).
+      mkdirSync(PASTA_DOS_GIFS, { recursive: true });
+      ffmpeg(...entrada, '-vf', 'fps=12,scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=4',
+        join(PASTA_DOS_GIFS, `${midia.nome}.gif`));
+    }
+    console.log(`${midia.nome}: ${n} quadros (${total}s) → mp4, webm, jpg${PASTA_DOS_GIFS ? ', gif' : ''}`);
   } finally {
     rmSync(quadros, { recursive: true, force: true });
   }
@@ -233,7 +243,7 @@ function conferirOrcamento() {
   }
 }
 
-const pedidas = process.argv.slice(2);
+const pedidas = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 mkdirSync(SAIDA, { recursive: true });
 const navegador = await chromium.launch();
 try {

@@ -20,7 +20,7 @@ export type AbaDoCatalogo = 'vitrine' | 'releases' | 'catalogos';
 const BASICO = 'basico';
 
 /**
- * O catálogo do dev.kit (US #425; abas da US #461, /catalogo). A **Vitrine** é PÚBLICA: as skills, os Tech Plans e
+ * O catálogo do dev.kit (US #425; abas da US #461, /catalogo). A **Vitrine** é PÚBLICA: as skills, as Rules e
  * os fluxos do catálogo básico, de `GET /api/catalogo/base/vitrine`. O admin ganha as abas **Releases** (a antiga
  * /catalogo-base, agora de qualquer catálogo) e **Catálogos** (cadastro, empresas, edição dos itens e Publicar).
  * Quem não é admin vê só a vitrine, qualquer que seja a aba da URL.
@@ -94,8 +94,9 @@ export function Catalogo() {
     <div className="pagina">
       <Topo secao="catálogo">{ehAdmin && <MenuDoAdmin />}</Topo>
       <Pagina
+        rotulo="Catálogo"
         titulo="Catálogo do dev.kit"
-        subtitulo="Skills, tech plans e fluxos que vêm com o dev.kit. Chegam sozinhos a cada máquina quando sai uma versão nova."
+        subtitulo="Skills, Rules e fluxos que vêm com o dev.kit. Chegam sozinhos a cada máquina quando sai uma versão nova."
         acao={pilula}
       >
         {!ehAdmin ? vitrine : (

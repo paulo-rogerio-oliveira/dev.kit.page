@@ -17,14 +17,15 @@ export interface Midia {
 }
 
 /**
- * Um recurso do dev.kit (US #467, a proposta da home): o número e o rótulo curto da aba (01–04), o texto com os
+ * Um recurso do dev.kit (US #467, a proposta da home): o número e o rótulo curto da aba (01–07), o texto com os
  * marcadores, a mídia numa moldura de janela do app ("dev.kit - Agente") e a legenda curta abaixo dela — a
- * legenda saiu de cima do vídeo e veio para a página.
+ * legenda saiu de cima do vídeo e veio para a página. `novo` marca na aba o que chegou na versão 5.
  */
 export interface Recurso {
   id: string;
   numero: string;
   aba: string;
+  novo?: boolean;
   titulo: string;
   texto: string;
   marcadores: string[];
@@ -100,6 +101,14 @@ function midia(nome: string, alt: string, captura?: string): Midia {
   };
 }
 
+/**
+ * Uma mídia que é um GIF pronto do produto (o das Novidades da versão 5): sem vídeo, o GIF entra como a captura
+ * animada e o poster é o primeiro quadro dele — o que fica parado com prefers-reduced-motion.
+ */
+function gif(nome: string, alt: string, largura: number, altura: number): Midia {
+  return { poster: `/midia/${nome}.jpg`, captura: `/midia/${nome}.gif`, alt, largura, altura };
+}
+
 /** O título da moldura de janela do app ("dev.kit - Agente"), o mesmo na amostra do hero e nos recursos. */
 export const tituloDaJanela = (tela: string) => `dev.kit - ${tela}`;
 
@@ -146,11 +155,13 @@ export const HERO = {
 };
 
 /**
- * O "Board" do hero (US #405): uma amostra estática do que o dev.kit mostra — o "Precisa de você" com o
+ * O "Board" do hero (US #405): uma amostra estática do que o dev.kit mostra — desde a versão 5, com a fala do
+ * Orquestrador no topo (ele destravou uma task e só repassa o que precisa de você), o "Precisa de você" com o
  * que espera o dev, a nota do avaliador e as horas do dia. Dados de demonstração, como as mídias.
  */
 export const AMOSTRA_DO_BOARD = {
   titulo: tituloDaJanela('Board'),
+  orquestrador: { autor: 'Orquestrador', texto: 'Destravei a #509: respondi pela fila com o que o pedido.md já dizia.' },
   precisaDeVoce: [
     { titulo: 'US #393 — Agente: diretório de trabalho e multimídia', estado: 'pronto para revisão · PR aberta', acao: 'Aprovar' },
     { titulo: 'Fluxo “planejar e executar”', estado: 'aguardando interação', acao: 'Abrir' },
@@ -165,11 +176,12 @@ export const CABECALHOS = {
   comoFunciona: {
     rotulo: 'Como funciona',
     titulo: 'Do work item à Pull Request, em sete etapas',
-    subtitulo: 'O agente faz o trabalho repetitivo. A decisão final é sua.',
+    subtitulo: 'O agente faz o trabalho repetitivo, o Orquestrador acompanha e destrava. A decisão final é sua.',
   },
   recursos: {
     rotulo: 'Recursos',
     titulo: 'Cada recurso com a sua demonstração',
+    subtitulo: 'Novo na versão 5: o Orquestrador, a escolha do provedor cognitivo e o Design.',
   },
   porQue: {
     rotulo: 'Por que o dev.kit',
@@ -217,7 +229,7 @@ export const CONCEITOS = {
       id: 'agente',
       titulo: 'Agente',
       texto:
-        'Um modelo de IA com ferramentas — ler e editar arquivos, rodar comandos, consultar o board — que trabalha em turnos sobre um pedido. Ele não adivinha o contexto: recebe o work item, o plano técnico e as regras do time.',
+        'Um modelo de IA com ferramentas — ler e editar arquivos, rodar comandos, consultar o board — que trabalha em turnos sobre um pedido. Ele não adivinha o contexto: recebe o work item, o planejamento técnico e as Rules do time.',
       marcadores: [
         'Recebe um pedido claro: o work item e o planejamento técnico',
         'Age e verifica: implementa, compila e testa antes de dizer que terminou',
@@ -228,7 +240,7 @@ export const CONCEITOS = {
         codigo: [
           'US #387 — Exportar o ROI em CSV',
           '',
-          'Plano técnico:',
+          'Planejamento técnico:',
           '- rota GET /api/roi/exportar?formato=csv',
           '- reaproveitar ExportacaoCsv',
           '- teste de API cobrindo o filtro por máquina',
@@ -262,10 +274,10 @@ export const CONCEITOS = {
       id: 'rule',
       titulo: 'Rule',
       texto:
-        'As regras fixas do time, que valem em TODO turno, qualquer que seja o pedido. Onde a skill diz como fazer, a rule diz o limite: o que não se faz, o que sempre se relata, como tratar o encoding.',
+        'Os padrões e os limites do time, que entram no prompt e valem em TODO turno, qualquer que seja o pedido. Onde a skill diz como fazer, a rule diz o limite: o que não se faz, o que sempre se relata, como tratar o encoding.',
       marcadores: [
-        'Ficam no arquivo de regras do branch (o CLAUDE.md) e entram em toda conversa',
-        'Os Tech Plans somam os padrões do time: arquitetura, nomes, testes',
+        'Entram no arquivo de regras do branch (o CLAUDE.md, no Claude Code) e em toda conversa',
+        'As Rules do catálogo somam os padrões do time: arquitetura, nomes, testes, o que entregar',
         'O árbitro confere cada resposta contra elas e cobra o que faltou',
       ],
       exemplo: {
@@ -284,7 +296,7 @@ export const CONCEITOS = {
   exemplo: {
     titulo: 'Um exemplo, de ponta a ponta',
     passos: [
-      { titulo: 'O pedido', texto: 'O work item #387 chega com o plano técnico: exportar o ROI em CSV.' },
+      { titulo: 'O pedido', texto: 'O work item #387 chega com o planejamento técnico: exportar o ROI em CSV.' },
       { titulo: 'As rules', texto: 'Entram no primeiro turno: sem commit, encoding preservado, arquivos relatados.' },
       { titulo: 'As skills', texto: 'O agente implementa e roda compilar-projeto e testar-dotnet, do jeito do time.' },
       { titulo: 'A entrega', texto: 'O avaliador dá a nota; com a mínima, o resumo vai para você aprovar.' },
@@ -305,7 +317,7 @@ export const FABRICA = {
     texto:
       'Uma linha de produção de software em que cada estação é um agente com um papel, uma entrada e um critério de aceite. O trabalho passa de estação em estação por gatilhos, e só segue com a nota mínima. No dev.kit, a fábrica é um fluxo salvo: roda pelo Board, por agendamento ou por gatilho.',
     estacoes: [
-      { titulo: 'Planejar', texto: 'Um agente lê o work item e escreve o plano técnico e as tasks filhas.' },
+      { titulo: 'Planejar', texto: 'Um agente lê o work item e escreve o planejamento técnico e as tasks filhas.' },
       { titulo: 'Implementar', texto: 'Outro agente executa o plano com as rules e as skills do time.' },
       { titulo: 'Verificar', texto: 'Compila e testa o que mudou, no menor escopo que cobre a alteração.' },
       { titulo: 'Avaliar', texto: 'Avaliadores dão nota de 0 a 100; abaixo da mínima, o trabalho volta.' },
@@ -315,7 +327,7 @@ export const FABRICA = {
     marcadores: [
       'Medida de ponta a ponta: falhas por causa, notas, impasses e custo por objetivo',
       'Best-of-N: a mesma task em 2 a 4 agentes, e fica a execução de maior nota',
-      'Cada estação é trocável: outro agente, outro modelo, outra skill',
+      'Cada estação é trocável: outro agente, outro provedor cognitivo, outra skill',
     ],
   },
   time: {
@@ -339,23 +351,42 @@ export const FABRICA = {
  */
 export const PASSOS: Passo[] = [
   { titulo: 'Clona', texto: 'Os repositórios do work item, no branch certo.' },
-  { titulo: 'Implementa', texto: 'Com as regras e os tech plans do seu time.' },
+  { titulo: 'Implementa', texto: 'Com o provedor cognitivo que você escolher, as Rules e as skills do seu time.' },
   { titulo: 'Compila', texto: 'Com o compilador do projeto.' },
   { titulo: 'Testa', texto: 'Roda os testes antes de seguir.' },
   { titulo: 'Avalia', texto: 'Avaliadores dão nota de 0 a 100; abaixo da mínima, refaz.' },
   { titulo: 'Commit e push', texto: 'Só o que é da task, com a mensagem do board.' },
-  { titulo: 'Pull Request', texto: 'Você revisa e aprova.' },
+  { titulo: 'Pull Request', texto: 'Você revisa e aprova: o Orquestrador só traz o que precisa de você.' },
 ];
 
 /**
- * Os QUATRO recursos da home (US #467, a proposta): as abas 01–04 apontam para eles, e cada um traz a mídia
- * gravada do app atual (web/midia/roteiro.mjs) sem legenda sobreposta — a legenda é a deste arquivo, abaixo
- * da moldura. Agendamento, depurador e devcli saíram da home: continuam no comparativo e nas integrações.
+ * Os recursos da home (US #467, a proposta; a versão 5 trouxe o Orquestrador, a escolha do provedor cognitivo — o
+ * Codex entrou como um dos provedores — e o Design): as abas 01–07
+ * apontam para eles, e cada um traz a mídia do app atual sem legenda sobreposta — a legenda é a deste arquivo,
+ * abaixo da moldura. O Orquestrador usa o GIF das Novidades da versão 5; os demais, os vídeos gravados por
+ * web/midia/roteiro.mjs. Agendamento, depurador e devcli saíram da home: continuam no comparativo e nas integrações.
  */
 export const RECURSOS: Recurso[] = [
   {
-    id: 'agente',
+    id: 'orquestrador',
     numero: '01',
+    aba: 'Orquestrador',
+    novo: true,
+    titulo: 'O Orquestrador acompanha todas as tasks',
+    texto:
+      'O chat no centro do Board vê todos os processos e agentes. Ele responde e destrava as perguntas deles com o que o pedido já diz, abre execuções e fluxos quando você pede e só repassa a você o que precisa de você.',
+    marcadores: [
+      'Responde pela fila o que o pedido.md já responde, sem parar a task',
+      'Os pedidos de comando (Executar, Permitir sempre, Cancelar) aparecem ali mesmo',
+      'Abre a execução ou o fluxo que você pede no chat',
+    ],
+    janela: 'Orquestrador',
+    legenda: 'Destravou a task e só chamou você para o que é seu',
+    midia: gif('orquestrador', 'O Orquestrador acompanha as tasks no Board, responde ao agente o que o pedido já diz e mostra o pedido de comando para executar ou permitir sempre.', 820, 560),
+  },
+  {
+    id: 'agente',
+    numero: '02',
     aba: 'O agente sobre a task',
     titulo: 'O agente sobre a sua task',
     texto:
@@ -363,15 +394,50 @@ export const RECURSOS: Recurso[] = [
     marcadores: [
       'Clona cada repositório lado a lado e cria o branch',
       'Grava as regras, as skills e o conhecimento comum na pasta da task',
-      'Roda a CLI que você escolher: Claude, Kiro, Kimi ou GLM',
+      'Roda no provedor cognitivo que você escolher: Claude Code, Codex, Kiro, Kimi ou GLM',
     ],
     janela: 'Agente',
     legenda: 'Propõe o commit com Ab#1234 — e você aprova',
     midia: midia('agente', 'O agente pede para executar a compilação, roda a suíte de testes e propõe a mensagem de commit para aprovação.', '/capturas/tela-agente.png'),
   },
   {
+    id: 'provedor',
+    numero: '03',
+    aba: 'Provedor cognitivo',
+    novo: true,
+    titulo: 'Você escolhe o melhor provedor cognitivo',
+    texto:
+      'O dev.kit não prende o time a um modelo: escolha o provedor e o modelo de cada papel — o agente que implementa, o avaliador que dá a nota e o Orquestrador. Claude Code, Codex (OpenAI), Kiro, Kimi e GLM estão no mesmo seletor.',
+    marcadores: [
+      'Escolhido na pré-execução da task e em cada agente do fluxo',
+      'O dev.kit monta as regras próprias do ambiente de cada provedor: shell, sandbox e skills',
+      'Novo na versão 5: o Codex (OpenAI) entrou entre os provedores',
+    ],
+    janela: 'Tarefa avulsa',
+    legenda: 'O provedor e o modelo da task, no resumo antes de executar',
+    // A mídia segue com o nome do arquivo gravado (codex): é a pré-execução com o seletor de modelo.
+    midia: midia('codex', 'A pré-execução de uma tarefa avulsa: o vínculo, o repositório, o planejamento e o provedor escolhido no seletor de modelo, com o resumo e o botão Executar com o agente.', '/capturas/tela-codex.png'),
+  },
+  {
+    id: 'design',
+    numero: '04',
+    aba: 'Design',
+    novo: true,
+    titulo: 'Design: da captura real à proposta e à implementação',
+    texto:
+      'Capture as telas reais da web e do desktop, peça a mudança no chat do Orquestrador e receba a proposta visual como versão nova, lado a lado com a original.',
+    marcadores: [
+      'Capturas reais versionadas por repositório e branch',
+      'Propostas pedidas pelo chat do Orquestrador, com as telas selecionadas',
+      'O fluxo Design vai da proposta à implementação e à recaptura',
+    ],
+    janela: 'Orquestrador · Design',
+    legenda: 'A proposta aparece como versão nova, ao lado da captura',
+    midia: midia('design', 'O painel Design do Orquestrador: as telas do projeto, a captura real e a proposta lado a lado, e o agente avisando que gravou as propostas pedidas.', '/capturas/tela-design.png'),
+  },
+  {
     id: 'fluxos',
-    numero: '02',
+    numero: '05',
     aba: 'Fluxos com avaliadores',
     titulo: 'Fluxos com avaliadores, gatilhos e objetivo',
     texto:
@@ -387,7 +453,7 @@ export const RECURSOS: Recurso[] = [
   },
   {
     id: 'replicacao',
-    numero: '03',
+    numero: '06',
     aba: 'Cherry-pick',
     titulo: 'Cherry-pick e replicação de branch',
     texto: 'Replique commits entre branches numa cópia temporária, sem trocar o branch do seu projeto.',
@@ -401,7 +467,7 @@ export const RECURSOS: Recurso[] = [
   },
   {
     id: 'board',
-    numero: '04',
+    numero: '07',
     aba: 'Horas',
     titulo: 'Horas lançadas sozinhas',
     texto:
@@ -416,8 +482,7 @@ export const RECURSOS: Recurso[] = [
 export const INTEGRACOES: Integracao[] = [
   { nome: 'Azure DevOps', texto: 'Boards (work items, iterações, horas) e Repos.' },
   { nome: 'GitHub', texto: 'Clone, push e Pull Request pelo gh.' },
-  { nome: 'Claude Code', texto: 'A CLI claude como agente da task.' },
-  { nome: 'Kiro, Kimi e GLM', texto: 'As outras CLIs de agente, escolhidas por task.' },
+  { nome: 'Provedores cognitivos', texto: 'Claude Code, Codex (OpenAI), Kiro, Kimi e GLM: o melhor para cada agente, com as regras do ambiente de cada um.' },
   { nome: 'TortoiseGit', texto: 'Diffs e o merge de conflitos arquivo por arquivo.' },
   { nome: 'Serviço do Windows', texto: 'O agendador que roda as tasks no horário.' },
 ];
@@ -506,7 +571,7 @@ export const EMPRESAS = {
  * empresa. A lista completa, por tecnologia, é a página pública /catalogo.
  */
 export const CATALOGO = {
-  titulo: 'Catálogo de skills, Tech Plans e fluxos',
+  titulo: 'Catálogo de skills, Rules e fluxos',
   subtitulo: 'O dev.kit chega com o catálogo básico, e ele se atualiza sozinho.',
   itens: [
     {
@@ -515,7 +580,7 @@ export const CATALOGO = {
     },
     {
       titulo: 'O catálogo da sua empresa',
-      texto: 'Publique as skills, os Tech Plans e os fluxos do time; cada pessoa assina o que usa, e assinar um fluxo traz as skills e os planos dele.',
+      texto: 'Publique as skills, as Rules e os fluxos do time; cada pessoa assina o que usa, e assinar um fluxo traz as skills e as Rules dele.',
     },
     {
       titulo: 'Versionado e revisado',
@@ -572,15 +637,16 @@ export const PERGUNTAS: PerguntaFrequente[] = [
   {
     pergunta: 'O que é o catálogo do dev.kit?',
     resposta:
-      'As skills, os Tech Plans e os fluxos que o agente usa. O básico vem com o dev.kit e se atualiza sozinho; a sua empresa pode publicar os dela para o time assinar.',
+      'As skills, as Rules e os fluxos que o agente usa. O básico vem com o dev.kit e se atualiza sozinho; a sua empresa pode publicar os dela para o time assinar.',
   },
   {
     pergunta: 'Preciso trocar o meu processo no Azure DevOps?',
     resposta: 'Não. O dev.kit lê os work items, as iterações e os campos do processo que você já usa, e respeita os campos obrigatórios dele.',
   },
   {
-    pergunta: 'Quais agentes de IA ele usa?',
-    resposta: 'As CLIs claude, kiro, kimi e glm. Cada task escolhe a sua; a conta e o plano do agente são os seus.',
+    pergunta: 'Quais provedores de IA ele usa?',
+    resposta:
+      'O que você escolher, papel a papel — o agente que implementa, o avaliador e o Orquestrador: Claude Code, Codex (OpenAI), Kiro, Kimi ou GLM. A conta e o plano de cada provedor são os seus.',
   },
   {
     pergunta: 'O agente faz commit e push sozinho?',

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ColaboradorResumo, EventoDoLog, Filtro, Harness, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
 import { salvarArquivo } from '../arquivos';
@@ -8,13 +7,14 @@ import { CartoesDoFluxo } from '../componentes/CartoesDoFluxo';
 import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
+import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
 import { formatar, ultimosDias } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
 /** Os períodos oferecidos no filtro. */
 export const PERIODOS = [7, 30, 90] as const;
 
-/** Os harnesses do filtro, na ordem da tela — o codex é do suporte futuro (a API já o aceita). */
+/** Os harnesses do filtro (o provedor cognitivo que rodou o turno), na ordem da tela — o Codex entrou na versão 5. */
 export const HARNESSES: { valor: Harness; rotulo: string }[] = [
   { valor: 'claude', rotulo: 'Claude' },
   { valor: 'kiro', rotulo: 'Kiro CLI' },
@@ -116,22 +116,14 @@ export function Dashboard() {
 
   return (
     <div className="pagina">
-      <header className="topo">
-        <span className="marca">dev<span className="marca-ponto">.</span>kit <small>uso</small></span>
-        <nav>
-          {ehAdmin && <Link className="botao botao-fantasma" to="/empresas">Empresas</Link>}
-          {ehAdmin && <Link className="botao botao-fantasma" to="/usuarios">Usuários</Link>}
-          {ehAdmin && <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>}
-          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/usuarios">Usuários da empresa</Link>}
-          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
-          {!ehAdmin && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
-          <Link className="botao botao-fantasma" to="/relatos">Relatos</Link>
-          <span className="usuario">{sessao!.login}{sessao!.empresa ? ` · ${sessao!.empresa}` : ''}</span>
-          <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
-        </nav>
-      </header>
+      <Topo secao="uso">{ehAdmin ? <MenuDoAdmin /> : <MenuDaEmpresa />}</Topo>
 
       <main className="painel">
+        <div className="cabecalho-do-painel">
+        <header className="cabecalho-textos">
+          <p className="rotulo-da-pagina">{ehAdmin ? 'Painel do admin' : 'Painel do gestor'}</p>
+          <h1>{ehAdmin ? 'Uso do dev.kit' : `Uso da ${sessao!.empresa ?? 'empresa'}`}</h1>
+        </header>
         <div className="filtros" role="search">
           <label>
             {ehAdmin ? 'Máquina' : 'Colaborador'}
@@ -155,6 +147,7 @@ export function Dashboard() {
           </label>
           <button className="botao botao-fantasma" type="button" onClick={() => void exportar()}>Exportar uso (CSV)</button>
           {carregando && <span className="carregando" role="status">Carregando…</span>}
+        </div>
         </div>
 
         {erro && <p className="erro" role="alert">{erro}</p>}

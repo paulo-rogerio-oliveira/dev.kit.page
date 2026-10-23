@@ -6,7 +6,7 @@ import { Selo } from '../../componentes/Selo';
 import { formatar } from '../../formatar';
 import { EditorDeItem } from './EditorDeItem';
 import { Publicacao } from './Publicacao';
-import { NOME_DO_TIPO, SITUACAO_DO_ITEM } from './tipos';
+import { NOME_DO_TIPO, NOME_DO_TIPO_NO_PLURAL, rotuloDaCategoria, SITUACAO_DO_ITEM } from './tipos';
 
 type FiltroDeTipo = 'todos' | TipoDeItem;
 
@@ -132,7 +132,9 @@ export function DetalheDoCatalogo({ token, catalogo, aoVoltar, aoMudar, aoPublic
 
   async function salvo(item: ItemEditavel, novo: boolean) {
     setModo({ tipo: 'lista' });
-    await depoisDeMudar(`${NOME_DO_TIPO[item.tipo]} ${item.nome} ${novo ? 'criado' : 'salvo'} como rascunho: publique para chegar às máquinas.`);
+    // A Rule é feminina; a skill, o fluxo e o antigo Tech Plan, no masculino da mensagem.
+    const feminina = item.tipo === 'plan';
+    await depoisDeMudar(`${NOME_DO_TIPO[item.tipo]} ${item.nome} ${novo ? (feminina ? 'criada' : 'criado') : (feminina ? 'salva' : 'salvo')} como rascunho: publique para chegar às máquinas.`);
   }
 
   const ativos = itens ?? [];
@@ -232,7 +234,7 @@ export function DetalheDoCatalogo({ token, catalogo, aoVoltar, aoMudar, aoPublic
             <h2 id="titulo-itens-do-catalogo" className="titulo-do-cartao">Itens</h2>
             <div className="acoes">
               <button className="botao botao-fantasma botao-pequeno" type="button" onClick={() => { limpar(); setModo({ tipo: 'editor', tipoDoItem: 'skill', item: null }); }}>Nova skill</button>
-              <button className="botao botao-fantasma botao-pequeno" type="button" onClick={() => { limpar(); setModo({ tipo: 'editor', tipoDoItem: 'plan', item: null }); }}>Novo tech plan</button>
+              <button className="botao botao-fantasma botao-pequeno" type="button" onClick={() => { limpar(); setModo({ tipo: 'editor', tipoDoItem: 'plan', item: null }); }}>Nova Rule</button>
               <button className="botao botao-fantasma botao-pequeno" type="button" onClick={() => { limpar(); setModo({ tipo: 'editor', tipoDoItem: 'fluxo', item: null }); }}>Novo fluxo</button>
             </div>
           </div>
@@ -255,9 +257,9 @@ export function DetalheDoCatalogo({ token, catalogo, aoVoltar, aoMudar, aoPublic
               aoMudar={setFiltro}
               opcoes={[
                 { valor: 'todos', rotulo: 'Todos', contagem: ativos.length },
-                { valor: 'skill', rotulo: 'Skills', contagem: conta('skill') },
-                { valor: 'plan', rotulo: 'Tech plans', contagem: conta('plan') },
-                { valor: 'fluxo', rotulo: 'Fluxos', contagem: conta('fluxo') },
+                { valor: 'skill', rotulo: NOME_DO_TIPO_NO_PLURAL.skill, contagem: conta('skill') },
+                { valor: 'plan', rotulo: NOME_DO_TIPO_NO_PLURAL.plan, contagem: conta('plan') },
+                { valor: 'fluxo', rotulo: NOME_DO_TIPO_NO_PLURAL.fluxo, contagem: conta('fluxo') },
               ]}
             />
           </div>
@@ -287,7 +289,7 @@ export function DetalheDoCatalogo({ token, catalogo, aoVoltar, aoMudar, aoPublic
                           {i.descricao && <small>{i.descricao}</small>}
                         </span>
                       </td>
-                      <td>{i.categoria || '—'}</td>
+                      <td>{i.categoria ? rotuloDaCategoria(i.categoria) : '—'}</td>
                       <td className="numero">{i.versaoPublicada > 0 ? i.versaoPublicada : '—'}</td>
                       <td><Selo variante={SITUACAO_DO_ITEM[i.situacao]?.variante ?? 'neutro'}>{SITUACAO_DO_ITEM[i.situacao]?.rotulo ?? i.situacao}</Selo></td>
                       <td>{formatar.dataHora(i.alteradoEm)}{i.alteradoPor ? ` · ${i.alteradoPor}` : ''}</td>
