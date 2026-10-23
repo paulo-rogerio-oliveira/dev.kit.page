@@ -130,6 +130,8 @@ public static partial class GeradorDoManifesto
     /// <summary>
     /// O grupo da vitrine pelo NOME do item, como no git.kit: o Angular, o .NET, o Git e o Azure DevOps têm skills
     /// próprias; os fluxos e o resto (as que operam o próprio dev.kit) vão para "dev.kit"; os plans, para "Tech Plans".
+    /// O "Tech Plans" é valor do contrato com o app (o <c>esperado.json</c> de ContratoDoManifesto, o mesmo nos dois
+    /// repositórios): a tela o exibe como "Rules", e trocá-lo aqui exige trocar o gerador do app no mesmo pedido.
     /// </summary>
     public static string Tecnologia(string tipo, string nome)
     {

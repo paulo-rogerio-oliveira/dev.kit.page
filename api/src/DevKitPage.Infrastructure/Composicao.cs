@@ -133,7 +133,7 @@ public sealed class InicializadorDaBase(
         {
             Slug = Contracts.V1.Catalogos.Basico,
             Nome = "Básico",
-            Descricao = "Skills, tech plans e fluxos que vêm com o dev.kit — de todas as empresas.",
+            Descricao = "Skills, Rules e fluxos que vêm com o dev.kit — de todas as empresas.",
             Basico = true,
             CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
         });

@@ -91,9 +91,10 @@ public sealed record EventoDoLog(
 public sealed record Pagina<T>(IReadOnlyList<T> Itens, int Total, int NumeroDaPagina, int Tamanho);
 
 /// <summary>
-/// Os HARNESSES — o CLI de agente que roda o turno — que o painel filtra no log e nas exceções. É o recorte do
-/// <see cref="TiposDeEvento.TurnoExecutado"/> e o fim do tipo da falha de turno sem causa (<c>Falha de turno do
-/// &lt;cli&gt;</c>). O <see cref="Codex"/> é do suporte futuro: o filtro já o aceita, e fica vazio até o dev.kit o mandar.
+/// Os HARNESSES — o CLI do provedor cognitivo que roda o turno — que o painel filtra no log e nas exceções. É o recorte
+/// do <see cref="TiposDeEvento.TurnoExecutado"/> e o fim do tipo da falha de turno sem causa (<c>Falha de turno do
+/// &lt;cli&gt;</c>). O <see cref="Codex"/> entrou como provedor na versão 5 do dev.kit; o filtro fica vazio enquanto
+/// nenhuma máquina o mandar.
 /// </summary>
 public static class Harnesses
 {

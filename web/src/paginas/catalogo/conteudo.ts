@@ -1,7 +1,8 @@
 // O conteúdo de um item editável (US #461) — o MESMO JSON que o dev.kit desktop grava, montado a partir do
 // formulário com os mesmos campos e na MESMA ORDEM (a ordem das propriedades é a do arquivo): o `SkillJson` e o
-// `TechPlanJson` do git.kit e o envelope `devkit-fluxo` do `FlowCatalogFiles`. As mensagens de erro são as do app,
-// para o admin ver no site o que veria no dev.kit.
+// `TechPlanJson` do git.kit (a Rule; o nome interno segue o antigo Tech Plan) e o envelope `devkit-fluxo` do
+// `FlowCatalogFiles`. As mensagens de erro são as do app, com o nome que a tela mostra (Rule), para o admin ver no
+// site o que veria no dev.kit.
 
 /** Os campos do formulário da skill (as listas como texto, uma linha por item). */
 export interface CamposDaSkill {
@@ -15,7 +16,7 @@ export interface CamposDaSkill {
   isPinned: boolean;
 }
 
-/** Os campos do formulário do Tech Plan. */
+/** Os campos do formulário da Rule. */
 export interface CamposDoPlano {
   key: string;
   description: string;
@@ -75,7 +76,7 @@ export function validarSkill(c: CamposDaSkill): string[] {
   return erros;
 }
 
-/** O JSON do Tech Plan — o `TechPlanJson.Export`: a chave (a identidade) abre o arquivo, as marcações o fecham. */
+/** O JSON da Rule — o `TechPlanJson.Export`: a chave (a identidade) abre o arquivo, as marcações o fecham. */
 export function montarPlano(c: CamposDoPlano): string {
   return JSON.stringify({
     key: c.key.trim(),
@@ -88,12 +89,12 @@ export function montarPlano(c: CamposDoPlano): string {
   }, null, 2);
 }
 
-/** Os erros do Tech Plan — os textos do `TechPlanJson.Read` (descrição e conteúdo são os obrigatórios). */
+/** Os erros da Rule — os textos do `TechPlanJson.Read` (descrição e conteúdo são os obrigatórios). */
 export function validarPlano(c: CamposDoPlano): string[] {
   const erros: string[] = [];
   const descricao = c.description.trim();
-  if (!descricao) erros.push('O Tech Plan está sem descrição (campo "description").');
-  if (!c.content.trim()) erros.push(`O Tech Plan "${descricao}" veio sem conteúdo (campo "content").`);
+  if (!descricao) erros.push('A Rule está sem descrição (campo "description").');
+  if (!c.content.trim()) erros.push(`A Rule "${descricao}" veio sem conteúdo (campo "content").`);
   return erros;
 }
 
@@ -123,7 +124,7 @@ export function lerSkill(conteudo: unknown): CamposDaSkill {
   };
 }
 
-/** Os campos do formulário a partir do Tech Plan guardado. */
+/** Os campos do formulário a partir da Rule guardada. */
 export function lerPlano(conteudo: unknown): CamposDoPlano {
   const o = objeto(conteudo);
   return {
@@ -155,7 +156,7 @@ export interface FluxoLido {
   nome: string;
   descricao: string;
   passos: PassoDoFluxo[];
-  /** Os Tech Plans embutidos (`planos[]`): chegam à máquina junto com o fluxo. */
+  /** As Rules embutidas (`planos[]`): chegam à máquina junto com o fluxo. */
   planos: number;
   erros: string[];
 }

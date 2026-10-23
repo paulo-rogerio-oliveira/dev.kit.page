@@ -71,11 +71,11 @@ describe('conteúdo da landing', () => {
     expect(EMPRESAS.itens.map((i) => i.titulo)).toEqual(expect.arrayContaining(['Consentimento do colaborador', 'Exportação auditada']));
   });
 
-  it('os recursos da proposta (US #467) com os da versão 5 (Orquestrador, Codex e Design), numerados 01–07, com aba, marcadores, moldura e legenda', () => {
-    expect(RECURSOS.map((r) => r.id)).toEqual(['orquestrador', 'agente', 'codex', 'design', 'fluxos', 'replicacao', 'board']);
+  it('os recursos da proposta (US #467) com os da versão 5 (Orquestrador, provedor cognitivo e Design), numerados 01–07, com aba, marcadores, moldura e legenda', () => {
+    expect(RECURSOS.map((r) => r.id)).toEqual(['orquestrador', 'agente', 'provedor', 'design', 'fluxos', 'replicacao', 'board']);
     expect(RECURSOS.map((r) => r.numero)).toEqual(['01', '02', '03', '04', '05', '06', '07']);
-    expect(RECURSOS.map((r) => r.aba)).toEqual(['Orquestrador', 'O agente sobre a task', 'Codex como agente', 'Design', 'Fluxos com avaliadores', 'Cherry-pick', 'Horas']);
-    expect(RECURSOS.filter((r) => r.novo).map((r) => r.id)).toEqual(['orquestrador', 'codex', 'design']);
+    expect(RECURSOS.map((r) => r.aba)).toEqual(['Orquestrador', 'O agente sobre a task', 'Provedor cognitivo', 'Design', 'Fluxos com avaliadores', 'Cherry-pick', 'Horas']);
+    expect(RECURSOS.filter((r) => r.novo).map((r) => r.id)).toEqual(['orquestrador', 'provedor', 'design']);
     expect(RECURSOS.map((r) => tituloDaJanela(r.janela))).toEqual([
       'dev.kit - Orquestrador', 'dev.kit - Agente', 'dev.kit - Tarefa avulsa', 'dev.kit - Orquestrador · Design', 'dev.kit - Atividades', 'dev.kit - Cherry-pick', 'dev.kit - Board',
     ]);
@@ -91,12 +91,30 @@ describe('conteúdo da landing', () => {
     }
   });
 
-  it('o Orquestrador usa o GIF das Novidades da versão 5, e o Codex e o Design, vídeos novos com a captura do app v5', () => {
+  it('o Orquestrador usa o GIF das Novidades da versão 5, e o provedor cognitivo e o Design, vídeos novos com a captura do app v5', () => {
     const porId = (id: string) => RECURSOS.find((r) => r.id === id)!.midia;
     expect(porId('orquestrador')).toMatchObject({ captura: '/midia/orquestrador.gif', poster: '/midia/orquestrador.jpg' });
     expect(porId('orquestrador').video).toBeUndefined();
-    expect(porId('codex')).toMatchObject({ video: { webm: '/midia/codex.webm', mp4: '/midia/codex.mp4' }, captura: '/capturas/tela-codex.png' });
+    expect(porId('provedor')).toMatchObject({ video: { webm: '/midia/codex.webm', mp4: '/midia/codex.mp4' }, captura: '/capturas/tela-codex.png' });
     expect(porId('design')).toMatchObject({ video: { webm: '/midia/design.webm', mp4: '/midia/design.mp4' }, captura: '/capturas/tela-design.png' });
+  });
+
+  it('os conceitos usam os nomes do produto: Rules no lugar de Tech Plans, e a escolha do provedor cognitivo sem destacar um só', () => {
+    const textos = JSON.stringify([
+      HERO, AMOSTRA_DO_BOARD, CABECALHOS, BENEFICIOS, PASSOS, RECURSOS, CONCEITOS, FABRICA, CATALOGO, COMPARATIVO, INTEGRACOES, SEGURANCA, EMPRESAS, PLANOS, PERGUNTAS,
+    ]);
+    expect(textos).not.toMatch(/tech ?plans?/i);
+    expect(textos).not.toMatch(/Codex como agente/);
+    expect(CATALOGO.titulo).toBe('Catálogo de skills, Rules e fluxos');
+    // Os provedores citados são só os que o produto suporta, e cada lugar que os lista traz todos.
+    const provedores = ['Claude Code', 'Codex', 'Kiro', 'Kimi', 'GLM'];
+    const listas = [
+      RECURSOS.find((r) => r.id === 'provedor')!.texto,
+      RECURSOS.find((r) => r.id === 'agente')!.marcadores.join(' '),
+      INTEGRACOES.find((i) => i.nome === 'Provedores cognitivos')!.texto,
+      PERGUNTAS.find((p) => p.pergunta === 'Quais provedores de IA ele usa?')!.resposta,
+    ];
+    for (const lista of listas) for (const provedor of provedores) expect(lista, lista).toContain(provedor);
   });
 
   it('o como funciona não tem mais o vídeo do hero (a proposta não o tem)', () => {

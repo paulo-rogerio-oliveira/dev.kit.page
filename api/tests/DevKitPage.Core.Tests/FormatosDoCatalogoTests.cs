@@ -59,7 +59,7 @@ public sealed class FormatosDoCatalogoTests
     [Theory]
     [InlineData(TiposDeItem.Skill, """{ "description": "x", "content": "y" }""", "A skill está sem nome (campo \"name\").")]
     [InlineData(TiposDeItem.Skill, """{ "name": "x", "content": "  " }""", "A skill \"x\" veio sem conteúdo (campo \"content\").")]
-    [InlineData(TiposDeItem.Plan, """{ "content": "y" }""", "O Tech Plan está sem descrição (campo \"description\").")]
+    [InlineData(TiposDeItem.Plan, """{ "content": "y" }""", "A Rule está sem descrição (campo \"description\").")]
     [InlineData(TiposDeItem.Fluxo, """{ "nome": "x" }""", "O arquivo não é um fluxo exportado pelo dev.kit (falta \"formato\": \"devkit-fluxo\").")]
     [InlineData(TiposDeItem.Fluxo, """{ "formato": "devkit-fluxo", "versao": 2, "nome": "x" }""", "Versão 2 do arquivo de fluxo não é conhecida por este dev.kit (ele lê a 1): atualize o dev.kit ou exporte de novo.")]
     [InlineData(TiposDeItem.Fluxo, """{ "formato": "devkit-fluxo", "versao": 1, "nome": "Entrega" }""", "O fluxo \"Entrega\" está sem o desenho (campo \"desenho\").")]

@@ -55,6 +55,22 @@ describe('Vitrine do catálogo (US #425; visual da US #461)', () => {
     expect(screen.getByRole('button', { name: 'Todos 1' })).toBeInTheDocument();
   });
 
+  it('o plan aparece como Rule: o chip "Rules", o selo e a categoria "Tech Plans" do manifesto exibida como "Rules"', async () => {
+    servidor.use(http.get(`${API}/api/catalogo/base/vitrine`, () => HttpResponse.json({
+      versao: 3, publicadaEm: '2026-10-22T12:00:00Z',
+      grupos: [{ tecnologia: 'Tech Plans', itens: [{ tipo: 'plan', nome: 'geral', descricao: 'Os padrões do time', tecnologia: 'Tech Plans', versao: 1 }] }],
+    })));
+
+    renderizar('/catalogo');
+
+    const rules = await screen.findByRole('region', { name: 'Rules' });
+    expect(within(rules).getByText('Rule')).toHaveClass('insignia');
+    expect(screen.getByText('Skills, Rules e fluxos que vêm com o dev.kit. Chegam sozinhos a cada máquina quando sai uma versão nova.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rules 1' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Categorias' })).getByRole('button', { name: 'Rules' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/tech ?plans?/i);
+  });
+
   it('com o catálogo indisponível (503), diz por quê', async () => {
     servidor.use(http.get(`${API}/api/catalogo/base/vitrine`, () => HttpResponse.json({ detail: 'indisponível' }, { status: 503 })));
 

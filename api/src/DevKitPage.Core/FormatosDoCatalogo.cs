@@ -80,22 +80,22 @@ public static class FormatosDoCatalogo
             Linhas(raiz, "arguments"), Linhas(raiz, "repositories"), Flag(raiz, "isCommand"), Flag(raiz, "isBackground"), Flag(raiz, "isPinned"));
     }
 
-    // ----- Tech Plan -----
+    // ----- Rule (o tipo "plan": o nome interno segue o antigo Tech Plan) -----
 
     /// <summary>O JSON do plano, como o <c>TechPlanJson.Export</c> (a chave fixa abre o arquivo).</summary>
     public static string ExportarPlan(PlanDoCatalogo plano) => JsonSerializer.Serialize(plano with { Key = Chave(plano) }, Arquivo);
 
     /// <summary>Lê o plano como o <c>TechPlanJson.Read</c>: sem <c>key</c>, a chave é derivada da descrição.</summary>
-    /// <exception cref="FormatException">O JSON não descreve um Tech Plan — a mensagem é a do app.</exception>
+    /// <exception cref="FormatException">O JSON não descreve uma Rule — a mensagem é a do app, com o nome que a tela mostra.</exception>
     public static PlanDoCatalogo LerPlan(string json)
     {
-        var raiz = Objeto(json, "O JSON do Tech Plan é inválido", "O JSON não descreve um Tech Plan (era esperado um objeto).", tolerante: false);
+        var raiz = Objeto(json, "O JSON da Rule é inválido", "O JSON não descreve uma Rule (era esperado um objeto).", tolerante: false);
         var descricao = Texto(raiz, "description").Trim();
         if (descricao.Length == 0)
-            throw new FormatException("O Tech Plan está sem descrição (campo \"description\").");
+            throw new FormatException("A Rule está sem descrição (campo \"description\").");
         var conteudo = Texto(raiz, "content");
         if (conteudo.Trim().Length == 0)
-            throw new FormatException($"O Tech Plan \"{descricao}\" veio sem conteúdo (campo \"content\").");
+            throw new FormatException($"A Rule \"{descricao}\" veio sem conteúdo (campo \"content\").");
 
         return new PlanDoCatalogo(
             Texto(raiz, "key").Trim() is { Length: > 0 } chave ? chave : ChaveDe(descricao), descricao,

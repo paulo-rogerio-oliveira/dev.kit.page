@@ -2,12 +2,15 @@ import { useState } from 'react';
 import type { ItemDaVitrine, TipoDeItem, Vitrine as VitrineDoCatalogo } from '../../api/tipos';
 import { Chips } from '../../componentes/Chips';
 import { Selo } from '../../componentes/Selo';
-import { NOME_DO_TIPO } from './tipos';
+import { NOME_DO_TIPO, NOME_DO_TIPO_NO_PLURAL, rotuloDaCategoria } from './tipos';
 
 type FiltroDeTipo = 'todos' | TipoDeItem;
 
 /** A busca ignora maiúsculas e acentos. */
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** O id do título de um grupo: sem espaço ("Azure DevOps", "Tech Plans"), que o aria-labelledby leria como dois ids. */
+const idDaTecnologia = (tecnologia: string) => `tecnologia-${tecnologia.replace(/\s+/g, '-')}`;
 
 /** Quantos itens a vitrine tem — a pílula do cabeçalho conta os mesmos. */
 export function itensDaVitrine(vitrine: VitrineDoCatalogo): number {
@@ -55,9 +58,9 @@ export function Vitrine({ vitrine }: { vitrine: VitrineDoCatalogo }) {
           aoMudar={setTipo}
           opcoes={[
             { valor: 'todos', rotulo: 'Todos', contagem: doRecorte.length },
-            { valor: 'skill', rotulo: 'Skills', contagem: conta('skill') },
-            { valor: 'plan', rotulo: 'Tech plans', contagem: conta('plan') },
-            { valor: 'fluxo', rotulo: 'Fluxos', contagem: conta('fluxo') },
+            { valor: 'skill', rotulo: NOME_DO_TIPO_NO_PLURAL.skill, contagem: conta('skill') },
+            { valor: 'plan', rotulo: NOME_DO_TIPO_NO_PLURAL.plan, contagem: conta('plan') },
+            { valor: 'fluxo', rotulo: NOME_DO_TIPO_NO_PLURAL.fluxo, contagem: conta('fluxo') },
           ]}
         />
       </div>
@@ -72,7 +75,7 @@ export function Vitrine({ vitrine }: { vitrine: VitrineDoCatalogo }) {
             {vitrine.grupos.map((g) => (
               <li key={g.tecnologia}>
                 <button type="button" className="categoria" aria-pressed={categoria === g.tecnologia} onClick={() => setCategoria(g.tecnologia)}>
-                  {g.tecnologia}
+                  {rotuloDaCategoria(g.tecnologia)}
                 </button>
               </li>
             ))}
@@ -82,8 +85,8 @@ export function Vitrine({ vitrine }: { vitrine: VitrineDoCatalogo }) {
         <div className="vitrine-grupos">
           {grupos.length === 0 && <p className="vazio">Nenhum item com esses filtros.</p>}
           {grupos.map((grupo) => (
-            <section key={grupo.tecnologia} aria-labelledby={`tecnologia-${grupo.tecnologia}`} className="grupo-do-catalogo">
-              <h2><span id={`tecnologia-${grupo.tecnologia}`}>{grupo.tecnologia}</span> <small>{grupo.itens.length}</small></h2>
+            <section key={grupo.tecnologia} aria-labelledby={idDaTecnologia(grupo.tecnologia)} className="grupo-do-catalogo">
+              <h2><span id={idDaTecnologia(grupo.tecnologia)}>{rotuloDaCategoria(grupo.tecnologia)}</span> <small>{grupo.itens.length}</small></h2>
               <ul className="grade-de-itens">
                 {grupo.itens.map((item) => (
                   <li key={`${item.tipo}:${item.nome}`} className="cartao cartao-do-item">

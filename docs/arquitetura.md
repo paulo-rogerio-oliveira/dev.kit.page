@@ -26,7 +26,7 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 A landing é a página de venda, na disposição da proposta da home (US #467, que reorganizou a da US #405):
 hero (selo "Para times no Azure DevOps", o título com "Pull Request" em destaque, os dois botões, o link
 discreto "Baixar o dev.kit versão N" e a amostra do Board feita em HTML) → como funciona (sete etapas, de
-Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Codex e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
+Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Provedor cognitivo e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
 mídia numa moldura de janela do app — o componente `Janela`, o mesmo da amostra do Board —, com a legenda
 abaixo) → por que o dev.kit (três cartões) → catálogo → comparativo → integrações → segurança → para
 empresas → planos → contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit"
@@ -136,8 +136,9 @@ quem está logado; o `MenuDoAdmin` (Uso, Empresas, Usuários, Catálogo) marca a
     409, o relatório que vem no corpo (`ErroDaApi.corpo` — não é ProblemDetails) com os problemas; publicada, a
     página vai à aba Releases daquele catálogo.
   - **O editor** grava o MESMO JSON do dev.kit desktop (`web/src/paginas/catalogo/conteudo.ts`): a skill como o
-    `SkillJson` e o Tech Plan como o `TechPlanJson` — mesmos campos, mesma ordem, dois espaços —, com as mensagens de
-    erro do app; o fluxo é o envelope `devkit-fluxo` como texto (colado ou carregado do `devcli fluxos --exportar`),
+    `SkillJson` e a Rule (o tipo `plan`, o antigo Tech Plan) como o `TechPlanJson` — mesmos campos, mesma ordem, dois
+    espaços —, com as mensagens de erro do app (com o nome Rule); a tela mostra "Rule"/"Rules" e a categoria "Tech
+    Plans" do manifesto como "Rules", sem mudar o contrato (`plan`, `techPlanId`, o `esperado.json`); o fluxo é o envelope `devkit-fluxo` como texto (colado ou carregado do `devcli fluxos --exportar`),
     conferido (JSON, `formato`, `versao` 1, `nome`, `desenho`) e com a prévia dos passos (nó → tipo → skill). O
     desenho gráfico continua no desktop. Salvar grava rascunho; só o Publicar leva às máquinas.
 
@@ -203,8 +204,8 @@ não têm sessão; para listar UMA A UMA as falhas que ela conta, o `GET /api/da
 dele, na mesma máquina, tem um `TurnoExecutado` com aquele CLI no recorte. O `GET /api/dashboard/erros`
 aceita o mesmo `harness`, que deixa só os grupos `Falha de turno do <cli>` (a primeira linha do trace
 que o `TraceSanitizado.DoTexto` do dev.kit escreve); as exceções do app não têm harness e ficam de fora.
-Os harnesses aceitos são `claude`, `kiro` (também `kiro-cli`), `glm` e `codex` (`Harnesses`); o codex é
-do suporte futuro — aceito, e vazio até o dev.kit mandá-lo —, e o desconhecido é 400. O harness NÃO
+Os harnesses aceitos são `claude`, `kiro` (também `kiro-cli`), `glm` e `codex` (`Harnesses`) — o CLI do
+provedor cognitivo que rodou o turno; o codex entrou como provedor na versão 5 do dev.kit —, e o desconhecido é 400. O harness NÃO
 filtra a quantidade nem a qualidade: os totais não guardam a sessão. Toda falha `nao-classificada` tem
 uma `ExcecaoNaoClassificada` gêmea na mesma sessão (o `JobTelemetria.Turno` do dev.kit manda as duas):
 `tipo=TurnoFalhou&detalhe=nao-classificada&harness=claude` dá as falhas, e o grupo dá o trace.
