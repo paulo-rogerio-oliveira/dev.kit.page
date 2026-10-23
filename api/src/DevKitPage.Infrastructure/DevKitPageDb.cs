@@ -36,6 +36,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<PacoteDoCatalogo> PacotesDoCatalogo => Set<PacoteDoCatalogo>();
     public DbSet<RepositorioDaEmpresa> RepositoriosDaEmpresa => Set<RepositorioDaEmpresa>();
     public DbSet<ConvencaoDaEmpresa> ConvencoesDaEmpresa => Set<ConvencaoDaEmpresa>();
+    public DbSet<Relato> Relatos => Set<Relato>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -126,6 +127,27 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave }).IsUnique();
             e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Autor).WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Os relatos dos usuários do dev.kit (US #602). No Azure SQL a tabela vem de api/scripts/sqlserver/Us602.sql. A
+        // chave do cliente é ÚNICA por usuário quando veio (o reenvio da fila offline devolve o mesmo relato); a captura
+        // é varbinary(max), com o teto do contrato conferido antes.
+        modelBuilder.Entity<Relato>(e =>
+        {
+            e.ToTable("Relatos");
+            e.Property(r => r.Categoria).HasMaxLength(20);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.Property(r => r.Texto).HasMaxLength(Contracts.V1.RelatosV1.TamanhoMaximoDoTexto);
+            e.Property(r => r.Contexto).HasMaxLength(Contracts.V1.RelatosV1.TamanhoMaximoDoContexto);
+            e.Property(r => r.Resposta).HasMaxLength(Contracts.V1.RelatosV1.TamanhoMaximoDaResposta);
+            e.Property(r => r.VersaoDevKit).HasMaxLength(Contracts.V1.RelatosV1.TamanhoMaximoDaVersao);
+            e.Property(r => r.ChaveDoCliente).HasMaxLength(Contracts.V1.RelatosV1.TamanhoMaximoDaChave);
+            e.HasIndex(r => new { r.UsuarioId, r.ChaveDoCliente }).IsUnique().HasFilter("[ChaveDoCliente] <> ''");
+            e.HasIndex(r => new { r.EmpresaId, r.CriadoEmUtc });
+            e.HasIndex(r => r.CriadoEmUtc);
+            e.HasOne(r => r.Usuario).WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Empresa).WithMany().HasForeignKey(r => r.EmpresaId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(r => r.RespondidoPor).WithMany().HasForeignKey(r => r.RespondidoPorId).OnDelete(DeleteBehavior.NoAction);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.

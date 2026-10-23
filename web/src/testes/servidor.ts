@@ -3,7 +3,7 @@ import { setupServer } from 'msw/node';
 import type {
   CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
   ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
-  RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
+  EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
   Vitrine,
 } from '../api/tipos';
 
@@ -290,6 +290,38 @@ export const contextosDaEmpresa: ConvencaoDaEmpresa[] = [
   { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Respostas curtas, com o porquê.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:20:00Z' },
 ];
 
+// ----- US #602: os relatos -----
+
+/** O PNG de 1x1 em base64 (a captura do relato). */
+export const CAPTURA_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** O defeito do caso real (da Empresa A, com contexto e captura) e uma sugestão já respondida (da Empresa B). */
+const relatosIniciais = (): RelatoDetalhe[] => [
+  {
+    id: 41, categoria: 'defeito', estado: 'novo', texto: 'A PR da task multirepo foi criada no repositório errado (dev.kit.page em vez de git.kit)',
+    contexto: '{"versao":"137","task":"t_602","repositorios":["git.kit","dev.kit.page"]}', captura: CAPTURA_PNG, versaoDevKit: '137',
+    autor: 'Ana Souza', empresaId: 4, empresa: 'Empresa A', criadoEm: '2026-10-18T10:00:00Z', atualizadoEm: '2026-10-18T10:00:00Z',
+    resposta: '', respondidoPor: '', respondidoEm: null,
+  },
+  {
+    id: 42, categoria: 'sugestao', estado: 'em-analise', texto: 'Mostrar o custo do turno no Board.', contexto: '', captura: null, versaoDevKit: '136',
+    autor: 'bia@empresa-b.com', empresaId: 5, empresa: 'Empresa B', criadoEm: '2026-10-17T10:00:00Z', atualizadoEm: '2026-10-17T12:00:00Z',
+    resposta: 'Entrou no planejamento.', respondidoPor: 'admin', respondidoEm: '2026-10-17T12:00:00Z',
+  },
+];
+
+/** Os relatos do servidor de mentira: a troca de estado e a resposta os alteram (o setup os reinicia a cada teste). */
+export const relatosNoServidor: RelatoDetalhe[] = relatosIniciais();
+
+export function reiniciarRelatos() {
+  relatosNoServidor.splice(0, relatosNoServidor.length, ...relatosIniciais());
+}
+
+const resumoDoRelato = (r: RelatoDetalhe): RelatoResumo => ({
+  id: r.id, categoria: r.categoria, estado: r.estado, resumo: r.texto.slice(0, 120), autor: r.autor, empresaId: r.empresaId, empresa: r.empresa,
+  criadoEm: r.criadoEm, atualizadoEm: r.atualizadoEm, temCaptura: r.captura !== null, respondido: r.resposta !== '',
+});
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -517,6 +549,41 @@ export const handlersPadrao = [
     const corpo = (await request.json()) as { plano: string };
     escritas.push({ metodo: 'POST', caminho: '/api/pagamentos/checkout', corpo });
     return HttpResponse.json({ url: `/compra-concluida?simulado=1&plano=${corpo.plano}`, simulado: true });
+  }),
+  // US #602: os relatos — a lista filtra por estado e categoria como a API (o escopo do gestor é da API, não daqui).
+  http.get(`${API}/api/relatos`, ({ request }) => {
+    const url = new URL(request.url);
+    requisicoes.push(url);
+    const estado = url.searchParams.get('estado');
+    const categoria = url.searchParams.get('categoria');
+    const empresaId = url.searchParams.get('empresa');
+    const itens = relatosNoServidor
+      .filter((r) => (!estado || r.estado === estado) && (!categoria || r.categoria === categoria) && (!empresaId || String(r.empresaId) === empresaId))
+      .map(resumoDoRelato);
+    return HttpResponse.json({ itens, total: itens.length, numeroDaPagina: Number(url.searchParams.get('pagina') ?? 1), tamanho: Number(url.searchParams.get('tamanho') ?? 20) });
+  }),
+  http.get(`${API}/api/relatos/meus`, () => HttpResponse.json([])),
+  http.get(`${API}/api/relatos/:id`, ({ params }) => {
+    const relato = relatosNoServidor.find((r) => String(r.id) === params.id);
+    return relato ? HttpResponse.json(relato) : HttpResponse.json({ detail: 'Relato não encontrado.' }, { status: 404 });
+  }),
+  http.patch(`${API}/api/relatos/:id/estado`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { estado: EstadoDoRelato };
+    escritas.push({ metodo: 'PATCH', caminho: `/api/relatos/${params.id}/estado`, corpo });
+    const relato = relatosNoServidor.find((r) => String(r.id) === params.id)!;
+    relato.estado = corpo.estado;
+    relato.atualizadoEm = '2026-10-18T11:00:00Z';
+    return HttpResponse.json(relato);
+  }),
+  http.post(`${API}/api/relatos/:id/resposta`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { texto: string };
+    escritas.push({ metodo: 'POST', caminho: `/api/relatos/${params.id}/resposta`, corpo });
+    const relato = relatosNoServidor.find((r) => String(r.id) === params.id)!;
+    Object.assign(relato, {
+      resposta: corpo.texto, respondidoPor: 'admin', respondidoEm: '2026-10-18T11:30:00Z', atualizadoEm: '2026-10-18T11:30:00Z',
+      estado: relato.estado === 'novo' ? 'em-analise' : relato.estado,
+    });
+    return HttpResponse.json(relato);
   }),
   // US #405: a gestão de usuários.
   http.get(`${API}/api/usuarios`, () => HttpResponse.json(usuarios)),

@@ -254,6 +254,9 @@ input, select {
   background: #0d0d0d; color: #f1f1ee; font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre;
 }
 .trace:focus { outline: 2px solid var(--serie-1); outline-offset: 2px; }
+/* Os relatos (US #602): o texto com as quebras de linha do usuário e a captura no tamanho da coluna. */
+.texto-do-relato { margin: 0; white-space: pre-wrap; line-height: 1.6; }
+.captura-do-relato { max-width: 100%; height: auto; border: 1px solid var(--borda); border-radius: 8px; align-self: flex-start; }
 .acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .acoes .resolver { flex-direction: row; align-items: center; gap: 8px; }
 .acoes .resolver input { width: 110px; }

@@ -87,6 +87,7 @@ export function EmpresaUsuarios() {
         <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link>
         <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>
         <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>
+        <Link className="botao botao-fantasma" to="/relatos">Relatos</Link>
       </Topo>
       <main className="painel">
         {erro && <p className="erro" role="alert">{erro}</p>}

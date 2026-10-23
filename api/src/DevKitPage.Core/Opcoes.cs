@@ -81,6 +81,18 @@ public sealed class OpcoesDoPainel
     public int ExportacoesPorMinuto { get; set; } = 10;
 }
 
+/// <summary>Os relatos dos usuários do dev.kit (seção <c>Relatos</c>, US #602).</summary>
+public sealed class OpcoesDosRelatos
+{
+    public const string Secao = "Relatos";
+
+    /// <summary>
+    /// Quantos relatos um mesmo usuário envia por hora; acima disto, 429 — e o dev.kit mantém o relato na fila e tenta
+    /// de novo depois. Relatar é legítimo, mas não em laço.
+    /// </summary>
+    public int EnviosPorHora { get; set; } = 20;
+}
+
 /// <summary>
 /// O proxy na frente da API (seção <c>Proxy</c>). No Azure Container Apps todo visitante chega com o
 /// IP do proxy: o IP do cliente vem no <c>X-Forwarded-For</c>, aceito SÓ de quem está nestas redes.

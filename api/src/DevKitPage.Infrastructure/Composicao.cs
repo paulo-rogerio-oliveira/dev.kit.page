@@ -74,6 +74,9 @@ public static class Composicao
         servicos.AddScoped<IExpurgoDePedidos, ExpurgoDePedidos>();
         servicos.AddScoped<ICatalogoDaEmpresa, CatalogoDaEmpresa>();
         servicos.AddScoped<IConhecimentoDaEmpresa, ConhecimentoDaEmpresa>();
+        // Os relatos dos usuários do dev.kit (US #602).
+        servicos.Configure<OpcoesDosRelatos>(configuracao.GetSection(OpcoesDosRelatos.Secao));
+        servicos.AddScoped<IRelatos, Relatos>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();

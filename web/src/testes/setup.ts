@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { instalarNavegador, observadores, restaurarNavegador } from './navegador';
-import { cadastros, downloads, escritas, gestaoDeUsuarios, pedidosRecebidos, reacoes, requisicoes, servidor } from './servidor';
+import { cadastros, downloads, escritas, gestaoDeUsuarios, pedidosRecebidos, reacoes, reiniciarRelatos, requisicoes, servidor } from './servidor';
 
 instalarNavegador();
 
@@ -20,6 +20,7 @@ afterEach(() => {
   downloads.length = 0;
   escritas.length = 0;
   observadores.length = 0;
+  reiniciarRelatos();
   restaurarNavegador();
 });
 afterAll(() => servidor.close());

@@ -90,6 +90,7 @@ export function EmpresaConhecimento() {
       <Topo secao="conhecimento da empresa">
         {ehGestor ? <Link className="botao botao-fantasma" to="/dashboard">Dashboard</Link> : <Link className="botao botao-fantasma" to="/conta">Conta</Link>}
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
+        {ehGestor && <Link className="botao botao-fantasma" to="/relatos">Relatos</Link>}
       </Topo>
       <Pagina titulo="Repositórios e convenções" subtitulo="O que a empresa compartilha com o dev.kit: auditado aqui, com quem gravou e quando, e editável.">
         {erro && <p className="erro" role="alert">{erro}</p>}
