@@ -66,6 +66,27 @@ public sealed class LicencasApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Renovacao_forcada_do_login_sem_a_licenca_atual_renova_dentro_da_janela()
+    {
+        // O contrato de que o login do dev.kit depende (cf. #590): a renovação forçada (relogar, "Renovar agora") vai
+        // SEM a licença atual e emite os 30 dias de novo; com ela, dentro dos 7 dias, a resposta segue 409.
+        var admin = await _api.AdminAsync();
+        var a = await ApiDeTeste.EmpresaAsync(admin, "Empresa A");
+        var (ana, _) = await _api.DevPorAdesaoAsync(a.CodigoDeAdesao, "ana@a.com");
+        await _api.MaquinaAsync("maquina-1");
+        ana.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, _api.Chaves["maquina-1"]);
+        var primeira = (await (await ana.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1())).Content.ReadFromJsonAsync<LicencaV1>())!;
+
+        var apresentada = await ana.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1(primeira.Conteudo));
+        var forcada = await ana.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1(LicencaAtual: null));
+
+        Assert.Equal(HttpStatusCode.Conflict, apresentada.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, forcada.StatusCode);
+        var lida = Ler(await forcada.Content.ReadFromJsonAsync<LicencaV1>())!;
+        Assert.Equal((TiposDeLicenca.Assinatura, "ana@a.com", 30d), (lida.Tipo, lida.Usuario, Math.Round((lida.ValidaAte - lida.EmitidaEm).TotalDays)));
+    }
+
+    [Fact]
     public async Task Renovacao_recusa_o_bloqueado_e_quem_nao_tem_empresa()
     {
         var admin = await _api.AdminAsync();
