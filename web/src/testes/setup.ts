@@ -10,9 +10,26 @@ configure({ asyncUtilTimeout: 5_000 });
 
 instalarNavegador();
 
+// As requisições que o servidor de mentira começou e ainda não respondeu. Um teste que termina no mesmo render
+// em que os filhos montam (o Dashboard: o ROI e as exceções) deixa a consulta deles em voo; sem esperar por ela,
+// o handler a registra em `requisicoes` DEPOIS da limpeza, e ela aparece no teste seguinte (o do dev, que espera nenhuma).
+const emVoo = new Set<string>();
+servidor.events.on('request:start', ({ requestId }) => { emVoo.add(requestId); });
+servidor.events.on('request:end', ({ requestId }) => { emVoo.delete(requestId); });
+
+/** Espera o servidor de mentira responder o que já começou (com teto, para um handler preso não travar a suíte). */
+async function esperarAsRequisicoesEmVoo(tetoMs = 2_000) {
+  const ate = Date.now() + tetoMs;
+  do {
+    await new Promise((pronto) => setTimeout(pronto, 0));
+  } while (emVoo.size > 0 && Date.now() < ate);
+  emVoo.clear();
+}
+
 beforeAll(() => servidor.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await esperarAsRequisicoesEmVoo();
   servidor.resetHandlers();
   sessionStorage.clear();
   requisicoes.length = 0;

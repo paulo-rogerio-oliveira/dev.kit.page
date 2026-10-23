@@ -31,7 +31,8 @@ jobs:
         with:
           name: resultados-api
           path: api/TestResults
-      - uses: dorny/test-reporter@v1
+      # v2: a v1 quebrava ("stackTrace.split is not a function") ao ler o <failure message=...> (dorny/test-reporter#506).
+      - uses: dorny/test-reporter@v2
         if: always()
         with:
           name: Testes da API
@@ -59,7 +60,7 @@ jobs:
         with:
           name: resultados-web
           path: web/test-results
-      - uses: dorny/test-reporter@v1
+      - uses: dorny/test-reporter@v2
         if: always()
         with:
           name: Testes da web
