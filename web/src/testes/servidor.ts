@@ -290,6 +290,13 @@ export const contextosDaEmpresa: ConvencaoDaEmpresa[] = [
   { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Respostas curtas, com o porquê.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:20:00Z' },
 ];
 
+/** As SUGESTÕES dos agentes (US #663), ao lado das regras: origem agente, com o id e a versão. */
+export const sugestoesDaEmpresa: ConvencaoDaEmpresa[] = [
+  { nivel: 'empresa', chave: 'contexto.testes', valor: 'Rode o lint antes do PR.', time: '', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:00:00Z', id: 101, origem: 'agente', versao: 1 },
+  { nivel: 'time', chave: 'contexto.stack', valor: 'Angular 19 standalone.', time: 'vendas', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:10:00Z', id: 102, origem: 'agente', versao: 2 },
+  { nivel: 'usuario', chave: 'contexto.revisao', valor: 'Prefere diffs pequenos.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:20:00Z', id: 103, origem: 'agente', versao: 1 },
+];
+
 // ----- US #602: os relatos -----
 
 /** O PNG de 1x1 em base64 (a captura do relato). */
@@ -529,16 +536,43 @@ export const handlersPadrao = [
     escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/repositorios?origem=${origem}`, corpo: null });
     return HttpResponse.json(repositoriosDaEmpresa.find((r) => r.origem === origem) ?? repositoriosDaEmpresa[0]);
   }),
-  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa])),
+  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa, ...sugestoesDaEmpresa])),
   http.put(`${API}/api/empresa/convencoes`, async ({ request }) => {
     const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string };
     escritas.push({ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo });
     return HttpResponse.json({ ...corpo, usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
   }),
   // US #550: o que o dev.kit lê sem time (a da empresa e a de quem consulta), as equipes conhecidas e as rotas do admin.
-  http.get(`${API}/api/empresa/convencoes`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa].filter((c) => c.nivel !== 'time'))),
+  // US #663: sem ?origem só as regras (o dev.kit antigo); com ?origem=todas, também as sugestões.
+  http.get(`${API}/api/empresa/convencoes`, ({ request }) => {
+    const todas = new URL(request.url).searchParams.get('origem') === 'todas';
+    return HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa, ...(todas ? sugestoesDaEmpresa : [])].filter((c) => c.nivel !== 'time'));
+  }),
+  // US #663: promover (a versão lida tem de ser a atual, senão 409) e descartar a sugestão do agente.
+  http.post(`${API}/api/empresa/contexto/:id/promover`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { versaoEsperada: number | null };
+    escritas.push({ metodo: 'POST', caminho: `/api/empresa/contexto/${params.id}/promover`, corpo });
+    const sugestao = sugestoesDaEmpresa.find((s) => String(s.id) === params.id);
+    if (!sugestao) return HttpResponse.json({ detail: 'A sugestão não existe mais (alguém a promoveu ou descartou).' }, { status: 404 });
+    if (corpo.versaoEsperada !== null && corpo.versaoEsperada !== sugestao.versao)
+      return HttpResponse.json({ detail: 'A sugestão mudou depois que você a leu (outro agente a reescreveu). Confira o texto novo e promova de novo.' }, { status: 409 });
+    return HttpResponse.json({ ...sugestao, origem: 'usuario', autor: 'Gestor A' });
+  }),
+  http.delete(`${API}/api/empresa/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/contexto/${params.id}`, corpo: null });
+    const sugestao = sugestoesDaEmpresa.find((s) => String(s.id) === params.id);
+    return sugestao ? HttpResponse.json(sugestao) : HttpResponse.json({ detail: 'Só quem grava a regra desta camada, ou o autor da sugestão, a descarta.' }, { status: 403 });
+  }),
+  http.post(`${API}/api/empresas/:empresa/contexto/:id/promover`, async ({ params, request }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/empresas/${params.empresa}/contexto/${params.id}/promover`, corpo: await request.json() });
+    return HttpResponse.json({ ...sugestoesDaEmpresa[0], origem: 'usuario', autor: 'admin' });
+  }),
+  http.delete(`${API}/api/empresas/:empresa/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/empresas/${params.empresa}/contexto/${params.id}`, corpo: null });
+    return HttpResponse.json(sugestoesDaEmpresa[0]);
+  }),
   http.get(`${API}/api/empresa/equipes`, () => HttpResponse.json(['vendas'])),
-  http.get(`${API}/api/empresas/:id/convencoes/todas`, ({ params }) => HttpResponse.json(params.id === '4' ? [...convencoesDaEmpresa, ...contextosDaEmpresa] : [])),
+  http.get(`${API}/api/empresas/:id/convencoes/todas`, ({ params }) => HttpResponse.json(params.id === '4' ? [...convencoesDaEmpresa, ...contextosDaEmpresa, ...sugestoesDaEmpresa] : [])),
   http.get(`${API}/api/empresas/:id/equipes`, ({ params }) => HttpResponse.json(params.id === '4' ? ['vendas'] : [])),
   http.put(`${API}/api/empresas/:id/convencoes`, async ({ params, request }) => {
     const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string; usuario: string };

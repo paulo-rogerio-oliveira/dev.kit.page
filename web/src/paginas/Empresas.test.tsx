@@ -2,7 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderizar } from '../testes/renderizar';
 import { entregues } from '../testes/navegador';
+import { vi } from 'vitest';
 import { cadastros, escritas, tokenDoGestor, tokenValido } from '../testes/servidor';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('Empresas (US #381; visual da US #461)', () => {
   it('lista as empresas com o plano, os assentos em uso, o código de adesão e o gestor', async () => {
@@ -100,6 +103,26 @@ describe('Empresas (US #381; visual da US #461)', () => {
 
     await userEvent.click(within(painel).getByRole('button', { name: 'Fechar' }));
     expect(screen.getByRole('complementary', { name: 'Nova empresa' })).toBeInTheDocument();
+  });
+
+  it('o painel Contexto (US #663): o admin promove e descarta a sugestão do agente pelas rotas dele', { timeout: 15_000 }, async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/empresas', tokenValido());
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Contexto de Empresa A' }));
+    const painel = await screen.findByRole('complementary', { name: 'Contexto de Empresa A' });
+    const empresa = await within(painel).findByRole('region', { name: 'Empresa' });
+    expect(within(empresa).getByText('Rode o lint antes do PR.')).toBeInTheDocument();
+
+    await userEvent.click(within(empresa).getByRole('button', { name: 'Promover a regra a sugestão testes' }));
+    expect(await within(painel).findByText('Sugestão testes promovida a regra.')).toBeInTheDocument();
+    await userEvent.click(within(empresa).getByRole('button', { name: 'Descartar a sugestão testes' }));
+    expect(await within(painel).findByText('Sugestão testes descartada.')).toBeInTheDocument();
+
+    expect(escritas).toEqual([
+      { metodo: 'POST', caminho: '/api/empresas/4/contexto/101/promover', corpo: { versaoEsperada: 1 } },
+      { metodo: 'DELETE', caminho: '/api/empresas/4/contexto/101', corpo: null },
+    ]);
   });
 
   it('o gestor que abre Empresas volta ao dashboard da empresa dele', async () => {

@@ -123,8 +123,12 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             // O maior teto, o do contexto (US #550): o das outras convenções é da regra. No Azure SQL a coluna cresce
             // por api/scripts/sqlserver/Us550.sql.
             e.Property(c => c.Valor).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoValorDeContexto);
+            // A origem (US #663): a regra do usuário e a sugestão do agente do mesmo tema são duas linhas. No Azure SQL as
+            // colunas e o índice vêm de api/scripts/sqlserver/Us663.sql.
+            e.Property(c => c.Origem).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaOrigemDaConvencao).HasDefaultValue(Contracts.V1.OrigensDeConvencao.Usuario);
+            e.Property(c => c.Versao).HasDefaultValue(1);
             // O UsuarioId é o dono da convenção de nível usuário e vale 0 nos outros níveis: sem FK, de propósito.
-            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave }).IsUnique();
+            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave, c.Origem }).IsUnique();
             e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Autor).WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
         });

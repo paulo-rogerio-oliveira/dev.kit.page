@@ -686,5 +686,10 @@ input, select {
 .cabecalho-do-tema small { color: var(--texto-2); font-size: 0.78rem; }
 .cabecalho-do-tema .acoes { margin-left: auto; }
 .texto-do-contexto { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85rem; line-height: 1.5; }
+/* US #663: a regra do usuário × a sugestão do agente, em duas partes de cada nível. */
+.parte-do-contexto { margin: 14px 0 4px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-2); }
+.editor-de-contexto > .parte-do-contexto:first-child { margin-top: 0; }
+.lista-de-sugestoes li { border-style: dashed; }
+.selo-da-sugestao { font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--borda); color: var(--texto-2); }
 .secoes-do-contexto { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 .secoes-do-contexto > section h2, .secoes-do-contexto > section h3 { margin-top: 0; font-size: 1rem; }

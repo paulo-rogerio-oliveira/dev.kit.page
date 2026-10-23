@@ -36,14 +36,15 @@ public static class EndpointsDaUs550
             => ComoAdmin(id, quem, empresas, ct, async escopo =>
             {
                 var problema = RegrasDoConhecimentoDaEmpresa.ValidarConvencao(convencao);
-                return problema.Length > 0
-                    ? Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest)
-                    : EndpointsDaUs425.Resultado(await conhecimento.GravarConvencaoAsync(escopo, convencao!, ct));
+                if (problema.Length > 0)
+                    return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
+                return EndpointsDaUs663.SegredoNoContexto(convencao!.Chave, convencao.Valor)
+                    ?? EndpointsDaUs425.Resultado(await conhecimento.GravarConvencaoAsync(escopo, convencao, ct));
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
     }
 
     /// <summary>A ação do admin geral na empresa do caminho; empresa que não existe é 404.</summary>
-    private static async Task<IResult> ComoAdmin(
+    internal static async Task<IResult> ComoAdmin(
         int empresaId, ClaimsPrincipal quem, IEmpresas empresas, CancellationToken ct, Func<EscopoDaEmpresa, Task<IResult>> acao)
     {
         if (Seguranca.UsuarioId(quem) is not { } adminId)

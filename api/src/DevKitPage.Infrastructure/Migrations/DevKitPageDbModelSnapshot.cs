@@ -201,6 +201,13 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("usuario");
+
                     b.Property<string>("Time")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -214,11 +221,16 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Versao")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("AutorId");
 
-                    b.HasIndex("EmpresaId", "Nivel", "Time", "UsuarioId", "Chave")
+                    b.HasIndex("EmpresaId", "Nivel", "Time", "UsuarioId", "Chave", "Origem")
                         .IsUnique();
 
                     b.ToTable("ConvencoesDaEmpresa", (string)null);
