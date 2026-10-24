@@ -4,7 +4,7 @@ import type {
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
   NivelDeConvencao, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
   EstadoDoRelato, FiltroDeRelatos, MeuRelato, RelatoDetalhe, RelatoNovo, RelatoRecebido, RelatoResumo,
-  RoiResposta, UsuarioComSenha,
+  ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
 } from './tipos';
 
@@ -329,6 +329,18 @@ export const api = {
 
   responderRelato: (token: string, id: number, texto: string) =>
     chamar<RelatoDetalhe>(`/api/relatos/${id}/resposta`, { metodo: 'POST', corpo: { texto }, token }),
+
+  // O design compartilhado (US #669): os projetos visíveis (com ou sem empresa), o uso do teto, e a imagem de cada versão
+  // pelo link estável — por fetch e blob, porque a rota é autenticada e um <img src> não levaria o token.
+  projetosDeDesign: (token: string) => chamar<ProjetoDeDesign[]>('/api/design/projetos', { token }),
+
+  projetoDeDesign: (token: string, id: number) => chamar<ProjetoDeDesign>(`/api/design/projetos/${id}`, { token }),
+
+  usoDoDesign: (token: string) => chamar<UsoDoDesign>('/api/design/uso', { token }),
+
+  imagemDeDesign: async (token: string, link: string) => (await requisitar(link, { token, aceita: 'image/png' })).blob(),
+
+  apagarVersaoDeDesign: (token: string, link: string) => chamar<unknown>(link, { metodo: 'DELETE', token }),
 
   // A gestão de usuários (US #405) — só o admin.
   usuarios: (token: string) => chamar<UsuarioResumo[]>('/api/usuarios', { token }),

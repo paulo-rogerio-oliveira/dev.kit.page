@@ -467,6 +467,39 @@ captura e de resposta, filtra por estado, categoria, empresa (só o admin) e per
 contexto (em `<pre>`), a captura, a troca de estado e a caixa de resposta com quem respondeu
 (`paginas/Relatos.tsx`, `componentes/ListaDeRelatos.tsx`).
 
+**Design compartilhado (US #669).** O projeto de design do dev.kit (as capturas de tela e as propostas visuais) sai
+da máquina do dev e passa a morar aqui — e os PNG nunca entram no git: a PR da semana cita o LINK ESTÁVEL da versão.
+- **Modelo:** um `ProjetoDeDesign` por REPOSITÓRIO (a URL normalizada por `DesignV1.ChaveDoRepositorio` — https, ssh,
+  `.git` e maiúsculas são o mesmo; o dev.kit usa a MESMA regra) num nível, no padrão da `ConvencaoDaEmpresa`; `TelaDeDesign`
+  (id do dev.kit, nome, estado); `VersaoDeDesign` (número, tipo captura|proposta, base, tema, dimensões lidas do PNG,
+  origem web|desktop|proposta, alvo, BRANCH e COMMIT de onde saiu — o branch é atributo, não projeto —, descrição, autor
+  e se foi o usuário ou o agente, a data original e a de envio, o SHA-256 e a chave da imagem).
+- **Escopo:** o `EscopoDoDesign` existe SEM empresa (ao contrário do `EscopoDaEmpresa`), por isso as rotas ficam em
+  `/api/design`, e não em `/api/empresa`: quem não tem empresa guarda tudo no nível `usuario`. Com empresa, o nível
+  `empresa` é de todos dela, o `time` de quem declara o time (`?time=`; sem ele, o site vê todos) e o `usuario` só do
+  dono (`RegrasDoDesign.Visivel`). Projeto que não é visível é 404, sem revelar se existe.
+- **Imagens fora do banco:** `IArmazemDeImagens` (Core) com o Azure Blob Storage em produção (`ArmazemDeImagensNoBlob`,
+  `Design:Armazem=blob` e a conexão `Design:ConexaoDoBlob` do Key Vault) e uma pasta em desenvolvimento e nos testes
+  (`ArmazemDeImagensEmDisco`, `Design:Pasta`). A versão só fica no banco com a imagem gravada: a falha do armazém desfaz
+  a versão, e o reenvio da fila a grava de novo.
+- **Teto por plano:** `Design:Tetos:<plano>` (versões e MB; o Empresarial vem com 500 versões e 2 GB) e
+  `Design:TetoPadrao` (100 e 256 MB) para o plano fora da lista e para quem não tem empresa. O espaço que consome o teto é
+  a empresa (ou o usuário sem ela). Estourou: 413 com a mensagem.
+- **Rotas:** `GET /api/design/projetos?time=&desde=` (o `desde` é a sincronização incremental da abertura do dev.kit:
+  só os projetos alterados depois — e o projeto vem inteiro, então a versão apagada também se reconcilia),
+  `GET /api/design/projetos/{id}`, `GET /api/design/uso`, `POST /api/design/versoes` (multipart: os metadados e o PNG em
+  `imagem`, até 16 MB; limite por usuário em `Design:EnviosPorMinuto`), `GET /api/design/{projeto}/{tela}/v{n}` (o PNG,
+  com ETag pelo hash) e `DELETE` no mesmo caminho (só o autor da versão ou o gestor da empresa; a tela sem versão sai).
+- **Idempotência:** a chave é (projeto, tela, número) + o hash. O reenvio do mesmo PNG é 200 com a mesma versão; outro PNG
+  no mesmo número é 409 — o dev.kit não sobrescreve. Sem número, a próxima da tela.
+- **Web:** a aba **Design** de `/empresa/conhecimento` e a página `/design` (quem não tem empresa; o link fica na `/conta`)
+  usam o mesmo `componentes/DesignCompartilhado.tsx` (a proposta `empresa-conhecimento` v002): o repositório, o branch
+  (filtro) e o escopo Empresa / Equipe / Minhas, o uso do teto, as telas com o selo da última versão e a comparação
+  captura | proposta | recaptura (a última proposta, a captura que é a base dela e a última captura depois dela) em Uma,
+  Lado a lado ou Sobrepor, com Copiar link e Apagar (só de quem pode) e a faixa do link estável. A imagem vem por fetch
+  com o token e um `blob:` (a rota é autenticada). O link estável é a página `/design/{projeto}/{tela}/v{n}`.
+- Tabelas novas pela migration `Us669DesignCompartilhado` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us669.sql`.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -477,7 +510,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #669, `Us669.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
@@ -502,4 +535,5 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | US #461 (web) | Vitest: `componentes/Compartilhados.test.tsx` (iniciais, selo, barra de uso, copiar, abas pelo teclado, chips, página e painel lateral), `Empresas.test.tsx` (assentos em uso, gestor, copiar o código, painel lateral, convite na linha), `Usuarios.test.tsx` (busca e filtros, menu ⋯, painel lateral), `Catalogo.test.tsx` (vitrine com busca, chips e categorias; a rota antiga na aba Releases; o cartão da release, o copiar do SHA-256, o manifesto e o zip; o seletor de catálogo), `catalogo/conteudo.test.ts` (o JSON da skill e do plan na ordem do dev.kit, as mensagens do app, o envelope do fluxo e a prévia) e `catalogo/Catalogos.test.tsx` (cadastro, slug, empresas e a colisão, itens, editor, retirar, publicação com o 409 da dependência e o sucesso indo para Releases); e2e: `us461.spec.ts` (catálogo → empresa → skill e fluxo → publicar → release e manifesto → `/api/catalogos/meus` só para a empresa relacionada; o nome por US faz ele rodar depois do `fluxo.spec.ts`, que pressupõe a base nova com a senha inicial do admin) e `usuarios.spec.ts` no layout novo |
 | US #491 | Infrastructure: `Us491Tests` (o mesmo caminho escrito de dois jeitos é um repositório e gravar de novo troca a descrição, o filtro, o isolamento entre empresas, a convenção da empresa só do gestor e a do time de qualquer um, cada time vê só a dele, vazio apaga, script `Us491.sql`); Api: `ConhecimentoApiTests` (o dev grava e consulta o catálogo, 400 sem descrição, a outra empresa não vê, admin 403 e anônimo 401; a convenção da empresa 403 ao dev e 200 ao gestor, a do time do dev, o nível do usuário 400, o `?time=` trazendo a da empresa e a do time) |
 | US #602 | Core: `RegrasDosRelatosTests` (categoria e texto, a captura PNG/JPEG no teto, os segredos mascarados antes do caminho e do e-mail, estado e resposta validados, o resumo da lista); Infrastructure: `Us602Tests` (gravação nova, mascarada e ligada ao usuário e à empresa, a chave do cliente idempotente, filtros e paginação com o gestor só na empresa dele, responder um novo o leva a em análise, `/meus` só do autor, script `Us602.sql`); Api: `RelatosApiTests` (401 sem login e o dev fora da gestão, o gestor só na empresa dele, o admin vê todos, filtra, muda o estado e responde, o usuário e a empresa do token, o reenvio sem duplicar, o segredo mascarado no servidor, a captura acima do teto recusada, o 429 com `Retry-After`); web: `Relatos.test.tsx` (a lista com os selos e os indicadores, a query dos filtros, o filtro de empresa só do admin, o detalhe com o contexto em `<pre>` e a captura, trocar o estado e responder atualizando lista e detalhe, a mensagem do 403); e2e: `us602.spec.ts` (dois devs de duas empresas, por adesão, relatam pela API; o admin vê, filtra, leva a em análise e a resolvido e responde; o gestor vê só o da empresa dele; o dev lê a resposta em `/api/relatos/meus`; capturas `80`–`84`) |
+| US #669 | Core: `RegrasDoDesignTests` (a URL normalizada em https/ssh/.git/maiúsculas/pasta, o nível usuário de quem não tem empresa, o escopo das claims, a visibilidade da regra do contexto, quem apaga, o teto do plano e a validação do envio); Infrastructure: `Us669Tests` (script `Us669.sql` contra o modelo, o armazém em disco preso à pasta, o envio cuja imagem falha sem deixar versão); Api: `DesignApiTests` (o envio com o branch como atributo e o mesmo repositório escrito de dois jeitos num projeto, o link estável devolvendo o PNG, a visibilidade usuário × equipe × empresa × outra empresa, quem não tem empresa no nível usuário, o reenvio idempotente e o 409, apagar autor/gestor/terceiro, a sincronização com `?desde=`, o 413 do teto); web: `componentes/DesignCompartilhado.test.tsx` (a comparação, a aba com o uso do teto e as colunas, o link copiado, o Apagar só de quem pode, o filtro de branch e o modo Uma, o escopo Minhas e o vazio, `/design` sem empresa, a página do link estável e a versão que não existe mais); e2e: `us669.spec.ts` (o envio multipart com o PNG gerado no teste, a comparação lado a lado, o branch, o Sobrepor e o link estável; capturas `90`–`92`) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

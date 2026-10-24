@@ -649,6 +649,67 @@ export interface FiltroDeRelatos {
   ate: string;
 }
 
+// ----- US #669: o design compartilhado -----
+
+/** O tipo de uma versão de design: a tela real ou a proposta (imagem, nada implementado). */
+export type TipoDeVersaoDeDesign = 'captura' | 'proposta';
+
+/** Uma versão imutável de uma tela (o contrato VersaoDeDesignV1). A imagem vem pelo `link` estável, com o token. */
+export interface VersaoDeDesign {
+  numero: number;
+  tipo: TipoDeVersaoDeDesign;
+  base: number | null;
+  tema: 'light' | 'dark';
+  largura: number;
+  altura: number;
+  /** web, desktop ou proposta. */
+  origem: string;
+  alvo: string;
+  /** O branch de onde a versão saiu — atributo, e não projeto. */
+  branch: string;
+  commit: string;
+  descricao: string;
+  autor: string;
+  autorTipo: 'usuario' | 'agente';
+  runner: string;
+  criadaEm: string;
+  sha256: string;
+  bytes: number;
+  /** O caminho da imagem na API (/api/design/{projeto}/{tela}/v{n}); a página do site é o mesmo sem o /api. */
+  link: string;
+  podeApagar: boolean;
+}
+
+/** Uma tela do projeto, com as versões em ordem. */
+export interface TelaDeDesign {
+  id: string;
+  nome: string;
+  estado: string;
+  versoes: VersaoDeDesign[];
+}
+
+/** Um projeto de design: as telas de UM repositório num nível (empresa, time ou usuário). */
+export interface ProjetoDeDesign {
+  id: number;
+  repositorio: string;
+  /** O caminho normalizado (github.com/acme/portal). */
+  chave: string;
+  nivel: NivelDeConvencao;
+  time: string;
+  dono: string;
+  atualizadoEm: string;
+  telas: TelaDeDesign[];
+}
+
+/** O uso do teto do plano: a empresa de quem consulta, ou ele mesmo sem empresa. */
+export interface UsoDoDesign {
+  versoes: number;
+  tetoDeVersoes: number;
+  bytes: number;
+  tetoDeBytes: number;
+  plano: string;
+}
+
 /** Um arquivo baixado da API: o conteúdo e o nome sugerido. */
 export interface ArquivoBaixado {
   conteudo: Blob;

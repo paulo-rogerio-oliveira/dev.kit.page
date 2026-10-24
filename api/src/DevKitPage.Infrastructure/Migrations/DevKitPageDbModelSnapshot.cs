@@ -756,6 +756,61 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("PedidosDeDemonstracao", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Chave")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Espaco")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Repositorio")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Time")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmpresaId", "AtualizadoEmUtc");
+
+                    b.HasIndex("UsuarioId", "AtualizadoEmUtc");
+
+                    b.HasIndex("Espaco", "Nivel", "Time", "UsuarioId", "Chave")
+                        .IsUnique();
+
+                    b.ToTable("ProjetosDeDesign", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Relato", b =>
                 {
                     b.Property<long>("Id")
@@ -952,6 +1007,38 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("RoisDeWorkItem", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.TelaDeDesign", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Identificador")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ProjetoId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjetoId", "Identificador")
+                        .IsUnique();
+
+                    b.ToTable("TelasDeDesign", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.TotalDiario", b =>
                 {
                     b.Property<long>("Id")
@@ -1077,6 +1164,104 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Usuarios", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VersaoDeDesign", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Altura")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Alvo")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AutorTipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("Base")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Bytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChaveDaImagem")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Commit")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EnviadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Largura")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Runner")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TelaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Tema")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutorId");
+
+                    b.HasIndex("TelaId", "Numero")
+                        .IsUnique();
+
+                    b.ToTable("VersoesDeDesign", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.VersaoDeItem", b =>
@@ -1338,6 +1523,16 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Empresa");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.Relato", b =>
                 {
                     b.HasOne("DevKitPage.Core.Empresa", "Empresa")
@@ -1393,6 +1588,17 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Maquina");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.TelaDeDesign", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ProjetoDeDesign", "Projeto")
+                        .WithMany("Telas")
+                        .HasForeignKey("ProjetoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Projeto");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.TotalDiario", b =>
                 {
                     b.HasOne("DevKitPage.Core.Maquina", null)
@@ -1410,6 +1616,25 @@ namespace DevKitPage.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.VersaoDeDesign", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", "Autor")
+                        .WithMany()
+                        .HasForeignKey("AutorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.TelaDeDesign", "Tela")
+                        .WithMany("Versoes")
+                        .HasForeignKey("TelaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Autor");
+
+                    b.Navigation("Tela");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.VersaoDeItem", b =>
@@ -1451,6 +1676,16 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Catalogo");
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
+                {
+                    b.Navigation("Telas");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.TelaDeDesign", b =>
+                {
+                    b.Navigation("Versoes");
                 });
 #pragma warning restore 612, 618
         }

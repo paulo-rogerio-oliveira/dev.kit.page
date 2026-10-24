@@ -5,6 +5,7 @@ import type { ConvencaoDaEmpresa, NivelDeConvencao, RepositorioDaEmpresa } from 
 import { Abas } from '../componentes/Abas';
 import { Chips } from '../componentes/Chips';
 import { ContextoPorNivel } from '../componentes/ContextoPorNivel';
+import { DesignCompartilhado } from '../componentes/DesignCompartilhado';
 import { ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
@@ -13,14 +14,18 @@ import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
-/** As abas da página: o catálogo de repositórios, as convenções e o contexto (US #550). A ativa fica na URL (?aba=). */
+/**
+ * As abas da página: o catálogo de repositórios, as convenções, o contexto (US #550) e o design compartilhado (US #669).
+ * A ativa fica na URL (?aba=).
+ */
 const ABAS = [
   { id: 'repositorios', rotulo: 'Repositórios' },
   { id: 'convencoes', rotulo: 'Convenções' },
   { id: 'contexto', rotulo: 'Contexto' },
+  { id: 'design', rotulo: 'Design', novo: true },
 ];
 
-type IdDaAba = 'repositorios' | 'convencoes' | 'contexto';
+type IdDaAba = 'repositorios' | 'convencoes' | 'contexto' | 'design';
 
 const NOME_DO_NIVEL: Record<NivelDeConvencao, string> = { empresa: 'Empresa', time: 'Time', usuario: 'Usuário' };
 
@@ -41,7 +46,7 @@ export function EmpresaConhecimento() {
   const ehGestor = papelDa(sessao!) === 'gestor';
   const [busca, setBusca] = useSearchParams();
   const pedida = busca.get('aba');
-  const aba: IdDaAba = pedida === 'convencoes' || pedida === 'contexto' ? pedida : 'repositorios';
+  const aba: IdDaAba = pedida === 'convencoes' || pedida === 'contexto' || pedida === 'design' ? pedida : 'repositorios';
 
   const [repositorios, setRepositorios] = useState<RepositorioDaEmpresa[] | null>(null);
   const [convencoes, setConvencoes] = useState<ConvencaoDaEmpresa[] | null>(null);
@@ -97,6 +102,7 @@ export function EmpresaConhecimento() {
           {aba === 'repositorios' && <AbaRepositorios repositorios={repositorios} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'convencoes' && <AbaConvencoes convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'contexto' && <AbaContexto convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} tratar={tratar} />}
+          {aba === 'design' && <DesignCompartilhado token={token} comEmpresa={Boolean(sessao!.empresa)} tratar={tratar} />}
         </Abas>
       </Pagina>
     </div>

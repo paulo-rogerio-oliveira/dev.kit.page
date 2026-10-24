@@ -4,7 +4,7 @@ import type {
   CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
   ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
-  Vitrine,
+  ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -289,6 +289,45 @@ export const contextosDaEmpresa: ConvencaoDaEmpresa[] = [
   { nivel: 'time', chave: 'contexto.stack', valor: 'Angular 19 no front.\nTestes com Jasmine.', time: 'vendas', usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-16T09:10:00Z' },
   { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Respostas curtas, com o porquê.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:20:00Z' },
 ];
+
+// ----- US #669: o design compartilhado -----
+
+const versaoDeDesign = (numero: number, tipo: 'captura' | 'proposta', extra: Partial<VersaoDeDesign> = {}): VersaoDeDesign => ({
+  numero, tipo, base: null, tema: 'light', largura: 1440, altura: 900, origem: tipo === 'proposta' ? 'proposta' : 'web', alvo: 'http://localhost:5173/checkout',
+  branch: 'feature/dev/semana5', commit: '3f9c2a1', descricao: '', autor: 'Ana Souza', autorTipo: 'agente', runner: 'claude',
+  criadaEm: '2026-10-23T14:05:00Z', sha256: String(numero).repeat(64).slice(0, 64), bytes: 48_000,
+  link: `/api/design/7/checkout/v${numero}`, podeApagar: false, ...extra,
+});
+
+/**
+ * Os projetos de design que a API devolve (US #669): o portal da empresa (a tela Checkout com captura, proposta e
+ * recaptura — a da Ana o gestor apaga — e o Login só com captura, de outro branch) e um projeto do nível usuário.
+ */
+export const projetosDeDesign: ProjetoDeDesign[] = [
+  {
+    id: 7, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'empresa', time: '', dono: '', atualizadoEm: '2026-10-23T16:40:00Z',
+    telas: [
+      {
+        id: 'checkout', nome: 'Checkout', estado: '', versoes: [
+          versaoDeDesign(1, 'captura', { branch: 'feature/dev/semana4', commit: '81c0e2d', criadaEm: '2026-10-21T10:12:00Z' }),
+          versaoDeDesign(2, 'proposta', { base: 1, descricao: 'Botão de pagar em destaque.', podeApagar: true }),
+          versaoDeDesign(3, 'captura', { base: 2, commit: '9d41b07', criadaEm: '2026-10-23T16:40:00Z', podeApagar: true }),
+        ],
+      },
+      {
+        id: 'login', nome: 'Login', estado: '', versoes: [
+          versaoDeDesign(1, 'captura', { branch: 'feature/dev/semana3', link: '/api/design/7/login/v1' }),
+        ],
+      },
+    ],
+  },
+  {
+    id: 9, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'usuario', time: '', dono: 'Ana Souza', atualizadoEm: '2026-10-22T10:00:00Z',
+    telas: [{ id: 'rascunho', nome: 'Rascunho', estado: '', versoes: [versaoDeDesign(1, 'proposta', { link: '/api/design/9/rascunho/v1', podeApagar: true })] }],
+  },
+];
+
+export const usoDoDesign: UsoDoDesign = { versoes: 37, tetoDeVersoes: 500, bytes: 48 * 1_048_576, tetoDeBytes: 2048 * 1_048_576, plano: 'Empresarial' };
 
 // ----- US #602: os relatos -----
 
@@ -584,6 +623,19 @@ export const handlersPadrao = [
       estado: relato.estado === 'novo' ? 'em-analise' : relato.estado,
     });
     return HttpResponse.json(relato);
+  }),
+  // US #669: o design compartilhado — os projetos, o uso do teto, a imagem pelo link estável e o apagar.
+  http.get(`${API}/api/design/projetos`, () => HttpResponse.json(projetosDeDesign)),
+  http.get(`${API}/api/design/projetos/:id`, ({ params }) => {
+    const projeto = projetosDeDesign.find((p) => String(p.id) === params.id);
+    return projeto ? HttpResponse.json(projeto) : HttpResponse.json({ detail: 'Projeto de design não encontrado.' }, { status: 404 });
+  }),
+  http.get(`${API}/api/design/uso`, () => HttpResponse.json(usoDoDesign)),
+  http.get(`${API}/api/design/:projeto/:tela/:versao`, () =>
+    new HttpResponse(Uint8Array.from(atob(CAPTURA_PNG), (c) => c.charCodeAt(0)), { headers: { 'Content-Type': 'image/png' } })),
+  http.delete(`${API}/api/design/:projeto/:tela/:versao`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/design/${params.projeto}/${params.tela}/${params.versao}`, corpo: null });
+    return HttpResponse.json(projetosDeDesign[0].telas[0].versoes[1]);
   }),
   // US #405: a gestão de usuários.
   http.get(`${API}/api/usuarios`, () => HttpResponse.json(usuarios)),

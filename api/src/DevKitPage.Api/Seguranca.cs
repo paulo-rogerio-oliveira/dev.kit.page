@@ -129,6 +129,13 @@ public static class Seguranca
     /// </summary>
     public static EscopoDaEmpresa? EscopoDaEmpresa(ClaimsPrincipal usuario)
         => Core.EscopoDaEmpresa.DasClaims(usuario.FindFirstValue("role"), usuario.FindFirstValue(ClaimEmpresa), usuario.FindFirstValue(JwtRegisteredClaimNames.Sub));
+
+    /// <summary>
+    /// O escopo do DESIGN de quem fez a requisição (US #669): todo usuário autenticado tem um — sem empresa, o design
+    /// dele fica no nível usuário. Nulo só para o token sem usuário.
+    /// </summary>
+    public static EscopoDoDesign? EscopoDoDesign(ClaimsPrincipal usuario)
+        => Core.EscopoDoDesign.DasClaims(usuario.FindFirstValue("role"), usuario.FindFirstValue(ClaimEmpresa), usuario.FindFirstValue(JwtRegisteredClaimNames.Sub));
 }
 
 /// <summary>Emite o JWT do usuário.</summary>

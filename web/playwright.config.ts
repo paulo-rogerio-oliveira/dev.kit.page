@@ -5,6 +5,8 @@ import { CODIGO_DE_REGISTRO, PORTA_DA_API, PORTA_DA_WEB, SENHA_INICIAL } from '.
 
 // Uma base SQLite NOVA a cada execução: o cenário começa do zero (o admin é semeado na subida).
 const banco = join(tmpdir(), `devkitpage-e2e-${process.pid}-${Date.now()}.db`);
+// As imagens do design (US #669) também numa pasta temporária: nada do cenário fica no clone.
+const design = join(tmpdir(), `devkitpage-e2e-design-${process.pid}-${Date.now()}`);
 
 export default defineConfig({
   testDir: './e2e',
@@ -34,6 +36,7 @@ export default defineConfig({
         ASPNETCORE_ENVIRONMENT: 'Development',
         ASPNETCORE_URLS: `http://localhost:${PORTA_DA_API}`,
         ConnectionStrings__DevKitPage: `Data Source=${banco}`,
+        Design__Pasta: design,
         Seed__AdminPassword: SENHA_INICIAL,
         Telemetria__CodigoDeRegistro: CODIGO_DE_REGISTRO,
         Cors__Origens__0: `http://localhost:${PORTA_DA_WEB}`,

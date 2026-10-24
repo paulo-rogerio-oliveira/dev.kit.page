@@ -94,6 +94,52 @@ public sealed class OpcoesDosRelatos
 }
 
 /// <summary>
+/// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
+/// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta
+/// em desenvolvimento e nos testes.
+/// </summary>
+public sealed class OpcoesDoDesign
+{
+    public const string Secao = "Design";
+    public const string Disco = "disco";
+    public const string Blob = "blob";
+
+    /// <summary><c>disco</c> (padrão) ou <c>blob</c>.</summary>
+    public string Armazem { get; set; } = Disco;
+
+    /// <summary>A pasta das imagens no armazém em disco.</summary>
+    public string Pasta { get; set; } = "dados/design";
+
+    /// <summary>A connection string do Storage (segredo: Key Vault ou <c>Design__ConexaoDoBlob</c>).</summary>
+    public string ConexaoDoBlob { get; set; } = string.Empty;
+
+    /// <summary>O contêiner das imagens no Storage.</summary>
+    public string Conteiner { get; set; } = "design";
+
+    /// <summary>
+    /// O teto por PLANO (o <c>Empresa.Plano</c>): quantas versões e quantos MB de imagens o espaço guarda. Ajustável aqui
+    /// sem código; o plano fora da lista usa o <see cref="TetoPadrao"/>, e quem não tem empresa também.
+    /// </summary>
+    public Dictionary<string, TetoDoDesign> Tetos { get; set; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Empresarial"] = new() { Versoes = 500, MegaBytes = 2048 },
+    };
+
+    /// <summary>O teto de quem não tem empresa e do plano fora de <see cref="Tetos"/>.</summary>
+    public TetoDoDesign TetoPadrao { get; set; } = new() { Versoes = 100, MegaBytes = 256 };
+
+    /// <summary>Quantos envios de versão um mesmo usuário faz por minuto; acima disto, 429 (a fila do dev.kit tenta depois).</summary>
+    public int EnviosPorMinuto { get; set; } = 60;
+}
+
+/// <summary>O teto de um plano no design: a quantidade de versões e o tamanho das imagens.</summary>
+public sealed class TetoDoDesign
+{
+    public int Versoes { get; set; }
+    public long MegaBytes { get; set; }
+}
+
+/// <summary>
 /// O proxy na frente da API (seção <c>Proxy</c>). No Azure Container Apps todo visitante chega com o
 /// IP do proxy: o IP do cliente vem no <c>X-Forwarded-For</c>, aceito SÓ de quem está nestas redes.
 /// </summary>
