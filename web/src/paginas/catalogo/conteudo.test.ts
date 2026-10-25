@@ -1,5 +1,8 @@
 import { fluxoDeExemplo } from '../../testes/servidor';
-import { lerFluxo, lerPlano, lerSkill, montarPlano, montarSkill, PLANO_VAZIO, SKILL_VAZIA, textoDoFluxo, validarPlano, validarSkill } from './conteudo';
+import {
+  lerFluxo, lerPlano, lerSkill, lerSkillMarkdown, montarPlano, montarSkill, PLANO_VAZIO, SKILL_VAZIA, skillMarkdown, tamanhoEmBytes, tamanhoLegivel, textoDoFluxo,
+  validarPlano, validarSkill,
+} from './conteudo';
 
 describe('Conteúdo dos itens do catálogo (US #461) — o formato do dev.kit', () => {
   it('monta a skill como o SkillJson: os campos na ordem do arquivo, indentado com dois espaços', () => {
@@ -75,5 +78,36 @@ describe('Conteúdo dos itens do catálogo (US #461) — o formato do dev.kit', 
       'O fluxo está sem nome (campo "nome").',
       'O fluxo está sem o desenho (campo "desenho" com os "nodes").',
     ]);
+  });
+});
+
+describe('O SKILL.md e a Rule com stack do editor de artefato (US #687)', () => {
+  it('o SKILL.md vai e volta: o frontmatter com o nome e a descrição, e o corpo', () => {
+    const md = skillMarkdown({ name: 'compilar-net-framework', description: 'Compilar .NET Framework (MSBuild)', content: '# Compilar\n\n1. Ache o MSBuild.' });
+
+    expect(md).toBe('---\nname: compilar-net-framework\ndescription: Compilar .NET Framework (MSBuild)\n---\n\n# Compilar\n\n1. Ache o MSBuild.');
+    expect(lerSkillMarkdown(md)).toEqual({ name: 'compilar-net-framework', description: 'Compilar .NET Framework (MSBuild)', content: '# Compilar\n\n1. Ache o MSBuild.', erros: [] });
+  });
+
+  it('o frontmatter que falta ou não fecha é erro', () => {
+    expect(lerSkillMarkdown('# só o corpo').erros).toEqual(['O SKILL.md começa pelo frontmatter (a linha ---).']);
+    expect(lerSkillMarkdown('---\nname: x').erros).toEqual(['O frontmatter do SKILL.md não fecha (falta a segunda linha ---).']);
+    expect(lerSkillMarkdown('---\nname: x\n---\ncorpo').erros).toEqual(['O frontmatter está sem a "description".']);
+  });
+
+  it('a Rule leva a stack e o tipo só quando existem (o hash das outras não muda)', () => {
+    const sem = montarPlano({ ...PLANO_VAZIO, key: 'build', description: 'Build', content: 'x' });
+    const com = montarPlano({ ...PLANO_VAZIO, key: 'licenca', description: 'Licença', content: 'x', stack: 'DotNet; vb6, dotnet', tipo: 'Impacto' });
+
+    expect(sem).not.toContain('stack');
+    expect(JSON.parse(com)).toMatchObject({ stack: 'dotnet, vb6', tipo: 'impacto' });
+    expect(Object.keys(JSON.parse(com)).slice(-2)).toEqual(['stack', 'tipo']);
+    expect(lerPlano(com)).toMatchObject({ stack: 'dotnet, vb6', tipo: 'impacto' });
+  });
+
+  it('o tamanho em UTF-8 e como o rodapé o escreve', () => {
+    expect(tamanhoEmBytes('ação')).toBe(6);
+    expect(tamanhoLegivel(900)).toBe('900 B');
+    expect(tamanhoLegivel(1229)).toBe('1,2 KB');
   });
 });

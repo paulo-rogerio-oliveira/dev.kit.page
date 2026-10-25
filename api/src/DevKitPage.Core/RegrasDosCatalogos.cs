@@ -162,6 +162,114 @@ public static partial class RegrasDosCatalogos
         return problemas;
     }
 
+    // ----- US #687: a edição de artefato (escopo, Rule de impacto, o texto do editor e as diferenças) -----
+
+    /// <summary>A recusa da Rule de impacto no básico: ela é do negócio do cliente, e o básico vai a toda máquina.</summary>
+    public const string ImpactoNoBasico =
+        "A Rule de impacto é do negócio do cliente e nunca vai para o catálogo básico: grave-a num catálogo de empresa (ou presa ao repositório do projeto).";
+
+    /// <summary>O conteúdo é uma Rule de impacto (o tipo <c>impacto</c>)? O conteúdo que não abre não é.</summary>
+    public static bool RuleDeImpacto(string tipo, string conteudo)
+        => tipo == TiposDeItem.Plan && Plano(conteudo) is { EhImpacto: true };
+
+    /// <summary>A stack da Rule (vazia nos outros tipos e na Rule de qualquer stack).</summary>
+    public static string Stack(string tipo, string conteudo) => tipo == TiposDeItem.Plan ? Plano(conteudo)?.Stack ?? string.Empty : string.Empty;
+
+    /// <summary>
+    /// Para onde o item vai (<see cref="EscoposDoItem"/>): o do básico é base; nos outros, o preso a um repositório (a Rule
+    /// com repositório, a skill com repositórios) é projeto, e o resto, empresa — a regra do <c>ClassificacaoDoCatalogo</c>
+    /// do git.kit vista do site.
+    /// </summary>
+    public static string Escopo(bool basico, string tipo, string conteudo)
+    {
+        if (basico)
+            return EscoposDoItem.Base;
+        var preso = tipo switch
+        {
+            TiposDeItem.Plan => Plano(conteudo)?.Repository.Length > 0,
+            TiposDeItem.Skill => Habilidade(conteudo)?.Repositories.Count > 0,
+            _ => false,
+        };
+        return preso ? EscoposDoItem.Projeto : EscoposDoItem.Empresa;
+    }
+
+    /// <summary>
+    /// O TEXTO que o editor mostra e as diferenças comparam: o SKILL.md da skill (o frontmatter com o nome e a descrição, e
+    /// o conteúdo), o conteúdo da Rule, o JSON do fluxo. O conteúdo que não abre volta como está.
+    /// </summary>
+    public static string TextoEditavel(string tipo, string conteudo)
+    {
+        if (tipo == TiposDeItem.Skill && Habilidade(conteudo) is { } skill)
+            return $"---\nname: {skill.Name}\ndescription: {skill.Description}\n---\n\n{skill.Content}";
+        if (tipo == TiposDeItem.Plan && Plano(conteudo) is { } plano)
+            return plano.Content;
+        return FormatosDoCatalogo.Normalizar(conteudo);
+    }
+
+    /// <summary>O teto de linhas que a comparação linha a linha aceita (a conta é quadrática); acima dele, tudo muda.</summary>
+    public const int LinhasMaximasDaComparacao = 3000;
+
+    /// <summary>
+    /// As diferenças de <paramref name="atual"/> para <paramref name="anterior"/>, linha a linha (a maior subsequência comum):
+    /// as iguais, as removidas (do anterior) e as adicionadas (do atual, com o número da linha nele).
+    /// </summary>
+    public static IReadOnlyList<LinhaDaDiferencaV1> Diferencas(string anterior, string atual)
+    {
+        var a = Linhas(anterior);
+        var b = Linhas(atual);
+        if (a.Length > LinhasMaximasDaComparacao || b.Length > LinhasMaximasDaComparacao)
+            return a.Select(l => new LinhaDaDiferencaV1(TiposDeLinha.Removida, l, null))
+                .Concat(b.Select((l, i) => new LinhaDaDiferencaV1(TiposDeLinha.Adicionada, l, i + 1))).ToArray();
+
+        var lcs = new int[a.Length + 1, b.Length + 1];
+        for (var i = a.Length - 1; i >= 0; i--)
+            for (var j = b.Length - 1; j >= 0; j--)
+                lcs[i, j] = a[i] == b[j] ? lcs[i + 1, j + 1] + 1 : Math.Max(lcs[i + 1, j], lcs[i, j + 1]);
+
+        var linhas = new List<LinhaDaDiferencaV1>(a.Length + b.Length);
+        int x = 0, y = 0;
+        while (x < a.Length || y < b.Length)
+        {
+            if (x < a.Length && y < b.Length && a[x] == b[y])
+            {
+                linhas.Add(new LinhaDaDiferencaV1(TiposDeLinha.Igual, b[y], y + 1));
+                x++;
+                y++;
+            }
+            else if (y < b.Length && (x == a.Length || lcs[x, y + 1] >= lcs[x + 1, y]))
+            {
+                linhas.Add(new LinhaDaDiferencaV1(TiposDeLinha.Adicionada, b[y], y + 1));
+                y++;
+            }
+            else
+            {
+                linhas.Add(new LinhaDaDiferencaV1(TiposDeLinha.Removida, a[x], null));
+                x++;
+            }
+        }
+
+        return linhas;
+    }
+
+    private static string[] Linhas(string texto)
+    {
+        var normalizado = FormatosDoCatalogo.Normalizar(texto ?? string.Empty);
+        return normalizado.Length == 0 ? [] : normalizado.Split('\n');
+    }
+
+    /// <summary>O plano do conteúdo, ou nulo quando ele não abre (o gravado é canônico; a defesa é só para não derrubar a lista).</summary>
+    private static PlanDoCatalogo? Plano(string conteudo)
+    {
+        try { return FormatosDoCatalogo.LerPlan(conteudo); }
+        catch (FormatException) { return null; }
+    }
+
+    private static SkillDoCatalogo? Habilidade(string conteudo)
+    {
+        try { return FormatosDoCatalogo.LerSkill(conteudo); }
+        catch (FormatException) { return null; }
+    }
+
     private static IEnumerable<(string Campo, string Erro)> ValidarTextos(string? nome, string? descricao)
     {
         var limpo = (nome ?? string.Empty).Trim();

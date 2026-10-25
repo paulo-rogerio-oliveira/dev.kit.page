@@ -6,6 +6,8 @@ import type {
   EstadoDoRelato, FiltroDeRelatos, MeuRelato, RelatoDetalhe, RelatoNovo, RelatoRecebido, RelatoResumo,
   ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
+  AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
+  UtilidadeResposta,
 } from './tipos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -370,4 +372,68 @@ export const api = {
 
   redefinirSenha: (token: string, id: number) =>
     chamar<UsuarioComSenha>(`/api/usuarios/${id}/senha`, { metodo: 'POST', token }),
+
+  // ----- US #687 -----
+
+  // A licença de cada usuário (só o admin): a de agora com o histórico, a prévia, aplicar (com o motivo) e revogar.
+  licencaDoUsuario: (token: string, id: number) => chamar<DetalheDaLicenca>(`/api/usuarios/${id}/licenca`, { token }),
+
+  previaDaLicenca: (token: string, id: number, definicao: DefinicaoDeLicenca) =>
+    chamar<PreviaDeLicenca>(`/api/usuarios/${id}/licenca/previa`, { metodo: 'POST', corpo: definicao, token }),
+
+  definirLicenca: (token: string, id: number, definicao: DefinicaoDeLicenca) =>
+    chamar<DetalheDaLicenca>(`/api/usuarios/${id}/licenca`, { metodo: 'PUT', corpo: definicao, token }),
+
+  revogarLicenca: (token: string, id: number, motivo: string) =>
+    chamar<DetalheDaLicenca>(`/api/usuarios/${id}/licenca/revogar`, { metodo: 'POST', corpo: { motivo }, token }),
+
+  // A edição da empresa: os dados básicos, o plano, o contrato e os assentos (nunca abaixo dos em uso).
+  editarEmpresa: (token: string, id: number, edicao: EmpresaEditada) =>
+    chamar<EmpresaResumo>(`/api/empresas/${id}`, { metodo: 'PUT', corpo: edicao, token }),
+
+  // O painel de utilidade: a saúde de agora, o resultado do período, os turnos por desfecho e onde as tasks travam.
+  utilidade: (token: string, filtro: Filtro) => chamar<UtilidadeResposta>(`/api/dashboard/utilidade?${consulta(filtro)}`, { token }),
+
+  // A edição de artefato do catálogo: a lista de todos (com a busca no conteúdo), as diferenças, o histórico, o descarte
+  // do rascunho e os anexos — o anexo por fetch e blob, porque a rota é autenticada.
+  todosOsItens: (token: string, filtro: { busca?: string; tipo?: TipoDeItem | ''; escopo?: EscopoDoItem | '' } = {}) =>
+    chamar<ItemEditavel[]>(`/api/catalogos/itens?${new URLSearchParams(preenchidos({ ...filtro }))}`, { token }),
+
+  diferencasDoItem: (token: string, slug: string, id: number) =>
+    chamar<DiferencasDoItem>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/diferencas`, { token }),
+
+  historicoDoItem: (token: string, slug: string, id: number) =>
+    chamar<HistoricoDoItem[]>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/historico`, { token }),
+
+  // O item nunca publicado some (204, sem corpo); o publicado volta à versão da última release.
+  descartarRascunho: (token: string, slug: string, id: number) =>
+    chamar<ItemEditavel | undefined>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/descartar`, { metodo: 'POST', token }),
+
+  anexosDoItem: (token: string, slug: string, id: number) =>
+    chamar<AnexoDoItem[]>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/anexos`, { token }),
+
+  anexarAoItem: async (token: string, slug: string, id: number, arquivo: File) => {
+    const formulario = new FormData();
+    formulario.append('arquivo', arquivo, arquivo.name);
+    const resposta = await fetch(`${baseDaApi}/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/anexos`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formulario,
+    });
+    if (!resposta.ok) {
+      let mensagem = `A API respondeu ${resposta.status}.`;
+      try {
+        const problema = (await resposta.json()) as { detail?: string; title?: string };
+        mensagem = problema.detail ?? problema.title ?? mensagem;
+      } catch {
+        // sem corpo: fica a mensagem padrão
+      }
+      throw new ErroDaApi(resposta.status, mensagem);
+    }
+    return (await resposta.json()) as AnexoDoItem;
+  },
+
+  baixarAnexo: (token: string, slug: string, id: number, anexo: AnexoDoItem) =>
+    baixar(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/anexos/${anexo.id}`, token, anexo.nome),
+
+  removerAnexo: (token: string, slug: string, id: number, anexoId: number) =>
+    chamar<AnexoDoItem>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/anexos/${anexoId}`, { metodo: 'DELETE', token }),
 };

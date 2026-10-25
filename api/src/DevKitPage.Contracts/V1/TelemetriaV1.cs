@@ -192,6 +192,45 @@ public static class TiposDeEvento
     /// </summary>
     public const string ArbitroAgiu = "ArbitroAgiu";
 
+    // ----- US #687: o painel de utilidade (a saúde de agora e onde as tasks travam) -----
+    // Wire v1 sem campo novo, como a US #399 e a #405: o recorte vai no Detalhe e a medida no Valor. Um dev.kit antigo não
+    // os manda e continua válido; o painel mostra o que chegou. Os quatro primeiros são FOTOS (FotoDeEstado): vale o mais
+    // recente de cada sessão, work item ou máquina.
+
+    /// <summary>
+    /// A situação de uma task do agente: <see cref="TelemetryEventV1.Detalhe"/> = uma de <see cref="SituacoesDaTask"/>;
+    /// <see cref="TelemetryEventV1.Valor"/> = os minutos na situação. A foto é por sessão.
+    /// </summary>
+    public const string SituacaoDaTask = "SituacaoDaTask";
+
+    /// <summary>
+    /// A pergunta ao desenvolvedor: detalhe = <see cref="EstadosDaPergunta.Aberta"/> (o <c>em</c> é quando abriu) ou
+    /// <see cref="EstadosDaPergunta.Respondida"/> (valor = os minutos de espera). A foto é por sessão.
+    /// </summary>
+    public const string PerguntaAoDev = "PerguntaAoDev";
+
+    /// <summary>
+    /// O desfecho do FECHAMENTO da entrega (o gatilho de fechamento reportou): detalhe = <c>ok</c> ou <c>falhou</c>; valor =
+    /// o work item. A foto é por work item (o mais recente vence: o fechamento que falhou e depois passou sai do cartão).
+    /// </summary>
+    public const string FechamentoDaEntrega = "FechamentoDaEntrega";
+
+    /// <summary>
+    /// A amostra dos recursos da máquina: detalhe = <c>disco-mb=N;memoria-mb=N;limite=disco|memoria|disco+memoria|nao</c>
+    /// (sem unidade nem caminho); valor = o disco livre em MB. A foto é da máquina.
+    /// </summary>
+    public const string AmostraDaMaquina = "AmostraDaMaquina";
+
+    /// <summary>
+    /// A sugestão de impacto que a retrospectiva do Orquestrador registrou: detalhe = <c>causa|sugestao-N|estado|#US</c> (a
+    /// causa é o título curto da sugestão, já sanitizado; o estado, pendente, promovida ou descartada; a US, a origem
+    /// quando é um work item). A foto é por sugestão.
+    /// </summary>
+    public const string SugestaoDeImpacto = "SugestaoDeImpacto";
+
+    /// <summary>O desfecho de um turno do agente: detalhe = um de <see cref="DesfechosDoTurno"/> (os totais por dia empilham).</summary>
+    public const string DesfechoDoTurno = "DesfechoDoTurno";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -200,7 +239,42 @@ public static class TiposDeEvento
         RoiCalculado,
         EntregaAvaliada, EntregaPronta, RevisaoHumana, TokensConsumidos, CustoEstimado, AgenteTrocado, ComandoNegado,
         ImpasseDetectado, ImpasseResolvido, ArbitroAgiu,
+        SituacaoDaTask, PerguntaAoDev, FechamentoDaEntrega, AmostraDaMaquina, SugestaoDeImpacto, DesfechoDoTurno,
     };
+
+    /// <summary>Os tipos cujo evento é uma FOTO (US #687): a ingestão guarda o mais recente de cada chave.</summary>
+    public static IReadOnlySet<string> Fotos { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        SituacaoDaTask, PerguntaAoDev, FechamentoDaEntrega, AmostraDaMaquina, SugestaoDeImpacto,
+    };
+}
+
+/// <summary>As situações de uma task no <see cref="TiposDeEvento.SituacaoDaTask"/> (US #687).</summary>
+public static class SituacoesDaTask
+{
+    public const string Executando = "executando";
+    public const string EsperandoDev = "esperando-dev";
+
+    /// <summary>"Em execução" sem processo vivo e sem atividade além do limite do vigia de saúde: a task parada.</summary>
+    public const string ParadaSemProcesso = "parada-sem-processo";
+
+    public const string Encerrada = "encerrada";
+}
+
+/// <summary>Os estados da pergunta no <see cref="TiposDeEvento.PerguntaAoDev"/> (US #687).</summary>
+public static class EstadosDaPergunta
+{
+    public const string Aberta = "aberta";
+    public const string Respondida = "respondida";
+}
+
+/// <summary>Os desfechos de um turno no <see cref="TiposDeEvento.DesfechoDoTurno"/> (US #687) — as quatro cores do gráfico.</summary>
+public static class DesfechosDoTurno
+{
+    public const string Trabalhou = "trabalhou";
+    public const string EsperouDev = "esperou-dev";
+    public const string LimiteDeUso = "limite-de-uso";
+    public const string Falhou = "falhou";
 }
 
 /// <summary>As origens de um <see cref="TiposDeEvento.ImpasseDetectado"/> (o recorte do evento).</summary>

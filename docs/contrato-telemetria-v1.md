@@ -81,6 +81,33 @@ novo não quebra uma API mais velha.
 | `ImpasseResolvido` (US #405) | como destravou (`nota`, `mensagem-entregue`, `objetivo-cumprido`, `dev-falou`, `agente-pediu-avaliacao`, `cancelado`, `arbitro-reagiu`) | minutos entre a detecção e o desfecho | como e em quanto tempo os impasses destravam |
 | `ArbitroAgiu` (US #405) | `<acao>` ou `<acao>\|<seção da regra>` (ação: `cobrou`, `escalou-ao-dev`, `aprovou`, `corrigido`, `teto-de-rodadas`, `teto-de-custo`, `falha-de-comunicacao`, `reencaminhou-resposta`, `pediu-avaliacao`, `turno-no-dono`, `turno-no-leitor`) | a rodada (ou o nº da reação) | cobranças por regra, taxa de correção e escaladas ao dev |
 
+| `SituacaoDaTask` (US #687) | `executando`, `esperando-dev`, `parada-sem-processo` ou `encerrada` | minutos na situação | tasks paradas agora (foto por sessão) |
+| `PerguntaAoDev` (US #687) | `aberta` (o `em` é quando abriu) ou `respondida` | minutos de espera (na respondida) | perguntas sem resposta e a espera do dev (foto por sessão) |
+| `FechamentoDaEntrega` (US #687) | `ok` ou `falhou` | o work item | fechamentos que falharam e entregas integradas (foto por work item; sem ele, pela sessão) |
+| `AmostraDaMaquina` (US #687) | `disco-mb=N;memoria-mb=N;limite=disco\|memoria\|disco+memoria\|nao` | disco livre em MB | máquinas no limite de disco ou memória (foto da máquina) |
+| `SugestaoDeImpacto` (US #687) | `causa\|sugestao-N\|estado\|#US` (estado: `pendente`, `promovida`, `descartada`; a US só quando a origem é um work item) | — | "onde as tasks travam" (foto por sugestão) |
+| `DesfechoDoTurno` (US #687) | `trabalhou`, `esperou-dev`, `limite-de-uso` ou `falhou` | — | turnos por dia, empilhados pelo desfecho |
+
+### As fotos de estado (US #687)
+
+Os seis tipos da US #687 também não levam campo novo: o recorte no `detalhe`, a medida no `valor`. Cinco deles são
+**FOTOS** — a API guarda, além do total diário, o evento MAIS RECENTE (pelo `em`) de cada (máquina, tipo, chave) em
+`FotosDeEstado`; a chave é a sessão (situação e pergunta), o work item (fechamento), o `sugestao-N` (sugestão) ou
+vazia (a amostra, da máquina). Um evento mais antigo que chegue depois conta no total, mas não volta a foto para trás.
+O `DesfechoDoTurno` é só contagem.
+
+O painel de utilidade (`GET /api/dashboard/utilidade?escopo=&periodo=&maquina=`, `UtilidadeResposta`) lê:
+
+- **Saúde agora**: tasks `parada-sem-processo`, perguntas `aberta` e a mais velha, fechamentos `falhou` e máquinas com
+  `limite` diferente de `nao` (a amostra com mais de 24 h não conta: a máquina desligada não está no limite agora);
+- **Resultado do uso**: aprovadas, aprovadas na primeira, mediana das rodadas, do tempo até aprovar e da espera do
+  dev — dos `RevisaoHumana`/`ObjetivoAvaliado` das sessões — e as integradas (`FechamentoDaEntrega` `ok`);
+- **Turnos por dia**: pelo `DesfechoDoTurno`; sem ele (o dev.kit anterior), a conta sai do `TurnoExecutado` e do
+  `TurnoFalhou` (o `limite-de-uso` é a causa dele; o resto da falha, `falhou`) — o `esperou-dev` só o desfecho novo distingue;
+- **Onde as tasks travam**: as fotos das sugestões, agrupadas pela causa; o selo é o da sugestão mais nova.
+
+Um dev.kit antigo não manda os tipos, e uma API antiga os ignora (`ignorados`).
+
 ### O impasse e o árbitro (US #405)
 
 Os três tipos não levam campo novo: o recorte vai no `detalhe` e a medida no `valor`, e entram nos

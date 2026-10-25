@@ -523,6 +523,29 @@ da máquina do dev e passa a morar aqui — e os PNG nunca entram no git: a PR d
   com o token e um `blob:` (a rota é autenticada). O link estável é a página `/design/{projeto}/{tela}/v{n}`.
 - Tabelas novas pela migration `Us669DesignCompartilhado` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us669.sql`.
 
+### O admin útil: painel de utilidade, licença, empresa e editor de artefato (US #687)
+
+- **Painel de utilidade** (`/dashboard`, `GET /api/dashboard/utilidade`, `ConsultasDoPainelDeUtilidade`): a "Saúde agora",
+  o resultado do uso, os turnos por dia pelo desfecho e "onde as tasks travam" substituem os números de quantidade. Lê as
+  FOTOS de estado (`FotosDeEstado`, o evento mais recente por máquina/tipo/chave, gravado na ingestão) e os totais
+  diários; as regras puras ficam em `RegrasDoPainelDeUtilidade` (Core). O contrato dos seis tipos novos está em
+  `docs/contrato-telemetria-v1.md`.
+- **Licença por usuário** (`/usuarios`, `GET|PUT /api/usuarios/{id}/licenca`, `POST .../licenca/previa`,
+  `POST .../licenca/revogar`, só admin): somar dias, até uma data ou sem prazo, com o tipo e o motivo no histórico
+  (`HistoricosDeLicenca`). A renovação do dev.kit (`POST /api/licencas/renovar`) emite `min(agora + 30 dias, validade do
+  admin)` e recusa a licença vencida ou revogada (403). A janela de renovação é a MESMA regra nos dois lados — `agora >=
+  emitida + 7 dias` ou `agora >= validade − 7 dias`, e a alteração do admin depois da emissão abre a janela —,
+  conferida pelo mesmo arquivo de casos (`ContratoDaRenovacao/casos.json`) nos testes da API e do dev.kit. Sem licença
+  definida pelo admin vale a da empresa (o contrato até) ou, sem ela, os 30 dias corridos de antes.
+- **Edição da empresa** (`/empresas`, `PUT /api/empresas/{id}`): os dados (CNPJ com dígitos verificadores), o plano, o
+  contrato e os assentos — nunca abaixo dos que estão em uso (`RegrasDaEmpresa`).
+- **Editor de artefato** (`/catalogo`, aba Itens; `GET /api/catalogos/itens` e `/api/catalogos/{slug}/itens/{id}/`
+  `diferencas|historico|descartar|anexos`): a lista de todos os catálogos com busca no conteúdo e o escopo base/empresa/
+  projeto, e o editor com o SKILL.md (salvo sozinho), as diferenças com a versão publicada, o histórico e os anexos (até
+  1 MB, 10 por item; ficam no site, não vão para o pacote). A Rule de IMPACTO nunca entra no catálogo básico: o site
+  recusa ao salvar e ao publicar, e o dev.kit a ignora na sincronia.
+- Tabelas e colunas novas pela migration `Us687AdminDeUtilidade` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us687.sql`.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -533,7 +556,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`, e a da US #687, `Us687.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de

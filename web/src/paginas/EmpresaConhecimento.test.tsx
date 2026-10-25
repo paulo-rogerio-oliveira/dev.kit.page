@@ -183,6 +183,6 @@ describe('Repositórios e convenções da empresa (US #491)', () => {
 
   it('o admin, que não é de empresa, vai para o dashboard', async () => {
     renderizar('/empresa/conhecimento', tokenValido());
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
   });
 });
