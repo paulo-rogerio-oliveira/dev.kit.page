@@ -344,11 +344,14 @@ function AbaContexto({ convencoes, ehGestor, token, escrever, tratar }: {
     <section className="cartao" aria-label="Contexto da empresa por nível">
       <p className="nota-do-formulario">
         O que os agentes do dev.kit recebem em toda task, composto empresa → equipe → usuário: num tema em conflito, vale o
-        nível mais específico.{!ehGestor && ' Só o gestor edita o da empresa e o das equipes.'}
+        nível mais específico. A regra (do usuário) é obrigatória para o agente; a sugestão (do agente) é só consulta.
+        {!ehGestor && ' Só o gestor edita o da empresa e o das equipes. Ele promove as sugestões delas; você descarta as que o seu agente registrou.'}
       </p>
       <ContextoPorNivel convencoes={convencoes} equipes={equipes} podeGerir={ehGestor}
         aoGravar={(nivel, chave, valor, time) => escrever(() => api.gravarConvencao(token, nivel, chave, valor, time),
-          valor ? `Tema ${temaDa(chave)} gravado no contexto.` : `Tema ${temaDa(chave)} removido do contexto.`)} />
+          valor ? `Tema ${temaDa(chave)} gravado no contexto.` : `Tema ${temaDa(chave)} removido do contexto.`)}
+        aoPromover={(c) => escrever(() => api.promoverContexto(token, c.id!, c.versao), `Sugestão ${temaDa(c.chave)} promovida a regra.`)}
+        aoDescartar={(c) => escrever(() => api.descartarContexto(token, c.id!), `Sugestão ${temaDa(c.chave)} descartada.`)} />
     </section>
   );
 }

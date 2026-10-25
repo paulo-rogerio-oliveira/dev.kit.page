@@ -145,6 +145,7 @@ public static partial class RegrasDosRelatos
     public static string MascararSegredos(string? texto)
     {
         var resultado = texto ?? string.Empty;
+        resultado = ChavePrivada().Replace(resultado, Segredo);
         resultado = ConexaoDeBanco().Replace(resultado, ConnectionString);
         resultado = ChaveValor().Replace(resultado, m =>
         {
@@ -158,6 +159,13 @@ public static partial class RegrasDosRelatos
         return resultado;
     }
 
+    /// <summary>
+    /// O texto tem um segredo (US #663)? Pelos MESMOS padrões da máscara (<see cref="MascararSegredos"/>), sem uma
+    /// segunda lista: o que a máscara trocaria é o que barra a gravação do contexto.
+    /// </summary>
+    public static bool ContemSegredo(string? texto)
+        => !string.IsNullOrEmpty(texto) && !string.Equals(MascararSegredos(texto), texto, StringComparison.Ordinal);
+
     /// <summary>O começo do texto para a linha da lista.</summary>
     public static string Resumo(string texto)
     {
@@ -169,6 +177,9 @@ public static partial class RegrasDosRelatos
         => b.Length > 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A;
 
     private static bool EhJpeg(ReadOnlySpan<byte> b) => b.Length > 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF;
+
+    [GeneratedRegex(@"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)")]
+    private static partial Regex ChavePrivada();
 
     [GeneratedRegex(@"(?:\b(?:server|data source|address|addr|initial catalog|database|user id|userid|uid|user|username|password|pwd|integrated security|trusted_connection|encrypt|trustservercertificate|persist security info|multipleactiveresultsets|connection timeout|host|port|accountname|accountkey|sharedaccesskeyname|sharedaccesskey|sharedaccesssignature|endpoint|defaultendpointsprotocol|endpointsuffix)\s*=\s*[^;\r\n""]*(?:;|$|(?=""))[ \t]*){2,}",
         RegexOptions.IgnoreCase | RegexOptions.Multiline)]

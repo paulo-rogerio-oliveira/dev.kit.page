@@ -195,6 +195,14 @@ Rode também `api/scripts/sqlserver/Us550.sql` (idempotente, depois do `Us491.sq
 `ConvencoesDaEmpresa` passa a `nvarchar(4000)`, o teto do texto do contexto (`contexto.<tema>`). Sem ele, gravar um
 contexto com mais de 200 caracteres responde 500. Nenhuma tabela nem configuração nova.
 
+### Regra do usuário × Sugestão do agente (US #663)
+
+Rode também `api/scripts/sqlserver/Us663.sql` (idempotente, depois do `Us550.sql`): `ConvencoesDaEmpresa` ganha
+`Origem` (`usuario`, a regra; `agente`, a sugestão) e `Versao`, e o índice único passa a incluir a origem. Só
+acrescenta: o que já existe vira regra na versão 1. Sem ele, `/api/empresa/contexto/*` e a leitura com
+`?origem=todas` respondem 500. A rota antiga (`GET /api/empresa/convencoes` sem `origem`) continua devolvendo só as
+regras — o dev.kit instalado não vê as sugestões como regra. Nenhuma configuração nova.
+
 ### Design compartilhado (US #669)
 
 Rode também `api/scripts/sqlserver/Us669.sql` (idempotente): cria `ProjetosDeDesign`, `TelasDeDesign` e

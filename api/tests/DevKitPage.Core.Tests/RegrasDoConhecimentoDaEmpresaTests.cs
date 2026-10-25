@@ -64,4 +64,74 @@ public sealed class RegrasDoConhecimentoDaEmpresaTests
         var escopo = papel switch { "dev" => Dev, "gestor" => Gestor, _ => Admin };
         Assert.Equal(pode, RegrasDoConhecimentoDaEmpresa.PodeGravar(escopo, nivel, chave, alvo));
     }
+
+    /// <summary>US #663 — a matriz papel × camada da SUGESTÃO: o agente sugere em toda camada que o usuário vê.</summary>
+    [Theory]
+    [InlineData("dev", "usuario", 0, true)]
+    [InlineData("dev", "usuario", 10, true)]
+    [InlineData("dev", "usuario", 11, false)]
+    [InlineData("dev", "time", 0, true)]
+    [InlineData("dev", "empresa", 0, true)]
+    [InlineData("gestor", "empresa", 0, true)]
+    [InlineData("gestor", "usuario", 10, false)]
+    [InlineData("admin", "usuario", 10, true)]
+    [InlineData("dev", "projeto", 0, false)]
+    public void Quem_sugere_em_cada_camada(string papel, string nivel, int alvo, bool pode)
+    {
+        var escopo = papel switch { "dev" => Dev, "gestor" => Gestor, _ => Admin };
+        Assert.Equal(pode, RegrasDoConhecimentoDaEmpresa.PodeSugerir(escopo, nivel, alvo));
+    }
+
+    /// <summary>US #663 — PROMOVER é de quem grava a regra da camada: o dev na dele, o gestor na equipe e na empresa, o admin em todas.</summary>
+    [Theory]
+    [InlineData("dev", "usuario", 10, true)]
+    [InlineData("dev", "time", 0, false)]
+    [InlineData("dev", "empresa", 0, false)]
+    [InlineData("gestor", "time", 0, true)]
+    [InlineData("gestor", "empresa", 0, true)]
+    [InlineData("gestor", "usuario", 10, false)]
+    [InlineData("admin", "empresa", 0, true)]
+    [InlineData("admin", "time", 0, true)]
+    [InlineData("admin", "usuario", 10, true)]
+    public void Quem_promove_a_sugestao_a_regra(string papel, string nivel, int alvo, bool pode)
+    {
+        var escopo = papel switch { "dev" => Dev, "gestor" => Gestor, _ => Admin };
+        Assert.Equal(pode, RegrasDoConhecimentoDaEmpresa.PodePromover(escopo, nivel, "contexto.stack", alvo));
+    }
+
+    /// <summary>US #663 — DESCARTAR: quem grava a camada, ou o autor da sugestão (o dev descarta a que o agente dele fez na empresa).</summary>
+    [Theory]
+    [InlineData("dev", "empresa", 0, 10, true)]   // a sugestão dele
+    [InlineData("dev", "empresa", 0, 30, false)]  // a de outro, numa camada que ele não grava
+    [InlineData("dev", "time", 0, 30, false)]
+    [InlineData("dev", "usuario", 10, 30, true)]  // a camada dele
+    [InlineData("gestor", "time", 0, 30, true)]
+    [InlineData("gestor", "empresa", 0, 30, true)]
+    [InlineData("admin", "usuario", 10, 30, true)]
+    public void Quem_descarta_a_sugestao(string papel, string nivel, int alvo, int autor, bool pode)
+    {
+        var escopo = papel switch { "dev" => Dev, "gestor" => Gestor, _ => Admin };
+        Assert.Equal(pode, RegrasDoConhecimentoDaEmpresa.PodeDescartar(escopo, nivel, "contexto.stack", alvo, autor));
+    }
+
+    [Theory]
+    [InlineData("stack", "contexto.stack")]
+    [InlineData(" Contexto.Revisao ", "contexto.revisao")]
+    [InlineData("", "")]
+    public void O_tema_vira_a_chave_de_contexto(string tema, string chave)
+        => Assert.Equal(chave, RegrasDoConhecimentoDaEmpresa.ChaveDoTema(tema));
+
+    [Fact]
+    public void A_sugestao_e_so_de_contexto_com_texto_e_no_teto()
+    {
+        Assert.Empty(RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("usuario", "stack", "Use .NET 10.")));
+        Assert.Empty(RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("time", "contexto.testes", "xUnit", "Vendas")));
+        // O branch.* continua só regra do usuário: o agente não o sugere.
+        Assert.Contains("só sugere CONTEXTO", RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("empresa", "branch.bug", "bug/{id}")));
+        Assert.Contains("Escreva", RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("usuario", "stack", "  ")));
+        Assert.Contains("4000", RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("usuario", "stack", new string('x', 4001))));
+        Assert.Contains("time", RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("time", "stack", "x")));
+        Assert.Contains("nível", RegrasDoConhecimentoDaEmpresa.ValidarSugestao(new SugestaoDeContextoV1("projeto", "stack", "x")));
+        Assert.NotEmpty(RegrasDoConhecimentoDaEmpresa.ValidarSugestao(null));
+    }
 }

@@ -289,7 +289,15 @@ export const api = {
 
   // O contexto por nível (US #550): as chaves contexto.<tema> das mesmas convenções. As de quem consulta (a da empresa
   // e a dele — o que o dev.kit lê sem time) e as equipes conhecidas.
-  minhasConvencoes: (token: string) => chamar<ConvencaoDaEmpresa[]>('/api/empresa/convencoes', { token }),
+  // Com ?origem=todas (US #663): as regras e as sugestões dos agentes, cada uma com o id, a origem e a versão.
+  minhasConvencoes: (token: string) => chamar<ConvencaoDaEmpresa[]>('/api/empresa/convencoes?origem=todas', { token }),
+
+  // A sugestão do agente (US #663): promover a regra (com a versão lida; outra é 409) e descartar.
+  promoverContexto: (token: string, id: number, versaoEsperada: number | null | undefined) =>
+    chamar<ConvencaoDaEmpresa>(`/api/empresa/contexto/${id}/promover`, { metodo: 'POST', corpo: { versaoEsperada: versaoEsperada ?? null }, token }),
+
+  descartarContexto: (token: string, id: number) =>
+    chamar<ConvencaoDaEmpresa>(`/api/empresa/contexto/${id}`, { metodo: 'DELETE', token }),
 
   equipesDaEmpresa: (token: string) => chamar<string[]>('/api/empresa/equipes', { token }),
 
@@ -302,6 +310,12 @@ export const api = {
 
   gravarConvencaoDoAdmin: (token: string, empresa: number, nivel: NivelDeConvencao, chave: string, valor: string, time: string, usuario: string) =>
     chamar<ConvencaoDaEmpresa>(`/api/empresas/${empresa}/convencoes`, { metodo: 'PUT', corpo: { nivel, chave, valor, time, usuario }, token }),
+
+  promoverContextoDoAdmin: (token: string, empresa: number, id: number, versaoEsperada: number | null | undefined) =>
+    chamar<ConvencaoDaEmpresa>(`/api/empresas/${empresa}/contexto/${id}/promover`, { metodo: 'POST', corpo: { versaoEsperada: versaoEsperada ?? null }, token }),
+
+  descartarContextoDoAdmin: (token: string, empresa: number, id: number) =>
+    chamar<ConvencaoDaEmpresa>(`/api/empresas/${empresa}/contexto/${id}`, { metodo: 'DELETE', token }),
 
   // A compra individual (US #425): o checkout leva ao gateway (ou ao simulado, sem gateway configurado).
   checkout: (email: string, nome: string, plano: string) =>

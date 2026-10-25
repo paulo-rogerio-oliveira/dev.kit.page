@@ -449,6 +449,29 @@ convenções da #491 — a tabela `ConvencoesDaEmpresa`, o contrato `ConvencaoV1
 - No dev.kit, a composição é a do `ContextoDoDevKit` (empresa → equipe → usuário; num tema em conflito, vale o mais
   específico), que entra no arquivo de regras de toda task.
 
+**Regra do usuário × Sugestão do agente (US #663).** O que a PESSOA escreve no contexto é REGRA para o agente; o que o
+agente do dev.kit registra ao concluir uma task (`devcli contexto --sugerir`) é SUGESTÃO — consulta, nunca obrigação —
+até alguém com o papel da camada promovê-la.
+- **A origem na mesma tabela.** `ConvencaoDaEmpresa` ganhou `Origem` (`usuario` | `agente`) e `Versao` (sobe a cada
+  gravação), e o índice único passou a incluir a origem: a regra e a sugestão do mesmo tema coexistem. Migration
+  `Us663OrigemDoContexto` (só acrescenta; o que existia virou regra na versão 1) e `api/scripts/sqlserver/Us663.sql`.
+- **Contrato compatível.** `ConvencaoV1` ganhou, no fim e opcionais, `Id`, `Origem` e `Versao`. `GET
+  /api/empresa/convencoes` continua devolvendo SÓ as regras (o dev.kit instalado leria a sugestão como regra); com
+  `?origem=todas`, as duas. A auditoria (`/todas`) traz as duas.
+- **As rotas novas** (`EndpointsDaUs663.cs`): `POST /api/empresa/contexto/sugestoes` (`SugestaoDeContextoV1`; a origem
+  é SEMPRE agente, o corpo não a escolhe; idempotente pelo autor+tema+texto — o reenvio da fila offline do dev.kit não
+  sobe a versão), `POST /api/empresa/contexto/{id}/promover` (`PromocaoDeContextoV1.VersaoEsperada`; outra → 409) e
+  `DELETE /api/empresa/contexto/{id}`; as mesmas do admin em `/api/empresas/{id}/contexto/*`, no mesmo serviço.
+- **Quem pode, em regras puras** (`RegrasDoConhecimentoDaEmpresa`): `PodeSugerir` (toda camada que o usuário vê; no
+  nível usuário, só o próprio), `PodePromover` (= `PodeGravar` da camada) e `PodeDescartar` (quem grava a camada, ou
+  o autor da sugestão). Só o contexto aceita sugestão: `branch.*` continua só regra. Promover grava (ou sobrescreve) a
+  regra do tema na camada e remove a sugestão num `SaveChanges` só.
+- **Segredo barrado.** `RegrasDosRelatos.ContemSegredo` usa os MESMOS padrões da máscara dos relatos (que ganhou a
+  chave privada): toda gravação de contexto, regra ou sugestão, com segredo é 422, sem ecoar o valor.
+- **As telas**: o `EditorDeContexto` mostra, em cada nível, a parte **Regra (do usuário)** e a **Sugestão (do
+  agente)** — só leitura, com autor e data, os botões **Promover a regra** (de quem edita o nível) e **Descartar** (a
+  API aceita de quem edita ou do autor) e o aviso quando o tema já tem regra (a regra prevalece).
+
 **Relatos dos usuários (US #602).** O defeito, a sugestão ou a dúvida que o usuário manda pelo dev.kit (a ação Relatar
 e o `devcli relatar`) chega em `POST /api/relatos` (qualquer usuário logado; o usuário e a empresa vêm das claims do
 JWT, nunca do corpo) e devolve 201 com `{id, estado, recebidoEm}`. O envio tem limite POR USUÁRIO
@@ -510,7 +533,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #669, `Us669.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de

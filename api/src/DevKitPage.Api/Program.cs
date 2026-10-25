@@ -49,6 +49,7 @@ app.MapearCatalogos();
 app.MapearConta();
 app.MapearConhecimentoDaEmpresa();
 app.MapearContextoPorNivel();
+app.MapearOrigemDoContexto();
 app.MapearRelatos();
 app.MapearDesign();
 app.MapearLicencas();

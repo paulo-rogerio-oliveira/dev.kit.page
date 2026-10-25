@@ -39,8 +39,10 @@ public static class EndpointsDaUs491
                 ? Results.Problem("Informe a origem do repositório a remover (?origem=).", statusCode: StatusCodes.Status400BadRequest)
                 : EndpointsDaUs425.Resultado(await conhecimento.RemoverRepositorioAsync(escopo, origem, ct))));
 
-        grupo.MapGet("/convencoes", (string? time, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
-            => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.ConvencoesAsync(escopo, time, ct))));
+        // Sem ?origem, só as REGRAS (o dev.kit anterior à US #663 leria a sugestão como regra); ?origem=todas traz as duas.
+        grupo.MapGet("/convencoes", (string? time, string? origem, ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
+            => EndpointsDaUs425.ComEmpresa(quem, async escopo => Results.Ok(await conhecimento.ConvencoesAsync(
+                escopo, time, string.Equals(origem?.Trim(), OrigensDeConvencao.Todas, StringComparison.OrdinalIgnoreCase), ct))));
 
         // A AUDITORIA do site: todas as que quem consulta pode ver, com o autor e a data.
         grupo.MapGet("/convencoes/todas", (ClaimsPrincipal quem, IConhecimentoDaEmpresa conhecimento, CancellationToken ct)
@@ -50,9 +52,10 @@ public static class EndpointsDaUs491
             => EndpointsDaUs425.ComEmpresa(quem, async escopo =>
             {
                 var problema = RegrasDoConhecimentoDaEmpresa.ValidarConvencao(convencao);
-                return problema.Length > 0
-                    ? Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest)
-                    : EndpointsDaUs425.Resultado(await conhecimento.GravarConvencaoAsync(escopo, convencao!, ct));
+                if (problema.Length > 0)
+                    return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
+                return EndpointsDaUs663.SegredoNoContexto(convencao!.Chave, convencao.Valor)
+                    ?? EndpointsDaUs425.Resultado(await conhecimento.GravarConvencaoAsync(escopo, convencao, ct));
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
     }
 }

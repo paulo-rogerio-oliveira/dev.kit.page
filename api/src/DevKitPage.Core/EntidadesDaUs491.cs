@@ -1,3 +1,5 @@
+using DevKitPage.Contracts.V1;
+
 namespace DevKitPage.Core;
 
 /// <summary>
@@ -50,6 +52,16 @@ public sealed class ConvencaoDaEmpresa
 
     public string Chave { get; set; } = string.Empty;
     public string Valor { get; set; } = string.Empty;
+
+    /// <summary>
+    /// De quem é o texto (US #663): <c>usuario</c> — a REGRA, escrita por pessoa — ou <c>agente</c> — a SUGESTÃO que um
+    /// agente do dev.kit registrou (<see cref="OrigensDeConvencao"/>). A regra e a sugestão do mesmo tema coexistem.
+    /// </summary>
+    public string Origem { get; set; } = OrigensDeConvencao.Usuario;
+
+    /// <summary>Sobe a cada gravação (US #663): a promoção com a versão velha é conflito.</summary>
+    public int Versao { get; set; } = 1;
+
     public int AutorId { get; set; }
     public Usuario? Autor { get; set; }
     public DateTime AtualizadoEmUtc { get; set; }

@@ -5,7 +5,7 @@ import { Avatar } from '../componentes/Avatar';
 import { BarraDeUso } from '../componentes/BarraDeUso';
 import { BotaoCopiar } from '../componentes/BotaoCopiar';
 import { ContextoPorNivel, type GravarContexto, type UsuarioDoContexto } from '../componentes/ContextoPorNivel';
-import { temaDa } from '../componentes/EditorDeContexto';
+import { temaDa, type AcaoNaSugestao } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
@@ -221,18 +221,30 @@ function ContextoDaEmpresa({ empresa, token, tratar, aoFechar }: {
     void carregar();
   }, [carregar]);
 
-  const gravar: GravarContexto = async (nivel, chave, valor, time, usuario) => {
+  /** Roda uma escrita do admin: grava, avisa e recarrega (também na falha: o 409 mostra a versão do servidor). */
+  async function escrever(acao: () => Promise<unknown>, mensagem: string) {
     setAviso('');
     try {
-      await api.gravarConvencaoDoAdmin(token, empresa.id, nivel, chave, valor, time, usuario);
-      setAviso(valor ? `Tema ${temaDa(chave)} gravado.` : `Tema ${temaDa(chave)} removido.`);
+      await acao();
+      setAviso(mensagem);
       await carregar();
       return true;
     } catch (falha) {
       tratar(falha);
+      await carregar();
       return false;
     }
-  };
+  }
+
+  const gravar: GravarContexto = (nivel, chave, valor, time, usuario) =>
+    escrever(() => api.gravarConvencaoDoAdmin(token, empresa.id, nivel, chave, valor, time, usuario),
+      valor ? `Tema ${temaDa(chave)} gravado.` : `Tema ${temaDa(chave)} removido.`);
+
+  const promover: AcaoNaSugestao = (c) =>
+    escrever(() => api.promoverContextoDoAdmin(token, empresa.id, c.id!, c.versao), `Sugestão ${temaDa(c.chave)} promovida a regra.`);
+
+  const descartar: AcaoNaSugestao = (c) =>
+    escrever(() => api.descartarContextoDoAdmin(token, empresa.id, c.id!), `Sugestão ${temaDa(c.chave)} descartada.`);
 
   return (
     <PainelLateral id="titulo-contexto-da-empresa" titulo={`Contexto de ${empresa.nome}`}>
@@ -241,7 +253,8 @@ function ContextoDaEmpresa({ empresa, token, tratar, aoFechar }: {
       {!dados ? (
         <p className="carregando" role="status">Carregando…</p>
       ) : (
-        <ContextoPorNivel key={empresa.id} convencoes={dados.convencoes} equipes={dados.equipes} podeGerir usuarios={dados.usuarios} aoGravar={gravar} />
+        <ContextoPorNivel key={empresa.id} convencoes={dados.convencoes} equipes={dados.equipes} podeGerir usuarios={dados.usuarios} aoGravar={gravar}
+          aoPromover={promover} aoDescartar={descartar} />
       )}
     </PainelLateral>
   );

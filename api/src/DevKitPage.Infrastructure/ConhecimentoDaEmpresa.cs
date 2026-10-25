@@ -77,10 +77,11 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         return new(Resumo(repositorio));
     }
 
-    public async Task<IReadOnlyList<ConvencaoV1>> ConvencoesAsync(EscopoDaEmpresa escopo, string? time, CancellationToken ct)
+    public async Task<IReadOnlyList<ConvencaoV1>> ConvencoesAsync(EscopoDaEmpresa escopo, string? time, bool comSugestoes, CancellationToken ct)
     {
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
         var convencoes = await Da(escopo)
+            .Where(c => comSugestoes || c.Origem == OrigensDeConvencao.Usuario)
             .Where(c => c.Nivel == NiveisDeConvencao.Empresa
                 || (doTime.Length > 0 && c.Nivel == NiveisDeConvencao.Time && c.Time == doTime)
                 || (c.Nivel == NiveisDeConvencao.Usuario && c.UsuarioId == escopo.UsuarioId))
@@ -128,8 +129,10 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
                 ? "Só o gestor grava as convenções da empresa; a de um time, qualquer um da empresa grava."
                 : "Só o gestor grava o contexto da empresa e o das equipes.");
 
+        // A gravação daqui é sempre a REGRA (US #663): a sugestão do mesmo tema é outra linha, e fica.
         var existente = await db.ConvencoesDaEmpresa.FirstOrDefaultAsync(
-            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave, ct);
+            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave
+                && c.Origem == OrigensDeConvencao.Usuario, ct);
 
         if (valor.Length == 0)
         {
@@ -145,11 +148,12 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
 
         if (existente is null)
         {
-            existente = new ConvencaoDaEmpresa { EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, UsuarioId = usuario, Chave = chave };
+            existente = new ConvencaoDaEmpresa { EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, UsuarioId = usuario, Chave = chave, Versao = 0 };
             db.ConvencoesDaEmpresa.Add(existente);
         }
 
         existente.Valor = valor;
+        existente.Versao++;
         existente.AutorId = escopo.UsuarioId;
         existente.AtualizadoEmUtc = relogio.GetUtcNow().UtcDateTime;
 
@@ -165,6 +169,121 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
         await db.Entry(existente).Reference(c => c.Autor).LoadAsync(ct);
         return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
     }
+
+    public async Task<ResultadoDaGestao<ConvencaoV1>> SugerirAsync(EscopoDaEmpresa escopo, SugestaoDeContextoV1 sugestao, CancellationToken ct)
+    {
+        var nivel = sugestao.Camada!.Trim().ToLowerInvariant();
+        var chave = RegrasDoConhecimentoDaEmpresa.ChaveDoTema(sugestao.Tema);
+        var time = nivel == NiveisDeConvencao.Time ? RegrasDoConhecimentoDaEmpresa.NormalizarTime(sugestao.Time) : string.Empty;
+        var texto = sugestao.Texto!.Trim();
+        var usuario = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
+
+        if (!RegrasDoConhecimentoDaEmpresa.PodeSugerir(escopo, nivel, usuario))
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "A sugestão no nível usuário é só no do próprio usuário.");
+
+        // A linha da SUGESTÃO, ao lado da regra do mesmo tema (o índice único inclui a origem): a regra nunca é tocada.
+        var existente = await db.ConvencoesDaEmpresa.Include(c => c.Autor).FirstOrDefaultAsync(
+            c => c.EmpresaId == escopo.EmpresaId && c.Nivel == nivel && c.Time == time && c.UsuarioId == usuario && c.Chave == chave
+                && c.Origem == OrigensDeConvencao.Agente, ct);
+
+        // Idempotente: o reenvio da fila offline do dev.kit (a mesma sugestão do mesmo autor) não sobe a versão.
+        if (existente is not null && existente.AutorId == escopo.UsuarioId && existente.Valor == texto)
+            return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
+
+        if (existente is null)
+        {
+            existente = new ConvencaoDaEmpresa
+            {
+                EmpresaId = escopo.EmpresaId, Nivel = nivel, Time = time, UsuarioId = usuario, Chave = chave,
+                Origem = OrigensDeConvencao.Agente, Versao = 0,
+            };
+            db.ConvencoesDaEmpresa.Add(existente);
+        }
+
+        existente.Valor = texto;
+        existente.Versao++;
+        existente.AutorId = escopo.UsuarioId;
+        existente.AtualizadoEmUtc = relogio.GetUtcNow().UtcDateTime;
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Conflito, $"A sugestão '{chave}' acabou de ser gravada por outro agente. Envie de novo.");
+        }
+
+        await db.Entry(existente).Reference(c => c.Autor).LoadAsync(ct);
+        return new((await ParaLeituraAsync(new[] { existente }, ct))[0]);
+    }
+
+    public async Task<ResultadoDaGestao<ConvencaoV1>> PromoverAsync(EscopoDaEmpresa escopo, long id, int? versaoEsperada, CancellationToken ct)
+    {
+        var sugestao = await SugestaoVisivelAsync(escopo, id, ct);
+        if (sugestao is null)
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.NaoEncontrado, "A sugestão não existe mais (alguém a promoveu ou descartou).");
+        if (!RegrasDoConhecimentoDaEmpresa.PodePromover(escopo, sugestao.Nivel, sugestao.Chave, sugestao.UsuarioId))
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "Só quem grava a regra desta camada promove a sugestão.");
+        if (versaoEsperada is { } esperada && esperada != sugestao.Versao)
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Conflito,
+                "A sugestão mudou depois que você a leu (outro agente a reescreveu). Confira o texto novo e promova de novo.");
+
+        var regra = await db.ConvencoesDaEmpresa.FirstOrDefaultAsync(
+            c => c.EmpresaId == sugestao.EmpresaId && c.Nivel == sugestao.Nivel && c.Time == sugestao.Time && c.UsuarioId == sugestao.UsuarioId
+                && c.Chave == sugestao.Chave && c.Origem == OrigensDeConvencao.Usuario, ct);
+        if (regra is null)
+        {
+            regra = new ConvencaoDaEmpresa
+            {
+                EmpresaId = sugestao.EmpresaId, Nivel = sugestao.Nivel, Time = sugestao.Time, UsuarioId = sugestao.UsuarioId,
+                Chave = sugestao.Chave, Origem = OrigensDeConvencao.Usuario, Versao = 0,
+            };
+            db.ConvencoesDaEmpresa.Add(regra);
+        }
+
+        // Numa transação só (um SaveChanges): a regra passa a ter o texto da sugestão, e a sugestão sai.
+        regra.Valor = sugestao.Valor;
+        regra.Versao++;
+        regra.AutorId = escopo.UsuarioId;
+        regra.AtualizadoEmUtc = relogio.GetUtcNow().UtcDateTime;
+        db.ConvencoesDaEmpresa.Remove(sugestao);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Conflito, $"A regra '{sugestao.Chave}' acabou de ser gravada por outra pessoa. Promova de novo.");
+        }
+
+        await db.Entry(regra).Reference(c => c.Autor).LoadAsync(ct);
+        return new((await ParaLeituraAsync(new[] { regra }, ct))[0]);
+    }
+
+    public async Task<ResultadoDaGestao<ConvencaoV1>> DescartarAsync(EscopoDaEmpresa escopo, long id, CancellationToken ct)
+    {
+        var sugestao = await SugestaoVisivelAsync(escopo, id, ct);
+        if (sugestao is null)
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.NaoEncontrado, "A sugestão não existe mais (alguém a promoveu ou descartou).");
+        if (!RegrasDoConhecimentoDaEmpresa.PodeDescartar(escopo, sugestao.Nivel, sugestao.Chave, sugestao.UsuarioId, sugestao.AutorId))
+            return ResultadoDaGestao<ConvencaoV1>.Falhou(FalhaNaGestao.Proibida, "Só quem grava a regra desta camada, ou o autor da sugestão, a descarta.");
+
+        var lida = (await ParaLeituraAsync(new[] { sugestao }, ct))[0];
+        db.ConvencoesDaEmpresa.Remove(sugestao);
+        await db.SaveChangesAsync(ct);
+        return new(lida);
+    }
+
+    /// <summary>
+    /// A sugestão <paramref name="id"/> da empresa do escopo que quem pede pode ver: a de nível usuário só o dono, o
+    /// gestor e o admin a veem (como na auditoria). A regra, a de outra empresa ou a invisível não são achadas.
+    /// </summary>
+    private Task<ConvencaoDaEmpresa?> SugestaoVisivelAsync(EscopoDaEmpresa escopo, long id, CancellationToken ct)
+        => db.ConvencoesDaEmpresa.Include(c => c.Autor).FirstOrDefaultAsync(
+            c => c.Id == id && c.EmpresaId == escopo.EmpresaId && c.Origem == OrigensDeConvencao.Agente
+                && (escopo.EhGestor || escopo.EhAdmin || c.Nivel != NiveisDeConvencao.Usuario || c.UsuarioId == escopo.UsuarioId), ct);
 
     public async Task<IReadOnlyList<string>> EquipesAsync(EscopoDaEmpresa escopo, CancellationToken ct)
         => await db.ConvencoesDaEmpresa.AsNoTracking()
@@ -188,7 +307,8 @@ public sealed class ConhecimentoDaEmpresa(DevKitPageDb db, TimeProvider relogio)
             c.Nivel, c.Chave, c.Valor, c.Time,
             c.UsuarioId > 0 ? nomes.GetValueOrDefault(c.UsuarioId, string.Empty) : string.Empty,
             Nome(c.Autor),
-            DevKitPageDb.Utc(c.AtualizadoEmUtc))).ToArray();
+            DevKitPageDb.Utc(c.AtualizadoEmUtc),
+            c.Id, c.Origem, c.Versao)).ToArray();
     }
 
     private static string Nome(Usuario? usuario) => usuario is null ? string.Empty : usuario.Nome.Length > 0 ? usuario.Nome : usuario.Login;

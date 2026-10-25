@@ -450,7 +450,16 @@ export interface ConvencaoDaEmpresa {
   /** Quem a gravou por último. */
   autor: string;
   atualizadoEm: string | null;
+  /** O id da linha (US #663): é por ele que se promove ou descarta a sugestão. */
+  id?: number | null;
+  /** De quem é o texto (US #663): a REGRA do usuário ou a SUGESTÃO do agente. Ausente na API antiga: regra. */
+  origem?: OrigemDoContexto | null;
+  /** A versão da linha (US #663); a promoção a confere (outra → 409). */
+  versao?: number | null;
 }
+
+/** A origem de um tema do contexto (US #663): o usuário escreve REGRA; o agente registra SUGESTÃO. */
+export type OrigemDoContexto = 'usuario' | 'agente';
 
 /** A resposta da adesão e do pedido de link: a mensagem (o link vai por e-mail). */
 export interface Mensagem {

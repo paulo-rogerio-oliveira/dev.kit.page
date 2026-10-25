@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { renderizar } from '../testes/renderizar';
-import { escritas, tokenDoDev, tokenDoGestor, tokenValido } from '../testes/servidor';
+import { escritas, sugestoesDaEmpresa, tokenDoDev, tokenDoGestor, tokenValido } from '../testes/servidor';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -132,6 +132,46 @@ describe('Repositórios e convenções da empresa (US #491)', () => {
     expect(screen.queryByRole('form')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Editar o tema/ })).not.toBeInTheDocument();
     expect(screen.getByText(/Só o gestor edita o da empresa e o das equipes\./)).toBeInTheDocument();
+    // US #663: a sugestão do agente aparece à parte; o dev não promove, mas pode descartar (a API confere o autor).
+    const sugestoes = within(empresa).getByRole('list', { name: 'Contexto da empresa — sugestões do agente' });
+    expect(within(sugestoes).getByText('Rode o lint antes do PR.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Promover a regra/ })).not.toBeInTheDocument();
+    expect(within(sugestoes).getByRole('button', { name: 'Descartar a sugestão testes' })).toBeInTheDocument();
+  });
+
+  it('aba Contexto (US #663): o gestor promove a sugestão do agente com a versão lida, e o 409 aparece como conflito', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/empresa/conhecimento?aba=contexto', tokenDoGestor());
+
+    const empresa = await screen.findByRole('region', { name: 'Empresa' });
+    expect(within(empresa).getByRole('heading', { name: 'Regra (do usuário)' })).toBeInTheDocument();
+    expect(within(empresa).getByRole('heading', { name: 'Sugestão (do agente)' })).toBeInTheDocument();
+    await userEvent.click(within(empresa).getByRole('button', { name: 'Promover a regra a sugestão testes' }));
+
+    expect(await screen.findByText('Sugestão testes promovida a regra.')).toBeInTheDocument();
+    expect(escritas).toContainEqual({ metodo: 'POST', caminho: '/api/empresa/contexto/101/promover', corpo: { versaoEsperada: 1 } });
+
+    // A equipe "vendas" tem a sugestão na versão 2; uma leitura velha (versão 1) recebe o conflito.
+    sugestoesDaEmpresa[1].versao = 1;
+    try {
+      const equipe = screen.getByRole('region', { name: 'Equipe' });
+      await userEvent.click(within(equipe).getByRole('button', { name: 'Promover a regra a sugestão stack' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('A sugestão mudou depois que você a leu');
+    } finally {
+      sugestoesDaEmpresa[1].versao = 2;
+    }
+  });
+
+  it('aba Contexto (US #663): descartar tira só a sugestão', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/empresa/conhecimento?aba=contexto', tokenDoGestor());
+
+    const empresa = await screen.findByRole('region', { name: 'Empresa' });
+    await userEvent.click(within(empresa).getByRole('button', { name: 'Descartar a sugestão testes' }));
+
+    expect(await screen.findByText('Sugestão testes descartada.')).toBeInTheDocument();
+    expect(escritas).toContainEqual({ metodo: 'DELETE', caminho: '/api/empresa/contexto/101', corpo: null });
+    expect(escritas.some((e) => e.metodo === 'PUT')).toBe(false);
   });
 
   it('a aba Convenções não mistura o contexto', async () => {
