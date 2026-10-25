@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using DevKitPage.Contracts.V1;
 
 namespace DevKitPage.Core;
@@ -13,8 +14,23 @@ public sealed record SkillDoCatalogo(
     bool IsCommand, bool IsBackground, bool IsPinned);
 
 /// <summary>Um Tech Plan no formato do dev.kit (o <c>TechPlan</c> do git.kit, sem o Id).</summary>
+/// <param name="Stack">
+/// (US #687) As stacks da Rule (<c>vb6, dotnet</c>) — o campo da US #657 do git.kit, que o site perdia ao regravar. Só vai
+/// ao arquivo quando existe: a Rule sem stack sai byte a byte como antes, e o hash dela no manifesto não muda.
+/// </param>
+/// <param name="Tipo">(US #687) O tipo da Rule (<c>impacto</c>, a da US #675), com a mesma regra da stack.</param>
 public sealed record PlanDoCatalogo(
-    string Key, string Description, string Content, string Repository, bool OnlyWithWorkItem, bool IsRequired, bool IsAgentInstruction);
+    string Key, string Description, string Content, string Repository, bool OnlyWithWorkItem, bool IsRequired, bool IsAgentInstruction,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Stack = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tipo = null)
+{
+    /// <summary>O tipo da Rule de impacto (o <c>TechPlan.TipoImpacto</c> do git.kit).</summary>
+    public const string TipoImpacto = "impacto";
+
+    /// <summary>A Rule de impacto do negócio do cliente: nunca vai no catálogo básico. Fora do arquivo (é derivada do tipo).</summary>
+    [JsonIgnore]
+    public bool EhImpacto => string.Equals(Tipo, TipoImpacto, StringComparison.Ordinal);
+}
 
 /// <summary>
 /// Os FORMATOS de arquivo do catálogo (US #461) — o porte, para o site, do que o git.kit grava e lê: o <c>SkillJson</c>, o
@@ -97,10 +113,16 @@ public static class FormatosDoCatalogo
         if (conteudo.Trim().Length == 0)
             throw new FormatException($"A Rule \"{descricao}\" veio sem conteúdo (campo \"content\").");
 
+        // A stack e o tipo (US #687) como o TechPlanJson.Read os lê: a stack normalizada (StacksDoClone), o tipo em
+        // minúsculas; vazios são nulos — e não vão ao arquivo.
+        var stack = string.Join(", ", Texto(raiz, "stack").Split([',', ';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => !s.StartsWith('#')).Select(s => s.ToLowerInvariant()).Distinct());
+        var tipo = Texto(raiz, "tipo").Trim().ToLowerInvariant();
         return new PlanDoCatalogo(
             Texto(raiz, "key").Trim() is { Length: > 0 } chave ? chave : ChaveDe(descricao), descricao,
             conteudo.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd(), Texto(raiz, "repository").Trim(),
-            Flag(raiz, "onlyWithWorkItem"), Flag(raiz, "isRequired"), Flag(raiz, "isAgentInstruction"));
+            Flag(raiz, "onlyWithWorkItem"), Flag(raiz, "isRequired"), Flag(raiz, "isAgentInstruction"),
+            stack.Length > 0 ? stack : null, tipo.Length > 0 ? tipo : null);
     }
 
     /// <summary>A chave fixa do plano: a dele, ou a derivada da descrição (o <c>TechPlanKeys.Do</c>).</summary>

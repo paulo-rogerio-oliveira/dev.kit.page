@@ -18,6 +18,8 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await page.getByLabel('Senha').fill(NOVA_SENHA);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await page.getByRole('link', { name: 'Usuários' }).click();
+  // Desde a US #687 o painel lateral abre pelo "+ Novo usuário" do título (ele também mostra a licença de um usuário).
+  await page.getByRole('button', { name: '+ Novo usuário' }).click();
   await expect(page.getByRole('heading', { name: 'Novo usuário' })).toBeVisible();
 
   // 2. Cria o dev pelo painel lateral (US #461): a senha temporária aparece uma vez.
@@ -40,7 +42,7 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await page.getByRole('searchbox', { name: 'Buscar por nome ou login' }).fill(login);
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2);
   await page.getByRole('button', { name: `Ações de ${login}` }).click();
-  await expect(page.getByRole('menu', { name: `Ações de ${login}` }).getByRole('menuitem')).toHaveText(['Editar', 'Bloquear', 'Redefinir senha']);
+  await expect(page.getByRole('menu', { name: `Ações de ${login}` }).getByRole('menuitem')).toHaveText(['Licença', 'Editar', 'Bloquear', 'Redefinir senha']);
   await page.screenshot({ path: 'test-results/capturas/21-usuarios-menu-da-linha.png', fullPage: true });
   await page.keyboard.press('Escape');
 
@@ -67,7 +69,7 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await expect(page.getByRole('link', { name: 'Baixar o dev.kit' })).toBeVisible();
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sua conta');
-  await expect(page.getByRole('heading', { name: 'Quantidade de uso' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Saúde agora' })).toHaveCount(0);
 
   // A API confirma: a senha antiga não entra mais, a nova entra sem troca pendente, e o painel é 403.
   expect((await request.post(`${API}/api/auth/login`, { data: { login, senha: temporaria } })).status()).toBe(401);

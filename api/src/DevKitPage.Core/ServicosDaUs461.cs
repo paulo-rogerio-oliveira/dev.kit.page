@@ -80,7 +80,40 @@ public interface IGestaoDeCatalogos
     /// continuar (<c>catalogo-v(N+1)</c>).
     /// </summary>
     Task<ImportacaoDoBasicoV1> ImportarBasicoAsync(string autor, CancellationToken ct);
+
+    // ----- US #687: a edição de artefato -----
+
+    /// <summary>
+    /// Os itens de TODOS os catálogos (sem o conteúdo), com o catálogo e o escopo de cada um — a lista do editor. A busca
+    /// procura no nome, na descrição e no CONTEÚDO (sem diferenciar maiúsculas); o tipo e o escopo filtram.
+    /// </summary>
+    Task<IReadOnlyList<ItemEditavelV1>> TodosOsItensAsync(string? busca, string? tipo, string? escopo, CancellationToken ct);
+
+    /// <summary>As diferenças do rascunho com a versão publicada, no texto que o editor mostra.</summary>
+    Task<ResultadoDaGestao<DiferencasDoItemV1>> DiferencasAsync(string slug, long id, CancellationToken ct);
+
+    /// <summary>O histórico do item: os rascunhos, descartes e retiradas, e cada versão que uma release publicou.</summary>
+    Task<ResultadoDaGestao<IReadOnlyList<HistoricoDoItemV1>>> HistoricoAsync(string slug, long id, CancellationToken ct);
+
+    /// <summary>
+    /// Descarta o rascunho: o item publicado volta ao conteúdo da última release (e deixa de ser retirada pendente); o que
+    /// nunca foi publicado é apagado — o resultado volta sem valor e sem falha.
+    /// </summary>
+    Task<ResultadoDaGestao<ItemEditavelV1>> DescartarRascunhoAsync(string slug, long id, string autor, CancellationToken ct);
+
+    Task<ResultadoDaGestao<IReadOnlyList<AnexoDoItemV1>>> AnexosAsync(string slug, long id, CancellationToken ct);
+
+    /// <summary>Anexa um arquivo ao item (até <see cref="AnexosDoItem.TamanhoMaximo"/>, no máximo <see cref="AnexosDoItem.MaximoPorItem"/>).</summary>
+    Task<ResultadoDaGestao<AnexoDoItemV1>> AnexarAsync(string slug, long id, string nome, string tipoDeConteudo, byte[] conteudo, string autor, CancellationToken ct);
+
+    /// <summary>O arquivo de um anexo; nulo quando ele (ou o item) não existe.</summary>
+    Task<AnexoBaixado?> AnexoAsync(string slug, long id, long anexoId, CancellationToken ct);
+
+    Task<ResultadoDaGestao<AnexoDoItemV1>> RemoverAnexoAsync(string slug, long id, long anexoId, CancellationToken ct);
 }
+
+/// <summary>O arquivo de um anexo para o download.</summary>
+public sealed record AnexoBaixado(string Nome, string TipoDeConteudo, byte[] Conteudo);
 
 /// <summary>
 /// A PUBLICAÇÃO e a DISTRIBUIÇÃO dos catálogos (US #461): o manifesto gerado pela regra do git.kit, o fechamento das

@@ -99,10 +99,31 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
 {
     public async Task<IReadOnlyList<UsuarioResumo>> ListarAsync(CancellationToken ct)
     {
-        var agora = relogio.GetUtcNow().UtcDateTime;
+        var agora = relogio.GetUtcNow();
+        var usos = await UltimosUsosAsync(db, null, ct);
         return (await db.Usuarios.AsNoTracking().Include(u => u.Empresa).OrderBy(u => u.Login).ToListAsync(ct))
-            .Select(u => Resumo(u, agora))
+            .Select(u => Resumo(u, agora, usos.GetValueOrDefault(u.Id)))
             .ToArray();
+    }
+
+    /// <summary>
+    /// A última renovação do dev.kit de cada usuário (ou só de um) — o "último uso" da licença (US #687), da trilha das
+    /// licenças emitidas: nada novo é gravado para isto.
+    /// </summary>
+    internal static async Task<Dictionary<int, DateTime>> UltimosUsosAsync(DevKitPageDb db, int? usuarioId, CancellationToken ct)
+        => await db.LicencasEmitidas.AsNoTracking()
+            .Where(l => l.UsuarioId != null && (usuarioId == null || l.UsuarioId == usuarioId))
+            .GroupBy(l => l.UsuarioId!.Value)
+            .Select(g => new { Usuario = g.Key, Ultima = g.Max(l => l.EmitidaEmUtc) })
+            .ToDictionaryAsync(x => x.Usuario, x => x.Ultima, ct);
+
+    /// <summary>A licença do usuário como o contrato v1 a leva (US #687): a regra do Core, a situação e o último uso.</summary>
+    internal static LicencaDoUsuarioV1 Licenca(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
+    {
+        var licenca = RegrasDeLicenca.Licenca(u, u.Empresa);
+        var (situacao, dias) = RegrasDeLicenca.Situacao(licenca, agora);
+        return new LicencaDoUsuarioV1(licenca.Tipo, situacao, licenca.ValidaAte, dias, DevKitPageDb.Utc(u.CriadoEmUtc), licenca.DefinidaPeloAdmin,
+            ultimoUso is { } uso ? DevKitPageDb.Utc(uso) : null);
     }
 
     public async Task<ResultadoDaGestao<UsuarioComSenha>> CriarAsync(UsuarioNovo novo, CancellationToken ct)
@@ -208,11 +229,13 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
         => empresaId is { } id && !await db.Empresas.AnyAsync(e => e.Id == id, ct);
 
     private async Task<UsuarioResumo> ResumoAsync(int id, CancellationToken ct)
-        => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow().UtcDateTime);
+        => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow(),
+            (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id));
 
-    private static UsuarioResumo Resumo(Usuario u, DateTime agora)
+    private static UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
         => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
-            u.BloqueadoAteUtc is { } ate && ate > agora ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc));
+            u.BloqueadoAteUtc is { } ate && ate > agora.UtcDateTime ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc),
+            Licenca(u, agora, ultimoUso));
 }
 
 /// <summary>

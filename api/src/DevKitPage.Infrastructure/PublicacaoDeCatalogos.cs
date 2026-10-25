@@ -192,6 +192,9 @@ public sealed class PublicacaoDeCatalogos(DevKitPageDb db, IArmazemDePacotes arm
                 var (conferido, erro) = RegrasDosCatalogos.Conferir(new ItemEditadoV1(item.Tipo, item.Conteudo, item.Categoria));
                 if (conferido is null)
                     problemas.Add($"{item.Tipo}:{item.Nome}: {erro}");
+                else if (catalogo.Basico && RegrasDosCatalogos.RuleDeImpacto(item.Tipo, item.Conteudo))
+                    // A Rule de impacto (US #687) nunca chega ao básico — nem pela edição, nem por um item gravado antes dela.
+                    problemas.Add($"{item.Tipo}:{item.Nome}: {RegrasDosCatalogos.ImpactoNoBasico}");
                 else
                     paraPublicar.Add(new ItemParaPublicar(item.Tipo, item.Nome, conferido.Dependencias, conferido.Embutidos));
             }

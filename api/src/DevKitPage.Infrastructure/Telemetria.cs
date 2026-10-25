@@ -69,6 +69,7 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
         var grupos = await AgruparErrosAsync(maquinaId, versao, novos.Where(n => n.Evento.Tipo == TiposDeEvento.ExcecaoNaoClassificada).ToList(), ct);
         await AtualizarRoisAsync(maquinaId, novos.Where(n => n.Evento.Tipo == TiposDeEvento.RoiCalculado).ToList(), ct);
         await AtualizarAvaliacoesAsync(maquinaId, novos.Where(n => n.Evento.Tipo == TiposDeEvento.EntregaAvaliada).ToList(), ct);
+        await AtualizarFotosAsync(maquinaId, eventos.Where(e => TiposDeEvento.Fotos.Contains(e.Tipo)).ToList(), ct);
 
         var maquina = await db.Maquinas.FirstAsync(m => m.Id == maquinaId, ct);
         maquina.UltimoEnvioEmUtc = agora;
@@ -252,6 +253,48 @@ public sealed class IngestaoDeTelemetria(DevKitPageDb db, TimeProvider relogio, 
             atual.EmUtc = evento.EmUtc;
             atual.Dia = evento.Dia;
             atual.EventId = evento.EventId;
+        }
+    }
+
+    /// <summary>
+    /// O upsert das FOTOS do "Saúde agora" (US #687), na MESMA transação do evento e no padrão do ROI: uma por (máquina,
+    /// tipo, chave — a sessão, o work item, a sugestão ou a máquina), e só um evento igual ou MAIS NOVO (pelo <c>em</c>) a
+    /// substitui. O evento que não identifica de quem é a foto (a amostra torta, o fechamento sem sessão nem item) conta no
+    /// total diário e não cria foto.
+    /// </summary>
+    private async Task AtualizarFotosAsync(int maquinaId, IReadOnlyCollection<EventoDeUso> eventos, CancellationToken ct)
+    {
+        var comChave = eventos
+            .Select(e => (Evento: e, Chave: RegrasDoPainelDeUtilidade.ChaveDaFoto(e.Tipo, e.SessaoId, e.Detalhe, e.Valor)))
+            .Where(x => x.Chave is not null)
+            .ToList();
+        if (comChave.Count == 0)
+            return;
+
+        var tipos = comChave.Select(x => x.Evento.Tipo).Distinct().ToList();
+        var existentes = (await db.FotosDeEstado.Where(f => f.MaquinaId == maquinaId && tipos.Contains(f.Tipo)).ToListAsync(ct))
+            .ToDictionary(f => (f.Tipo, f.Chave));
+
+        // Em ordem de instante: dentro do mesmo lote, o último também vence.
+        foreach (var (evento, chave) in comChave.OrderBy(x => x.Evento.EmUtc))
+        {
+            var id = (evento.Tipo, ValidadorDeLote.Cortar(chave!));
+            if (existentes.TryGetValue(id, out var foto))
+            {
+                if (evento.EmUtc < foto.EmUtc)
+                    continue;
+            }
+            else
+            {
+                foto = new FotoDeEstado { MaquinaId = maquinaId, Tipo = evento.Tipo, Chave = id.Item2 };
+                db.FotosDeEstado.Add(foto);
+                existentes[id] = foto;
+            }
+
+            foto.Detalhe = evento.Detalhe;
+            foto.Valor = evento.Valor;
+            foto.EmUtc = evento.EmUtc;
+            foto.EventId = evento.EventId;
         }
     }
 

@@ -31,14 +31,21 @@ async function abrirOGrupo(sessao = tokenValido()) {
 }
 
 describe('Dashboard', () => {
-  it('mostra os KPIs de quantidade e qualidade com os valores da API', async () => {
+  // US #687 (proposta admin-dashboard v008): a saúde de agora e o resultado do período, com os valores da API.
+  it('mostra a saúde de agora e o resultado do período, e a qualidade abaixo', async () => {
     renderizar('/dashboard', tokenValido());
 
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
-    expect(kpi('Sessões')).toHaveTextContent('3');
-    expect(kpi('Turnos')).toHaveTextContent('8');
-    expect(kpi('Ferramentas acionadas')).toHaveTextContent('41');
-    expect(kpi('Arquivos alterados')).toHaveTextContent('17');
+    await screen.findByRole('heading', { name: 'Saúde agora' });
+    expect(screen.getByTestId('saude-Tasks paradas sem processo')).toHaveTextContent('6+4 em 24 h');
+    expect(screen.getByRole('group', { name: 'Tasks paradas sem processo' })).toHaveTextContent('a mais antiga desde 08/10/2026');
+    expect(screen.getByTestId('saude-Perguntas esperando o dev')).toHaveTextContent('10');
+    expect(screen.getByRole('group', { name: 'Fechamentos que falharam' })).toHaveTextContent('#669 e #585');
+    expect(screen.getByRole('group', { name: 'Máquinas com recurso no limite' })).toHaveTextContent('disco 8 MB · memória 124 MB livres');
+    expect(kpi('Entregas aprovadas · integradas')).toHaveTextContent('14 · 1111 na semana');
+    expect(kpi('Aprovadas na 1ª avaliação')).toHaveTextContent('57%+9 p.p.');
+    expect(kpi('Tempo até a aprovação (mediana)')).toHaveTextContent('6h40+1h50');
+    expect(kpi('Turnos por entrega')).toHaveTextContent('17,7');
+    expect(screen.getByRole('group', { name: 'Turnos por entrega' })).toHaveTextContent('248 turnos · 63 comandos delegados · 296 arquivos');
     expect(kpi('Taxa de falha de turno')).toHaveTextContent(/25,0\s?%/);
     expect(kpi('Duração média do turno')).toHaveTextContent('42,5 s');
     expect(kpi('Nota média dos avaliadores')).toHaveTextContent('91,5');
@@ -71,7 +78,7 @@ describe('Dashboard', () => {
 
   it('os filtros de máquina e de período refazem a consulta', async () => {
     renderizar('/dashboard', tokenValido());
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    await screen.findByRole('heading', { name: 'Saúde agora' });
     // Só nas opções da Máquina: na página inteira, cada tentativa calcula o nome de todas as opções (harness, tipo do log).
     await within(screen.getByLabelText('Máquina')).findByRole('option', { name: /máquina a1b2c3d4/ });
 
@@ -91,7 +98,7 @@ describe('Dashboard', () => {
 
   it('o harness filtra o log e as exceções, e não os totais', async () => {
     renderizar('/dashboard', tokenValido());
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    await screen.findByRole('heading', { name: 'Saúde agora' });
 
     await userEvent.selectOptions(screen.getByLabelText('Harness'), 'kiro');
     await waitFor(() => {
@@ -104,7 +111,7 @@ describe('Dashboard', () => {
 
   it('o recorte do log leva o tipo e o detalhe', async () => {
     renderizar('/dashboard', tokenValido());
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    await screen.findByRole('heading', { name: 'Saúde agora' });
 
     const log = within(screen.getByRole('form', { name: 'Filtrar o log' }));
     await userEvent.selectOptions(log.getByLabelText('Tipo'), 'TurnoFalhou');
@@ -174,12 +181,27 @@ describe('Dashboard', () => {
     expect(paginas).toEqual(['1', '2']);
   });
 
-  it('mostra a quantidade de máquinas ativas e registradas (US #381)', async () => {
+  it('os turnos por dia empilham pelo desfecho, com a legenda e a tabela, e onde as tasks travam traz o selo', async () => {
     renderizar('/dashboard', tokenValido());
 
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
-    expect(kpi('Máquinas ativas')).toHaveTextContent('1');
-    expect(kpi('Máquinas registradas')).toHaveTextContent('2');
+    const grafico = await screen.findByRole('figure', { name: 'Turnos por dia, pelo desfecho' });
+    expect(within(grafico).getByRole('list', { name: 'Legenda' })).toHaveTextContent('trabalhouesperou o devlimite de usofalhou');
+    expect(within(grafico).getByRole('row', { name: '24/10 9 2 1 1' })).toBeInTheDocument();
+    const travam = screen.getByRole('figure', { name: 'Onde as tasks travam' });
+    expect(within(travam).getByRole('row', { name: /Esperou processo em segundo plano que morreu 9 sugestão #3/ })).toBeInTheDocument();
+    expect(within(travam).getByText('corrigido #568')).toHaveClass('insignia-sucesso');
+  });
+
+  it('a ação de um cartão da saúde recorta o log pelo caso', async () => {
+    renderizar('/dashboard', tokenValido());
+    const cartao = within(await screen.findByRole('group', { name: 'Tasks paradas sem processo' }));
+
+    await userEvent.click(cartao.getByRole('button', { name: 'Ver ›' }));
+
+    await waitFor(() => {
+      const eventos = ultima('/api/dashboard/eventos').searchParams;
+      expect([eventos.get('tipo'), eventos.get('detalhe')]).toEqual(['SituacaoDaTask', 'parada-sem-processo']);
+    });
   });
 
   it('sem exceção no período, diz que não há nenhuma', async () => {
@@ -247,7 +269,7 @@ describe('Dashboard', () => {
   it('o gestor filtra por colaborador, exporta o CSV e não vê os pedidos de demonstração nem Empresas', async () => {
     renderizar('/dashboard', tokenDoGestor());
 
-    await screen.findByRole('heading', { name: 'Quantidade de uso' });
+    await screen.findByRole('heading', { name: 'Saúde agora' });
     expect(screen.getByText('gestor.a · Empresa A')).toBeInTheDocument();
     const filtro = screen.getByLabelText('Colaborador');
     expect(await within(filtro).findByRole('option', { name: 'Ana Souza' })).toBeInTheDocument();

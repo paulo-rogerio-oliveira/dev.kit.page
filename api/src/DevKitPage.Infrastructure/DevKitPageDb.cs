@@ -40,9 +40,15 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ProjetoDeDesign> ProjetosDeDesign => Set<ProjetoDeDesign>();
     public DbSet<TelaDeDesign> TelasDeDesign => Set<TelaDeDesign>();
     public DbSet<VersaoDeDesign> VersoesDeDesign => Set<VersaoDeDesign>();
+    public DbSet<HistoricoDeLicenca> HistoricosDeLicenca => Set<HistoricoDeLicenca>();
+    public DbSet<FotoDeEstado> FotosDeEstado => Set<FotoDeEstado>();
+    public DbSet<HistoricoDeItemDoCatalogo> HistoricosDeItemDoCatalogo => Set<HistoricoDeItemDoCatalogo>();
+    public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigurarUs687(modelBuilder);
+
         modelBuilder.Entity<Usuario>(e =>
         {
             e.ToTable("Usuarios");
@@ -408,6 +414,73 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(p => p.Empresa).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaEmpresa);
             e.Property(p => p.Mensagem).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaMensagem);
             e.HasIndex(p => p.RecebidoEmUtc);
+        });
+    }
+
+    /// <summary>
+    /// A US #687: a licença por usuário (as colunas novas e o histórico), os dados básicos e o contrato da empresa, as fotos
+    /// do "Saúde agora" do painel e o histórico e os anexos dos itens do catálogo. No Azure SQL as tabelas e as colunas vêm
+    /// de api/scripts/sqlserver/Us687.sql.
+    /// </summary>
+    private static void ConfigurarUs687(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Usuario>(e => e.Property(u => u.LicencaTipo).HasMaxLength(20));
+
+        modelBuilder.Entity<Empresa>(e =>
+        {
+            e.Property(x => x.Cnpj).HasMaxLength(14);
+            e.Property(x => x.Segmento).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoSegmento);
+            e.Property(x => x.Cidade).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDaCidade);
+            e.Property(x => x.Uf).HasMaxLength(2);
+            e.Property(x => x.Contato).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoContato);
+            e.Property(x => x.Telefone).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoTelefone);
+            e.Property(x => x.Site).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoSite);
+            e.Property(x => x.AlteradaPor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+        });
+
+        modelBuilder.Entity<HistoricoDeLicenca>(e =>
+        {
+            e.ToTable("HistoricosDeLicenca");
+            e.Property(h => h.Acao).HasMaxLength(20);
+            e.Property(h => h.Descricao).HasMaxLength(200);
+            e.Property(h => h.Motivo).HasMaxLength(RegrasDeLicenca.TamanhoMaximoDoMotivo);
+            e.Property(h => h.Autor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.HasIndex(h => new { h.UsuarioId, h.EmUtc });
+            e.HasOne(h => h.Usuario).WithMany().HasForeignKey(h => h.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A foto do estado (o "Saúde agora"): UMA por (máquina, tipo, chave) — o índice único garante que o upsert da
+        // ingestão nunca deixa duas, como no ROI.
+        modelBuilder.Entity<FotoDeEstado>(e =>
+        {
+            e.ToTable("FotosDeEstado");
+            e.Property(f => f.Tipo).HasMaxLength(50);
+            e.Property(f => f.Chave).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(f => f.Detalhe).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(f => f.EventId).HasMaxLength(64);
+            e.HasIndex(f => new { f.MaquinaId, f.Tipo, f.Chave }).IsUnique();
+            e.HasIndex(f => new { f.Tipo, f.EmUtc });
+            e.HasOne(f => f.Maquina).WithMany().HasForeignKey(f => f.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HistoricoDeItemDoCatalogo>(e =>
+        {
+            e.ToTable("HistoricosDeItemDoCatalogo");
+            e.Property(h => h.Acao).HasMaxLength(20);
+            e.Property(h => h.Autor).HasMaxLength(100);
+            e.HasIndex(h => new { h.ItemId, h.EmUtc });
+            e.HasOne(h => h.Item).WithMany().HasForeignKey(h => h.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // O anexo é varbinary(max) no SQL Server, com o teto do contrato conferido antes.
+        modelBuilder.Entity<AnexoDeItemDoCatalogo>(e =>
+        {
+            e.ToTable("AnexosDeItemDoCatalogo");
+            e.Property(a => a.Nome).HasMaxLength(200);
+            e.Property(a => a.TipoDeConteudo).HasMaxLength(100);
+            e.Property(a => a.Autor).HasMaxLength(100);
+            e.HasIndex(a => a.ItemId);
+            e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

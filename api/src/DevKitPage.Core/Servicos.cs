@@ -138,6 +138,12 @@ public interface IConsultasDoPainel
 
     /// <summary>As métricas do feedback (US #417) no período e no escopo: total, positivos e negativos, por fluxo, por agente e por dia.</summary>
     Task<MetricasDeFeedbackV1> MetricasDeFeedbackAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, CancellationToken ct);
+
+    /// <summary>
+    /// O painel de UTILIDADE (US #687), no escopo (e da máquina, quando filtrada): a saúde de <paramref name="agora"/> (as
+    /// fotos), o resultado do período contra o anterior, os turnos de cada dia pelo desfecho e onde as tasks travam.
+    /// </summary>
+    Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, DateTimeOffset agora, CancellationToken ct);
 }
 
 /// <summary>As empresas do plano empresarial e os gestores delas (US #381) — só o admin.</summary>
@@ -152,6 +158,12 @@ public interface IEmpresas
     /// primeiro acesso. Nulo quando a empresa não existe; o erro, quando o login já existe.
     /// </summary>
     Task<(GestorCriado? Gestor, string Erro)> CriarGestorAsync(int empresaId, string login, CancellationToken ct);
+
+    /// <summary>
+    /// Edita a empresa JÁ validada (<see cref="RegrasDaEmpresa.Validar"/>, US #687): os dados básicos, o plano, o contrato e
+    /// os assentos — recusados abaixo dos em uso. Grava quem editou e quando.
+    /// </summary>
+    Task<ResultadoDaGestao<EmpresaResumo>> EditarAsync(int empresaId, EmpresaEditadaV1 edicao, string autor, CancellationToken ct);
 }
 
 /// <summary>Por que uma operação da gestão de usuários não foi feita — a API traduz em status HTTP.</summary>

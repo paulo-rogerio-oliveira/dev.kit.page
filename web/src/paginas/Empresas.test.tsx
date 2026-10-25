@@ -26,7 +26,9 @@ describe('Empresas (US #381; visual da US #461)', () => {
 
     // O cabeçalho resume a lista; a página usa o Topo com o menu do admin.
     expect(screen.getByRole('heading', { level: 1, name: 'Empresas' })).toBeInTheDocument();
-    expect(screen.getByText('2 empresas · 11 assentos contratados')).toBeInTheDocument();
+    expect(screen.getByText('2 empresas · 11 assentos contratados · 4 em uso')).toBeInTheDocument();
+    expect(within(linha).getByText('11.222.333/0001-81 · São Paulo/SP')).toBeInTheDocument();
+    expect(within(outra).getByText('sem CNPJ cadastrado')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Empresas' })).toHaveClass('link-ativo');
     expect(screen.getByRole('link', { name: 'Catálogo' })).toHaveAttribute('href', '/catalogo');
   });
@@ -42,6 +44,7 @@ describe('Empresas (US #381; visual da US #461)', () => {
 
   it('cria a empresa pelo painel lateral, com o nome, o plano e os assentos', async () => {
     renderizar('/empresas', tokenValido());
+    await userEvent.click(await screen.findByRole('button', { name: '+ Nova empresa' }));
     const painel = await screen.findByRole('complementary', { name: 'Nova empresa' });
     const formulario = within(painel).getByRole('form', { name: 'Nova empresa' });
     expect(within(painel).getByText('Ao criar, a empresa recebe um código de adesão para os devs entrarem.')).toBeInTheDocument();
@@ -102,7 +105,7 @@ describe('Empresas (US #381; visual da US #461)', () => {
     }]);
 
     await userEvent.click(within(painel).getByRole('button', { name: 'Fechar' }));
-    expect(screen.getByRole('complementary', { name: 'Nova empresa' })).toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Contexto de Empresa A' })).not.toBeInTheDocument();
   });
 
   it('o painel Contexto (US #663): o admin promove e descarta a sugestão do agente pelas rotas dele', { timeout: 15_000 }, async () => {
@@ -125,10 +128,44 @@ describe('Empresas (US #381; visual da US #461)', () => {
     ]);
   });
 
+  // US #687 (proposta admin-empresas v009): o Editar por linha abre o painel com os dados, o plano, o contrato e os assentos.
+  it('edita a empresa pelo painel: os dados, o contrato e os assentos com a prévia, nunca abaixo dos em uso', async () => {
+    renderizar('/empresas', tokenValido());
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar Empresa A' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Editar Empresa A' }));
+    expect(painel.getByLabelText('CNPJ')).toHaveValue('11.222.333/0001-81');
+    expect(painel.getByLabelText('Contrato até')).toHaveValue('2027-03-16');
+    expect(painel.getByText(/Última alteração: 22\/10\/2026 por admin/)).toBeInTheDocument();
+    // A coluna "Criada em" sai enquanto o painel está aberto (para caber o Editar).
+    expect(screen.queryByRole('columnheader', { name: 'Criada em' })).not.toBeInTheDocument();
+
+    for (let i = 0; i < 5; i++) await userEvent.click(painel.getByRole('button', { name: 'Mais um assento' }));
+    expect(painel.getByRole('status')).toHaveTextContent('+5 assentos (10 → 15). Mínimo permitido: 3, os que estão em uso.');
+    await userEvent.clear(painel.getByLabelText('Assentos'));
+    expect(painel.getByLabelText('Assentos')).toHaveValue(3); // não desce dos em uso
+    expect(painel.getByRole('button', { name: 'Menos um assento' })).toBeDisabled();
+
+    await userEvent.clear(painel.getByLabelText('CNPJ'));
+    await userEvent.type(painel.getByLabelText('CNPJ'), '12345678000190');
+    await userEvent.click(painel.getByRole('button', { name: 'Salvar alterações' }));
+    expect(painel.getByRole('alert')).toHaveTextContent('CNPJ inválido');
+
+    await userEvent.clear(painel.getByLabelText('CNPJ'));
+    await userEvent.type(painel.getByLabelText('CNPJ'), '11222333000181');
+    await userEvent.click(painel.getByRole('button', { name: 'Mais um assento' }));
+    await userEvent.click(painel.getByRole('button', { name: 'Salvar alterações' }));
+
+    await waitFor(() => expect(escritas.at(-1)).toMatchObject({
+      metodo: 'PUT', caminho: '/api/empresas/4', corpo: { nome: 'Empresa A', assentos: 4, cnpj: '11222333000181', uf: 'SP', contratoAte: '2027-03-16' },
+    }));
+    expect(await screen.findByText('Empresa Empresa A atualizada: 4 assentos.')).toBeInTheDocument();
+  });
+
   it('o gestor que abre Empresas volta ao dashboard da empresa dele', async () => {
     renderizar('/empresas', tokenDoGestor());
 
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Nova empresa' })).not.toBeInTheDocument();
   });
 });
