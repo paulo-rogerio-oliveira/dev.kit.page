@@ -62,7 +62,9 @@ public sealed class Licencas(DevKitPageDb db, IOptions<OpcoesDeLicenca> opcoes, 
         if (recusa != RecusaDaRenovacao.Nenhuma)
             return (null, recusa);
 
-        var licenca = await EmitirAsync(maquina, usuario, TiposDeLicenca.Assinatura, agora.AddDays(Math.Max(1, opcoes.Value.ValidadeDias)), ct);
+        // A validade do admin (US #687) é o TETO da licença emitida: os 30 dias de sempre, sem passar dela.
+        var validaAte = RegrasDeLicenca.ValidadeEmitida(RegrasDeLicenca.Licenca(usuario, usuario.Empresa), agora, opcoes.Value.ValidadeDias);
+        var licenca = await EmitirAsync(maquina, usuario, TiposDeLicenca.Assinatura, validaAte, ct);
         return (licenca, RecusaDaRenovacao.Nenhuma);
     }
 

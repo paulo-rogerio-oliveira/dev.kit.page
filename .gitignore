@@ -10,6 +10,9 @@ TestResults/
 *.db-shm
 *.db-wal
 
+# As imagens do design em desenvolvimento (US #669): o armazém em disco. Nenhum PNG de design entra no git.
+dados/design/
+
 # Node / Vite / Playwright
 node_modules/
 dist/

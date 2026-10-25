@@ -46,6 +46,10 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly bool _comLicenca;
     private readonly int _downloadsPorHora;
     private readonly int _relatosPorHora;
+    private readonly int? _tetoDoDesign;
+
+    /// <summary>A pasta das imagens do design (US #669) desta API: temporária, apagada no fim.</summary>
+    public string PastaDoDesign { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-design-{Guid.NewGuid():N}");
 
     /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
     /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
@@ -54,12 +58,14 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <param name="comLicenca">A chave privada da licença configurada (US #425); sem ela, as rotas de licença respondem 503.</param>
     /// <param name="downloadsPorHora">O limite de downloads anônimos por IP (US #425).</param>
     /// <param name="relatosPorHora">O limite de relatos por usuário (US #602).</param>
+    /// <param name="tetoDoDesign">O teto de versões de design de TODO plano (US #669); nulo é o da configuração.</param>
     public ApiDeTeste(
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
         string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100,
-        int relatosPorHora = 100)
+        int relatosPorHora = 100, int? tetoDoDesign = null)
     {
         _relatosPorHora = relatosPorHora;
+        _tetoDoDesign = tetoDoDesign;
         _ambiente = ambiente;
         _comSegredo = comSegredo;
         _ipDaConexao = ipDaConexao;
@@ -97,6 +103,14 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         builder.UseSetting("Conta:LimitePorMinuto", "100");
         builder.UseSetting("Atualizacao:DownloadsPorHora", _downloadsPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
         builder.UseSetting("Relatos:EnviosPorHora", _relatosPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // O design (US #669): as imagens numa pasta temporária, sem limite de envio que atrapalhe, e o teto do teste.
+        builder.UseSetting("Design:Pasta", PastaDoDesign);
+        builder.UseSetting("Design:EnviosPorMinuto", "1000");
+        if (_tetoDoDesign is { } teto)
+        {
+            builder.UseSetting("Design:Tetos:Empresarial:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            builder.UseSetting("Design:TetoPadrao:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         if (_redeConfiavel is not null)
             builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
         if (_ipDaConexao is not null)
@@ -220,6 +234,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         base.Dispose(disposing);
         SqliteConnection.ClearAllPools();
         try { File.Delete(_arquivo); } catch (IOException) { }
+        try { if (Directory.Exists(PastaDoDesign)) Directory.Delete(PastaDoDesign, recursive: true); } catch (IOException) { }
     }
 
     /// <summary>Faz toda requisição chegar deste IP, ANTES do pipeline da API — como o proxy na frente dela.</summary>

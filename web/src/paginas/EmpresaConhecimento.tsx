@@ -5,6 +5,7 @@ import type { ConvencaoDaEmpresa, NivelDeConvencao, RepositorioDaEmpresa } from 
 import { Abas } from '../componentes/Abas';
 import { Chips } from '../componentes/Chips';
 import { ContextoPorNivel } from '../componentes/ContextoPorNivel';
+import { DesignCompartilhado } from '../componentes/DesignCompartilhado';
 import { ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
@@ -13,14 +14,18 @@ import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
-/** As abas da página: o catálogo de repositórios, as convenções e o contexto (US #550). A ativa fica na URL (?aba=). */
+/**
+ * As abas da página: o catálogo de repositórios, as convenções, o contexto (US #550) e o design compartilhado (US #669).
+ * A ativa fica na URL (?aba=).
+ */
 const ABAS = [
   { id: 'repositorios', rotulo: 'Repositórios' },
   { id: 'convencoes', rotulo: 'Convenções' },
   { id: 'contexto', rotulo: 'Contexto' },
+  { id: 'design', rotulo: 'Design', novo: true },
 ];
 
-type IdDaAba = 'repositorios' | 'convencoes' | 'contexto';
+type IdDaAba = 'repositorios' | 'convencoes' | 'contexto' | 'design';
 
 const NOME_DO_NIVEL: Record<NivelDeConvencao, string> = { empresa: 'Empresa', time: 'Time', usuario: 'Usuário' };
 
@@ -41,7 +46,7 @@ export function EmpresaConhecimento() {
   const ehGestor = papelDa(sessao!) === 'gestor';
   const [busca, setBusca] = useSearchParams();
   const pedida = busca.get('aba');
-  const aba: IdDaAba = pedida === 'convencoes' || pedida === 'contexto' ? pedida : 'repositorios';
+  const aba: IdDaAba = pedida === 'convencoes' || pedida === 'contexto' || pedida === 'design' ? pedida : 'repositorios';
 
   const [repositorios, setRepositorios] = useState<RepositorioDaEmpresa[] | null>(null);
   const [convencoes, setConvencoes] = useState<ConvencaoDaEmpresa[] | null>(null);
@@ -97,6 +102,7 @@ export function EmpresaConhecimento() {
           {aba === 'repositorios' && <AbaRepositorios repositorios={repositorios} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'convencoes' && <AbaConvencoes convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'contexto' && <AbaContexto convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} tratar={tratar} />}
+          {aba === 'design' && <DesignCompartilhado token={token} comEmpresa={Boolean(sessao!.empresa)} tratar={tratar} />}
         </Abas>
       </Pagina>
     </div>
@@ -338,11 +344,14 @@ function AbaContexto({ convencoes, ehGestor, token, escrever, tratar }: {
     <section className="cartao" aria-label="Contexto da empresa por nível">
       <p className="nota-do-formulario">
         O que os agentes do dev.kit recebem em toda task, composto empresa → equipe → usuário: num tema em conflito, vale o
-        nível mais específico.{!ehGestor && ' Só o gestor edita o da empresa e o das equipes.'}
+        nível mais específico. A regra (do usuário) é obrigatória para o agente; a sugestão (do agente) é só consulta.
+        {!ehGestor && ' Só o gestor edita o da empresa e o das equipes. Ele promove as sugestões delas; você descarta as que o seu agente registrou.'}
       </p>
       <ContextoPorNivel convencoes={convencoes} equipes={equipes} podeGerir={ehGestor}
         aoGravar={(nivel, chave, valor, time) => escrever(() => api.gravarConvencao(token, nivel, chave, valor, time),
-          valor ? `Tema ${temaDa(chave)} gravado no contexto.` : `Tema ${temaDa(chave)} removido do contexto.`)} />
+          valor ? `Tema ${temaDa(chave)} gravado no contexto.` : `Tema ${temaDa(chave)} removido do contexto.`)}
+        aoPromover={(c) => escrever(() => api.promoverContexto(token, c.id!, c.versao), `Sugestão ${temaDa(c.chave)} promovida a regra.`)}
+        aoDescartar={(c) => escrever(() => api.descartarContexto(token, c.id!), `Sugestão ${temaDa(c.chave)} descartada.`)} />
     </section>
   );
 }

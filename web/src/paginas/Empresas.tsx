@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, EmpresaResumo, GestorCriado } from '../api/tipos';
 import { Avatar } from '../componentes/Avatar';
 import { BarraDeUso } from '../componentes/BarraDeUso';
 import { BotaoCopiar } from '../componentes/BotaoCopiar';
 import { ContextoPorNivel, type GravarContexto, type UsuarioDoContexto } from '../componentes/ContextoPorNivel';
-import { temaDa } from '../componentes/EditorDeContexto';
+import { temaDa, type AcaoNaSugestao } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
+import { formatarCnpj, PainelDaEmpresa } from '../componentes/PainelDaEmpresa';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
 import { MenuDoAdmin, Topo } from '../componentes/Topo';
@@ -16,10 +18,19 @@ import { useSessao } from '../sessao';
 /** Os planos que o admin escolhe ao criar a empresa (o da compra individual nasce pelo gateway). */
 export const PLANOS = ['Empresarial', 'Individual'];
 
-/** "1 empresa · 10 assentos contratados": o resumo do cabeçalho. */
+/** "1 empresa · 10 assentos contratados · 2 em uso": o resumo do cabeçalho. */
 export function resumoDasEmpresas(empresas: EmpresaResumo[]): string {
   const assentos = empresas.reduce((soma, e) => soma + e.assentos, 0);
-  return `${empresas.length} ${empresas.length === 1 ? 'empresa' : 'empresas'} · ${assentos} ${assentos === 1 ? 'assento contratado' : 'assentos contratados'}`;
+  const emUso = empresas.reduce((soma, e) => soma + e.assentosEmUso, 0);
+  return `${empresas.length} ${empresas.length === 1 ? 'empresa' : 'empresas'} · ${assentos} ${assentos === 1 ? 'assento contratado' : 'assentos contratados'} · ${emUso} em uso`;
+}
+
+/** A linha de apoio da empresa na lista (US #687): o CNPJ e a cidade/UF, ou "sem CNPJ cadastrado". */
+export function apoioDaEmpresa(e: EmpresaResumo): string {
+  const d = e.dados;
+  const local = d?.cidade ? `${d.cidade}${d.uf ? `/${d.uf}` : ''}` : d?.uf ?? '';
+  const partes = [d?.cnpj ? formatarCnpj(d.cnpj) : 'sem CNPJ cadastrado', local].filter(Boolean);
+  return partes.join(' · ');
 }
 
 /**
@@ -40,6 +51,11 @@ export function Empresas() {
   const [loginDoGestor, setLoginDoGestor] = useState('');
   const [criado, setCriado] = useState<(GestorCriado & { empresa: string }) | null>(null);
   const [contextoDe, setContextoDe] = useState<EmpresaResumo | null>(null);
+  // O painel à direita (US #687): nenhum, a "Nova empresa" (pelo botão do título) ou a edição de uma empresa.
+  // O link direto ?editar=<id> abre a edição da empresa.
+  const [parametros] = useSearchParams();
+  const [lateral, setLateral] = useState<'nova' | number | null>(() => (Number(parametros.get('editar')) > 0 ? Number(parametros.get('editar')) : null));
+  const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
 
   const tratar = useCallback((falha: unknown) => {
@@ -88,12 +104,24 @@ export function Empresas() {
     }
   }
 
+  function abrir(painel: 'nova' | number) {
+    setErro('');
+    setAviso('');
+    setContextoDe(null);
+    setLateral(painel);
+  }
+
+  const emEdicao = typeof lateral === 'number' ? empresas?.find((e) => e.id === lateral) : undefined;
+  const comPainel = lateral !== null || contextoDe !== null;
+  const novaEmpresa = <button className="botao botao-fantasma" type="button" onClick={() => abrir('nova')}>+ Nova empresa</button>;
+
   return (
     <div className="pagina">
       <Topo secao="empresas"><MenuDoAdmin /></Topo>
 
-      <Pagina rotulo="Administração" titulo="Empresas"subtitulo={empresas ? resumoDasEmpresas(empresas) : undefined} emLinha>
+      <Pagina rotulo="Administração" titulo="Empresas" subtitulo={empresas ? resumoDasEmpresas(empresas) : undefined} acao={novaEmpresa} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}
+        {aviso && <p className="aviso" role="status">{aviso}</p>}
         {criado && (
           <p className="aviso senha-temporaria" role="status">
             Gestor <strong>{criado.login}</strong> criado para {criado.empresa}. Senha inicial: <code>{criado.senhaInicial}</code>
@@ -101,7 +129,7 @@ export function Empresas() {
           </p>
         )}
 
-        <div className="com-lateral">
+        <div className={comPainel ? 'com-lateral com-lateral-larga' : 'sem-lateral'}>
           <section className="cartao cartao-de-tabela" aria-label="Empresas cadastradas">
             {!empresas ? (
               <p className="carregando" role="status">Carregando…</p>
@@ -109,14 +137,19 @@ export function Empresas() {
               <p className="vazio">Nenhuma empresa cadastrada.</p>
             ) : (
               <div className="tabela-rolavel-simples">
-                <table className="tabela tabela-do-cartao">
+                <table className="tabela tabela-do-cartao tabela-de-empresas">
                   <thead>
-                    <tr><th>Empresa</th><th>Plano</th><th>Assentos</th><th>Código de adesão</th><th>Criada em</th><th>Gestor</th></tr>
+                    <tr><th>Empresa</th><th>Plano</th><th>Assentos</th><th>Código de adesão</th>{!comPainel && <th>Criada em</th>}<th>Gestor</th></tr>
                   </thead>
                   <tbody>
                     {empresas.map((e) => (
-                      <tr key={e.id}>
-                        <td><span className="com-avatar"><Avatar nome={e.nome} letras={1} /><strong>{e.nome}</strong></span></td>
+                      <tr key={e.id} className={lateral === e.id ? 'linha-selecionada' : undefined}>
+                        <td>
+                          <span className="com-avatar">
+                            <Avatar nome={e.nome} letras={1} />
+                            <span className="nome-e-login"><strong>{e.nome}</strong><small>{apoioDaEmpresa(e)}</small></span>
+                          </span>
+                        </td>
                         <td><Selo>{e.plano}</Selo></td>
                         <td><BarraDeUso usados={e.assentosEmUso} total={e.assentos} rotulo={`Assentos em uso de ${e.nome}`} /></td>
                         <td>
@@ -125,7 +158,7 @@ export function Empresas() {
                             <BotaoCopiar texto={e.codigoDeAdesao} rotulo={`Copiar o código de adesão de ${e.nome}`} />
                           </span>
                         </td>
-                        <td>{formatar.data(e.criadaEm)}</td>
+                        {!comPainel && <td>{formatar.data(e.criadaEm)}</td>}
                         <td>
                           {convidando === e.id ? (
                             <form className="acoes" onSubmit={(ev) => void convidar(ev, e)} aria-label={`Convidar o gestor de ${e.nome}`}>
@@ -141,13 +174,17 @@ export function Empresas() {
                               <button className="botao botao-fantasma botao-pequeno" type="button" onClick={() => setConvidando(null)}>Cancelar</button>
                             </form>
                           ) : (
-                            <span className="acoes">
-                              {e.gestor ? <span>{e.gestor}</span> : <Selo variante="aviso">Sem gestor</Selo>}
+                            <span className="acoes acoes-da-empresa">
+                              {e.gestor ? <span className="gestor-da-empresa">{e.gestor}</span> : <Selo variante="aviso">Sem gestor</Selo>}
+                              <button className={`botao botao-fantasma botao-pequeno${lateral === e.id ? ' botao-ativo' : ''}`} type="button" aria-label={`Editar ${e.nome}`}
+                                onClick={() => abrir(e.id)}>
+                                Editar
+                              </button>
                               <button className="botao botao-fantasma botao-pequeno" type="button" aria-label={`Convidar o gestor de ${e.nome}`} onClick={() => abrirConvite(e)}>
                                 Convidar
                               </button>
                               <button className="botao botao-fantasma botao-pequeno" type="button" aria-label={`Contexto de ${e.nome}`}
-                                onClick={() => { setErro(''); setContextoDe(e); }}>
+                                onClick={() => { setErro(''); setLateral(null); setContextoDe(e); }}>
                                 Contexto
                               </button>
                             </span>
@@ -163,7 +200,20 @@ export function Empresas() {
 
           {contextoDe ? (
             <ContextoDaEmpresa empresa={contextoDe} token={token} tratar={tratar} aoFechar={() => setContextoDe(null)} />
-          ) : (
+          ) : emEdicao ? (
+            <PainelDaEmpresa
+              key={emEdicao.id}
+              token={token}
+              empresa={emEdicao}
+              planos={PLANOS}
+              aoFechar={() => setLateral(null)}
+              aoSalvar={(editada) => {
+                setLateral(null);
+                setAviso(`Empresa ${editada.nome} atualizada: ${editada.assentos} assentos.`);
+                void carregar();
+              }}
+            />
+          ) : lateral === 'nova' && (
             <PainelLateral id="titulo-nova-empresa" titulo="Nova empresa">
               <form className="formulario-lateral" onSubmit={criar} aria-label="Nova empresa">
                 <label>
@@ -221,18 +271,30 @@ function ContextoDaEmpresa({ empresa, token, tratar, aoFechar }: {
     void carregar();
   }, [carregar]);
 
-  const gravar: GravarContexto = async (nivel, chave, valor, time, usuario) => {
+  /** Roda uma escrita do admin: grava, avisa e recarrega (também na falha: o 409 mostra a versão do servidor). */
+  async function escrever(acao: () => Promise<unknown>, mensagem: string) {
     setAviso('');
     try {
-      await api.gravarConvencaoDoAdmin(token, empresa.id, nivel, chave, valor, time, usuario);
-      setAviso(valor ? `Tema ${temaDa(chave)} gravado.` : `Tema ${temaDa(chave)} removido.`);
+      await acao();
+      setAviso(mensagem);
       await carregar();
       return true;
     } catch (falha) {
       tratar(falha);
+      await carregar();
       return false;
     }
-  };
+  }
+
+  const gravar: GravarContexto = (nivel, chave, valor, time, usuario) =>
+    escrever(() => api.gravarConvencaoDoAdmin(token, empresa.id, nivel, chave, valor, time, usuario),
+      valor ? `Tema ${temaDa(chave)} gravado.` : `Tema ${temaDa(chave)} removido.`);
+
+  const promover: AcaoNaSugestao = (c) =>
+    escrever(() => api.promoverContextoDoAdmin(token, empresa.id, c.id!, c.versao), `Sugestão ${temaDa(c.chave)} promovida a regra.`);
+
+  const descartar: AcaoNaSugestao = (c) =>
+    escrever(() => api.descartarContextoDoAdmin(token, empresa.id, c.id!), `Sugestão ${temaDa(c.chave)} descartada.`);
 
   return (
     <PainelLateral id="titulo-contexto-da-empresa" titulo={`Contexto de ${empresa.nome}`}>
@@ -241,7 +303,8 @@ function ContextoDaEmpresa({ empresa, token, tratar, aoFechar }: {
       {!dados ? (
         <p className="carregando" role="status">Carregando…</p>
       ) : (
-        <ContextoPorNivel key={empresa.id} convencoes={dados.convencoes} equipes={dados.equipes} podeGerir usuarios={dados.usuarios} aoGravar={gravar} />
+        <ContextoPorNivel key={empresa.id} convencoes={dados.convencoes} equipes={dados.equipes} podeGerir usuarios={dados.usuarios} aoGravar={gravar}
+          aoPromover={promover} aoDescartar={descartar} />
       )}
     </PainelLateral>
   );

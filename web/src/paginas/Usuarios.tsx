@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { EmpresaResumo, Papel, UsuarioResumo } from '../api/tipos';
 import { Avatar } from '../componentes/Avatar';
 import { BotaoCopiar } from '../componentes/BotaoCopiar';
 import { Pagina } from '../componentes/Pagina';
+import { apoioDaLicenca, BarraDaLicenca, descreverLicenca, PainelDaLicenca } from '../componentes/PainelDaLicenca';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo, type VarianteDoSelo } from '../componentes/Selo';
 import { MenuDoAdmin, Topo } from '../componentes/Topo';
@@ -35,9 +37,13 @@ interface Edicao {
   empresaId: number | null;
 }
 
-/** A situação do usuário em uma palavra (e o porquê, quando é o bloqueio temporário), com a cor do selo. */
+/**
+ * A situação do usuário em uma palavra (e o porquê, quando é o bloqueio temporário), com a cor do selo. A licença vencida
+ * ou revogada (US #687) é "Bloqueado: licença": a renovação do dev.kit a recusa.
+ */
 function situacao(u: UsuarioResumo): { texto: string; variante: VarianteDoSelo } {
   if (u.bloqueado) return { texto: 'Bloqueado', variante: 'aviso' };
+  if (u.licenca?.situacao === 'vencida' || u.licenca?.situacao === 'revogada') return { texto: 'Bloqueado: licença', variante: 'marca' };
   if (u.bloqueadoAte) return { texto: `Bloqueado até ${formatar.dataHora(u.bloqueadoAte)}`, variante: 'aviso' };
   if (u.deveTrocarSenha) return { texto: 'Troca de senha pendente', variante: 'info' };
   return { texto: 'Ativo', variante: 'sucesso' };
@@ -49,6 +55,28 @@ export function resumoDosUsuarios(usuarios: UsuarioResumo[]): string {
   const gestores = conta('gestor');
   return `${usuarios.length} ${usuarios.length === 1 ? 'usuário' : 'usuários'} · ${conta('admin')} admin, ${conta('dev')} dev`
     + (gestores > 0 ? `, ${gestores} ${gestores === 1 ? 'gestor' : 'gestores'}` : '');
+}
+
+/** O filtro por licença (US #687): todas, as que vencem em 7 dias, as vencidas (e revogadas), sem prazo, válidas. */
+export type FiltroDeLicenca = '' | 'vencendo' | 'vencida' | 'sem-prazo' | 'valida';
+
+export const FILTROS_DE_LICENCA: { valor: FiltroDeLicenca; rotulo: string }[] = [
+  { valor: '', rotulo: 'Licença: todas' }, { valor: 'vencendo', rotulo: 'Licença: vence em 7 dias' }, { valor: 'vencida', rotulo: 'Licença: vencida' },
+  { valor: 'sem-prazo', rotulo: 'Licença: sem prazo' }, { valor: 'valida', rotulo: 'Licença: válida' },
+];
+
+function passaNoFiltroDeLicenca(u: UsuarioResumo, filtro: FiltroDeLicenca): boolean {
+  if (!filtro) return true;
+  const s = u.licenca?.situacao;
+  return filtro === 'vencida' ? s === 'vencida' || s === 'revogada' : s === filtro;
+}
+
+/** "2 licenças vencem em 7 dias · 1 vencida": a contagem da licença no título (só o que pede atenção). */
+export function resumoDasLicencas(usuarios: UsuarioResumo[]): { vencendo: number; vencidas: number } {
+  return {
+    vencendo: usuarios.filter((u) => u.licenca?.situacao === 'vencendo').length,
+    vencidas: usuarios.filter((u) => u.licenca?.situacao === 'vencida' || u.licenca?.situacao === 'revogada').length,
+  };
 }
 
 /** A busca ignora maiúsculas e acentos ("jose" acha "José"). */
@@ -90,6 +118,11 @@ function MenuDoUsuario({ usuario, acoes }: { usuario: UsuarioResumo; acoes: { ro
  * nome, o papel e a empresa, bloquear e desbloquear, e redefinir a senha. O cadastro fica no painel lateral; a
  * senha é TEMPORÁRIA, gerada pela API e devolvida UMA vez (a tela a mostra e não a guarda). O papel `dev` entra no
  * app e baixa o dev.kit, mas não no painel; o gestor precisa de uma empresa.
+ * <p>
+ * Desde a US #687 (proposta admin-usuarios v005): a coluna Licença (os dias, a barra, a validade e o tipo — âmbar a 7
+ * dias do fim, vermelho vencida, e a situação "Bloqueado: licença"), o filtro por licença, a contagem no título, o "Novo
+ * usuário" no título e o painel "Licença de &lt;usuário&gt;", onde o admin define a validade que quiser.
+ * </p>
  */
 export function Usuarios() {
   const { sessao, sair } = useSessao();
@@ -99,6 +132,12 @@ export function Usuarios() {
   const [busca, setBusca] = useState('');
   const [filtroDePapel, setFiltroDePapel] = useState<Papel | ''>('');
   const [filtroDeEmpresa, setFiltroDeEmpresa] = useState('');
+  const [filtroDeLicenca, setFiltroDeLicenca] = useState<FiltroDeLicenca>('');
+  // O painel à direita (US #687): nenhum, o "Novo usuário" (pelo botão do título) ou a licença de um usuário.
+  // O link direto ?licenca=<id> abre o painel da licença do usuário.
+  const [parametros] = useSearchParams();
+  const [lateral, setLateral] = useState<{ tipo: 'novo' } | { tipo: 'licenca'; id: number } | null>(
+    () => (Number(parametros.get('licenca')) > 0 ? { tipo: 'licenca', id: Number(parametros.get('licenca')) } : null));
   const [login, setLogin] = useState('');
   const [nome, setNome] = useState('');
   const [papel, setPapel] = useState<Papel>('dev');
@@ -192,13 +231,26 @@ export function Usuarios() {
   const visiveis = (usuarios ?? []).filter((u) =>
     (!termo || normalizar(`${u.nome} ${u.login}`).includes(termo))
     && (!filtroDePapel || u.papel === filtroDePapel)
-    && (!filtroDeEmpresa || (filtroDeEmpresa === 'nenhuma' ? u.empresaId === null : String(u.empresaId) === filtroDeEmpresa)));
+    && (!filtroDeEmpresa || (filtroDeEmpresa === 'nenhuma' ? u.empresaId === null : String(u.empresaId) === filtroDeEmpresa))
+    && passaNoFiltroDeLicenca(u, filtroDeLicenca));
+
+  const licencas = usuarios ? resumoDasLicencas(usuarios) : { vencendo: 0, vencidas: 0 };
+  const subtitulo = usuarios && (
+    <>
+      {resumoDosUsuarios(usuarios)}
+      {licencas.vencendo > 0 && <> · <span className="licenca-alerta">{licencas.vencendo} {licencas.vencendo === 1 ? 'licença vence' : 'licenças vencem'} em 7 dias</span></>}
+      {licencas.vencidas > 0 && <> · <span className="licenca-ruim">{licencas.vencidas} {licencas.vencidas === 1 ? 'vencida' : 'vencidas'}</span></>}
+    </>
+  );
+  const novoUsuario = (
+    <button className="botao botao-fantasma" type="button" onClick={() => { limpar(); setLateral({ tipo: 'novo' }); }}>+ Novo usuário</button>
+  );
 
   return (
     <div className="pagina">
       <Topo secao="usuários"><MenuDoAdmin /></Topo>
 
-      <Pagina rotulo="Administração" titulo="Usuários"subtitulo={usuarios ? resumoDosUsuarios(usuarios) : undefined} emLinha>
+      <Pagina rotulo="Administração" titulo="Usuários" subtitulo={subtitulo || undefined} acao={novoUsuario} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
         {senha && (
@@ -209,7 +261,7 @@ export function Usuarios() {
           </p>
         )}
 
-        <div className="com-lateral">
+        <div className={lateral ? 'com-lateral com-lateral-larga' : 'sem-lateral'}>
           <section className="cartao cartao-de-tabela" aria-label="Usuários cadastrados">
             <div className="barra-de-filtros" role="search">
               <input
@@ -229,6 +281,10 @@ export function Usuarios() {
                 <option value="nenhuma">Sem empresa</option>
                 {empresas.map((e) => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
               </select>
+              <select aria-label="Filtrar por licença" className={filtroDeLicenca ? 'filtro-ativo' : 'filtro-da-licenca'} value={filtroDeLicenca}
+                onChange={(e) => setFiltroDeLicenca(e.target.value as FiltroDeLicenca)}>
+                {FILTROS_DE_LICENCA.map((f) => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
+              </select>
             </div>
 
             {!usuarios ? (
@@ -239,7 +295,7 @@ export function Usuarios() {
               <div className="tabela-rolavel-simples">
                 <table className="tabela tabela-do-cartao">
                   <thead>
-                    <tr><th>Usuário</th><th>Papel</th><th>Empresa</th><th>Situação</th><th>Criado em</th><th><span className="visualmente-oculto">Ações</span></th></tr>
+                    <tr><th>Usuário</th><th>Papel</th><th>Empresa</th><th>Licença</th><th>Situação</th><th><span className="visualmente-oculto">Ações</span></th></tr>
                   </thead>
                   <tbody>
                     {visiveis.map((u) => {
@@ -273,16 +329,24 @@ export function Usuarios() {
                           </td>
                         </tr>
                       ) : (
-                        <tr key={u.id}>
+                        <tr key={u.id} className={lateral?.tipo === 'licenca' && lateral.id === u.id ? 'linha-selecionada' : undefined}>
                           <td>{identidade}</td>
                           <td><Selo variante={COR_DO_PAPEL[u.papel] ?? 'neutro'}>{NOME_DO_PAPEL[u.papel] ?? u.papel}</Selo></td>
                           <td>{u.empresa ?? '—'}</td>
+                          <td>
+                            <button className="celula-da-licenca" type="button" aria-label={`Licença de ${u.nome || u.login}`}
+                              onClick={() => { limpar(); setLateral({ tipo: 'licenca', id: u.id }); }}>
+                              <strong className={`licenca-${descreverLicenca(u.licenca).cor}`}>{descreverLicenca(u.licenca).texto}</strong>
+                              <BarraDaLicenca licenca={u.licenca} rotulo={`Validade de ${u.login}`} />
+                              <small>{apoioDaLicenca(u.licenca)}</small>
+                            </button>
+                          </td>
                           <td><Selo variante={s.variante} ponto={s.variante === 'sucesso'}>{s.texto}</Selo></td>
-                          <td>{formatar.data(u.criadoEm)}</td>
                           <td className="coluna-do-menu">
                             <MenuDoUsuario
                               usuario={u}
                               acoes={[
+                                { rotulo: 'Licença', aoEscolher: () => { limpar(); setLateral({ tipo: 'licenca', id: u.id }); } },
                                 { rotulo: 'Editar', aoEscolher: () => { limpar(); setEdicao({ id: u.id, nome: u.nome, papel: u.papel, empresaId: u.empresaId }); } },
                                 // O admin não se bloqueia: a linha dele não tem a ação.
                                 ...(u.login !== sessao!.login
@@ -301,7 +365,20 @@ export function Usuarios() {
             )}
           </section>
 
+          {lateral?.tipo === 'licenca' && (
+            <PainelDaLicenca
+              key={lateral.id}
+              token={token}
+              usuarioId={lateral.id}
+              aoMudar={(mensagem) => { setAviso(mensagem); void carregar(); }}
+              aoFechar={() => setLateral(null)}
+              tratar={tratar}
+            />
+          )}
+
+          {lateral?.tipo === 'novo' && (
           <PainelLateral id="titulo-novo-usuario" titulo="Novo usuário">
+            <button className="botao-icone fechar-painel" type="button" aria-label="Fechar o novo usuário" onClick={() => setLateral(null)}>×</button>
             <form className="formulario-lateral" onSubmit={criar} aria-label="Novo usuário">
               <label>
                 Login
@@ -330,6 +407,7 @@ export function Usuarios() {
               <button className="botao botao-primario botao-largo" type="submit">Criar usuário</button>
             </form>
           </PainelLateral>
+          )}
         </div>
       </Pagina>
     </div>

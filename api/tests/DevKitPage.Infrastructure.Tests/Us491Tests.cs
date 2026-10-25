@@ -134,8 +134,9 @@ public sealed class Us491Tests : IAsyncLifetime
     [InlineData("ConvencoesDaEmpresa")]
     public void Script_do_azure_sql_cria_cada_tabela_com_as_colunas_do_modelo(string tabela)
     {
-        // Os scripts na ordem em que rodam: o Valor das convenções cresce no Us550.sql (o contexto, US #550).
-        var script = BaseDeTeste.ScriptDoAzureSql("Us491.sql") + BaseDeTeste.ScriptDoAzureSql("Us550.sql");
+        // Os scripts na ordem em que rodam: o Valor das convenções cresce no Us550.sql (o contexto, US #550); a Origem e
+        // a Versao entram no Us663.sql (a regra do usuário × a sugestão do agente, US #663).
+        var script = BaseDeTeste.ScriptDoAzureSql("Us491.sql") + BaseDeTeste.ScriptDoAzureSql("Us550.sql") + BaseDeTeste.ScriptDoAzureSql("Us663.sql");
 
         Assert.Contains($"OBJECT_ID(N'[dbo].[{tabela}]', N'U') IS NULL", script);
         foreach (var coluna in BaseDeTeste.ColunasNoSqlServer(tabela))

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ConvencaoDaEmpresa, NivelDeConvencao } from '../api/tipos';
-import { EditorDeContexto, ehContexto } from './EditorDeContexto';
+import { EditorDeContexto, ehContexto, type AcaoNaSugestao } from './EditorDeContexto';
 
 /** Um usuário que o admin geral pode escolher para editar o contexto (o login vai na gravação; o nome, na leitura). */
 export interface UsuarioDoContexto {
@@ -21,15 +21,18 @@ const nomeDe = (u: UsuarioDoContexto) => u.nome || u.login;
  * o dev) e o painel Contexto do admin em /empresas. Empresa e equipe: quem `podeGerir` (o gestor, o admin) edita; o dev
  * só lê. Usuários: com `usuarios` (o admin), escolhe-se um e edita-se o contexto dele; sem, a lista é só leitura — cada
  * um edita o próprio em /conta. A composição no dev.kit é empresa → equipe → usuário, e em conflito vale o mais
- * específico.
+ * específico. Cada nível mostra a REGRA (do usuário) e a SUGESTÃO (do agente) separadas (US #663): quem `podeGerir`
+ * promove a sugestão a regra; o descarte vai à API, que aceita de quem grava o nível ou do autor da sugestão.
  */
-export function ContextoPorNivel({ convencoes, equipes, podeGerir, usuarios, aoGravar }: {
+export function ContextoPorNivel({ convencoes, equipes, podeGerir, usuarios, aoGravar, aoPromover, aoDescartar }: {
   convencoes: ConvencaoDaEmpresa[];
   /** As equipes conhecidas da empresa (GET .../equipes). */
   equipes: string[];
   podeGerir: boolean;
   usuarios?: UsuarioDoContexto[];
   aoGravar: GravarContexto;
+  aoPromover?: AcaoNaSugestao;
+  aoDescartar?: AcaoNaSugestao;
 }) {
   const contexto = convencoes.filter((c) => ehContexto(c.chave));
   const conhecidas = [...new Set([...equipes, ...contexto.filter((c) => c.nivel === 'time').map((c) => c.time)])].sort();
@@ -48,7 +51,8 @@ export function ContextoPorNivel({ convencoes, equipes, podeGerir, usuarios, aoG
         <h3 id="titulo-contexto-empresa">Empresa</h3>
         <p className="nota-do-formulario">Vale para todos os agentes da empresa.</p>
         <EditorDeContexto rotulo="Contexto da empresa" itens={doNivel('empresa')} editavel={podeGerir}
-          aoGravar={(chave, valor) => aoGravar('empresa', chave, valor, '', '')} vazio="A empresa ainda não definiu contexto." />
+          aoGravar={(chave, valor) => aoGravar('empresa', chave, valor, '', '')} vazio="A empresa ainda não definiu contexto."
+          aoPromover={aoPromover} aoDescartar={aoDescartar} />
       </section>
 
       <section aria-labelledby="titulo-contexto-equipe">
@@ -64,7 +68,8 @@ export function ContextoPorNivel({ convencoes, equipes, podeGerir, usuarios, aoG
         <p className="nota-do-formulario">Vale para quem declara esta equipe nas Configurações do dev.kit, por cima do da empresa.</p>
         {daEquipe ? (
           <EditorDeContexto rotulo={`Contexto da equipe ${daEquipe}`} itens={doNivel('time', (c) => c.time === daEquipe)} editavel={podeGerir}
-            aoGravar={(chave, valor) => aoGravar('time', chave, valor, daEquipe, '')} vazio="Esta equipe ainda não tem contexto." />
+            aoGravar={(chave, valor) => aoGravar('time', chave, valor, daEquipe, '')} vazio="Esta equipe ainda não tem contexto."
+            aoPromover={aoPromover} aoDescartar={aoDescartar} />
         ) : (
           <p className="vazio">Escolha ou digite uma equipe.</p>
         )}
@@ -82,7 +87,8 @@ export function ContextoPorNivel({ convencoes, equipes, podeGerir, usuarios, aoG
             </label>
             {escolhido ? (
               <EditorDeContexto rotulo={`Contexto de ${nomeDe(escolhido)}`} itens={doNivel('usuario', (c) => c.usuario === nomeDe(escolhido))} editavel
-                aoGravar={(chave, valor) => aoGravar('usuario', chave, valor, '', escolhido.login)} vazio="Este usuário ainda não tem contexto." />
+                aoGravar={(chave, valor) => aoGravar('usuario', chave, valor, '', escolhido.login)} vazio="Este usuário ainda não tem contexto."
+                aoPromover={aoPromover} aoDescartar={aoDescartar} />
             ) : (
               <p className="vazio">A empresa ainda não tem usuários.</p>
             )}

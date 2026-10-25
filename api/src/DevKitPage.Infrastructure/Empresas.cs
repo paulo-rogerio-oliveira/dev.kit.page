@@ -31,8 +31,43 @@ public sealed class Empresas(DevKitPageDb db, IGestaoDeUsuarios usuarios, TimePr
         };
         db.Empresas.Add(nova);
         await db.SaveChangesAsync(ct);
-        return new EmpresaResumo(nova.Id, nova.Nome, nova.Plano, nova.Assentos, nova.CodigoDeAdesao, 0, DevKitPageDb.Utc(nova.CriadaEmUtc));
+        return new EmpresaResumo(nova.Id, nova.Nome, nova.Plano, nova.Assentos, nova.CodigoDeAdesao, 0, DevKitPageDb.Utc(nova.CriadaEmUtc), Dados: Dados(nova));
     }
+
+    public async Task<ResultadoDaGestao<EmpresaResumo>> EditarAsync(int empresaId, EmpresaEditadaV1 edicao, string autor, CancellationToken ct)
+    {
+        if (await db.Empresas.FirstOrDefaultAsync(e => e.Id == empresaId, ct) is not { } empresa)
+            return ResultadoDaGestao<EmpresaResumo>.Falhou(FalhaNaGestao.NaoEncontrado, "Empresa não encontrada.");
+
+        // Os assentos não descem abaixo dos em uso (a MESMA conta do login e da licença): quem está dentro fica.
+        var emUso = await Assentos.OcupadosAsync(db, empresaId, ct);
+        if (RegrasDaEmpresa.ValidarAssentos(edicao.Assentos, emUso) is { Length: > 0 } problema)
+            return ResultadoDaGestao<EmpresaResumo>.Falhou(FalhaNaGestao.Recusada, problema);
+
+        empresa.Nome = edicao.Nome.Trim();
+        empresa.Plano = edicao.Plano.Trim();
+        empresa.Assentos = edicao.Assentos;
+        empresa.Cnpj = RegrasDaEmpresa.Cnpj(edicao.Cnpj);
+        empresa.Segmento = Limpo(edicao.Segmento);
+        empresa.Cidade = Limpo(edicao.Cidade);
+        empresa.Uf = Limpo(edicao.Uf).ToUpperInvariant();
+        empresa.Contato = Limpo(edicao.Contato);
+        empresa.Telefone = Limpo(edicao.Telefone);
+        empresa.Site = Limpo(edicao.Site);
+        // O contrato vale o dia inteiro, como a validade da licença que ele limita.
+        empresa.ContratoAteUtc = edicao.ContratoAte is { } ate ? RegrasDeLicenca.FimDoDia(ate).UtcDateTime : null;
+        empresa.AlteradaEmUtc = relogio.GetUtcNow().UtcDateTime;
+        empresa.AlteradaPor = autor.Length <= ValidadorDeEmpresa.TamanhoMaximoDoLogin ? autor : autor[..ValidadorDeEmpresa.TamanhoMaximoDoLogin];
+        await db.SaveChangesAsync(ct);
+        return new((await ListarAsync(ct)).First(e => e.Id == empresaId));
+    }
+
+    /// <summary>Os dados básicos e o contrato como o contrato v1 os leva (o CNPJ só com os dígitos).</summary>
+    internal static DadosDaEmpresaV1 Dados(Empresa e)
+        => new(e.Cnpj, e.Segmento, e.Cidade, e.Uf, e.Contato, e.Telefone, e.Site,
+            e.ContratoAteUtc is { } ate ? DateOnly.FromDateTime(ate) : null, e.AlteradaEmUtc is { } em ? DevKitPageDb.Utc(em) : null, e.AlteradaPor);
+
+    private static string Limpo(string? texto) => (texto ?? string.Empty).Trim();
 
     public async Task<IReadOnlyList<EmpresaResumo>> ListarAsync(CancellationToken ct)
     {
@@ -58,7 +93,7 @@ public sealed class Empresas(DevKitPageDb db, IGestaoDeUsuarios usuarios, TimePr
 
         return empresas
             .Select(e => new EmpresaResumo(e.Id, e.Nome, e.Plano, e.Assentos, e.CodigoDeAdesao, colaboradores.GetValueOrDefault(e.Id), DevKitPageDb.Utc(e.CriadaEmUtc),
-                gestores.GetValueOrDefault(e.Id), ocupados.GetValueOrDefault(e.Id)))
+                gestores.GetValueOrDefault(e.Id), ocupados.GetValueOrDefault(e.Id), Dados(e)))
             .ToArray();
     }
 

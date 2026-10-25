@@ -1,0 +1,87 @@
+{
+  "aPartirDoDia": 7,
+  "validadeDias": 30,
+  "casos": [
+    {
+      "nome": "menos de 7 dias, abertura do dia: trava no cliente e na API",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-11-19T12:00:00Z",
+      "agora": "2026-10-23T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "automatica" },
+      "esperado": { "clienteChama": false, "apiRenova": false, "recusa": "CedoDemais" }
+    },
+    {
+      "nome": "menos de 7 dias, login novo: o cliente chama e a API recusa (cedo demais)",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-11-19T12:00:00Z",
+      "agora": "2026-10-23T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "automatica" },
+      "esperado": { "clienteChama": true, "apiRenova": false, "recusa": "CedoDemais" }
+    },
+    {
+      "nome": "mais de 7 dias com a trava: renova por mais 30 dias",
+      "emitidaEm": "2026-10-10T12:00:00Z",
+      "validaAte": "2026-11-09T12:00:00Z",
+      "agora": "2026-10-18T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "automatica" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-11-17T12:00:00Z" }
+    },
+    {
+      "nome": "login perto de vencer: a validade curta do admin renova antes do 7º dia, sem passar dela",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-10-26T23:59:59Z",
+      "agora": "2026-10-23T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "data", "validaAte": "2026-10-26T23:59:59Z", "alteradaEm": "2026-10-15T12:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-10-26T23:59:59Z" }
+    },
+    {
+      "nome": "o admin estendeu depois da emissão e o dev entrou: renova já, sem esperar o 7º dia",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-11-19T12:00:00Z",
+      "agora": "2026-10-23T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "data", "validaAte": "2027-01-31T23:59:59Z", "alteradaEm": "2026-10-22T09:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-11-22T12:00:00Z" }
+    },
+    {
+      "nome": "o admin estendeu, abertura do dia: o cliente não chama a API a cada abertura (a renovação vem no login ou no 7º dia)",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-11-19T12:00:00Z",
+      "agora": "2026-10-23T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "data", "validaAte": "2027-01-31T23:59:59Z", "alteradaEm": "2026-10-22T09:00:00Z" },
+      "esperado": { "clienteChama": false, "apiRenova": true, "validaAteEmitida": "2026-11-22T12:00:00Z" }
+    },
+    {
+      "nome": "sem prazo: renova pelos 30 dias de sempre, sem data-limite",
+      "emitidaEm": "2026-10-10T12:00:00Z",
+      "validaAte": "2026-11-09T12:00:00Z",
+      "agora": "2026-10-18T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "sem-prazo", "alteradaEm": "2026-10-01T12:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-11-17T12:00:00Z" }
+    },
+    {
+      "nome": "revogada: a API recusa e a licença atual da máquina vale até o prazo dela",
+      "emitidaEm": "2026-10-10T12:00:00Z",
+      "validaAte": "2026-11-09T12:00:00Z",
+      "agora": "2026-10-18T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "revogada", "alteradaEm": "2026-10-17T12:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": false, "recusa": "LicencaRevogada" }
+    },
+    {
+      "nome": "vencida pela validade do admin: a API recusa (Bloqueado: licença)",
+      "emitidaEm": "2026-10-10T12:00:00Z",
+      "validaAte": "2026-10-17T23:59:59Z",
+      "agora": "2026-10-18T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "data", "validaAte": "2026-10-17T23:59:59Z", "alteradaEm": "2026-10-05T12:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": false, "recusa": "LicencaVencida" }
+    }
+  ]
+}

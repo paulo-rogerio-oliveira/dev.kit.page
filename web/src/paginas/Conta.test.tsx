@@ -2,7 +2,10 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
+import { vi } from 'vitest';
 import { API, contaIndividual, escritas, servidor, tokenDoDev } from '../testes/servidor';
+
+afterEach(() => vi.restoreAllMocks());
 
 describe('Adesão por código e e-mail (US #425)', () => {
   it('manda o código e o e-mail e mostra a mensagem — o link vai por e-mail', async () => {
@@ -115,6 +118,25 @@ describe('Conta (US #425)', () => {
 
     expect(await within(secao).findByText('Tema revisao gravado no seu contexto.')).toBeInTheDocument();
     expect(escritas).toEqual([{ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo: { nivel: 'usuario', chave: 'contexto.revisao', valor: 'Sempre com testes.', time: '' } }]);
+  });
+
+  it('Meu contexto (US #663): a sugestão do agente fica à parte da regra, e promover a torna regra', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Meu contexto' });
+    const regras = await within(secao).findByRole('list', { name: 'Seu contexto' });
+    expect(within(regras).queryByText('Prefere diffs pequenos.')).not.toBeInTheDocument();
+    const sugestoes = within(secao).getByRole('list', { name: 'Seu contexto — sugestões do agente' });
+    expect(within(sugestoes).getByText('Prefere diffs pequenos.')).toBeInTheDocument();
+    expect(within(sugestoes).getByText(/agente de Ana Souza/)).toBeInTheDocument();
+    // A sugestão da empresa não entra no "A empresa já define" (lá só as regras).
+    expect(within(secao).getByText('A empresa já define: stack.')).toBeInTheDocument();
+
+    await userEvent.click(within(sugestoes).getByRole('button', { name: 'Promover a regra a sugestão revisao' }));
+
+    expect(await within(secao).findByText('Sugestão revisao promovida a regra do seu contexto.')).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'POST', caminho: '/api/empresa/contexto/103/promover', corpo: { versaoEsperada: 1 } }]);
   });
 
   it('Meu contexto (US #550): sem empresa, avisa e não mostra o editor', async () => {

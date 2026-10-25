@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, Conta as DadosDaConta } from '../api/tipos';
-import { EditorDeContexto, ehContexto, temaDa } from '../componentes/EditorDeContexto';
+import { EditorDeContexto, ehContexto, ehSugestao, temaDa } from '../componentes/EditorDeContexto';
 import { Topo } from '../componentes/Topo';
 import { papelDa, useSessao } from '../sessao';
 
@@ -32,6 +32,7 @@ export function Conta() {
         {ehGestor && <Link className="botao botao-fantasma" to="/empresa/catalogo">Catálogo da empresa</Link>}
         {daEmpresa && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
         <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>
+        <Link className="botao botao-fantasma" to="/design">Design</Link>
       </Topo>
       <main className="painel conta">
         <header className="cabecalho-da-conta">
@@ -105,8 +106,24 @@ function MeuContexto({ token, temEmpresa, sair }: { token: string; temEmpresa: b
     }
   }
 
+  /** Promove ou descarta a sugestão de um agente (US #663): a mesma rota do site e do dev.kit. */
+  async function naSugestao(acao: () => Promise<unknown>, mensagem: string) {
+    setErro('');
+    setAviso('');
+    try {
+      await acao();
+      setAviso(mensagem);
+      await carregar();
+      return true;
+    } catch (falha) {
+      tratar(falha);
+      await carregar();
+      return false;
+    }
+  }
+
   const meus = (convencoes ?? []).filter((c) => c.nivel === 'usuario' && ehContexto(c.chave));
-  const daEmpresa = (convencoes ?? []).filter((c) => c.nivel === 'empresa' && ehContexto(c.chave));
+  const daEmpresa = (convencoes ?? []).filter((c) => c.nivel === 'empresa' && ehContexto(c.chave) && !ehSugestao(c));
   return (
     <section aria-labelledby="titulo-meu-contexto" className="cartao secao-do-contexto">
       <p className="rotulo-da-pagina">Contexto</p>
@@ -125,7 +142,9 @@ function MeuContexto({ token, temEmpresa, sair }: { token: string; temEmpresa: b
             !erro && <p className="carregando" role="status">Carregando…</p>
           ) : (
             <EditorDeContexto rotulo="Seu contexto" itens={meus} editavel aoGravar={gravar}
-              vazio="Nenhum tema ainda: o dev.kit usa só o contexto da equipe e o da empresa." />
+              vazio="Nenhum tema ainda: o dev.kit usa só o contexto da equipe e o da empresa."
+              aoPromover={(c) => naSugestao(() => api.promoverContexto(token, c.id!, c.versao), `Sugestão ${temaDa(c.chave)} promovida a regra do seu contexto.`)}
+              aoDescartar={(c) => naSugestao(() => api.descartarContexto(token, c.id!), `Sugestão ${temaDa(c.chave)} descartada.`)} />
           )}
           {daEmpresa.length > 0 && (
             <p className="nota-da-secao">A empresa já define: {daEmpresa.map((c) => temaDa(c.chave)).join(', ')}.</p>

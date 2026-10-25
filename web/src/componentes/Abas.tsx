@@ -3,6 +3,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 export interface Aba {
   id: string;
   rotulo: string;
+  /** A aba recém-chegada leva o selo "novo" ao lado do rótulo (a Design da US #669). */
+  novo?: boolean;
 }
 
 /**
@@ -10,12 +12,14 @@ export interface Aba {
  * Home/End movendo entre as abas, e o painel da aba ativa. Quem decide a aba é a página (ela fica na URL), e não
  * o componente.
  */
-export function Abas({ rotulo, abas, ativa, aoMudar, prefixo = 'aba', children }: {
+export function Abas({ rotulo, abas, ativa, aoMudar, prefixo = 'aba', acao, children }: {
   rotulo: string;
   abas: Aba[];
   ativa: string;
   aoMudar: (id: string) => void;
   prefixo?: string;
+  /** A ação na linha das abas, à direita (o "+ Novo item" do catálogo, US #687). */
+  acao?: ReactNode;
   children: ReactNode;
 }) {
   function teclar(evento: KeyboardEvent<HTMLButtonElement>, indice: number) {
@@ -27,26 +31,31 @@ export function Abas({ rotulo, abas, ativa, aoMudar, prefixo = 'aba', children }
     document.getElementById(`${prefixo}-${aba.id}`)?.focus();
   }
 
+  const lista = (
+    <div className="abas" role="tablist" aria-label={rotulo}>
+      {abas.map((aba, indice) => (
+        <button
+          key={aba.id}
+          id={`${prefixo}-${aba.id}`}
+          className="aba"
+          type="button"
+          role="tab"
+          aria-selected={aba.id === ativa}
+          aria-controls={`${prefixo}-painel`}
+          tabIndex={aba.id === ativa ? 0 : -1}
+          onClick={() => aoMudar(aba.id)}
+          onKeyDown={(e) => teclar(e, indice)}
+        >
+          {aba.rotulo}
+          {aba.novo && <span className="recurso-novo" aria-hidden="true">novo</span>}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      <div className="abas" role="tablist" aria-label={rotulo}>
-        {abas.map((aba, indice) => (
-          <button
-            key={aba.id}
-            id={`${prefixo}-${aba.id}`}
-            className="aba"
-            type="button"
-            role="tab"
-            aria-selected={aba.id === ativa}
-            aria-controls={`${prefixo}-painel`}
-            tabIndex={aba.id === ativa ? 0 : -1}
-            onClick={() => aoMudar(aba.id)}
-            onKeyDown={(e) => teclar(e, indice)}
-          >
-            {aba.rotulo}
-          </button>
-        ))}
-      </div>
+      {acao ? <div className="abas-com-acao">{lista}<div className="abas-acao">{acao}</div></div> : lista}
       <div id={`${prefixo}-painel`} role="tabpanel" aria-labelledby={`${prefixo}-${ativa}`} className="painel-da-aba">
         {children}
       </div>

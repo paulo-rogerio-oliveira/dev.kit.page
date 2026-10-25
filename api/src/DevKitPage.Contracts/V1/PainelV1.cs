@@ -177,6 +177,74 @@ public sealed record RoiDoWorkItem(
 public sealed record RoiTotais(
     int Itens, long Turnos, decimal Horas, double? LeadTimeMedioDias, long PullRequests, long PullRequestsMergeadas);
 
+/// <summary>
+/// O PAINEL DE UTILIDADE (US #687, <c>GET /api/dashboard/utilidade</c>): o que está travando o trabalho agora, o que o uso
+/// entregou no período, os turnos de cada dia pelo desfecho e onde as tasks travam. As medidas sem denominador são nulas
+/// (a tela mostra um traço).
+/// </summary>
+public sealed record UtilidadeResposta(
+    DateOnly De, DateOnly Ate, SaudeAgoraV1 Saude, ResultadoDoUsoV1 Resultado, IReadOnlyList<TurnosDoDiaV1> TurnosPorDesfecho,
+    IReadOnlyList<CausaDeTravamentoV1> OndeTravam);
+
+/// <summary>
+/// A SAÚDE DE AGORA — não depende do período: a última foto de cada task, work item e máquina (a máquina do filtro, quando
+/// há). Cada cartão tem a ação dele na tela.
+/// </summary>
+/// <param name="TasksParadas">As tasks "em execução" sem processo e sem atividade.</param>
+/// <param name="Perguntas">As perguntas abertas esperando o desenvolvedor.</param>
+/// <param name="Fechamentos">Os fechamentos de entrega cujo último desfecho foi a falha (os itens são os work items).</param>
+/// <param name="Maquinas">As máquinas cuja última amostra (das últimas 24 h) está com o disco ou a memória no limite.</param>
+public sealed record SaudeAgoraV1(CartaoDeSaudeV1 TasksParadas, CartaoDeSaudeV1 Perguntas, CartaoDeSaudeV1 Fechamentos, CartaoDeSaudeV1 Maquinas);
+
+/// <summary>Um cartão do "Saúde agora".</summary>
+/// <param name="Quantidade">Quantos casos há agora.</param>
+/// <param name="Novos24h">Quantos deles começaram nas últimas 24 h.</param>
+/// <param name="MaisAntigo">Desde quando está o caso mais antigo; nulo sem caso.</param>
+/// <param name="Itens">O que identificar no cartão: os work items (<c>#669</c>) do fechamento, a amostra da máquina…</param>
+public sealed record CartaoDeSaudeV1(int Quantidade, int Novos24h, DateTimeOffset? MaisAntigo, IReadOnlyList<string> Itens);
+
+/// <summary>O RESULTADO do uso no período (e a variação contra o período anterior de mesmo tamanho).</summary>
+/// <param name="Aprovadas">As entregas aprovadas pelo desenvolvedor (a revisão humana <c>aprovada</c> ou <c>commit</c>).</param>
+/// <param name="Integradas">Os fechamentos de entrega que terminaram bem (<see cref="TiposDeEvento.FechamentoDaEntrega"/> <c>ok</c>).</param>
+/// <param name="AprovadasNaSemana">As aprovadas nos últimos 7 dias do período.</param>
+/// <param name="PercentualNaPrimeira">As sessões aprovadas sem nenhuma devolução antes, sobre as aprovadas (0–100).</param>
+/// <param name="VariacaoNaPrimeira">A diferença, em pontos percentuais, para o período anterior.</param>
+/// <param name="NotaMedia">A nota média dos avaliadores no período.</param>
+/// <param name="RodadasAteANota">As avaliações por sessão que teve o objetivo cumprido.</param>
+/// <param name="MedianaAteAprovacaoMinutos">A mediana, em minutos, do começo da sessão à aprovação.</param>
+/// <param name="VariacaoDaMedianaMinutos">A diferença da mediana para o período anterior.</param>
+/// <param name="PercentualEsperandoDev">Do tempo até a aprovação, quanto foi esperando o dev (a entrega pronta até a decisão), 0–100.</param>
+/// <param name="TurnosPorEntrega">Os turnos do período sobre as entregas aprovadas.</param>
+public sealed record ResultadoDoUsoV1(
+    long Aprovadas, long Integradas, long AprovadasNaSemana, double? PercentualNaPrimeira, double? VariacaoNaPrimeira, double? NotaMedia,
+    double? RodadasAteANota, double? MedianaAteAprovacaoMinutos, double? VariacaoDaMedianaMinutos, double? PercentualEsperandoDev,
+    double? TurnosPorEntrega, long Turnos, long ComandosDelegados, long ArquivosAlterados);
+
+/// <summary>Os turnos de um dia pelo desfecho — as quatro camadas da coluna.</summary>
+public sealed record TurnosDoDiaV1(DateOnly Dia, long Trabalhou, long EsperouDev, long LimiteDeUso, long Falhou);
+
+/// <summary>Uma causa de "onde as tasks travam": a retrospectiva do Orquestrador, com o selo da sugestão ou da US.</summary>
+/// <param name="Causa">O título curto da sugestão de impacto.</param>
+/// <param name="Vezes">Quantas sugestões o Orquestrador registrou para a causa no período.</param>
+/// <param name="Selo">O texto do selo (<c>sugestão #3</c>, <c>corrigido #568</c>, <c>#681</c>); vazio sem selo.</param>
+/// <param name="TipoDoSelo">Um de <see cref="TiposDeSelo"/>.</param>
+public sealed record CausaDeTravamentoV1(string Causa, long Vezes, string Selo, string TipoDoSelo);
+
+/// <summary>Os tipos do selo de uma causa — a cor dele na tela.</summary>
+public static class TiposDeSelo
+{
+    /// <summary>A sugestão está pendente: alguém precisa decidir.</summary>
+    public const string Sugestao = "sugestao";
+
+    /// <summary>A sugestão foi promovida: a causa tem correção.</summary>
+    public const string Corrigido = "corrigido";
+
+    /// <summary>A causa aponta a US (a origem da sugestão), sem decisão ainda.</summary>
+    public const string Us = "us";
+
+    public const string Nenhum = "";
+}
+
 /// <summary>O painel de ROI por work item (US #387): as fotos mais recentes primeiro, e os totais.</summary>
 /// <param name="Itens">No máximo as <c>ConsultasDoPainel.RoiMaximosNaLista</c> mais recentes.</param>
 public sealed record RoiResposta(DateOnly De, DateOnly Ate, IReadOnlyList<RoiDoWorkItem> Itens, RoiTotais Totais);

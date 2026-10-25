@@ -10,8 +10,8 @@ public static class Catalogos
     /// <summary>O slug do catálogo básico: o registro semeado, que não se vincula nem se exclui.</summary>
     public const string Basico = "basico";
 
-    /// <summary>Os slugs que colidem com as rotas de <c>/api/catalogos</c>.</summary>
-    public static IReadOnlyList<string> Reservados { get; } = [Basico, "meus", "base", "empresa"];
+    /// <summary>Os slugs que colidem com as rotas de <c>/api/catalogos</c> (o <c>itens</c> desde a US #687: a lista de todos).</summary>
+    public static IReadOnlyList<string> Reservados { get; } = [Basico, "meus", "base", "empresa", "itens"];
 
     /// <summary>A tag da release <paramref name="versao"/>: <c>catalogo-vN</c> no básico (continua a numeração do GitHub), <c>{slug}-vN</c> nos demais.</summary>
     public static string Tag(string slug, int versao)
@@ -66,9 +66,78 @@ public static class SituacoesDoItem
 /// <param name="VersaoPublicada">A versão do item na última release (0 = nunca publicado).</param>
 /// <param name="Situacao">Um de <see cref="SituacoesDoItem"/>.</param>
 /// <param name="Dependencias">O que o item usa (<c>tipo:nome</c>) — no fluxo, as skills das etapas e os plans embutidos.</param>
+/// <param name="Catalogo">O slug do catálogo do item (US #687: a lista de todos os catálogos); nulo numa API anterior.</param>
+/// <param name="Escopo">Para onde o item vai (<see cref="EscoposDoItem"/>, a classificação base/empresa/projeto do git.kit).</param>
+/// <param name="Stack">A stack da Rule (<c>vb6</c>, <c>dotnet</c>…); vazia em qualquer stack e nos outros tipos.</param>
+/// <param name="RuleDeImpacto">A Rule é de IMPACTO (o tipo <c>impacto</c>): nunca vai para o básico.</param>
 public sealed record ItemEditavelV1(
     long Id, string Tipo, string Nome, string Descricao, string Categoria, string Hash, int VersaoPublicada, string Situacao,
-    DateTimeOffset AlteradoEm, string AlteradoPor, IReadOnlyList<string> Dependencias, string? Conteudo);
+    DateTimeOffset AlteradoEm, string AlteradoPor, IReadOnlyList<string> Dependencias, string? Conteudo,
+    string? Catalogo = null, string? Escopo = null, string? Stack = null, bool RuleDeImpacto = false);
+
+/// <summary>
+/// Para onde vai um item (US #687) — a classificação do git.kit (<c>ClassificacaoDoCatalogo</c>) vista do site: o item do
+/// catálogo básico é BASE (toda máquina); o de um catálogo relacionado a empresas é EMPRESA; o preso a um repositório (a
+/// Rule com repositório, a skill com repositórios) é PROJETO. A Rule de impacto nunca é base.
+/// </summary>
+public static class EscoposDoItem
+{
+    public const string Base = "base";
+    public const string Empresa = "empresa";
+    public const string Projeto = "projeto";
+
+    public static IReadOnlyList<string> Todos { get; } = [Base, Empresa, Projeto];
+}
+
+/// <summary>Uma linha da comparação do rascunho com a versão publicada.</summary>
+/// <param name="Tipo">Um de <see cref="TiposDeLinha"/>.</param>
+/// <param name="Numero">O número da linha no rascunho (nulo na removida).</param>
+public sealed record LinhaDaDiferencaV1(string Tipo, string Texto, int? Numero);
+
+/// <summary>Os tipos de linha da comparação.</summary>
+public static class TiposDeLinha
+{
+    public const string Igual = "igual";
+    public const string Adicionada = "adicionada";
+    public const string Removida = "removida";
+}
+
+/// <summary>
+/// As diferenças do rascunho de um item com a versão publicada (<c>GET .../itens/{id}/diferencas</c>), no TEXTO que o
+/// editor mostra: o SKILL.md da skill (o frontmatter e o conteúdo), o conteúdo da Rule, o JSON do fluxo.
+/// </summary>
+/// <param name="VersaoPublicada">A versão comparada (0 = nunca publicado: tudo é linha nova).</param>
+/// <param name="Publicado">O texto da versão publicada (vazio quando não há).</param>
+/// <param name="Rascunho">O texto de agora.</param>
+public sealed record DiferencasDoItemV1(int VersaoPublicada, string Publicado, string Rascunho, IReadOnlyList<LinhaDaDiferencaV1> Linhas, int Adicionadas, int Removidas);
+
+/// <summary>Uma linha do histórico do item: o rascunho salvo, descartado ou retirado, ou a versão que uma release publicou.</summary>
+/// <param name="Acao">Uma de <see cref="AcoesNoItem"/>.</param>
+/// <param name="Versao">A versão do item publicada (na publicação) ou a de partida; 0 quando não se aplica.</param>
+/// <param name="Release">A tag da release (na publicação); vazia nas outras ações.</param>
+public sealed record HistoricoDoItemV1(DateTimeOffset Em, string Acao, int Versao, string Release, string Autor);
+
+/// <summary>As ações do histórico de um item do catálogo.</summary>
+public static class AcoesNoItem
+{
+    public const string Rascunho = "rascunho";
+    public const string Descartado = "descartado";
+    public const string Retirado = "retirado";
+    public const string Publicado = "publicado";
+}
+
+/// <summary>Um arquivo anexo a um item (material de apoio de quem edita: fica no site, a máquina não o recebe).</summary>
+public sealed record AnexoDoItemV1(long Id, string Nome, string TipoDeConteudo, long TamanhoBytes, string Autor, DateTimeOffset Em);
+
+/// <summary>Os limites dos anexos de um item.</summary>
+public static class AnexosDoItem
+{
+    /// <summary>O tamanho máximo de um anexo: 1 MB.</summary>
+    public const int TamanhoMaximo = 1024 * 1024;
+
+    /// <summary>Quantos anexos um item tem no máximo.</summary>
+    public const int MaximoPorItem = 10;
+}
 
 /// <summary>
 /// Criar ou editar um item: o <paramref name="Conteudo"/> é o JSON no formato do dev.kit (a skill do <c>SkillJson</c>, o plan

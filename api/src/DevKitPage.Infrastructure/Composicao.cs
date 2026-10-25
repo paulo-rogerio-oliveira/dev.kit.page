@@ -77,9 +77,18 @@ public static class Composicao
         // Os relatos dos usuários do dev.kit (US #602).
         servicos.Configure<OpcoesDosRelatos>(configuracao.GetSection(OpcoesDosRelatos.Secao));
         servicos.AddScoped<IRelatos, Relatos>();
+        // O design compartilhado (US #669): as imagens no Blob Storage em produção, numa pasta fora dela.
+        servicos.Configure<OpcoesDoDesign>(configuracao.GetSection(OpcoesDoDesign.Secao));
+        servicos.TryAddSingleton<IArmazemDeImagens>(sp =>
+            string.Equals(sp.GetRequiredService<IOptions<OpcoesDoDesign>>().Value.Armazem, OpcoesDoDesign.Blob, StringComparison.OrdinalIgnoreCase)
+                ? new ArmazemDeImagensNoBlob(sp.GetRequiredService<IOptions<OpcoesDoDesign>>())
+                : new ArmazemDeImagensEmDisco(sp.GetRequiredService<IOptions<OpcoesDoDesign>>()));
+        servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
+        // A licença por usuário na gestão do admin (US #687): o que a renovação acima respeita.
+        servicos.AddScoped<ILicencasDosUsuarios, LicencasDosUsuarios>();
         servicos.AddScoped<IPagamentos, Pagamentos>();
         // Os catálogos nomeados (US #461): a gestão usa a MESMA instância da publicação (o manifesto da última release
         // decide a situação dos itens), e o armazém dos zips é o banco por ora.

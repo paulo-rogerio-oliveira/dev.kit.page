@@ -37,9 +37,18 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<RepositorioDaEmpresa> RepositoriosDaEmpresa => Set<RepositorioDaEmpresa>();
     public DbSet<ConvencaoDaEmpresa> ConvencoesDaEmpresa => Set<ConvencaoDaEmpresa>();
     public DbSet<Relato> Relatos => Set<Relato>();
+    public DbSet<ProjetoDeDesign> ProjetosDeDesign => Set<ProjetoDeDesign>();
+    public DbSet<TelaDeDesign> TelasDeDesign => Set<TelaDeDesign>();
+    public DbSet<VersaoDeDesign> VersoesDeDesign => Set<VersaoDeDesign>();
+    public DbSet<HistoricoDeLicenca> HistoricosDeLicenca => Set<HistoricoDeLicenca>();
+    public DbSet<FotoDeEstado> FotosDeEstado => Set<FotoDeEstado>();
+    public DbSet<HistoricoDeItemDoCatalogo> HistoricosDeItemDoCatalogo => Set<HistoricoDeItemDoCatalogo>();
+    public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigurarUs687(modelBuilder);
+
         modelBuilder.Entity<Usuario>(e =>
         {
             e.ToTable("Usuarios");
@@ -123,8 +132,12 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             // O maior teto, o do contexto (US #550): o das outras convenções é da regra. No Azure SQL a coluna cresce
             // por api/scripts/sqlserver/Us550.sql.
             e.Property(c => c.Valor).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoValorDeContexto);
+            // A origem (US #663): a regra do usuário e a sugestão do agente do mesmo tema são duas linhas. No Azure SQL as
+            // colunas e o índice vêm de api/scripts/sqlserver/Us663.sql.
+            e.Property(c => c.Origem).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDaOrigemDaConvencao).HasDefaultValue(Contracts.V1.OrigensDeConvencao.Usuario);
+            e.Property(c => c.Versao).HasDefaultValue(1);
             // O UsuarioId é o dono da convenção de nível usuário e vale 0 nos outros níveis: sem FK, de propósito.
-            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave }).IsUnique();
+            e.HasIndex(c => new { c.EmpresaId, c.Nivel, c.Time, c.UsuarioId, c.Chave, c.Origem }).IsUnique();
             e.HasOne(c => c.Empresa).WithMany().HasForeignKey(c => c.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Autor).WithMany().HasForeignKey(c => c.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
@@ -148,6 +161,53 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(r => r.Usuario).WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(r => r.Empresa).WithMany().HasForeignKey(r => r.EmpresaId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(r => r.RespondidoPor).WithMany().HasForeignKey(r => r.RespondidoPorId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // O design compartilhado (US #669). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us669.sql. As imagens NÃO
+        // ficam aqui: vão para o armazém (o Blob Storage), e a versão guarda a chave e o hash.
+        modelBuilder.Entity<ProjetoDeDesign>(e =>
+        {
+            e.ToTable("ProjetosDeDesign");
+            e.Property(p => p.Espaco).HasMaxLength(40);
+            e.Property(p => p.Nivel).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoNivel);
+            e.Property(p => p.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
+            e.Property(p => p.Repositorio).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRepositorio);
+            e.Property(p => p.Chave).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRepositorio);
+            // O UsuarioId é o dono do nível usuário e vale 0 nos outros: sem FK, como na convenção.
+            e.HasIndex(p => new { p.Espaco, p.Nivel, p.Time, p.UsuarioId, p.Chave }).IsUnique();
+            e.HasIndex(p => new { p.EmpresaId, p.AtualizadoEmUtc });
+            e.HasIndex(p => new { p.UsuarioId, p.AtualizadoEmUtc });
+            e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Telas).WithOne(t => t.Projeto).HasForeignKey(t => t.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TelaDeDesign>(e =>
+        {
+            e.ToTable("TelasDeDesign");
+            e.Property(t => t.Identificador).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoId);
+            e.Property(t => t.Nome).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoNome);
+            e.Property(t => t.Estado).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoEstado);
+            e.HasIndex(t => new { t.ProjetoId, t.Identificador }).IsUnique();
+            e.HasMany(t => t.Versoes).WithOne(v => v.Tela).HasForeignKey(v => v.TelaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<VersaoDeDesign>(e =>
+        {
+            e.ToTable("VersoesDeDesign");
+            e.Property(v => v.Tipo).HasMaxLength(20);
+            e.Property(v => v.Tema).HasMaxLength(10);
+            e.Property(v => v.Origem).HasMaxLength(20);
+            e.Property(v => v.Alvo).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoAlvo);
+            e.Property(v => v.Branch).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoBranch);
+            e.Property(v => v.Commit).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoCommit);
+            e.Property(v => v.Descricao).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDaDescricao);
+            e.Property(v => v.AutorTipo).HasMaxLength(20);
+            e.Property(v => v.Runner).HasMaxLength(Contracts.V1.DesignV1.TamanhoMaximoDoRunner);
+            e.Property(v => v.Sha256).HasMaxLength(64);
+            e.Property(v => v.ChaveDaImagem).HasMaxLength(300);
+            // O número ÚNICO na tela é o que torna o reenvio da fila do dev.kit inofensivo (o hash decide 200 ou 409).
+            e.HasIndex(v => new { v.TelaId, v.Numero }).IsUnique();
+            e.HasOne(v => v.Autor).WithMany().HasForeignKey(v => v.AutorId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.
@@ -354,6 +414,73 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(p => p.Empresa).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaEmpresa);
             e.Property(p => p.Mensagem).HasMaxLength(ValidadorDeDemonstracao.TamanhoMaximoDaMensagem);
             e.HasIndex(p => p.RecebidoEmUtc);
+        });
+    }
+
+    /// <summary>
+    /// A US #687: a licença por usuário (as colunas novas e o histórico), os dados básicos e o contrato da empresa, as fotos
+    /// do "Saúde agora" do painel e o histórico e os anexos dos itens do catálogo. No Azure SQL as tabelas e as colunas vêm
+    /// de api/scripts/sqlserver/Us687.sql.
+    /// </summary>
+    private static void ConfigurarUs687(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Usuario>(e => e.Property(u => u.LicencaTipo).HasMaxLength(20));
+
+        modelBuilder.Entity<Empresa>(e =>
+        {
+            e.Property(x => x.Cnpj).HasMaxLength(14);
+            e.Property(x => x.Segmento).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoSegmento);
+            e.Property(x => x.Cidade).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDaCidade);
+            e.Property(x => x.Uf).HasMaxLength(2);
+            e.Property(x => x.Contato).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoContato);
+            e.Property(x => x.Telefone).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoTelefone);
+            e.Property(x => x.Site).HasMaxLength(RegrasDaEmpresa.TamanhoMaximoDoSite);
+            e.Property(x => x.AlteradaPor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+        });
+
+        modelBuilder.Entity<HistoricoDeLicenca>(e =>
+        {
+            e.ToTable("HistoricosDeLicenca");
+            e.Property(h => h.Acao).HasMaxLength(20);
+            e.Property(h => h.Descricao).HasMaxLength(200);
+            e.Property(h => h.Motivo).HasMaxLength(RegrasDeLicenca.TamanhoMaximoDoMotivo);
+            e.Property(h => h.Autor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.HasIndex(h => new { h.UsuarioId, h.EmUtc });
+            e.HasOne(h => h.Usuario).WithMany().HasForeignKey(h => h.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A foto do estado (o "Saúde agora"): UMA por (máquina, tipo, chave) — o índice único garante que o upsert da
+        // ingestão nunca deixa duas, como no ROI.
+        modelBuilder.Entity<FotoDeEstado>(e =>
+        {
+            e.ToTable("FotosDeEstado");
+            e.Property(f => f.Tipo).HasMaxLength(50);
+            e.Property(f => f.Chave).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(f => f.Detalhe).HasMaxLength(ValidadorDeLote.TamanhoMaximoDoTexto);
+            e.Property(f => f.EventId).HasMaxLength(64);
+            e.HasIndex(f => new { f.MaquinaId, f.Tipo, f.Chave }).IsUnique();
+            e.HasIndex(f => new { f.Tipo, f.EmUtc });
+            e.HasOne(f => f.Maquina).WithMany().HasForeignKey(f => f.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HistoricoDeItemDoCatalogo>(e =>
+        {
+            e.ToTable("HistoricosDeItemDoCatalogo");
+            e.Property(h => h.Acao).HasMaxLength(20);
+            e.Property(h => h.Autor).HasMaxLength(100);
+            e.HasIndex(h => new { h.ItemId, h.EmUtc });
+            e.HasOne(h => h.Item).WithMany().HasForeignKey(h => h.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // O anexo é varbinary(max) no SQL Server, com o teto do contrato conferido antes.
+        modelBuilder.Entity<AnexoDeItemDoCatalogo>(e =>
+        {
+            e.ToTable("AnexosDeItemDoCatalogo");
+            e.Property(a => a.Nome).HasMaxLength(200);
+            e.Property(a => a.TipoDeConteudo).HasMaxLength(100);
+            e.Property(a => a.Autor).HasMaxLength(100);
+            e.HasIndex(a => a.ItemId);
+            e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

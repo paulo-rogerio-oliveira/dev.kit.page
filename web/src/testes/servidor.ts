@@ -4,7 +4,8 @@ import type {
   CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
   ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
-  Vitrine,
+  ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
+  AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -33,6 +34,10 @@ export const colaboradores: ColaboradorResumo[] = [
 export const empresa: EmpresaResumo = {
   id: 4, nome: 'Empresa A', plano: 'Empresarial', assentos: 10, codigoDeAdesao: 'DK-7QH4-M2XA', colaboradores: 2, criadaEm: '2026-10-01T10:00:00Z',
   gestor: null, assentosEmUso: 3,
+  dados: {
+    cnpj: '11222333000181', segmento: 'Software / ERP', cidade: 'São Paulo', uf: 'SP', contato: 'gestor@empresa-a.com.br', telefone: '', site: '',
+    contratoAte: '2027-03-16', alteradaEm: '2026-10-22T10:00:00Z', alteradaPor: 'admin',
+  },
 };
 
 /** A segunda empresa (US #461): já tem gestor e o único assento ocupado. */
@@ -96,9 +101,69 @@ export const tokenDoDev = (): LoginResponse => ({
 
 /** Os usuários da lista do admin (US #405). */
 export const usuarios: UsuarioResumo[] = [
-  { id: 1, login: 'admin', nome: '', papel: 'admin', empresaId: null, empresa: null, bloqueado: false, bloqueadoAte: null, deveTrocarSenha: false, criadoEm: '2026-10-01T10:00:00Z' },
-  { id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z' },
+  {
+    id: 1, login: 'admin', nome: '', papel: 'admin', empresaId: null, empresa: null, bloqueado: false, bloqueadoAte: null, deveTrocarSenha: false, criadoEm: '2026-10-01T10:00:00Z',
+    licenca: { tipo: 'admin', situacao: 'sem-prazo', validaAte: null, diasRestantes: null, inicio: '2026-10-01T10:00:00Z', definidaPeloAdmin: false, ultimoUso: null },
+  },
+  {
+    id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z',
+    licenca: { tipo: 'trial', situacao: 'vencendo', validaAte: '2026-10-28T23:59:59Z', diasRestantes: 3, inicio: '2026-10-02T10:00:00Z', definidaPeloAdmin: true, ultimoUso: '2026-10-25T11:42:00Z' },
+  },
 ];
+
+// ----- US #687 -----
+
+/** O painel de utilidade (GET /api/dashboard/utilidade). */
+export const utilidade: UtilidadeResposta = {
+  de: '2026-09-26', ate: '2026-10-25',
+  saude: {
+    tasksParadas: { quantidade: 6, novos24h: 4, maisAntigo: '2026-10-08T10:00:00Z', itens: [] },
+    perguntas: { quantidade: 10, novos24h: 2, maisAntigo: '2026-10-22T10:00:00Z', itens: [] },
+    fechamentos: { quantidade: 2, novos24h: 1, maisAntigo: '2026-10-24T10:00:00Z', itens: ['#669', '#585'] },
+    maquinas: { quantidade: 1, novos24h: 1, maisAntigo: '2026-10-25T10:00:00Z', itens: ['máquina a1b2c3d4: disco 8 MB · memória 124 MB livres'] },
+  },
+  resultado: {
+    aprovadas: 14, integradas: 11, aprovadasNaSemana: 11, percentualNaPrimeira: 57, variacaoNaPrimeira: 9, notaMedia: 91, rodadasAteANota: 2.1,
+    medianaAteAprovacaoMinutos: 400, variacaoDaMedianaMinutos: 110, percentualEsperandoDev: 62, turnosPorEntrega: 17.7, turnos: 248, comandosDelegados: 63,
+    arquivosAlterados: 296,
+  },
+  turnosPorDesfecho: [
+    { dia: '2026-10-24', trabalhou: 9, esperouDev: 2, limiteDeUso: 1, falhou: 1 },
+    { dia: '2026-10-25', trabalhou: 5, esperouDev: 1, limiteDeUso: 0, falhou: 2 },
+  ],
+  ondeTravam: [
+    { causa: 'Esperou processo em segundo plano que morreu', vezes: 9, selo: 'sugestão #3', tipoDoSelo: 'sugestao' },
+    { causa: 'Pergunta sem chegar ao dev', vezes: 7, selo: 'corrigido #568', tipoDoSelo: 'corrigido' },
+  ],
+};
+
+/** A licença da Ana (GET /api/usuarios/2/licenca). */
+export const licencaDaAna: DetalheDaLicenca = {
+  usuarioId: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresa: 'Empresa A', licenca: usuarios[1].licenca!,
+  historico: [
+    { em: '2026-10-21T10:00:00Z', acao: 'renovada', descricao: 'login renovou a licença do dev.kit até 28/10/2026', motivo: '', autor: 'ana.dev' },
+    { em: '2026-10-14T10:00:00Z', acao: 'definida', descricao: 'validade até 28/10/2026 · trial', motivo: 'trial de 14 dias', autor: 'admin' },
+  ],
+};
+
+/** O catálogo da edição de artefato: a skill do básico com o rascunho da v2. */
+export const itemDoBasico: ItemEditavel = {
+  id: 31, tipo: 'skill', nome: 'compilar-net-framework', descricao: 'Compilar projetos .NET Framework', categoria: '.NET', hash: 'h31', versaoPublicada: 1,
+  situacao: 'alterado', alteradoEm: '2026-10-25T11:58:00Z', alteradoPor: 'admin', dependencias: [], conteudo: null, catalogo: 'basico', escopo: 'base', stack: '',
+  ruleDeImpacto: false,
+};
+
+export const diferencasDoItem: DiferencasDoItem = {
+  versaoPublicada: 1, publicado: '---\nname: compilar-net-framework\n---\n\n1. Ache o MSBuild.', rascunho: '', adicionadas: 1, removidas: 0,
+  linhas: [{ tipo: 'igual', texto: '---', numero: 1 }, { tipo: 'adicionada', texto: '3. Use -m:1 -nodeReuse:false', numero: 7 }],
+};
+
+export const historicoDoItem: HistoricoDoItem[] = [
+  { em: '2026-10-25T11:58:00Z', acao: 'rascunho', versao: 1, release: '', autor: 'admin' },
+  { em: '2026-10-23T10:00:00Z', acao: 'publicado', versao: 1, release: 'catalogo-v1', autor: 'admin' },
+];
+
+export const anexosDoItem: AnexoDoItem[] = [{ id: 1, nome: 'exemplo.log', tipoDeConteudo: 'text/plain', tamanhoBytes: 2048, autor: 'admin', em: '2026-10-24T10:00:00Z' }];
 
 /** O que chegou às rotas de escrita da gestão de usuários (o corpo, ou a ação). */
 export const gestaoDeUsuarios: { metodo: string; caminho: string; corpo: unknown }[] = [];
@@ -290,6 +355,52 @@ export const contextosDaEmpresa: ConvencaoDaEmpresa[] = [
   { nivel: 'usuario', chave: 'contexto.estilo', valor: 'Respostas curtas, com o porquê.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-16T09:20:00Z' },
 ];
 
+/** As SUGESTÕES dos agentes (US #663), ao lado das regras: origem agente, com o id e a versão. */
+export const sugestoesDaEmpresa: ConvencaoDaEmpresa[] = [
+  { nivel: 'empresa', chave: 'contexto.testes', valor: 'Rode o lint antes do PR.', time: '', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:00:00Z', id: 101, origem: 'agente', versao: 1 },
+  { nivel: 'time', chave: 'contexto.stack', valor: 'Angular 19 standalone.', time: 'vendas', usuario: '', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:10:00Z', id: 102, origem: 'agente', versao: 2 },
+  { nivel: 'usuario', chave: 'contexto.revisao', valor: 'Prefere diffs pequenos.', time: '', usuario: 'Ana Souza', autor: 'Ana Souza', atualizadoEm: '2026-10-22T18:20:00Z', id: 103, origem: 'agente', versao: 1 },
+];
+
+// ----- US #669: o design compartilhado -----
+
+const versaoDeDesign = (numero: number, tipo: 'captura' | 'proposta', extra: Partial<VersaoDeDesign> = {}): VersaoDeDesign => ({
+  numero, tipo, base: null, tema: 'light', largura: 1440, altura: 900, origem: tipo === 'proposta' ? 'proposta' : 'web', alvo: 'http://localhost:5173/checkout',
+  branch: 'feature/dev/semana5', commit: '3f9c2a1', descricao: '', autor: 'Ana Souza', autorTipo: 'agente', runner: 'claude',
+  criadaEm: '2026-10-23T14:05:00Z', sha256: String(numero).repeat(64).slice(0, 64), bytes: 48_000,
+  link: `/api/design/7/checkout/v${numero}`, podeApagar: false, ...extra,
+});
+
+/**
+ * Os projetos de design que a API devolve (US #669): o portal da empresa (a tela Checkout com captura, proposta e
+ * recaptura — a da Ana o gestor apaga — e o Login só com captura, de outro branch) e um projeto do nível usuário.
+ */
+export const projetosDeDesign: ProjetoDeDesign[] = [
+  {
+    id: 7, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'empresa', time: '', dono: '', atualizadoEm: '2026-10-23T16:40:00Z',
+    telas: [
+      {
+        id: 'checkout', nome: 'Checkout', estado: '', versoes: [
+          versaoDeDesign(1, 'captura', { branch: 'feature/dev/semana4', commit: '81c0e2d', criadaEm: '2026-10-21T10:12:00Z' }),
+          versaoDeDesign(2, 'proposta', { base: 1, descricao: 'Botão de pagar em destaque.', podeApagar: true }),
+          versaoDeDesign(3, 'captura', { base: 2, commit: '9d41b07', criadaEm: '2026-10-23T16:40:00Z', podeApagar: true }),
+        ],
+      },
+      {
+        id: 'login', nome: 'Login', estado: '', versoes: [
+          versaoDeDesign(1, 'captura', { branch: 'feature/dev/semana3', link: '/api/design/7/login/v1' }),
+        ],
+      },
+    ],
+  },
+  {
+    id: 9, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'usuario', time: '', dono: 'Ana Souza', atualizadoEm: '2026-10-22T10:00:00Z',
+    telas: [{ id: 'rascunho', nome: 'Rascunho', estado: '', versoes: [versaoDeDesign(1, 'proposta', { link: '/api/design/9/rascunho/v1', podeApagar: true })] }],
+  },
+];
+
+export const usoDoDesign: UsoDoDesign = { versoes: 37, tetoDeVersoes: 500, bytes: 48 * 1_048_576, tetoDeBytes: 2048 * 1_048_576, plano: 'Empresarial' };
+
 // ----- US #602: os relatos -----
 
 /** O PNG de 1x1 em base64 (a captura do relato). */
@@ -345,6 +456,50 @@ export const handlersPadrao = [
   http.get(`${API}/api/dashboard/quantidade`, ({ request }) => {
     requisicoes.push(new URL(request.url));
     return HttpResponse.json(quantidade);
+  }),
+  // US #687: o painel de utilidade, a licença por usuário, a edição da empresa e a edição de artefato do catálogo.
+  http.get(`${API}/api/dashboard/utilidade`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(utilidade);
+  }),
+  http.get(`${API}/api/usuarios/:id/licenca`, () => HttpResponse.json(licencaDaAna)),
+  http.post(`${API}/api/usuarios/:id/licenca/previa`, async ({ request }) => {
+    const corpo = (await request.json()) as { modo: string; dias?: number };
+    return HttpResponse.json({
+      validaAte: '2026-11-27T23:59:59Z', semPrazo: corpo.modo === 'sem-prazo', diasAPartirDeHoje: 33, tipo: 'individual',
+      mensagem: corpo.modo === 'sem-prazo' ? 'Sem prazo: a licença do dev.kit de Ana renova sem data-limite, no próximo login.'
+        : 'Nova validade: 27/11/2026 (33 dias a partir de hoje). A licença do dev.kit de Ana renova no próximo login, sem precisar sair.',
+    });
+  }),
+  http.put(`${API}/api/usuarios/:id/licenca`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/licenca`, corpo });
+    return HttpResponse.json({ ...licencaDaAna, licenca: { ...licencaDaAna.licenca, situacao: 'valida', validaAte: '2026-11-27T23:59:59Z', diasRestantes: 33 } });
+  }),
+  http.post(`${API}/api/usuarios/:id/licenca/revogar`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/licenca/revogar`, corpo });
+    return HttpResponse.json({ ...licencaDaAna, licenca: { ...licencaDaAna.licenca, situacao: 'revogada', validaAte: null, diasRestantes: null } });
+  }),
+  http.put(`${API}/api/empresas/:id`, async ({ params, request }) => {
+    const corpo = (await request.json()) as object;
+    escritas.push({ metodo: 'PUT', caminho: `/api/empresas/${params.id}`, corpo });
+    return HttpResponse.json({ ...empresa, ...corpo, id: Number(params.id) });
+  }),
+  http.get(`${API}/api/catalogos/itens`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json([itemDoBasico]);
+  }),
+  http.get(`${API}/api/catalogos/basico/itens/31`, () => HttpResponse.json({
+    ...itemDoBasico,
+    conteudo: JSON.stringify({ name: 'compilar-net-framework', description: 'Compilar projetos .NET Framework', content: '# Compilar\n\n1. Ache o MSBuild.' }),
+  })),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/diferencas`, () => HttpResponse.json(diferencasDoItem)),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/historico`, () => HttpResponse.json(historicoDoItem)),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/anexos`, () => HttpResponse.json(anexosDoItem)),
+  http.post(`${API}/api/catalogos/:slug/itens/:id/descartar`, ({ params }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/catalogos/${params.slug}/itens/${params.id}/descartar`, corpo: null });
+    return HttpResponse.json({ ...itemDoBasico, situacao: 'publicado', conteudo: JSON.stringify({ name: 'compilar-net-framework', description: 'x', content: 'v1' }) });
   }),
   http.get(`${API}/api/dashboard/qualidade`, ({ request }) => {
     requisicoes.push(new URL(request.url));
@@ -529,16 +684,43 @@ export const handlersPadrao = [
     escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/repositorios?origem=${origem}`, corpo: null });
     return HttpResponse.json(repositoriosDaEmpresa.find((r) => r.origem === origem) ?? repositoriosDaEmpresa[0]);
   }),
-  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa])),
+  http.get(`${API}/api/empresa/convencoes/todas`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa, ...sugestoesDaEmpresa])),
   http.put(`${API}/api/empresa/convencoes`, async ({ request }) => {
     const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string };
     escritas.push({ metodo: 'PUT', caminho: '/api/empresa/convencoes', corpo });
     return HttpResponse.json({ ...corpo, usuario: '', autor: 'Gestor A', atualizadoEm: '2026-10-15T10:00:00Z' });
   }),
   // US #550: o que o dev.kit lê sem time (a da empresa e a de quem consulta), as equipes conhecidas e as rotas do admin.
-  http.get(`${API}/api/empresa/convencoes`, () => HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa].filter((c) => c.nivel !== 'time'))),
+  // US #663: sem ?origem só as regras (o dev.kit antigo); com ?origem=todas, também as sugestões.
+  http.get(`${API}/api/empresa/convencoes`, ({ request }) => {
+    const todas = new URL(request.url).searchParams.get('origem') === 'todas';
+    return HttpResponse.json([...convencoesDaEmpresa, ...contextosDaEmpresa, ...(todas ? sugestoesDaEmpresa : [])].filter((c) => c.nivel !== 'time'));
+  }),
+  // US #663: promover (a versão lida tem de ser a atual, senão 409) e descartar a sugestão do agente.
+  http.post(`${API}/api/empresa/contexto/:id/promover`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { versaoEsperada: number | null };
+    escritas.push({ metodo: 'POST', caminho: `/api/empresa/contexto/${params.id}/promover`, corpo });
+    const sugestao = sugestoesDaEmpresa.find((s) => String(s.id) === params.id);
+    if (!sugestao) return HttpResponse.json({ detail: 'A sugestão não existe mais (alguém a promoveu ou descartou).' }, { status: 404 });
+    if (corpo.versaoEsperada !== null && corpo.versaoEsperada !== sugestao.versao)
+      return HttpResponse.json({ detail: 'A sugestão mudou depois que você a leu (outro agente a reescreveu). Confira o texto novo e promova de novo.' }, { status: 409 });
+    return HttpResponse.json({ ...sugestao, origem: 'usuario', autor: 'Gestor A' });
+  }),
+  http.delete(`${API}/api/empresa/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/empresa/contexto/${params.id}`, corpo: null });
+    const sugestao = sugestoesDaEmpresa.find((s) => String(s.id) === params.id);
+    return sugestao ? HttpResponse.json(sugestao) : HttpResponse.json({ detail: 'Só quem grava a regra desta camada, ou o autor da sugestão, a descarta.' }, { status: 403 });
+  }),
+  http.post(`${API}/api/empresas/:empresa/contexto/:id/promover`, async ({ params, request }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/empresas/${params.empresa}/contexto/${params.id}/promover`, corpo: await request.json() });
+    return HttpResponse.json({ ...sugestoesDaEmpresa[0], origem: 'usuario', autor: 'admin' });
+  }),
+  http.delete(`${API}/api/empresas/:empresa/contexto/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/empresas/${params.empresa}/contexto/${params.id}`, corpo: null });
+    return HttpResponse.json(sugestoesDaEmpresa[0]);
+  }),
   http.get(`${API}/api/empresa/equipes`, () => HttpResponse.json(['vendas'])),
-  http.get(`${API}/api/empresas/:id/convencoes/todas`, ({ params }) => HttpResponse.json(params.id === '4' ? [...convencoesDaEmpresa, ...contextosDaEmpresa] : [])),
+  http.get(`${API}/api/empresas/:id/convencoes/todas`, ({ params }) => HttpResponse.json(params.id === '4' ? [...convencoesDaEmpresa, ...contextosDaEmpresa, ...sugestoesDaEmpresa] : [])),
   http.get(`${API}/api/empresas/:id/equipes`, ({ params }) => HttpResponse.json(params.id === '4' ? ['vendas'] : [])),
   http.put(`${API}/api/empresas/:id/convencoes`, async ({ params, request }) => {
     const corpo = (await request.json()) as { nivel: string; chave: string; valor: string; time: string; usuario: string };
@@ -584,6 +766,19 @@ export const handlersPadrao = [
       estado: relato.estado === 'novo' ? 'em-analise' : relato.estado,
     });
     return HttpResponse.json(relato);
+  }),
+  // US #669: o design compartilhado — os projetos, o uso do teto, a imagem pelo link estável e o apagar.
+  http.get(`${API}/api/design/projetos`, () => HttpResponse.json(projetosDeDesign)),
+  http.get(`${API}/api/design/projetos/:id`, ({ params }) => {
+    const projeto = projetosDeDesign.find((p) => String(p.id) === params.id);
+    return projeto ? HttpResponse.json(projeto) : HttpResponse.json({ detail: 'Projeto de design não encontrado.' }, { status: 404 });
+  }),
+  http.get(`${API}/api/design/uso`, () => HttpResponse.json(usoDoDesign)),
+  http.get(`${API}/api/design/:projeto/:tela/:versao`, () =>
+    new HttpResponse(Uint8Array.from(atob(CAPTURA_PNG), (c) => c.charCodeAt(0)), { headers: { 'Content-Type': 'image/png' } })),
+  http.delete(`${API}/api/design/:projeto/:tela/:versao`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/design/${params.projeto}/${params.tela}/${params.versao}`, corpo: null });
+    return HttpResponse.json(projetosDeDesign[0].telas[0].versoes[1]);
   }),
   // US #405: a gestão de usuários.
   http.get(`${API}/api/usuarios`, () => HttpResponse.json(usuarios)),

@@ -16,7 +16,7 @@ describe('Login', () => {
 
     await entrar('certa');
 
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
   });
 
   it('o gestor entra e cai no dashboard da empresa dele (US #381)', async () => {
@@ -26,7 +26,7 @@ describe('Login', () => {
     await userEvent.type(screen.getByLabelText('Senha'), 'certa');
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
     expect(screen.getByText('gestor.a · Empresa A')).toBeInTheDocument();
     expect(screen.getByLabelText('Colaborador')).toBeInTheDocument();
   });
@@ -57,7 +57,7 @@ describe('Login', () => {
     await userEvent.type(screen.getByLabelText('Confirme a nova senha'), 'senhaNova2026');
     await userEvent.click(screen.getByRole('button', { name: 'Trocar senha' }));
 
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
   });
 
   it('o dashboard sem token redireciona ao login', () => {
@@ -74,7 +74,7 @@ describe('Login', () => {
   });
 
   it('um 401 da API no meio do uso encerra a sessão e volta ao login', async () => {
-    servidor.use(http.get(`${API}/api/dashboard/quantidade`, () => new HttpResponse(null, { status: 401 })));
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => new HttpResponse(null, { status: 401 })));
 
     renderizar('/dashboard', tokenValido());
 

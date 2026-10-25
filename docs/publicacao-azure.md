@@ -195,6 +195,34 @@ Rode também `api/scripts/sqlserver/Us550.sql` (idempotente, depois do `Us491.sq
 `ConvencoesDaEmpresa` passa a `nvarchar(4000)`, o teto do texto do contexto (`contexto.<tema>`). Sem ele, gravar um
 contexto com mais de 200 caracteres responde 500. Nenhuma tabela nem configuração nova.
 
+### Regra do usuário × Sugestão do agente (US #663)
+
+Rode também `api/scripts/sqlserver/Us663.sql` (idempotente, depois do `Us550.sql`): `ConvencoesDaEmpresa` ganha
+`Origem` (`usuario`, a regra; `agente`, a sugestão) e `Versao`, e o índice único passa a incluir a origem. Só
+acrescenta: o que já existe vira regra na versão 1. Sem ele, `/api/empresa/contexto/*` e a leitura com
+`?origem=todas` respondem 500. A rota antiga (`GET /api/empresa/convencoes` sem `origem`) continua devolvendo só as
+regras — o dev.kit instalado não vê as sugestões como regra. Nenhuma configuração nova.
+
+### Design compartilhado (US #669)
+
+Rode também `api/scripts/sqlserver/Us669.sql` (idempotente): cria `ProjetosDeDesign`, `TelasDeDesign` e
+`VersoesDeDesign`. As IMAGENS não vão para o banco: crie uma Storage Account (ou use a existente) e configure na API
+`Design__Armazem=blob` e o segredo `Design__ConexaoDoBlob` (a connection string, do Key Vault); o contêiner
+`Design__Conteiner` (padrão `design`) é criado privado na primeira gravação. O teto por plano é ajustável sem código
+(`Design__Tetos__Empresarial__Versoes`, `Design__Tetos__Empresarial__MegaBytes`, `Design__TetoPadrao__*`). Sem o
+`Design__Armazem=blob`, as imagens vão para a pasta `Design__Pasta` do contêiner da API — e se perdem a cada nova revisão.
+
+### Painel de utilidade, licença por usuário, empresa e editor de artefato (US #687)
+
+Rode também `api/scripts/sqlserver/Us687.sql` (idempotente) **antes de publicar a API** desta versão — e a API antes de
+distribuir o pacote do dev.kit que manda os eventos novos. Ele acrescenta a `Usuarios` as colunas da licença definida
+pelo admin (`LicencaValidaAteUtc`, `LicencaSemPrazo`, `LicencaTipo`, `LicencaRevogadaEmUtc`, `LicencaAlteradaEmUtc`), a
+`Empresas` os dados da empresa (`Cnpj`, `Segmento`, `Cidade`, `Uf`, `Contato`, `Telefone`, `Site`, `ContratoAteUtc`,
+`AlteradaEmUtc`, `AlteradaPor`) e cria `HistoricosDeLicenca`, `FotosDeEstado`, `HistoricosDeItemDoCatalogo` e
+`AnexosDeItemDoCatalogo`. Só acrescenta: usuário sem licença definida segue a renovação de antes (30 dias corridos). Sem
+ele, `/api/usuarios`, `/api/empresas`, a ingestão da telemetria e `/api/catalogos/itens` respondem 500. Nenhuma
+configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

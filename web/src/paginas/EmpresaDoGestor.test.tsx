@@ -50,7 +50,7 @@ describe('Usuários da empresa (US #425)', () => {
     sessionStorage.clear();
 
     renderizar('/empresa/usuarios', tokenValido());
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
   });
 });
 

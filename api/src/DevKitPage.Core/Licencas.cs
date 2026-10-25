@@ -86,32 +86,190 @@ public enum RecusaDaRenovacao
 
     /// <summary>A empresa do dev não tem assento para ele (403).</summary>
     SemAssento,
+
+    /// <summary>A validade que o admin definiu (ou a do contrato da empresa) passou (US #687): "Bloqueado: licença" (403).</summary>
+    LicencaVencida,
+
+    /// <summary>O admin revogou a licença do usuário (US #687, 403).</summary>
+    LicencaRevogada,
 }
 
-/// <summary>As regras puras da licença assinada (US #425, fase 4): o trial, a validade e a janela de renovação.</summary>
+/// <summary>
+/// A licença do dev.kit de um usuário como a regra a vê (US #687): o tipo, a validade que a renovação respeita (a definida
+/// pelo admin para ele, ou a do contrato da empresa) e as marcas do admin.
+/// </summary>
+/// <param name="ValidaAte">O fim do último dia da validade; nulo sem prazo, revogada ou sem validade definida por ninguém.</param>
+/// <param name="DefinidaPeloAdmin">O admin definiu a licença DESTE usuário (validade, sem prazo ou revogação).</param>
+public sealed record LicencaDoUsuario(string Tipo, DateTimeOffset? ValidaAte, bool SemPrazo, bool Revogada, bool DefinidaPeloAdmin);
+
+/// <summary>
+/// As regras puras da licença assinada (US #425, fase 4): o trial, a validade e a janela de renovação. Desde a US #687,
+/// também a validade que o ADMIN define por usuário — que a renovação respeita: ela nunca emite além da validade, recusa
+/// a vencida e a revogada, e abre a janela quando o admin mudou a licença depois da última emissão.
+/// </summary>
 public static partial class RegrasDeLicenca
 {
+    /// <summary>O teto de dias que o admin soma de uma vez (dez anos): mais que isto é engano de digitação.</summary>
+    public const int DiasMaximosDeUmaVez = 3650;
+
+    /// <summary>O tamanho máximo do motivo no histórico.</summary>
+    public const int TamanhoMaximoDoMotivo = 300;
+
     /// <summary>A licença atual pode ser renovada? Só a partir do <paramref name="aPartirDoDia"/>º dia da emissão.</summary>
     public static bool NaJanela(DateTimeOffset emitidaEm, DateTimeOffset agora, int aPartirDoDia)
         => agora >= emitidaEm.AddDays(Math.Max(0, aPartirDoDia));
 
     /// <summary>
+    /// A janela da renovação com a VALIDADE da licença (US #687): a partir do <paramref name="aPartirDoDia"/>º dia da emissão
+    /// OU a menos de <paramref name="aPartirDoDia"/> dias do fim. Sem a segunda metade, a licença curta que o admin definiu
+    /// (3 dias) venceria antes do 7º dia sem que a máquina pedisse a renovação. É a MESMA regra do
+    /// <c>LicencaDoDevKit.NaJanela</c> do git.kit — travada pelo contrato <c>ContratoDaRenovacao/casos.json</c>.
+    /// </summary>
+    public static bool NaJanela(DateTimeOffset emitidaEm, DateTimeOffset validaAte, DateTimeOffset agora, int aPartirDoDia)
+        => NaJanela(emitidaEm, agora, aPartirDoDia) || agora >= validaAte.AddDays(-Math.Max(0, aPartirDoDia));
+
+    /// <summary>
     /// A recusa da renovação, ou <see cref="RecusaDaRenovacao.Nenhuma"/>. A <paramref name="atual"/> é a licença que a
-    /// máquina apresentou (já conferida): a de assinatura fora da janela é cedo demais; o trial renova a qualquer hora
-    /// (é a primeira licença de quem acabou de entrar).
+    /// máquina apresentou (já conferida): a de assinatura fora da janela é cedo demais — a menos que o admin tenha mudado
+    /// a licença (do usuário ou o contrato da empresa) depois da emissão dela; o trial renova a qualquer hora (é a
+    /// primeira licença de quem acabou de entrar). A validade do admin vem antes da empresa: a vencida e a revogada são
+    /// recusadas, e a licença definida para um usuário sem empresa renova.
     /// </summary>
     public static RecusaDaRenovacao Avaliar(Usuario usuario, Empresa? empresa, ConteudoDaLicenca? atual, DateTimeOffset agora, int aPartirDoDia)
     {
         if (usuario.BloqueadoPeloAdmin)
             return RecusaDaRenovacao.UsuarioBloqueado;
-        if (empresa is null)
+        var licenca = Licenca(usuario, empresa);
+        if (licenca.Revogada)
+            return RecusaDaRenovacao.LicencaRevogada;
+        if (licenca.ValidaAte is { } fim && fim <= agora)
+            return RecusaDaRenovacao.LicencaVencida;
+        if (empresa is null && !licenca.DefinidaPeloAdmin)
             return RecusaDaRenovacao.SemEmpresa;
-        if (empresa.AssinaturaCanceladaEmUtc is not null)
+        if (empresa?.AssinaturaCanceladaEmUtc is not null)
             return RecusaDaRenovacao.AssinaturaCancelada;
-        if (atual is { Tipo: TiposDeLicenca.Assinatura } && !NaJanela(atual.EmitidaEm, agora, aPartirDoDia))
+        if (atual is { Tipo: TiposDeLicenca.Assinatura } && !NaJanela(atual.EmitidaEm, atual.ValidaAte, agora, aPartirDoDia)
+            && !AlteradaDepois(usuario, empresa, atual.EmitidaEm))
             return RecusaDaRenovacao.CedoDemais;
         return RecusaDaRenovacao.Nenhuma;
     }
+
+    /// <summary>
+    /// Até quando vai a licença emitida agora: os <paramref name="validadeDias"/> de sempre, sem passar da validade do
+    /// admin (ou do contrato). A licença continua curta e renovada pelo login — o corte do gestor segue valendo —, e a
+    /// data do admin é o teto.
+    /// </summary>
+    public static DateTimeOffset ValidadeEmitida(LicencaDoUsuario licenca, DateTimeOffset agora, int validadeDias)
+    {
+        var padrao = agora.AddDays(Math.Max(1, validadeDias));
+        return licenca.ValidaAte is { } fim && fim < padrao ? fim : padrao;
+    }
+
+    /// <summary>
+    /// A licença do usuário: a conta de administração não tem prazo; a revogação e a validade do admin valem antes do
+    /// contrato da empresa; sem nada definido, a renovação segue como antes (sem data-limite, a situação automática).
+    /// </summary>
+    public static LicencaDoUsuario Licenca(Usuario usuario, Empresa? empresa)
+    {
+        if (usuario.EhAdmin || usuario.Papel == Papeis.Admin)
+            return new LicencaDoUsuario(TiposDaLicencaDoUsuario.Admin, null, SemPrazo: true, Revogada: false, DefinidaPeloAdmin: false);
+
+        var tipo = usuario.LicencaTipo.Length > 0
+            ? usuario.LicencaTipo
+            : empresa is null ? TiposDaLicencaDoUsuario.Trial : empresa.Individual ? TiposDaLicencaDoUsuario.Individual : TiposDaLicencaDoUsuario.Empresa;
+        if (usuario.LicencaRevogadaEmUtc is not null)
+            return new LicencaDoUsuario(tipo, null, false, Revogada: true, DefinidaPeloAdmin: true);
+        if (usuario.LicencaSemPrazo)
+            return new LicencaDoUsuario(tipo, null, SemPrazo: true, false, DefinidaPeloAdmin: true);
+        if (usuario.LicencaValidaAteUtc is { } doAdmin)
+            return new LicencaDoUsuario(tipo, Utc(doAdmin), false, false, DefinidaPeloAdmin: true);
+        if (empresa?.ContratoAteUtc is { } contrato)
+            return new LicencaDoUsuario(tipo, Utc(contrato), false, false, DefinidaPeloAdmin: false);
+        return new LicencaDoUsuario(tipo, null, false, false, false);
+    }
+
+    /// <summary>A situação (<see cref="SituacoesDaLicenca"/>) e os dias que faltam, contados por DATA (vence amanhã = 1).</summary>
+    public static (string Situacao, int? DiasRestantes) Situacao(LicencaDoUsuario licenca, DateTimeOffset agora)
+    {
+        if (licenca.Revogada)
+            return (SituacoesDaLicenca.Revogada, null);
+        if (licenca.SemPrazo)
+            return (SituacoesDaLicenca.SemPrazo, null);
+        if (licenca.ValidaAte is not { } fim)
+            return (SituacoesDaLicenca.Automatica, null);
+
+        var dias = DiasAte(fim, agora);
+        var situacao = fim <= agora ? SituacoesDaLicenca.Vencida
+            : dias <= SituacoesDaLicenca.DiasDoAviso ? SituacoesDaLicenca.Vencendo
+            : SituacoesDaLicenca.Valida;
+        return (situacao, dias);
+    }
+
+    /// <summary>Os dias entre as DATAS (UTC) de agora e do fim: vence hoje = 0, amanhã = 1, ontem = -1.</summary>
+    public static int DiasAte(DateTimeOffset fim, DateTimeOffset agora) => (fim.UtcDateTime.Date - agora.UtcDateTime.Date).Days;
+
+    /// <summary>O fim do dia (UTC): a validade "até 28/10" vale o dia 28 inteiro.</summary>
+    public static DateTimeOffset FimDoDia(DateOnly dia) => new(dia.ToDateTime(new TimeOnly(23, 59, 59)), TimeSpan.Zero);
+
+    /// <summary>O problema da definição (vazio quando ela pode ser aplicada). Ao aplicar, o motivo é obrigatório.</summary>
+    public static string ValidarDefinicao(DefinicaoDeLicencaV1? definicao, bool exigirMotivo, DateTimeOffset agora)
+    {
+        if (definicao is null)
+            return "Informe a validade da licença.";
+        if (!ModosDaValidade.Todos.Contains(definicao.Modo ?? string.Empty))
+            return $"Modo inválido: use {string.Join(", ", ModosDaValidade.Todos)}.";
+        if (definicao.Modo == ModosDaValidade.Somar && definicao.Dias is not (>= 1 and <= DiasMaximosDeUmaVez))
+            return $"Informe quantos dias somar: de 1 a {DiasMaximosDeUmaVez}.";
+        if (definicao.Modo == ModosDaValidade.AteData)
+        {
+            if (definicao.Ate is not { } ate)
+                return "Informe a data-limite da licença.";
+            var hoje = DateOnly.FromDateTime(agora.UtcDateTime);
+            if (ate < hoje)
+                return "A data já passou: escolha hoje ou uma data futura (para cortar o acesso, use Revogar).";
+            if (ate > hoje.AddDays(DiasMaximosDeUmaVez))
+                return "A data passa de dez anos: confira o ano.";
+        }
+
+        if (definicao.Tipo is { Length: > 0 } tipo && !TiposDaLicencaDoUsuario.Escolhiveis.Contains(tipo))
+            return $"Tipo inválido: use {string.Join(", ", TiposDaLicencaDoUsuario.Escolhiveis)}.";
+        return ValidarMotivo(definicao.Motivo, exigirMotivo);
+    }
+
+    /// <summary>O problema do motivo (obrigatório quando <paramref name="exigir"/>); vazio quando serve.</summary>
+    public static string ValidarMotivo(string? motivo, bool exigir)
+    {
+        var limpo = (motivo ?? string.Empty).Trim();
+        if (exigir && limpo.Length == 0)
+            return "Informe o motivo: ele vai para o histórico da licença.";
+        return limpo.Length > TamanhoMaximoDoMotivo ? $"O motivo tem até {TamanhoMaximoDoMotivo} caracteres." : string.Empty;
+    }
+
+    /// <summary>
+    /// A validade que a definição produz: sem prazo; até o fim do dia escolhido; ou os dias SOMADOS à validade atual —
+    /// a partir de hoje quando ela já passou, não tem data ou foi revogada.
+    /// </summary>
+    public static (DateTimeOffset? ValidaAte, bool SemPrazo) NovaValidade(DefinicaoDeLicencaV1 definicao, LicencaDoUsuario atual, DateTimeOffset agora)
+    {
+        if (definicao.Modo == ModosDaValidade.SemPrazo)
+            return (null, true);
+        if (definicao.Modo == ModosDaValidade.AteData)
+            return (FimDoDia(definicao.Ate!.Value), false);
+
+        var partida = atual is { Revogada: false, ValidaAte: { } fim } && fim > agora ? fim : agora;
+        return (FimDoDia(DateOnly.FromDateTime(partida.UtcDateTime).AddDays(definicao.Dias!.Value)), false);
+    }
+
+    /// <summary>A frase da prévia e do histórico ("validade até 27/11/2026 · individual").</summary>
+    public static string Descrever(DateTimeOffset? validaAte, bool semPrazo, string tipo)
+        => semPrazo ? $"sem prazo · {tipo}" : $"validade até {validaAte!.Value.UtcDateTime:dd/MM/yyyy} · {tipo}";
+
+    /// <summary>O admin mudou a licença do usuário (ou o contrato da empresa) DEPOIS da emissão da licença apresentada.</summary>
+    private static bool AlteradaDepois(Usuario usuario, Empresa? empresa, DateTimeOffset emitidaEm)
+        => (usuario.LicencaAlteradaEmUtc is { } doUsuario && Utc(doUsuario) > emitidaEm)
+           || (empresa?.AlteradaEmUtc is { } daEmpresa && Utc(daEmpresa) > emitidaEm);
+
+    private static DateTimeOffset Utc(DateTime data) => new(DateTime.SpecifyKind(data, DateTimeKind.Utc));
 
     /// <summary>A impressão da máquina como o banco a guarda: hex minúsculo de até 64 caracteres; nula quando não é uma.</summary>
     public static string? Impressao(string? texto)

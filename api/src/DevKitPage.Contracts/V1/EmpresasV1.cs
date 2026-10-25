@@ -26,9 +26,45 @@ public sealed record EmpresaNova(string Nome, string Plano, int Assentos);
 /// <param name="Colaboradores">Máquinas vinculadas (com consentimento) à telemetria da empresa.</param>
 /// <param name="Gestor">O gestor da empresa (o nome, ou o login sem nome); nulo quando ela ainda não tem gestor (US #461).</param>
 /// <param name="AssentosEmUso">Os assentos ocupados: os devs ativos da empresa, a mesma conta da adesão e da licença (US #461).</param>
+/// <param name="Dados">Os dados básicos e o contrato (US #687); nulos só numa API anterior a ela.</param>
 public sealed record EmpresaResumo(
     int Id, string Nome, string Plano, int Assentos, string CodigoDeAdesao, int Colaboradores, DateTimeOffset CriadaEm,
-    string? Gestor = null, int AssentosEmUso = 0);
+    string? Gestor = null, int AssentosEmUso = 0, DadosDaEmpresaV1? Dados = null);
+
+/// <summary>
+/// Os dados básicos e o contrato de uma empresa (US #687) — o que o painel "Editar" mostra além do nome, do plano e dos
+/// assentos. O CNPJ vai só com os dígitos; a tela o formata.
+/// </summary>
+/// <param name="ContratoAte">Até quando vai o contrato: a validade da licença dos usuários dela (sem a definida um a um).</param>
+/// <param name="AlteradaEm">A última edição pelo admin; nula na empresa nunca editada.</param>
+public sealed record DadosDaEmpresaV1(
+    string Cnpj, string Segmento, string Cidade, string Uf, string Contato, string Telefone, string Site, DateOnly? ContratoAte,
+    DateTimeOffset? AlteradaEm, string AlteradaPor);
+
+/// <summary>
+/// A edição de uma empresa pelo admin (US #687): os dados básicos, o plano, o contrato e os ASSENTOS — que não descem
+/// abaixo dos que estão em uso (quem já está dentro não perde o assento por uma edição).
+/// </summary>
+public sealed record EmpresaEditadaV1(
+    string Nome, string Plano, int Assentos, string? Cnpj = null, string? Segmento = null, string? Cidade = null, string? Uf = null,
+    string? Contato = null, string? Telefone = null, string? Site = null, DateOnly? ContratoAte = null);
+
+/// <summary>Os segmentos que o admin escolhe (a lista do painel; o texto livre de antes da lista continua aceito).</summary>
+public static class SegmentosDeEmpresa
+{
+    public static IReadOnlyList<string> Todos { get; } =
+        ["Software / ERP", "Construção civil", "Financeiro", "Indústria", "Varejo", "Saúde", "Educação", "Governo", "Serviços", "Outro"];
+}
+
+/// <summary>As 27 UFs, na ordem do seletor.</summary>
+public static class Ufs
+{
+    public static IReadOnlyList<string> Todas { get; } =
+    [
+        "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR", "RJ", "RN", "RO", "RR", "RS",
+        "SC", "SE", "SP", "TO",
+    ];
+}
 
 /// <summary>O convite de um gestor para a empresa: o login dele.</summary>
 public sealed record GestorNovo(string Login);

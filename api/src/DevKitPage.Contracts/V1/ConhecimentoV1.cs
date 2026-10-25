@@ -28,9 +28,14 @@ public sealed record GravacaoDeRepositorioV1(string? Origem, string? Descricao);
 /// <param name="Usuario">Na leitura, de quem é a convenção de nível <c>usuario</c> (o nome, ou o login).</param>
 /// <param name="Autor">Na leitura, quem a gravou por último.</param>
 /// <param name="AtualizadoEm">Na leitura, quando ela foi gravada por último.</param>
+/// <param name="Id">Na leitura (US #663), o id da linha: é por ele que se promove ou descarta uma sugestão.</param>
+/// <param name="Origem">Na leitura (US #663), um de <see cref="OrigensDeConvencao"/>: a regra do usuário ou a sugestão do agente.
+/// Na gravação a rota decide (o <c>PUT</c> grava regra; o <c>POST .../sugestoes</c>, sugestão) — o corpo não escolhe.</param>
+/// <param name="Versao">Na leitura (US #663), a versão da linha; a promoção a confere.</param>
 public sealed record ConvencaoV1(
     string? Nivel, string? Chave, string? Valor, string? Time = "",
-    string? Usuario = "", string? Autor = "", DateTimeOffset? AtualizadoEm = null);
+    string? Usuario = "", string? Autor = "", DateTimeOffset? AtualizadoEm = null,
+    long? Id = null, string? Origem = null, int? Versao = null);
 
 /// <summary>Os níveis de uma <see cref="ConvencaoV1"/>.</summary>
 public static class NiveisDeConvencao
@@ -39,3 +44,28 @@ public static class NiveisDeConvencao
     public const string Time = "time";
     public const string Usuario = "usuario";
 }
+
+/// <summary>
+/// A origem de uma <see cref="ConvencaoV1"/> de contexto (US #663): o que a PESSOA escreveu vale como regra para o
+/// agente; o que o AGENTE registrou é sugestão — consulta, nunca obrigação — até alguém promovê-la.
+/// </summary>
+public static class OrigensDeConvencao
+{
+    public const string Usuario = "usuario";
+    public const string Agente = "agente";
+
+    /// <summary>O valor de <c>?origem=</c> que traz as duas na leitura; sem ele, só as regras (o dev.kit antigo).</summary>
+    public const string Todas = "todas";
+}
+
+/// <summary>
+/// A SUGESTÃO de contexto que o agente do dev.kit registra ao concluir uma task (US #663), com o token do usuário.
+/// </summary>
+/// <param name="Camada">Um de <see cref="NiveisDeConvencao"/> (<c>usuario</c>, <c>time</c> ou <c>empresa</c>).</param>
+/// <param name="Tema">O tema, sem o prefixo (<c>stack</c> vira <c>contexto.stack</c>); com ele também vale.</param>
+/// <param name="Texto">O que o agente aprendeu.</param>
+/// <param name="Time">A equipe, na camada <c>time</c>.</param>
+public sealed record SugestaoDeContextoV1(string? Camada, string? Tema, string? Texto, string? Time = "");
+
+/// <summary>A promoção de uma sugestão a regra (US #663): a versão que quem promove leu; outra é conflito (409).</summary>
+public sealed record PromocaoDeContextoV1(int? VersaoEsperada);

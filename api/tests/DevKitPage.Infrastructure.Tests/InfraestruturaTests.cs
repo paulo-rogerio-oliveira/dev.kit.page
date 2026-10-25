@@ -494,12 +494,14 @@ public sealed class InfraestruturaTests : IAsyncLifetime
     public void Script_do_azure_sql_cria_as_empresas_a_trilha_e_as_colunas_novas()
     {
         var script = BaseDeTeste.ScriptDoAzureSql("Empresas.sql");
+        // Os dados da empresa da US #687 entram depois, pelo ALTER do Us687.sql (a base que já existe não recria a tabela).
+        var comOsDadosDaUs687 = script + BaseDeTeste.ScriptDoAzureSql("Us687.sql");
 
         foreach (var tabela in new[] { "Empresas", "AcessosAosDados" })
         {
             Assert.Contains($"IF OBJECT_ID(N'[dbo].[{tabela}]', N'U') IS NULL", script);
             foreach (var coluna in BaseDeTeste.ColunasNoSqlServer(tabela))
-                Assert.Contains(coluna, script);
+                Assert.Contains(coluna, tabela == "Empresas" ? comOsDadosDaUs687 : script);
         }
 
         // As colunas acrescentadas às tabelas que já existem, com o tipo do modelo.
