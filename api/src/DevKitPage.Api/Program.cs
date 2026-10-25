@@ -52,6 +52,7 @@ app.MapearContextoPorNivel();
 app.MapearOrigemDoContexto();
 app.MapearRelatos();
 app.MapearDesign();
+app.MapearProjetos();
 app.MapearLicencas();
 app.MapearPagamentos();
 

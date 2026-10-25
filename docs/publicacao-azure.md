@@ -212,6 +212,13 @@ Rode também `api/scripts/sqlserver/Us669.sql` (idempotente): cria `ProjetosDeDe
 (`Design__Tetos__Empresarial__Versoes`, `Design__Tetos__Empresarial__MegaBytes`, `Design__TetoPadrao__*`). Sem o
 `Design__Armazem=blob`, as imagens vão para a pasta `Design__Pasta` do contêiner da API — e se perdem a cada nova revisão.
 
+### Projetos compartilhados (US #693)
+
+Rode também `api/scripts/sqlserver/Us693.sql` (idempotente): cria `ProjetosCompartilhados` e
+`ItensDeProjetoCompartilhado`. Publique a API com as rotas `/api/projetos` ANTES do pacote do dev.kit que as usa (a
+Rule de impacto 5): o dev.kit trata o 404 da API antiga como "o projeto fica só nesta máquina", mas o compartilhamento
+só existe com a rota publicada. Nenhuma configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

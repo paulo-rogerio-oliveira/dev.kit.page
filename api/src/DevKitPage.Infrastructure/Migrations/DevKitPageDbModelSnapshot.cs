@@ -480,6 +480,65 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("ItensDeCatalogo", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ItemDeProjetoCompartilhado", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Componentes")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dependencias")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Descricao")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fluxo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Onda")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ProjetoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Repositorios")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Situacao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("WorkItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjetoId", "Numero")
+                        .IsUnique();
+
+                    b.ToTable("ItensDeProjetoCompartilhado", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ItemDoCatalogoEditavel", b =>
                 {
                     b.Property<long>("Id")
@@ -766,6 +825,106 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("RecebidoEmUtc");
 
                     b.ToTable("PedidosDeDemonstracao", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Anexos")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AtualizadoPorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Autonomia")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Definicao")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinoDaPr")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Espaco")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Paralelismo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Repositorios")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SemanaConvertida")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Situacao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Time")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Versao")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutorId");
+
+                    b.HasIndex("EmpresaId", "AtualizadoEmUtc");
+
+                    b.HasIndex("Espaco", "Nivel", "Time", "UsuarioId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("ProjetosCompartilhados", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
@@ -1464,6 +1623,17 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ItemDeProjetoCompartilhado", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "Projeto")
+                        .WithMany("Itens")
+                        .HasForeignKey("ProjetoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Projeto");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ItemDoCatalogoEditavel", b =>
                 {
                     b.HasOne("DevKitPage.Core.Catalogo", "Catalogo")
@@ -1533,6 +1703,24 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasForeignKey("DevKitPage.Core.PacoteDoCatalogo", "VersaoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", "Autor")
+                        .WithMany()
+                        .HasForeignKey("AutorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DevKitPage.Core.Empresa", "Empresa")
+                        .WithMany()
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Autor");
+
+                    b.Navigation("Empresa");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
@@ -1688,6 +1876,11 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Catalogo");
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
+                {
+                    b.Navigation("Itens");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
