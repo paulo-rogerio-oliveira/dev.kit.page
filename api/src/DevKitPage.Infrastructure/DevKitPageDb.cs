@@ -44,6 +44,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<FotoDeEstado> FotosDeEstado => Set<FotoDeEstado>();
     public DbSet<HistoricoDeItemDoCatalogo> HistoricosDeItemDoCatalogo => Set<HistoricoDeItemDoCatalogo>();
     public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
+    public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
+    public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -208,6 +210,38 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             // O número ÚNICO na tela é o que torna o reenvio da fila do dev.kit inofensivo (o hash decide 200 ou 409).
             e.HasIndex(v => new { v.TelaId, v.Numero }).IsUnique();
             e.HasOne(v => v.Autor).WithMany().HasForeignKey(v => v.AutorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Os projetos compartilhados (US #693), no escopo do design. No Azure SQL as tabelas vêm de
+        // api/scripts/sqlserver/Us693.sql.
+        modelBuilder.Entity<ProjetoCompartilhado>(e =>
+        {
+            e.ToTable("ProjetosCompartilhados");
+            e.Property(p => p.Espaco).HasMaxLength(40);
+            e.Property(p => p.Nivel).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoNivel);
+            e.Property(p => p.Time).HasMaxLength(RegrasDoConhecimentoDaEmpresa.TamanhoMaximoDoTime);
+            e.Property(p => p.Slug).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoSlug);
+            e.Property(p => p.Nome).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoNome);
+            e.Property(p => p.Branch).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoBranch);
+            e.Property(p => p.DestinoDaPr).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoBranch);
+            e.Property(p => p.Situacao).HasMaxLength(20);
+            // O UsuarioId é o dono do nível usuário e vale 0 nos outros: sem FK, como no design.
+            e.HasIndex(p => new { p.Espaco, p.Nivel, p.Time, p.UsuarioId, p.Slug }).IsUnique();
+            e.HasIndex(p => new { p.EmpresaId, p.AtualizadoEmUtc });
+            e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Autor).WithMany().HasForeignKey(p => p.AutorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(p => p.Itens).WithOne(i => i.Projeto).HasForeignKey(i => i.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ItemDeProjetoCompartilhado>(e =>
+        {
+            e.ToTable("ItensDeProjetoCompartilhado");
+            e.Property(i => i.Titulo).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoNome);
+            e.Property(i => i.Descricao).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoTexto);
+            e.Property(i => i.Fluxo).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoNome);
+            e.Property(i => i.Dependencias).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoTexto);
+            e.Property(i => i.Situacao).HasMaxLength(20);
+            e.HasIndex(i => new { i.ProjetoId, i.Numero }).IsUnique();
         });
 
         // Os catálogos nomeados (US #461). No Azure SQL as tabelas vêm de api/scripts/sqlserver/Us461.sql.
