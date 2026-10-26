@@ -223,6 +223,13 @@ pelo admin (`LicencaValidaAteUtc`, `LicencaSemPrazo`, `LicencaTipo`, `LicencaRev
 ele, `/api/usuarios`, `/api/empresas`, a ingestão da telemetria e `/api/catalogos/itens` respondem 500. Nenhuma
 configuração nova.
 
+### Projetos compartilhados (US #693)
+
+Rode também `api/scripts/sqlserver/Us693.sql` (idempotente): cria `ProjetosCompartilhados` e
+`ItensDeProjetoCompartilhado`. Publique a API com as rotas `/api/projetos` ANTES do pacote do dev.kit que as usa (a
+Rule de impacto 5): o dev.kit trata o 404 da API antiga como "o projeto fica só nesta máquina", mas o compartilhamento
+só existe com a rota publicada. Nenhuma configuração nova.
+
 ### Como saber que falta um script (bug do painel Uso, 26/10)
 
 Sem o `Us687.sql`, o painel Uso do admin mostrava só "An error occurred while processing your request" (o
