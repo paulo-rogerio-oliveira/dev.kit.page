@@ -166,6 +166,14 @@ public sealed class Us687ApiTests : IDisposable
         Assert.Equal((2, 1, 1), (doAdmin.Saude.TasksParadas.Quantidade, doAdmin.Saude.Perguntas.Quantidade, doAdmin.Saude.Maquinas.Quantidade));
         Assert.Equal(2, doAdmin.TurnosPorDesfecho[^1].LimiteDeUso); // um do desfecho novo, um da conta de antes
         Assert.Equal((1, 1), (doGestor.Saude.TasksParadas.Quantidade, doGestor.TurnosPorDesfecho[^1].LimiteDeUso));
+
+        // A adoção: as duas máquinas ativas (sem licença de usuário, o uso é sem login); o harness a recorta, e o
+        // desconhecido é 400; o gestor vê só a máquina da empresa que consentiu.
+        var doKiro = (await admin.GetFromJsonAsync<UtilidadeResposta>("/api/dashboard/utilidade?harness=kiro-cli"))!;
+        Assert.Equal(new AdocaoV1(0, 0, 2, 2, 2), doAdmin.Adocao);
+        Assert.Equal((0L, 0L), (doKiro.Adocao!.MaquinasAtivas, doKiro.Adocao.MaquinasSemLogin));
+        Assert.Equal((1L, 1L), (doGestor.Adocao!.MaquinasAtivas, doGestor.Adocao.MaquinasRegistradas));
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/dashboard/utilidade?harness=gemini")).StatusCode);
     }
 
     [Fact]

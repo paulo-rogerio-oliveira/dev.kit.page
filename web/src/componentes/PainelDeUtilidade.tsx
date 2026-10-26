@@ -1,4 +1,4 @@
-import type { CartaoDeSaude, TipoDoSelo, UtilidadeResposta } from '../api/tipos';
+import type { Adocao, CartaoDeSaude, TipoDoSelo, UtilidadeResposta } from '../api/tipos';
 import { formatar, SEM_VALOR } from '../formatar';
 import { GraficoEmpilhado, type Camada } from './Graficos';
 import { Selo, type VarianteDoSelo } from './Selo';
@@ -49,6 +49,40 @@ function Resultado({ rotulo, valor, variacao, variacaoBoa, nota }: { rotulo: str
   );
 }
 
+function Metrica({ rotulo, valor, nota, destaque }: { rotulo: string; valor: number; nota: string; destaque?: boolean }) {
+  return (
+    <div className={`metrica-de-adocao${destaque ? ' metrica-de-adocao-destaque' : ''}`} role="group" aria-label={rotulo}>
+      <span className="metrica-de-adocao-valor" data-testid={`adocao-${rotulo}`}>{formatar.inteiro(valor)}</span>
+      <span className="metrica-de-adocao-textos">
+        <span>{rotulo}</span>
+        <small>{nota}</small>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A faixa ADOÇÃO (proposta admin-dashboard v003 da semana6): os usuários ativos ao lado das máquinas ativas, nos filtros do
+ * painel — o período, a máquina e o harness.
+ */
+function FaixaDeAdocao({ adocao }: { adocao: Adocao }) {
+  const semLogin = adocao.maquinasSemLogin === 1 ? '1 máquina sem login' : `${formatar.inteiro(adocao.maquinasSemLogin)} máquinas sem login`;
+  return (
+    <section aria-labelledby="titulo-adocao" className="secao-do-painel">
+      <div className="titulo-com-nota"><h2 id="titulo-adocao">Adoção</h2><span>quem usou o dev.kit no período, nos filtros acima</span></div>
+      <div className="faixa-de-adocao">
+        <Metrica rotulo="Usuários ativos" valor={adocao.usuariosAtivos} destaque
+          nota={`de ${formatar.inteiro(adocao.usuariosCadastrados)} cadastrados${adocao.maquinasSemLogin > 0 ? ` · ${semLogin}` : ''}`} />
+        <Metrica rotulo="Máquinas ativas" valor={adocao.maquinasAtivas} nota={`de ${formatar.inteiro(adocao.maquinasRegistradas)} registradas`} />
+        <p className="nota-da-secao">
+          O usuário conta pela licença que a máquina pediu com o login dele; a máquina sem login entra só nas máquinas ativas.
+          Com o Harness, conta quem rodou turno naquele CLI.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 /**
  * O PAINEL DE UTILIDADE do admin (US #687, proposta admin-dashboard v008): o que está travando o trabalho AGORA (cada
  * cartão com a ação dele), o que o uso ENTREGOU no período, os turnos de cada dia pelo desfecho e onde as tasks travam
@@ -63,6 +97,8 @@ export function PainelDeUtilidade({ dados, aoFiltrarLog, agora = new Date() }: {
 
   return (
     <>
+      {dados.adocao && <FaixaDeAdocao adocao={dados.adocao} />}
+
       <section aria-labelledby="titulo-saude" className="secao-do-painel">
         <div className="titulo-com-nota"><h2 id="titulo-saude">Saúde agora</h2><span>o que está travando o trabalho neste momento</span></div>
         <div className="cartoes-de-saude">

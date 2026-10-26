@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
 import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
-import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, roi, servidor, tokenDoDev, tokenDoGestor, tokenValido } from '../testes/servidor';
+import { API, demonstracao, erroDetalhe, qualidadeVazia, reacoes, requisicoes, roi, servidor, tokenDoDev, tokenDoGestor, tokenValido, utilidade } from '../testes/servidor';
 
 const kpi = (rotulo: string) => screen.getByTestId(`kpi-${rotulo}`);
 
@@ -53,6 +53,26 @@ describe('Dashboard', () => {
     expect(screen.getByText('limite-de-uso')).toBeInTheDocument();
   });
 
+  // A faixa Adoção (admin-dashboard v003 da semana6): os usuários ativos ao lado das máquinas ativas.
+  it('mostra os usuários ativos ao lado das máquinas ativas', async () => {
+    renderizar('/dashboard', tokenValido());
+
+    await screen.findByRole('heading', { name: 'Adoção' });
+    expect(screen.getByTestId('adocao-Usuários ativos')).toHaveTextContent('3');
+    expect(screen.getByRole('group', { name: 'Usuários ativos' })).toHaveTextContent('de 4 cadastrados · 1 máquina sem login');
+    expect(screen.getByTestId('adocao-Máquinas ativas')).toHaveTextContent('4');
+    expect(screen.getByRole('group', { name: 'Máquinas ativas' })).toHaveTextContent('de 5 registradas');
+  });
+
+  it('sem a adoção na resposta (API anterior), a faixa não aparece', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => HttpResponse.json({ ...utilidade, adocao: undefined })));
+
+    renderizar('/dashboard', tokenValido());
+
+    await screen.findByRole('heading', { name: 'Saúde agora' });
+    expect(screen.queryByRole('heading', { name: 'Adoção' })).not.toBeInTheDocument();
+  });
+
   it('mostra os eventos recentes', async () => {
     renderizar('/dashboard', tokenValido());
 
@@ -96,12 +116,14 @@ describe('Dashboard', () => {
   /** A última requisição que chegou a uma rota do servidor de mentira. */
   const ultima = (caminho: string) => requisicoes.filter((r) => r.pathname === caminho).at(-1)!;
 
-  it('o harness filtra o log e as exceções, e não os totais', async () => {
+  it('o harness filtra a adoção, o log e as exceções, e não os totais', async () => {
     renderizar('/dashboard', tokenValido());
     await screen.findByRole('heading', { name: 'Saúde agora' });
+    expect(ultima('/api/dashboard/utilidade').searchParams.has('harness')).toBe(false);
 
     await userEvent.selectOptions(screen.getByLabelText('Harness'), 'kiro');
     await waitFor(() => {
+      expect(ultima('/api/dashboard/utilidade').searchParams.get('harness')).toBe('kiro');
       expect(ultima('/api/dashboard/eventos').searchParams.get('harness')).toBe('kiro');
       expect(ultima('/api/dashboard/erros').searchParams.get('harness')).toBe('kiro');
     });
