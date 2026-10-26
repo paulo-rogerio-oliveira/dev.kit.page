@@ -123,11 +123,30 @@ public sealed class LicencaDoUsuarioTests
     }
 
     [Fact]
+    public void O_usuario_sem_empresa_e_o_do_teste_e_renova_ate_o_fim_dele()
+    {
+        // Cadastrado em 20/10: o teste vai até o fim de 03/11 (14 dias).
+        var trial = Dev();
+        trial.CriadoEmUtc = new DateTime(2026, 10, 20, 9, 0, 0, DateTimeKind.Utc);
+        var licenca = RegrasDeLicenca.Licenca(trial, null);
+
+        Assert.Equal((TiposDaLicencaDoUsuario.Trial, RegrasDeLicenca.FimDoDia(new DateOnly(2026, 11, 3)), false), (licenca.Tipo, licenca.ValidaAte, licenca.DefinidaPeloAdmin));
+        Assert.Equal((SituacoesDaLicenca.Valida, (int?)9), RegrasDeLicenca.Situacao(licenca, Agora));
+        Assert.Equal(RecusaDaRenovacao.Nenhuma, RegrasDeLicenca.Avaliar(trial, null, null, Agora, 7));
+        // A licença emitida não passa do fim do teste — e os dias do teste vêm da configuração.
+        Assert.Equal(RegrasDeLicenca.FimDoDia(new DateOnly(2026, 11, 3)), RegrasDeLicenca.ValidadeEmitida(licenca, Agora, 30));
+        Assert.Equal(RegrasDeLicenca.FimDoDia(new DateOnly(2026, 10, 27)), RegrasDeLicenca.Licenca(trial, null, diasDoTeste: 7).ValidaAte);
+
+        Assert.Equal(RecusaDaRenovacao.TesteEncerrado, RegrasDeLicenca.Avaliar(trial, null, null, new DateTimeOffset(2026, 11, 4, 0, 0, 0, TimeSpan.Zero), 7));
+        Assert.Equal(RecusaDaRenovacao.TesteEncerrado, RegrasDeLicenca.Avaliar(trial, null, null, Agora, 7, diasDoTeste: 3));
+    }
+
+    [Fact]
     public void A_licenca_definida_pelo_admin_renova_sem_empresa_e_a_vencida_ou_revogada_nao()
     {
         var solta = Dev();
 
-        Assert.Equal(RecusaDaRenovacao.SemEmpresa, RegrasDeLicenca.Avaliar(solta, null, null, Agora, 7));
+        Assert.Equal(RecusaDaRenovacao.TesteEncerrado, RegrasDeLicenca.Avaliar(solta, null, null, Agora, 7)); // cadastro "nunca": o teste passou
         solta.LicencaSemPrazo = true;
         Assert.Equal(RecusaDaRenovacao.Nenhuma, RegrasDeLicenca.Avaliar(solta, null, null, Agora, 7));
         solta.LicencaRevogadaEmUtc = Agora.UtcDateTime;

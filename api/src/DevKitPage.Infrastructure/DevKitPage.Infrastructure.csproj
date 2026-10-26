@@ -23,4 +23,12 @@
     <PackageReference Include="Azure.Storage.Blobs" />
   </ItemGroup>
 
+  <!--
+    Os scripts do Azure SQL embutidos SÓ para a verificação do esquema na subida (EsquemaDoBanco): ela diz qual script
+    traz a tabela ou a coluna que falta. Nenhum deles é executado pela API.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\scripts\sqlserver\*.sql" LogicalName="sqlserver/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

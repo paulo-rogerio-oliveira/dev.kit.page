@@ -117,6 +117,22 @@ describe('Landing', () => {
     expect(within(menu).getByRole('link', { name: 'Entrar' })).toHaveAttribute('href', '/login');
   });
 
+  it('na tela estreita o menu abre pelo botão da proposta mobile e fecha ao escolher a seção', async () => {
+    renderizar('/');
+    const usuario = userEvent.setup();
+
+    const botao = screen.getByRole('button', { name: 'Abrir o menu' });
+    expect(botao).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById('menu-da-landing')).not.toHaveClass('menu-aberto');
+
+    await usuario.click(botao);
+    expect(screen.getByRole('button', { name: 'Fechar o menu' })).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById('menu-da-landing')).toHaveClass('menu-aberto');
+
+    await usuario.click(screen.getByRole('link', { name: 'Planos' }));
+    expect(screen.getByRole('button', { name: 'Abrir o menu' })).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('o rodapé não explica o dashboard: leva a Segurança, Comparativo, Empresas, Perguntas e ao login', () => {
     const { container } = renderizar('/');
 

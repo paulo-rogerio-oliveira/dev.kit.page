@@ -230,6 +230,21 @@ Rode também `api/scripts/sqlserver/Us693.sql` (idempotente): cria `ProjetosComp
 Rule de impacto 5): o dev.kit trata o 404 da API antiga como "o projeto fica só nesta máquina", mas o compartilhamento
 só existe com a rota publicada. Nenhuma configuração nova.
 
+### Como saber que falta um script (bug do painel Uso, 26/10)
+
+Sem o `Us687.sql`, o painel Uso do admin mostrava só "An error occurred while processing your request" (o
+`/api/dashboard/utilidade` lê `FotosDeEstado`). Desde esta versão a API confere o esquema na subida e diz o que falta:
+
+- **`GET /health` responde `Degraded`** (status 200) quando o banco não tem uma tabela ou coluna do modelo — no caso da
+  US #687, é o `Us687.sql` não aplicado. `Healthy` é o esquema completo.
+- O **log da subida** traz `Esquema do banco incompleto: O banco não tem a tabela FotosDeEstado (Us687.sql); …`, com o
+  script de cada falta.
+- O **500** de qualquer rota diz, ao admin, a rota, o que falta e o script, com o código que acha a exceção no log; aos
+  outros usuários, a rota e o código.
+
+A API não roda os scripts sozinha: aplique o indicado (são idempotentes) e reinicie a API — o `/health` volta a
+`Healthy`.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

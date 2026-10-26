@@ -115,7 +115,7 @@ export function GraficoEmpilhado({ titulo, unidade, camadas, pontos }: { titulo:
       <div className="grafico-topo">
         <figcaption>{titulo}</figcaption>
         <ul className="legenda" aria-label="Legenda">
-          {camadas.map((c) => <li key={c.chave}><span className={`amostra camada-${c.chave}`} aria-hidden="true" />{c.rotulo}</li>)}
+          {camadas.map((c) => <li key={c.chave}><span className={`legenda-cor camada-${c.chave}`} aria-hidden="true" />{c.rotulo}</li>)}
         </ul>
       </div>
       <div className="grafico-area">
@@ -153,7 +153,7 @@ export function GraficoEmpilhado({ titulo, unidade, camadas, pontos }: { titulo:
         {foco !== null && pontos[foco] && (
           <div className="dica" role="tooltip" style={{ left: `${((MARGEM.esquerda + foco * passo + passo / 2) / largura) * 100}%` }}>
             <strong>{pontos[foco].rotulo}</strong> · {total(pontos[foco])} {unidade}
-            {camadas.map((c, k) => <span key={c.chave} className="dica-linha"><span className={`amostra camada-${c.chave}`} aria-hidden="true" />{c.rotulo}: {pontos[foco].valores[k]}</span>)}
+            {camadas.map((c, k) => <span key={c.chave} className="dica-linha"><span className={`legenda-cor camada-${c.chave}`} aria-hidden="true" />{c.rotulo}: {pontos[foco].valores[k]}</span>)}
           </div>
         )}
       </div>
