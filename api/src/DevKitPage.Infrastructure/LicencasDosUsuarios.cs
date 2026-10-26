@@ -1,6 +1,7 @@
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace DevKitPage.Infrastructure;
 
@@ -8,10 +9,13 @@ namespace DevKitPage.Infrastructure;
 /// A licença de cada usuário na gestão do admin (US #687). O que fica gravado aqui é o que a renovação do dev.kit
 /// (<see cref="Licencas"/>) respeita: a validade é o teto da licença emitida, a vencida e a revogada são recusadas, e a
 /// alteração depois da última emissão abre a janela — "a licença renova no próximo login, sem precisar sair". Cada
-/// ação leva o motivo ao histórico.
+/// ação leva o motivo ao histórico. O teste grátis do usuário sem empresa conta os <see cref="OpcoesDeLicenca.TrialDias"/>
+/// configurados — os mesmos da renovação.
 /// </summary>
-public sealed class LicencasDosUsuarios(DevKitPageDb db, TimeProvider relogio) : ILicencasDosUsuarios
+public sealed class LicencasDosUsuarios(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDeLicenca> licencas) : ILicencasDosUsuarios
 {
+    private int DiasDoTeste => licencas.Value.TrialDias;
+
     public async Task<ResultadoDaGestao<DetalheDaLicencaV1>> DetalheAsync(int usuarioId, CancellationToken ct)
         => await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstOrDefaultAsync(u => u.Id == usuarioId, ct) is { } usuario
             ? new(await MontarAsync(usuario, ct))
@@ -25,7 +29,7 @@ public sealed class LicencasDosUsuarios(DevKitPageDb db, TimeProvider relogio) :
             return ResultadoDaGestao<PreviaDeLicencaV1>.Falhou(FalhaNaGestao.Recusada, recusa);
 
         var agora = relogio.GetUtcNow();
-        var atual = RegrasDeLicenca.Licenca(usuario, usuario.Empresa);
+        var atual = RegrasDeLicenca.Licenca(usuario, usuario.Empresa, DiasDoTeste);
         var (validaAte, semPrazo) = RegrasDeLicenca.NovaValidade(definicao, atual, agora);
         var tipo = Tipo(definicao, atual);
         int? dias = validaAte is { } fim ? RegrasDeLicenca.DiasAte(fim, agora) : null;
@@ -44,7 +48,7 @@ public sealed class LicencasDosUsuarios(DevKitPageDb db, TimeProvider relogio) :
             return ResultadoDaGestao<DetalheDaLicencaV1>.Falhou(FalhaNaGestao.Recusada, recusa);
 
         var agora = relogio.GetUtcNow();
-        var atual = RegrasDeLicenca.Licenca(usuario, usuario.Empresa);
+        var atual = RegrasDeLicenca.Licenca(usuario, usuario.Empresa, DiasDoTeste);
         var (validaAte, semPrazo) = RegrasDeLicenca.NovaValidade(definicao, atual, agora);
         var tipo = Tipo(definicao, atual);
         usuario.LicencaValidaAteUtc = validaAte?.UtcDateTime;
@@ -114,7 +118,7 @@ public sealed class LicencasDosUsuarios(DevKitPageDb db, TimeProvider relogio) :
 
         var ultimoUso = (await GestaoDeUsuarios.UltimosUsosAsync(db, usuario.Id, ct)).GetValueOrDefault(usuario.Id);
         return new DetalheDaLicencaV1(usuario.Id, usuario.Login, usuario.Nome, usuario.EhAdmin ? Papeis.Admin : usuario.Papel, usuario.Empresa?.Nome,
-            GestaoDeUsuarios.Licenca(usuario, agora, ultimoUso == default ? null : ultimoUso), historico);
+            GestaoDeUsuarios.Licenca(usuario, agora, ultimoUso == default ? null : ultimoUso, DiasDoTeste), historico);
     }
 
     private static string Dias(int dias) => dias == 1 ? "1 dia" : $"{dias} dias";
