@@ -57,7 +57,9 @@ public sealed class LicencasTests
 
         Assert.Equal(RecusaDaRenovacao.Nenhuma, RegrasDeLicenca.Avaliar(dev, empresa, null, Agora, 7));
         Assert.Equal(RecusaDaRenovacao.UsuarioBloqueado, RegrasDeLicenca.Avaliar(new Usuario { BloqueadoPeloAdmin = true }, empresa, null, Agora, 7));
-        Assert.Equal(RecusaDaRenovacao.SemEmpresa, RegrasDeLicenca.Avaliar(dev, null, null, Agora, 7));
+        // Sem empresa é o usuário do teste grátis: renova dentro dele e, terminado, a recusa é o teste encerrado.
+        Assert.Equal(RecusaDaRenovacao.Nenhuma, RegrasDeLicenca.Avaliar(new Usuario { Papel = Papeis.Dev, CriadoEmUtc = Agora.UtcDateTime }, null, null, Agora, 7));
+        Assert.Equal(RecusaDaRenovacao.TesteEncerrado, RegrasDeLicenca.Avaliar(dev, null, null, Agora, 7));
         Assert.Equal(RecusaDaRenovacao.AssinaturaCancelada, RegrasDeLicenca.Avaliar(dev, new Empresa { AssinaturaCanceladaEmUtc = Agora.UtcDateTime }, null, Agora, 7));
         Assert.Equal(RecusaDaRenovacao.CedoDemais, RegrasDeLicenca.Avaliar(dev, empresa, Conteudo(emitidaEm: Agora.AddDays(-3)), Agora, 7));
         Assert.Equal(RecusaDaRenovacao.Nenhuma, RegrasDeLicenca.Avaliar(dev, empresa, Conteudo(emitidaEm: Agora.AddDays(-8)), Agora, 7));

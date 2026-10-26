@@ -56,15 +56,23 @@ public sealed class Licencas(DevKitPageDb db, IOptions<OpcoesDeLicenca> opcoes, 
         if (atual is not null && !string.Equals(atual.Maquina, maquina.MaquinaId, StringComparison.Ordinal))
             atual = null;
 
-        var recusa = RegrasDeLicenca.Avaliar(usuario, usuario.Empresa, atual, agora, opcoes.Value.RenovaAPartirDoDia);
+        var diasDoTeste = opcoes.Value.TrialDias;
+        var recusa = RegrasDeLicenca.Avaliar(usuario, usuario.Empresa, atual, agora, opcoes.Value.RenovaAPartirDoDia, diasDoTeste);
         if (recusa == RecusaDaRenovacao.Nenhuma && !await Assentos.DentroAsync(db, usuario, ct))
             recusa = RecusaDaRenovacao.SemAssento;
         if (recusa != RecusaDaRenovacao.Nenhuma)
+        {
+            log.LogInformation("Renovação recusada: usuário {Usuario}, máquina {Maquina}, licença apresentada até {Atual:O}, recusa {Recusa}.",
+                usuario.Login, maquina.MaquinaId, atual?.ValidaAte, recusa);
             return (null, recusa);
+        }
 
-        // A validade do admin (US #687) é o TETO da licença emitida: os 30 dias de sempre, sem passar dela.
-        var validaAte = RegrasDeLicenca.ValidadeEmitida(RegrasDeLicenca.Licenca(usuario, usuario.Empresa), agora, opcoes.Value.ValidadeDias);
+        // A validade do admin (US #687) é o TETO da licença emitida: os 30 dias de sempre, sem passar dela — e, para o
+        // usuário do teste (sem empresa), sem passar do fim do teste.
+        var validaAte = RegrasDeLicenca.ValidadeEmitida(RegrasDeLicenca.Licenca(usuario, usuario.Empresa, diasDoTeste), agora, opcoes.Value.ValidadeDias);
         var licenca = await EmitirAsync(maquina, usuario, TiposDeLicenca.Assinatura, validaAte, ct);
+        log.LogInformation("Licença renovada: usuário {Usuario}, máquina {Maquina}, prazo antes {Antes:O}, prazo depois {Depois:O}.",
+            usuario.Login, maquina.MaquinaId, atual?.ValidaAte, validaAte);
         return (licenca, RecusaDaRenovacao.Nenhuma);
     }
 

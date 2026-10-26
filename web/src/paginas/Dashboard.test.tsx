@@ -53,6 +53,27 @@ describe('Dashboard', () => {
     expect(screen.getByText('limite-de-uso')).toBeInTheDocument();
   });
 
+  // Bug de 26/10: o 500 do painel aparecia só como "An error occurred while processing your request".
+  it('o 500 mostra a mensagem útil da API, e sem ela a rota que falhou com o código do log', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => HttpResponse.json(
+      { title: 'A API falhou ao processar o pedido.', status: 500, detail: 'GET /api/dashboard/utilidade falhou: O banco não tem a tabela FotosDeEstado (Us687.sql).' },
+      { status: 500 },
+    )));
+    const { unmount } = renderizar('/dashboard', tokenValido());
+
+    expect(await screen.findByText(/O banco não tem a tabela FotosDeEstado \(Us687\.sql\)/)).toBeInTheDocument();
+    unmount();
+
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => HttpResponse.json(
+      { title: 'An error occurred while processing your request.', status: 500, traceId: '00-abc-01' },
+      { status: 500 },
+    )));
+    renderizar('/dashboard', tokenValido());
+
+    expect(await screen.findByText('A API falhou ao processar /api/dashboard/utilidade (500). Código para o log da API: 00-abc-01.')).toBeInTheDocument();
+    expect(screen.queryByText(/An error occurred/)).not.toBeInTheDocument();
+  });
+
   it('mostra os eventos recentes', async () => {
     renderizar('/dashboard', tokenValido());
 

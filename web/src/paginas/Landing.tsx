@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BaixarDevKit } from '../componentes/BaixarDevKit';
 import { Cta } from '../componentes/Cta';
@@ -96,18 +97,24 @@ function AmostraDoBoard() {
  */
 export function Landing() {
   const [antes, depois] = HERO.titulo.split(HERO.destaque);
+  // O menu das seções na tela estreita (proposta home-mobile v003): abaixo de 1100px ele some da barra e abre pelo botão.
+  const [menuAberto, setMenuAberto] = useState(false);
   return (
     <div className="pagina landing">
       <a className="pular" href="#conteudo">Pular para o conteúdo</a>
       <header className="topo">
         <Marca />
         <nav aria-label="Seções" className="nav-landing">
-          <ul className="menu">
-            {MENU.map((id) => <li key={id}><a href={`#${id}`}>{rotuloDaSecao(id)}</a></li>)}
+          <ul id="menu-da-landing" className={menuAberto ? 'menu menu-aberto' : 'menu'}>
+            {MENU.map((id) => <li key={id}><a href={`#${id}`} onClick={() => setMenuAberto(false)}>{rotuloDaSecao(id)}</a></li>)}
           </ul>
           <div className="nav-acoes">
             <Link className="link-entrar" to="/login">Entrar</Link>
             <Cta para="#contato">Pedir demonstração</Cta>
+            <button type="button" className="botao-do-menu" aria-controls="menu-da-landing" aria-expanded={menuAberto}
+              aria-label={menuAberto ? 'Fechar o menu' : 'Abrir o menu'} onClick={() => setMenuAberto((aberto) => !aberto)}>
+              <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+            </button>
           </div>
         </nav>
       </header>
