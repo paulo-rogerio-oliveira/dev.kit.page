@@ -99,6 +99,7 @@ public static class Composicao
         // O teste troca o envio por um falso que guarda as mensagens (o TryAdd deixa o dele valer).
         servicos.TryAddSingleton<IEnvioDeEmail, EnvioDeEmail>();
         servicos.AddScoped<InicializadorDaBase>();
+        servicos.AddSingleton<EsquemaDoBanco>();
         return servicos;
     }
 }
@@ -109,7 +110,7 @@ public static class Composicao
 /// </summary>
 public sealed class InicializadorDaBase(
     DevKitPageDb db, IPasswordHasher<Usuario> hasher, IOptions<OpcoesDaSemente> semente, TimeProvider relogio,
-    ILogger<InicializadorDaBase> log)
+    ILogger<InicializadorDaBase> log, EsquemaDoBanco esquema)
 {
     public async Task InicializarAsync(CancellationToken ct = default)
     {
@@ -124,6 +125,8 @@ public sealed class InicializadorDaBase(
             // configuração (Azure SQL), o esquema nasce do modelo — ver docs/arquitetura.md. Numa base
             // que JÁ existe o EnsureCreated não cria tabela nova: ela vem dos scripts de api/scripts/sqlserver.
             await db.Database.EnsureCreatedAsync(ct);
+            // ...e o que falta de um script esquecido fica dito na subida, no /health e no erro de cada consulta.
+            await esquema.VerificarAsync(db, log, ct);
         }
 
         await SemearAdminAsync(ct);

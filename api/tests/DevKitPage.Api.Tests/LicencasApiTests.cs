@@ -66,25 +66,49 @@ public sealed class LicencasApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Renovacao_recusa_o_bloqueado_e_quem_nao_tem_empresa()
+    public async Task Renovacao_recusa_o_bloqueado()
     {
         var admin = await _api.AdminAsync();
         var a = await ApiDeTeste.EmpresaAsync(admin, "Empresa A");
         var (ana, _) = await _api.DevPorAdesaoAsync(a.CodigoDeAdesao, "ana@a.com");
-        var (semEmpresa, _) = await _api.UsuarioAsync(admin, "solto", Papeis.Dev);
         await _api.MaquinaAsync("maquina-1");
         ana.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, _api.Chaves["maquina-1"]);
-        semEmpresa.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, _api.Chaves["maquina-1"]);
         var id = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == "ana@a.com").Id;
         (await admin.PutAsJsonAsync($"/api/usuarios/{id}/bloqueio", new BloqueioDoUsuario(true))).EnsureSuccessStatusCode();
 
         var bloqueada = await ana.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1());
-        var solta = await semEmpresa.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1());
 
         Assert.Equal(HttpStatusCode.Forbidden, bloqueada.StatusCode);
         Assert.Contains("bloqueado", await bloqueada.Content.ReadAsStringAsync());
-        Assert.Equal(HttpStatusCode.Forbidden, solta.StatusCode);
-        Assert.Contains("empresa", await solta.Content.ReadAsStringAsync());
+    }
+
+    /// <summary>
+    /// O bug de 26/10, de ponta a ponta: quem baixa o dev.kit registra a máquina (o trial assinado), entra com a conta do
+    /// TESTE (sem empresa) e pede a renovação como o dev.kit pede — sem licença de assinatura gravada. Antes, 403 "não é de
+    /// uma empresa com assinatura"; agora renova, com a licença limitada ao fim do teste, e renova de novo na janela.
+    /// </summary>
+    [Fact]
+    public async Task O_usuario_do_teste_renova_ate_o_fim_do_teste()
+    {
+        var registro = await RegistrarAsync("maquina-trial");
+        var admin = await _api.AdminAsync();
+        var (trial, _) = await _api.UsuarioAsync(admin, "teste@solo.com", Papeis.Dev);
+        trial.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, registro.Chave);
+        var resumo = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == "teste@solo.com");
+        var fimDoTeste = RegrasDeLicenca.FimDoTeste(resumo.Licenca!.Inicio.UtcDateTime, RegrasDeLicenca.DiasDoTeste);
+
+        var renovada = await trial.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1());
+        var licenca = (await renovada.Content.ReadFromJsonAsync<LicencaV1>())!;
+        var lida = Ler(licenca)!;
+
+        Assert.Equal(HttpStatusCode.OK, renovada.StatusCode);
+        Assert.Equal((TiposDeLicenca.Assinatura, "maquina-trial", "teste@solo.com"), (lida.Tipo, lida.Maquina, lida.Usuario));
+        Assert.Equal(fimDoTeste, lida.ValidaAte); // não passa do fim do teste (os 30 dias de sempre seriam mais)
+        Assert.True(lida.ValidaAte > Ler(registro.Trial)!.EmitidaEm);
+        // Com a licença nova apresentada, a janela é a de quem assina: no 7º dia, ou a 7 dias do fim (do teste).
+        Assert.Equal(HttpStatusCode.Conflict, (await trial.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1(licenca.Conteudo))).StatusCode);
+        // O admin vê o usuário do teste com a validade do teste, e não "automática".
+        Assert.Equal((TiposDaLicencaDoUsuario.Trial, fimDoTeste, false), (resumo.Licenca.Tipo, resumo.Licenca.ValidaAte!.Value, resumo.Licenca.DefinidaPeloAdmin));
     }
 
     [Fact]

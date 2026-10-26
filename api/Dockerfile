@@ -4,6 +4,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/ src/
+# Os scripts do Azure SQL vão embutidos na Infrastructure: a verificação do esquema na subida diz qual aplicar.
+COPY scripts/ scripts/
 RUN dotnet publish src/DevKitPage.Api/DevKitPage.Api.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0

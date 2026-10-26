@@ -175,6 +175,9 @@ public static class EndpointsDaUs425
                     "A validade da sua licença terminou: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
                 RecusaDaRenovacao.LicencaRevogada => Results.Problem(
                     "A sua licença foi revogada pelo admin: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
+                RecusaDaRenovacao.TesteEncerrado => Results.Problem(
+                    "O seu teste grátis do dev.kit terminou: assine em dev.kit.page, ou entre com a conta da sua empresa, para continuar.",
+                    statusCode: StatusCodes.Status403Forbidden),
                 _ => Results.Problem("Ainda não é hora de renovar: a licença atual renova a partir do 7º dia.", statusCode: StatusCodes.Status409Conflict),
             };
         }).WithTags("Licenças");

@@ -11,7 +11,8 @@ namespace DevKitPage.Core.Tests;
 /// </summary>
 public sealed class ContratoDaRenovacaoTests
 {
-    private sealed record Admin(string Modo, DateTimeOffset? ValidaAte, DateTimeOffset? AlteradaEm);
+    /// <param name="Cadastro">O cadastro do usuário do teste (modo <c>trial</c>: sem empresa, o começo do teste grátis).</param>
+    private sealed record Admin(string Modo, DateTimeOffset? ValidaAte, DateTimeOffset? AlteradaEm, DateTimeOffset? Cadastro = null);
 
     private sealed record Esperado(bool ClienteChama, bool ApiRenova, string? Recusa, DateTimeOffset? ValidaAteEmitida);
 
@@ -45,10 +46,17 @@ public sealed class ContratoDaRenovacaoTests
     {
         var contrato = Ler();
         var caso = contrato.Casos.Single(c => c.Nome == nome);
-        var empresa = new Empresa { Id = 1, Nome = "Acme", Assentos = 10 };
+        Empresa? empresa = new Empresa { Id = 1, Nome = "Acme", Assentos = 10 };
         var usuario = new Usuario { Id = 7, Login = "ana@acme.com", Papel = Papeis.Dev, EmpresaId = 1, Empresa = empresa };
         switch (caso.Admin.Modo)
         {
+            case "trial":
+                // O usuário do teste grátis: sem empresa, e a validade é o fim do teste contado do cadastro.
+                empresa = null;
+                usuario.EmpresaId = null;
+                usuario.Empresa = null;
+                usuario.CriadoEmUtc = caso.Admin.Cadastro!.Value.UtcDateTime;
+                break;
             case "data":
                 usuario.LicencaValidaAteUtc = caso.Admin.ValidaAte!.Value.UtcDateTime;
                 break;
