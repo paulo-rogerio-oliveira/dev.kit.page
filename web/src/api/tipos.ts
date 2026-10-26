@@ -139,6 +139,67 @@ export interface UsuarioResumo {
   bloqueadoAte: string | null;
   deveTrocarSenha: boolean;
   criadoEm: string;
+  /** A licença do dev.kit (US #687); ausente numa API anterior a ela. */
+  licenca?: LicencaDoUsuario | null;
+}
+
+// ----- US #687: a licença por usuário que o admin define -----
+
+/** O tipo da licença: o teste, a do usuário, a do contrato da empresa, ou a conta de administração. */
+export type TipoDaLicenca = 'trial' | 'individual' | 'empresa' | 'admin';
+
+/** A situação da licença — a cor da coluna e o filtro. */
+export type SituacaoDaLicenca = 'valida' | 'vencendo' | 'vencida' | 'revogada' | 'sem-prazo' | 'automatica';
+
+export interface LicencaDoUsuario {
+  tipo: TipoDaLicenca;
+  situacao: SituacaoDaLicenca;
+  /** A validade que a renovação respeita; nula sem prazo, revogada ou automática. */
+  validaAte: string | null;
+  /** Os dias até a validade, por data; negativo depois de vencer. */
+  diasRestantes: number | null;
+  inicio: string;
+  /** A validade é a que o admin definiu para este usuário (e não a do contrato da empresa). */
+  definidaPeloAdmin: boolean;
+  /** A última renovação do dev.kit deste usuário. */
+  ultimoUso: string | null;
+}
+
+export type ModoDaValidade = 'somar' | 'ate-data' | 'sem-prazo';
+
+/** O Aplicar validade (e a prévia dele): o motivo é obrigatório ao aplicar. */
+export interface DefinicaoDeLicenca {
+  modo: ModoDaValidade;
+  dias?: number | null;
+  ate?: string | null;
+  tipo?: TipoDaLicenca | null;
+  motivo?: string | null;
+}
+
+export interface PreviaDeLicenca {
+  validaAte: string | null;
+  semPrazo: boolean;
+  diasAPartirDeHoje: number | null;
+  tipo: TipoDaLicenca;
+  mensagem: string;
+}
+
+export interface HistoricoDeLicenca {
+  em: string;
+  acao: 'definida' | 'sem-prazo' | 'revogada' | 'renovada' | 'criada';
+  descricao: string;
+  motivo: string;
+  autor: string;
+}
+
+export interface DetalheDaLicenca {
+  usuarioId: number;
+  login: string;
+  nome: string;
+  papel: Papel;
+  empresa: string | null;
+  licenca: LicencaDoUsuario;
+  historico: HistoricoDeLicenca[];
 }
 
 export interface UsuarioNovo {
@@ -258,6 +319,38 @@ export interface EmpresaResumo {
   gestor: string | null;
   /** Os devs ativos que ocupam assento — a mesma conta do login (US #461). */
   assentosEmUso: number;
+  /** Os dados básicos e o contrato (US #687); ausentes numa API anterior a ela. */
+  dados?: DadosDaEmpresa | null;
+}
+
+/** Os dados básicos e o contrato de uma empresa (US #687): o CNPJ vai só com os dígitos. */
+export interface DadosDaEmpresa {
+  cnpj: string;
+  segmento: string;
+  cidade: string;
+  uf: string;
+  contato: string;
+  telefone: string;
+  site: string;
+  /** Até quando vai o contrato (yyyy-mm-dd): a validade da licença dos usuários dela. */
+  contratoAte: string | null;
+  alteradaEm: string | null;
+  alteradaPor: string;
+}
+
+/** A edição da empresa (US #687): os assentos nunca abaixo dos em uso. */
+export interface EmpresaEditada {
+  nome: string;
+  plano: string;
+  assentos: number;
+  cnpj: string;
+  segmento: string;
+  cidade: string;
+  uf: string;
+  contato: string;
+  telefone: string;
+  site: string;
+  contratoAte: string | null;
 }
 
 export interface EmpresaNova {
@@ -528,6 +621,51 @@ export interface ItemEditavel {
   /** O que o item usa (`tipo:nome`). */
   dependencias: string[];
   conteudo: string | null;
+  /** O slug do catálogo do item (US #687); ausente numa API anterior. */
+  catalogo?: string | null;
+  /** Para onde o item vai: o básico (base), uma empresa, ou preso a um repositório (projeto). */
+  escopo?: EscopoDoItem | null;
+  /** A stack da Rule (vazia em qualquer stack e nos outros tipos). */
+  stack?: string | null;
+  /** A Rule é de impacto: nunca vai para o básico. */
+  ruleDeImpacto?: boolean;
+}
+
+// ----- US #687: a edição de artefato do catálogo -----
+
+export type EscopoDoItem = 'base' | 'empresa' | 'projeto';
+
+export interface LinhaDaDiferenca {
+  tipo: 'igual' | 'adicionada' | 'removida';
+  texto: string;
+  /** O número da linha no rascunho (nulo na removida). */
+  numero: number | null;
+}
+
+export interface DiferencasDoItem {
+  versaoPublicada: number;
+  publicado: string;
+  rascunho: string;
+  linhas: LinhaDaDiferenca[];
+  adicionadas: number;
+  removidas: number;
+}
+
+export interface HistoricoDoItem {
+  em: string;
+  acao: 'rascunho' | 'descartado' | 'retirado' | 'publicado';
+  versao: number;
+  release: string;
+  autor: string;
+}
+
+export interface AnexoDoItem {
+  id: number;
+  nome: string;
+  tipoDeConteudo: string;
+  tamanhoBytes: number;
+  autor: string;
+  em: string;
 }
 
 /** Criar ou editar um item: o conteúdo é o JSON no formato do dev.kit; a categoria vazia é a derivada do nome. */
@@ -730,6 +868,69 @@ export interface Filtro {
   de: string;
   ate: string;
   maquina: number | null;
+}
+
+// ----- US #687: o painel de utilidade -----
+
+/** Um cartão do "Saúde agora". */
+export interface CartaoDeSaude {
+  quantidade: number;
+  novos24h: number;
+  /** Desde quando está o caso mais antigo. */
+  maisAntigo: string | null;
+  /** Os work items do fechamento (#669), a amostra da máquina… */
+  itens: string[];
+}
+
+export interface SaudeAgora {
+  tasksParadas: CartaoDeSaude;
+  perguntas: CartaoDeSaude;
+  fechamentos: CartaoDeSaude;
+  maquinas: CartaoDeSaude;
+}
+
+export interface ResultadoDoUso {
+  aprovadas: number;
+  integradas: number;
+  aprovadasNaSemana: number;
+  percentualNaPrimeira: number | null;
+  variacaoNaPrimeira: number | null;
+  notaMedia: number | null;
+  rodadasAteANota: number | null;
+  medianaAteAprovacaoMinutos: number | null;
+  variacaoDaMedianaMinutos: number | null;
+  percentualEsperandoDev: number | null;
+  turnosPorEntrega: number | null;
+  turnos: number;
+  comandosDelegados: number;
+  arquivosAlterados: number;
+}
+
+export interface TurnosDoDia {
+  dia: string;
+  trabalhou: number;
+  esperouDev: number;
+  limiteDeUso: number;
+  falhou: number;
+}
+
+export type TipoDoSelo = 'sugestao' | 'corrigido' | 'us' | '';
+
+export interface CausaDeTravamento {
+  causa: string;
+  vezes: number;
+  selo: string;
+  tipoDoSelo: TipoDoSelo;
+}
+
+/** O painel de utilidade (GET /api/dashboard/utilidade). */
+export interface UtilidadeResposta {
+  de: string;
+  ate: string;
+  saude: SaudeAgora;
+  resultado: ResultadoDoUso;
+  turnosPorDesfecho: TurnosDoDia[];
+  ondeTravam: CausaDeTravamento[];
 }
 
 /** O harness — o CLI do provedor cognitivo que roda o turno — dos filtros do log e das exceções (o codex desde a versão 5). */

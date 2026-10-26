@@ -212,6 +212,17 @@ Rode também `api/scripts/sqlserver/Us669.sql` (idempotente): cria `ProjetosDeDe
 (`Design__Tetos__Empresarial__Versoes`, `Design__Tetos__Empresarial__MegaBytes`, `Design__TetoPadrao__*`). Sem o
 `Design__Armazem=blob`, as imagens vão para a pasta `Design__Pasta` do contêiner da API — e se perdem a cada nova revisão.
 
+### Painel de utilidade, licença por usuário, empresa e editor de artefato (US #687)
+
+Rode também `api/scripts/sqlserver/Us687.sql` (idempotente) **antes de publicar a API** desta versão — e a API antes de
+distribuir o pacote do dev.kit que manda os eventos novos. Ele acrescenta a `Usuarios` as colunas da licença definida
+pelo admin (`LicencaValidaAteUtc`, `LicencaSemPrazo`, `LicencaTipo`, `LicencaRevogadaEmUtc`, `LicencaAlteradaEmUtc`), a
+`Empresas` os dados da empresa (`Cnpj`, `Segmento`, `Cidade`, `Uf`, `Contato`, `Telefone`, `Site`, `ContratoAteUtc`,
+`AlteradaEmUtc`, `AlteradaPor`) e cria `HistoricosDeLicenca`, `FotosDeEstado`, `HistoricosDeItemDoCatalogo` e
+`AnexosDeItemDoCatalogo`. Só acrescenta: usuário sem licença definida segue a renovação de antes (30 dias corridos). Sem
+ele, `/api/usuarios`, `/api/empresas`, a ingestão da telemetria e `/api/catalogos/itens` respondem 500. Nenhuma
+configuração nova.
+
 ### Projetos compartilhados (US #693)
 
 Rode também `api/scripts/sqlserver/Us693.sql` (idempotente): cria `ProjetosCompartilhados` e

@@ -170,6 +170,11 @@ public static class EndpointsDaUs425
                 RecusaDaRenovacao.SemAssento => Results.Problem("A sua empresa não tem assento para você: a licença não renova. Fale com o gestor.", statusCode: StatusCodes.Status403Forbidden),
                 RecusaDaRenovacao.SemEmpresa => Results.Problem("O seu usuário não é de uma empresa com assinatura: a licença não renova.", statusCode: StatusCodes.Status403Forbidden),
                 RecusaDaRenovacao.AssinaturaCancelada => Results.Problem("A assinatura foi cancelada: a licença não renova.", statusCode: StatusCodes.Status402PaymentRequired),
+                // US #687: a validade que o admin definiu (ou a do contrato da empresa) é respeitada pela renovação.
+                RecusaDaRenovacao.LicencaVencida => Results.Problem(
+                    "A validade da sua licença terminou: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
+                RecusaDaRenovacao.LicencaRevogada => Results.Problem(
+                    "A sua licença foi revogada pelo admin: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
                 _ => Results.Problem("Ainda não é hora de renovar: a licença atual renova a partir do 7º dia.", statusCode: StatusCodes.Status409Conflict),
             };
         }).WithTags("Licenças");

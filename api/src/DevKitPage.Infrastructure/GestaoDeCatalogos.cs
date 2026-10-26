@@ -12,7 +12,7 @@ namespace DevKitPage.Infrastructure;
 /// release (a do site, ou a do GitHub no básico ainda não importado), pela <see cref="PublicacaoDeCatalogos"/> — uma
 /// fonte só para "o que as máquinas têm".
 /// </summary>
-public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos publicacao, IReleasesDoDevKit releases, TimeProvider relogio)
+public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos publicacao, IReleasesDoDevKit releases, TimeProvider relogio)
     : IGestaoDeCatalogos
 {
     private static readonly AcessoAoCatalogo DoAdmin = new(true, null);
@@ -117,13 +117,9 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
         var publicados = await PublicadosAsync(catalogo, ct);
         var itens = await db.ItensEditaveis.AsNoTracking().Where(i => i.CatalogoId == catalogo.Id)
             .OrderBy(i => i.Tipo).ThenBy(i => i.Nome)
-            .Select(i => new ItemDoCatalogoEditavel
-            {
-                Id = i.Id, CatalogoId = i.CatalogoId, Tipo = i.Tipo, Nome = i.Nome, Descricao = i.Descricao, Categoria = i.Categoria, Arquivo = i.Arquivo,
-                Hash = i.Hash, Dependencias = i.Dependencias, AlteradoEmUtc = i.AlteradoEmUtc, AlteradoPor = i.AlteradoPor, RetiradoEmUtc = i.RetiradoEmUtc,
-            })
             .ToListAsync(ct);
-        return new(itens.Select(i => Editavel(i, publicados, comConteudo: false)).ToArray());
+        // O conteúdo vem do banco (o escopo e a stack saem dele, US #687), mas não vai na lista.
+        return new(itens.Select(i => Editavel(i, publicados, catalogo, comConteudo: false)).ToArray());
     }
 
     public async Task<ResultadoDaGestao<ItemEditavelV1>> ItemAsync(string slug, long id, CancellationToken ct)
@@ -132,7 +128,7 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
             return NaoEncontrado<ItemEditavelV1>();
         if (await db.ItensEditaveis.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id && i.CatalogoId == catalogo.Id, ct) is not { } item)
             return ResultadoDaGestao<ItemEditavelV1>.Falhou(FalhaNaGestao.NaoEncontrado, "Item não encontrado.");
-        return new(Editavel(item, await PublicadosAsync(catalogo, ct), comConteudo: true));
+        return new(Editavel(item, await PublicadosAsync(catalogo, ct), catalogo, comConteudo: true));
     }
 
     public async Task<ResultadoDaGestao<ItemEditavelV1>> SalvarItemAsync(
@@ -140,6 +136,9 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
     {
         if (await db.Catalogos.AsNoTracking().FirstOrDefaultAsync(c => c.Slug == slug, ct) is not { } catalogo)
             return NaoEncontrado<ItemEditavelV1>();
+        // A Rule de impacto (US #687) é do negócio do cliente: o básico vai a toda máquina, e ela nunca entra nele.
+        if (catalogo.Basico && RegrasDosCatalogos.RuleDeImpacto(conferido.Tipo, conferido.Conteudo))
+            return ResultadoDaGestao<ItemEditavelV1>.Falhou(FalhaNaGestao.Recusada, RegrasDosCatalogos.ImpactoNoBasico);
         var chave = RegrasDoCatalogoDaEmpresa.Chave(conferido.Tipo, conferido.Nome);
         if (!catalogo.Basico && (await publicacao.ChavesDoBasicoAsync(ct)).Contains(chave))
             return ResultadoDaGestao<ItemEditavelV1>.Falhou(FalhaNaGestao.Conflito, $"Já existe '{conferido.Nome}' no catálogo básico do dev.kit: publique com outro nome.");
@@ -189,7 +188,9 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
             return ResultadoDaGestao<ItemEditavelV1>.Falhou(FalhaNaGestao.Conflito, $"'{conferido.Nome}' acabou de ser gravado por outra pessoa: recarregue e edite de novo.");
         }
 
-        return new(Editavel(item, await PublicadosAsync(catalogo, ct), comConteudo: true));
+        var publicados = await PublicadosAsync(catalogo, ct);
+        await RegistrarAsync(item.Id, AcoesNoItem.Rascunho, publicados.GetValueOrDefault((item.Tipo, item.Nome))?.Versao ?? 0, autor, ct);
+        return new(Editavel(item, publicados, catalogo, comConteudo: true));
     }
 
     public async Task<ResultadoDaGestao<ItemEditavelV1>> RetirarItemAsync(string slug, long id, string autor, CancellationToken ct)
@@ -212,7 +213,8 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
         item.AlteradoEmUtc = relogio.GetUtcNow().UtcDateTime;
         item.AlteradoPor = Autor(autor);
         await db.SaveChangesAsync(ct);
-        return new(Editavel(item, publicados, comConteudo: false));
+        await RegistrarAsync(item.Id, AcoesNoItem.Retirado, publicados[(item.Tipo, item.Nome)].Versao, autor, ct);
+        return new(Editavel(item, publicados, await db.Catalogos.AsNoTracking().FirstAsync(c => c.Id == item.CatalogoId, ct), comConteudo: false));
     }
 
     public async Task<ImportacaoDoBasicoV1> ImportarBasicoAsync(string autor, CancellationToken ct)
@@ -371,13 +373,16 @@ public sealed class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatalogos pub
         return null;
     }
 
-    private static ItemEditavelV1 Editavel(ItemDoCatalogoEditavel i, IReadOnlyDictionary<(string, string), ItemDoCatalogoV1> publicados, bool comConteudo)
+    private static ItemEditavelV1 Editavel(
+        ItemDoCatalogoEditavel i, IReadOnlyDictionary<(string, string), ItemDoCatalogoV1> publicados, Catalogo catalogo, bool comConteudo)
     {
         var (situacao, versao) = RegrasDosCatalogos.Situacao(i.Tipo, i.Nome, i.Hash, i.Descricao, i.Categoria, i.Arquivo, i.RetiradoEmUtc is not null,
             publicados.GetValueOrDefault((i.Tipo, i.Nome)));
         return new ItemEditavelV1(
             i.Id, i.Tipo, i.Nome, i.Descricao, RegrasDosCatalogos.Tecnologia(i.Tipo, i.Nome, i.Categoria), i.Hash, versao, situacao,
-            DevKitPageDb.Utc(i.AlteradoEmUtc), i.AlteradoPor, i.Dependencias.Split('\n', StringSplitOptions.RemoveEmptyEntries), comConteudo ? i.Conteudo : null);
+            DevKitPageDb.Utc(i.AlteradoEmUtc), i.AlteradoPor, i.Dependencias.Split('\n', StringSplitOptions.RemoveEmptyEntries), comConteudo ? i.Conteudo : null,
+            catalogo.Slug, RegrasDosCatalogos.Escopo(catalogo.Basico, i.Tipo, i.Conteudo), RegrasDosCatalogos.Stack(i.Tipo, i.Conteudo),
+            RegrasDosCatalogos.RuleDeImpacto(i.Tipo, i.Conteudo));
     }
 
     private static ResultadoDaGestao<T> NaoEncontrado<T>() where T : class

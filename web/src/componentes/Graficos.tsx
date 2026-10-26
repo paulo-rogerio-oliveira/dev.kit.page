@@ -81,6 +81,95 @@ export function GraficoDeColunas({ titulo, unidade, pontos }: { titulo: string; 
   );
 }
 
+/** Uma camada das colunas empilhadas: a chave (a classe CSS da cor) e o nome da legenda. */
+export interface Camada {
+  chave: string;
+  rotulo: string;
+}
+
+/** Um ponto das colunas empilhadas: o rótulo do eixo e um valor por camada, na ordem das camadas. */
+export interface PontoEmpilhado {
+  rotulo: string;
+  valores: number[];
+}
+
+/**
+ * Colunas EMPILHADAS ao longo do tempo (US #687, os turnos por dia pelo desfecho): a legenda acima (mais de uma série),
+ * as camadas na ordem fixa de baixo para cima com 2px de superfície entre elas, o topo de dado arredondado, a dica por
+ * coluna (o alvo é a coluna inteira) e a tabela equivalente embaixo. A cor é da camada, e nunca da posição.
+ */
+export function GraficoEmpilhado({ titulo, unidade, camadas, pontos }: { titulo: string; unidade: string; camadas: Camada[]; pontos: PontoEmpilhado[] }) {
+  const [foco, setFoco] = useState<number | null>(null);
+  const largura = Math.max(640, pontos.length * 14 + MARGEM.esquerda + MARGEM.direita);
+  const area = { largura: largura - MARGEM.esquerda - MARGEM.direita, altura: ALTURA - MARGEM.topo - MARGEM.base };
+  const total = (p: PontoEmpilhado) => p.valores.reduce((s, v) => s + v, 0);
+  const maximo = teto(Math.max(0, ...pontos.map(total)));
+  const passo = pontos.length === 0 ? 0 : area.largura / pontos.length;
+  const barra = Math.max(2, Math.min(28, passo - 4));
+  const escala = (valor: number) => (valor / maximo) * area.altura;
+  const base = MARGEM.topo + area.altura;
+  const cadaQuantos = Math.max(1, Math.ceil(pontos.length / 8));
+
+  return (
+    <figure className="grafico grafico-empilhado" aria-label={titulo}>
+      <div className="grafico-topo">
+        <figcaption>{titulo}</figcaption>
+        <ul className="legenda" aria-label="Legenda">
+          {camadas.map((c) => <li key={c.chave}><span className={`amostra camada-${c.chave}`} aria-hidden="true" />{c.rotulo}</li>)}
+        </ul>
+      </div>
+      <div className="grafico-area">
+        <svg viewBox={`0 0 ${largura} ${ALTURA}`} role="img" aria-label={`${titulo} — ${pontos.length} dias`}>
+          {[0, 0.5, 1].filter((fracao) => Number.isInteger(maximo * fracao)).map((fracao) => (
+            <g key={fracao}>
+              <line className="grade" x1={MARGEM.esquerda} x2={largura - MARGEM.direita} y1={base - escala(maximo * fracao)} y2={base - escala(maximo * fracao)} />
+              <text className="eixo" x={MARGEM.esquerda - 6} y={base - escala(maximo * fracao) + 4} textAnchor="end">{maximo * fracao}</text>
+            </g>
+          ))}
+          {pontos.map((ponto, i) => {
+            const x = MARGEM.esquerda + i * passo + (passo - barra) / 2;
+            const ultima = ponto.valores.reduce((u, v, k) => (v > 0 ? k : u), -1);
+            let topo = base;
+            return (
+              <g key={ponto.rotulo} onMouseEnter={() => setFoco(i)} onMouseLeave={() => setFoco(null)}>
+                <rect className="alvo" x={MARGEM.esquerda + i * passo} y={MARGEM.topo} width={passo} height={area.altura} />
+                {ponto.valores.map((valor, k) => {
+                  if (valor <= 0) return null;
+                  // 2px de superfície entre as camadas: a de cima começa 2px acima do topo da de baixo.
+                  const altura = Math.max(1, escala(valor) - (topo < base ? 2 : 0));
+                  const y = topo - (topo < base ? 2 : 0) - altura;
+                  topo = y;
+                  return (
+                    <path key={camadas[k].chave} className={`camada-${camadas[k].chave}${foco === i ? ' em-foco' : ''}`}
+                      d={k === ultima ? caminhoDaBarra(x, y, barra, altura) : `M${x},${y} H${x + barra} V${y + altura} H${x} Z`} />
+                  );
+                })}
+                {i % cadaQuantos === 0 && <text className="eixo" x={x + barra / 2} y={ALTURA - 6} textAnchor="middle">{ponto.rotulo}</text>}
+              </g>
+            );
+          })}
+          <line className="base" x1={MARGEM.esquerda} x2={largura - MARGEM.direita} y1={base} y2={base} />
+        </svg>
+        {foco !== null && pontos[foco] && (
+          <div className="dica" role="tooltip" style={{ left: `${((MARGEM.esquerda + foco * passo + passo / 2) / largura) * 100}%` }}>
+            <strong>{pontos[foco].rotulo}</strong> · {total(pontos[foco])} {unidade}
+            {camadas.map((c, k) => <span key={c.chave} className="dica-linha"><span className={`amostra camada-${c.chave}`} aria-hidden="true" />{c.rotulo}: {pontos[foco].valores[k]}</span>)}
+          </div>
+        )}
+      </div>
+      <details>
+        <summary>Ver como tabela</summary>
+        <table className="tabela">
+          <thead><tr><th>Dia</th>{camadas.map((c) => <th key={c.chave}>{c.rotulo}</th>)}</tr></thead>
+          <tbody>
+            {pontos.map((p) => <tr key={p.rotulo}><td>{p.rotulo}</td>{p.valores.map((v, k) => <td key={camadas[k].chave} className="numero">{v}</td>)}</tr>)}
+          </tbody>
+        </table>
+      </details>
+    </figure>
+  );
+}
+
 /** Barras horizontais de UMA série por categoria (as falhas por causa), com o valor rotulado em cada barra. */
 export function BarrasHorizontais({ titulo, pontos, vazio }: { titulo: string; pontos: Ponto[]; vazio: string }) {
   const maximo = Math.max(1, ...pontos.map((p) => p.valor));

@@ -27,6 +27,25 @@ export const formatar = {
   data: (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : SEM_VALOR),
   dataHora: (iso: string | null | undefined) =>
     iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : SEM_VALOR,
+  /** Minutos como o painel de utilidade os escreve (US #687): "45 min", "6h40", "2d 3h"; o sinal quando pedido ("+1h50"). */
+  duracao: (minutos: number | null | undefined, comSinal = false) => {
+    if (!valido(minutos)) return SEM_VALOR;
+    const sinal = comSinal ? (minutos < 0 ? '−' : '+') : minutos < 0 ? '−' : '';
+    const total = Math.round(Math.abs(minutos));
+    const texto = total < 60 ? `${total} min`
+      : total < 24 * 60 ? `${Math.floor(total / 60)}h${String(total % 60).padStart(2, '0')}`
+        : `${Math.floor(total / (24 * 60))}d ${Math.floor((total % (24 * 60)) / 60)}h`;
+    return sinal + texto;
+  },
+  /** Há quanto tempo, em palavras curtas (US #687): "há 3 dias", "há 2 h", "há 15 min". */
+  idade: (iso: string | null | undefined, agora = new Date()) => {
+    if (!iso) return SEM_VALOR;
+    const minutos = Math.max(0, Math.round((agora.getTime() - new Date(iso).getTime()) / 60_000));
+    if (minutos < 60) return `há ${minutos} min`;
+    if (minutos < 24 * 60) return `há ${Math.floor(minutos / 60)} h`;
+    const dias = Math.floor(minutos / (24 * 60));
+    return `há ${dias} ${dias === 1 ? 'dia' : 'dias'}`;
+  },
   /** DD/MM de um AAAA-MM-DD (o rótulo do eixo da série diária). */
   dia: (iso: string) => {
     const [, mes, dia] = iso.split('-');

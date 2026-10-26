@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
-import type { ColaboradorResumo, EventoDoLog, Filtro, Harness, MaquinaResumo, Pagina, QualidadeResposta, QuantidadeResposta } from '../api/tipos';
+import type { ColaboradorResumo, EventoDoLog, Filtro, Harness, MaquinaResumo, Pagina, QualidadeResposta, UtilidadeResposta } from '../api/tipos';
 import { salvarArquivo } from '../arquivos';
 import { ExcecoesNaoClassificadas } from '../componentes/ExcecoesNaoClassificadas';
 import { CartoesDoFluxo } from '../componentes/CartoesDoFluxo';
-import { BarrasHorizontais, GraficoDeColunas, Kpi } from '../componentes/Graficos';
+import { BarrasHorizontais, Kpi } from '../componentes/Graficos';
+import { PainelDeUtilidade } from '../componentes/PainelDeUtilidade';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
 import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
@@ -27,10 +28,12 @@ export const TIPOS_DO_LOG = [
   'TurnoFalhou', 'ExcecaoNaoClassificada', 'TurnoExecutado', 'SessaoIniciada', 'FluxoExecutado', 'FerramentaAcionada', 'ComandoDelegado',
   'ArquivoAlterado', 'ObjetivoAvaliado', 'ObjetivoCumprido', 'ObjetivoRecusado', 'RoiCalculado', 'EntregaAvaliada', 'EntregaPronta',
   'RevisaoHumana', 'TokensConsumidos', 'CustoEstimado', 'AgenteTrocado', 'ComandoNegado', 'ImpasseDetectado', 'ImpasseResolvido', 'ArbitroAgiu',
+  // US #687: os eventos do painel de utilidade.
+  'SituacaoDaTask', 'PerguntaAoDev', 'FechamentoDaEntrega', 'AmostraDaMaquina', 'SugestaoDeImpacto', 'DesfechoDoTurno',
 ] as const;
 
 interface Dados {
-  quantidade: QuantidadeResposta;
+  utilidade: UtilidadeResposta;
   qualidade: QualidadeResposta;
   eventos: Pagina<EventoDoLog>;
 }
@@ -42,11 +45,12 @@ interface OpcaoDoFiltro {
 }
 
 /**
- * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo, os KPIs
- * de QUANTIDADE (com as máquinas ativas e registradas) e de QUALIDADE, a série diária, as falhas por
- * causa, o ROI por work item (US #387), as exceções não classificadas com o trace e a reação (US #381), o log paginado e os pedidos
- * de demonstração da landing (fora do filtro: não são telemetria). Um 401 da
- * API (token vencido) encerra a sessão e volta ao login.
+ * O dashboard de uso por máquina: filtros (máquina e período) numa linha acima de tudo; o painel de UTILIDADE (US #687,
+ * proposta admin-dashboard v008) — a saúde de agora, o resultado do período, os turnos por dia pelo desfecho e onde as
+ * tasks travam —; os KPIs de QUALIDADE, as falhas por causa, o ROI por work item (US #387), as exceções não classificadas
+ * com o trace e a reação (US #381), o log paginado (a ação de cada cartão da saúde o recorta) e os pedidos de
+ * demonstração da landing (fora do filtro: não são telemetria). Um 401 da API (token vencido) encerra a sessão e volta
+ * ao login.
  */
 export function Dashboard() {
   const { sessao, sair } = useSessao();
@@ -99,8 +103,8 @@ export function Dashboard() {
     let vivo = true;
     setCarregando(true);
     setErro('');
-    Promise.all([api.quantidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
-      .then(([quantidade, qualidade, eventos]) => vivo && setDados({ quantidade, qualidade, eventos }))
+    Promise.all([api.utilidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
+      .then(([utilidade, qualidade, eventos]) => vivo && setDados({ utilidade, qualidade, eventos }))
       .catch((falha) => vivo && tratar(falha))
       .finally(() => vivo && setCarregando(false));
     return () => {
@@ -110,7 +114,16 @@ export function Dashboard() {
 
   const filtrandoOLog = Boolean(tipoDoLog || detalheDoLog || harness);
 
-  const q = dados?.quantidade;
+  /** A ação de um cartão da saúde: o log de eventos recortado pelo caso, e a tela vai até ele. */
+  function filtrarLog(tipo: string, detalhe: string) {
+    setPagina(1);
+    setTipoDoLog(tipo);
+    setDetalheDigitado(detalhe);
+    setDetalheDoLog(detalhe);
+    document.getElementById('titulo-eventos')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }
+
+  const u = dados?.utilidade;
   const ql = dados?.qualidade;
   const totalDePaginas = dados ? Math.max(1, Math.ceil(dados.eventos.total / dados.eventos.tamanho)) : 1;
 
@@ -161,26 +174,9 @@ export function Dashboard() {
           </p>
         )}
 
-        {q && ql && (
+        {u && ql && (
           <>
-            <section aria-labelledby="titulo-quantidade">
-              <h2 id="titulo-quantidade">Quantidade de uso</h2>
-              <div className="kpis">
-                <Kpi rotulo="Máquinas ativas" valor={formatar.inteiro(q.maquinasAtivas)} nota="com uso no período" />
-                <Kpi rotulo="Máquinas registradas" valor={formatar.inteiro(q.maquinasRegistradas)} />
-                <Kpi rotulo="Sessões" valor={formatar.inteiro(q.sessoes)} />
-                <Kpi rotulo="Turnos" valor={formatar.inteiro(q.turnos)} />
-                <Kpi rotulo="Fluxos" valor={formatar.inteiro(q.fluxos)} />
-                <Kpi rotulo="Ferramentas acionadas" valor={formatar.inteiro(q.ferramentas)} />
-                <Kpi rotulo="Comandos delegados" valor={formatar.inteiro(q.comandosDelegados)} />
-                <Kpi rotulo="Arquivos alterados" valor={formatar.inteiro(q.arquivosAlterados)} />
-              </div>
-              <GraficoDeColunas
-                titulo="Turnos por dia"
-                unidade="turnos"
-                pontos={q.serieDiaria.map((d) => ({ rotulo: formatar.dia(d.dia), valor: d.turnos }))}
-              />
-            </section>
+            <PainelDeUtilidade dados={u} aoFiltrarLog={filtrarLog} />
 
             <section aria-labelledby="titulo-qualidade">
               <h2 id="titulo-qualidade">Qualidade de uso</h2>

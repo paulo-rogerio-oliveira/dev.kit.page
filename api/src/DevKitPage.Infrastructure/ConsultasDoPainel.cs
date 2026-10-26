@@ -15,7 +15,7 @@ namespace DevKitPage.Infrastructure;
 /// corta no consentimento também para ele.
 /// </para>
 /// </summary>
-public sealed class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
+public sealed partial class ConsultasDoPainel(DevKitPageDb db) : IConsultasDoPainel
 {
     /// <summary>O teto de dias preenchidos na série (um período maior é cortado no início).</summary>
     public const int DiasMaximosDaSerie = 400;

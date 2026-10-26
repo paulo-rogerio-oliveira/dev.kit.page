@@ -25,6 +25,10 @@ export interface CamposDoPlano {
   onlyWithWorkItem: boolean;
   isRequired: boolean;
   isAgentInstruction: boolean;
+  /** (US #687) As stacks da Rule (`dotnet`, `vb6`…): só vão ao arquivo quando existem — o hash das Rules sem stack não muda. */
+  stack?: string;
+  /** (US #687) O tipo da Rule (`impacto`), com a mesma regra da stack. */
+  tipo?: string;
 }
 
 export const SKILL_VAZIA: CamposDaSkill = {
@@ -76,8 +80,13 @@ export function validarSkill(c: CamposDaSkill): string[] {
   return erros;
 }
 
-/** O JSON da Rule — o `TechPlanJson.Export`: a chave (a identidade) abre o arquivo, as marcações o fecham. */
+/**
+ * O JSON da Rule — o `TechPlanJson.Export`: a chave (a identidade) abre o arquivo, as marcações o fecham, e a stack e o
+ * tipo (US #687) vão por último, só quando existem.
+ */
 export function montarPlano(c: CamposDoPlano): string {
+  const stack = (c.stack ?? '').split(/[,;\n]/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const tipo = (c.tipo ?? '').trim().toLowerCase();
   return JSON.stringify({
     key: c.key.trim(),
     description: c.description.trim(),
@@ -86,8 +95,56 @@ export function montarPlano(c: CamposDoPlano): string {
     onlyWithWorkItem: c.onlyWithWorkItem,
     isRequired: c.isRequired,
     isAgentInstruction: c.isAgentInstruction,
+    ...(stack.length > 0 ? { stack: [...new Set(stack)].join(', ') } : {}),
+    ...(tipo ? { tipo } : {}),
   }, null, 2);
 }
+
+// ----- US #687: o SKILL.md do editor de artefato -----
+
+/** O SKILL.md da skill: o frontmatter com o nome e a descrição, e o conteúdo — o texto que o editor mostra. */
+export function skillMarkdown(c: Pick<CamposDaSkill, 'name' | 'description' | 'content'>): string {
+  return `---\nname: ${c.name.trim()}\ndescription: ${c.description.trim()}\n---\n\n${c.content.replace(/\r\n/g, '\n')}`;
+}
+
+/** O SKILL.md lido: o nome, a descrição e o conteúdo — ou os erros do frontmatter. */
+export interface SkillMarkdownLido {
+  name: string;
+  description: string;
+  content: string;
+  erros: string[];
+}
+
+/** Lê o SKILL.md do editor: o frontmatter (entre as linhas `---`) com `name` e `description`, e o corpo. */
+export function lerSkillMarkdown(md: string): SkillMarkdownLido {
+  const linhasDoTexto = md.replace(/\r\n/g, '\n').split('\n');
+  if (linhasDoTexto[0]?.trim() !== '---') return { name: '', description: '', content: md, erros: ['O SKILL.md começa pelo frontmatter (a linha ---).'] };
+  const fim = linhasDoTexto.findIndex((l, i) => i > 0 && l.trim() === '---');
+  if (fim < 0) return { name: '', description: '', content: md, erros: ['O frontmatter do SKILL.md não fecha (falta a segunda linha ---).'] };
+  const campos = new Map(linhasDoTexto.slice(1, fim).map((l) => {
+    const corte = l.indexOf(':');
+    return corte < 0 ? ['', ''] as const : [l.slice(0, corte).trim(), l.slice(corte + 1).trim()] as const;
+  }));
+  const erros: string[] = [];
+  const name = campos.get('name') ?? '';
+  const description = campos.get('description') ?? '';
+  if (!name) erros.push('O frontmatter está sem o "name".');
+  if (!description) erros.push('O frontmatter está sem a "description".');
+  return { name, description, content: linhasDoTexto.slice(fim + 1).join('\n').replace(/^\n+/, ''), erros };
+}
+
+/** O tamanho do texto em UTF-8 — o que a API mede (o teto é 256 KB). */
+export function tamanhoEmBytes(conteudo: string): number {
+  return new TextEncoder().encode(conteudo).length;
+}
+
+/** O tamanho escrito como o rodapé do editor o mostra ("1,2 KB"). */
+export function tamanhoLegivel(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB`;
+}
+
+/** O teto do conteúdo na API (256 KB). */
+export const TAMANHO_MAXIMO_DO_CONTEUDO = 256 * 1024;
 
 /** Os erros da Rule — os textos do `TechPlanJson.Read` (descrição e conteúdo são os obrigatórios). */
 export function validarPlano(c: CamposDoPlano): string[] {
@@ -130,6 +187,7 @@ export function lerPlano(conteudo: unknown): CamposDoPlano {
   return {
     key: campo(o, 'key'), description: campo(o, 'description'), content: campo(o, 'content'), repository: campo(o, 'repository'),
     onlyWithWorkItem: marca(o, 'onlyWithWorkItem'), isRequired: marca(o, 'isRequired'), isAgentInstruction: marca(o, 'isAgentInstruction'),
+    stack: campo(o, 'stack'), tipo: campo(o, 'tipo'),
   };
 }
 

@@ -88,6 +88,8 @@ public static class Composicao
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
+        // A licença por usuário na gestão do admin (US #687): o que a renovação acima respeita.
+        servicos.AddScoped<ILicencasDosUsuarios, LicencasDosUsuarios>();
         servicos.AddScoped<IPagamentos, Pagamentos>();
         // Os catálogos nomeados (US #461): a gestão usa a MESMA instância da publicação (o manifesto da última release
         // decide a situação dos itens), e o armazém dos zips é o banco por ora.

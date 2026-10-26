@@ -43,6 +43,27 @@ public sealed class Usuario
 
     public DateTime? BloqueadoAteUtc { get; set; }
     public DateTime CriadoEmUtc { get; set; }
+
+    /// <summary>
+    /// A validade da licença DEFINIDA PELO ADMIN (US #687): a renovação do dev.kit não passa dela. Nula com
+    /// <see cref="LicencaSemPrazo"/>, ou quando o admin nunca definiu (vale o contrato da empresa).
+    /// </summary>
+    public DateTime? LicencaValidaAteUtc { get; set; }
+
+    /// <summary>O admin tirou o prazo da licença (US #687): a renovação segue sem data-limite.</summary>
+    public bool LicencaSemPrazo { get; set; }
+
+    /// <summary>O tipo que o admin escolheu (<c>TiposDaLicencaDoUsuario</c>); vazio é o derivado da empresa.</summary>
+    public string LicencaTipo { get; set; } = string.Empty;
+
+    /// <summary>Quando o admin REVOGOU a licença (US #687): a renovação para até ele definir uma validade nova.</summary>
+    public DateTime? LicencaRevogadaEmUtc { get; set; }
+
+    /// <summary>
+    /// A última alteração da licença pelo admin (US #687): abre a janela de renovação — a licença emitida ANTES dela
+    /// renova já no próximo pedido do dev.kit, sem esperar o 7º dia.
+    /// </summary>
+    public DateTime? LicencaAlteradaEmUtc { get; set; }
 }
 
 /// <summary>Uma máquina com o dev.kit que envia telemetria. A chave só existe como hash.</summary>
@@ -125,6 +146,34 @@ public sealed class Empresa
 
     /// <summary>Quando o gateway avisou o cancelamento: daí em diante a licença não renova.</summary>
     public DateTime? AssinaturaCanceladaEmUtc { get; set; }
+
+    // ----- US #687: os dados básicos e o contrato que o admin edita -----
+
+    /// <summary>O CNPJ só com os dígitos (14); vazio quando não foi cadastrado.</summary>
+    public string Cnpj { get; set; } = string.Empty;
+
+    public string Segmento { get; set; } = string.Empty;
+    public string Cidade { get; set; } = string.Empty;
+
+    /// <summary>A sigla da UF (2 letras); vazia quando não foi cadastrada.</summary>
+    public string Uf { get; set; } = string.Empty;
+
+    /// <summary>O contato responsável (o e-mail ou o nome de quem responde pela empresa).</summary>
+    public string Contato { get; set; } = string.Empty;
+
+    public string Telefone { get; set; } = string.Empty;
+    public string Site { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Até quando vai o contrato (US #687): é a validade da licença dos usuários dela que o admin não definiu um a um —
+    /// a renovação do dev.kit não passa dela. Nulo: sem data-limite (a renovação segue como antes).
+    /// </summary>
+    public DateTime? ContratoAteUtc { get; set; }
+
+    /// <summary>A última edição pelo admin (o rodapé do painel): quando e quem.</summary>
+    public DateTime? AlteradaEmUtc { get; set; }
+
+    public string AlteradaPor { get; set; } = string.Empty;
 }
 
 /// <summary>

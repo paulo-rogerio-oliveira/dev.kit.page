@@ -2,12 +2,18 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
-import { API, gestaoDeUsuarios, servidor, tokenDoDev, tokenDoGestor, tokenValido, usuarios } from '../testes/servidor';
+import { API, escritas, gestaoDeUsuarios, servidor, tokenDoDev, tokenDoGestor, tokenValido, usuarios } from '../testes/servidor';
 
 /** A linha da tabela de um usuário (pelo login, que aparece embaixo do nome ou como o próprio nome). */
 async function linhaDe(login: string) {
   const tabela = (await screen.findByRole('table'));
   return within(tabela).getAllByRole('row').find((r) => within(r).queryByText(login) !== null)!;
+}
+
+/** Abre o painel "Novo usuário" pelo botão do título (US #687) e devolve o formulário. */
+async function abrirONovo() {
+  await userEvent.click(await screen.findByRole('button', { name: '+ Novo usuário' }));
+  return screen.findByRole('form', { name: 'Novo usuário' });
 }
 
 /** Abre o menu ⋯ da linha e escolhe a ação. */
@@ -32,7 +38,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     expect(within(admin).getByText('admin')).toBeInTheDocument();
     expect(within(admin).getByText('Admin')).toHaveClass('insignia-papel');
     expect(within(admin).getByText('—')).toBeInTheDocument();
-    expect(screen.getByText('2 usuários · 1 admin, 1 dev')).toBeInTheDocument();
+    expect(screen.getByText(/^2 usuários · 1 admin, 1 dev/)).toBeInTheDocument();
   });
 
   it('a linha do próprio admin não tem o Bloquear', async () => {
@@ -41,7 +47,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Ações de admin' }));
 
     const menu = screen.getByRole('menu', { name: 'Ações de admin' });
-    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Editar', 'Redefinir senha']);
+    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Licença', 'Editar', 'Redefinir senha']);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -53,7 +59,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     ])));
     renderizar('/usuarios', tokenValido());
     await screen.findByText('José Lima');
-    expect(screen.getByText('3 usuários · 1 admin, 1 dev, 1 gestor')).toBeInTheDocument();
+    expect(screen.getByText(/^3 usuários · 1 admin, 1 dev, 1 gestor/)).toBeInTheDocument();
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nome ou login' }), 'jose');
     expect(screen.getByText('José Lima')).toBeInTheDocument();
@@ -77,6 +83,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
   // Digita o formulário inteiro tecla a tecla: mais lento que o padrão de 5 s quando a suíte inteira roda junto.
   it('cria o usuário pelo painel lateral e mostra a senha temporária uma única vez', { timeout: 15_000 }, async () => {
     renderizar('/usuarios', tokenValido());
+    await abrirONovo();
     const painel = await screen.findByRole('complementary', { name: 'Novo usuário' });
     const formulario = within(painel).getByRole('form', { name: 'Novo usuário' });
     await within(formulario).findByRole('option', { name: 'Empresa A' });
@@ -100,7 +107,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
 
   it('a dica embaixo do papel muda com o papel escolhido', async () => {
     renderizar('/usuarios', tokenValido());
-    const formulario = await screen.findByRole('form', { name: 'Novo usuário' });
+    const formulario = await abrirONovo();
 
     await userEvent.selectOptions(within(formulario).getByLabelText('Papel'), 'admin');
 
@@ -112,7 +119,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     servidor.use(http.post(`${API}/api/usuarios`, () => HttpResponse.json(
       { title: 'Confira os dados do usuário.', errors: { empresaId: ['O gestor precisa de uma empresa.'] } }, { status: 400 })));
     renderizar('/usuarios', tokenValido());
-    const formulario = await screen.findByRole('form', { name: 'Novo usuário' });
+    const formulario = await abrirONovo();
 
     await userEvent.type(within(formulario).getByLabelText('Login'), 'gestor.b');
     await userEvent.selectOptions(within(formulario).getByLabelText('Papel'), 'gestor');
@@ -167,18 +174,88 @@ describe('Usuários (US #405; visual da US #461)', () => {
 
     await userEvent.click(await screen.findByRole('link', { name: 'Usuários' }));
 
-    expect(await screen.findByRole('heading', { name: 'Novo usuário' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '+ Novo usuário' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Usuários' })).toHaveClass('link-ativo');
   });
 
   it('o gestor que abre Usuários volta ao dashboard; o dev, à conta dele (US #425)', async () => {
     const { unmount } = renderizar('/usuarios', tokenDoGestor());
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Usuários' })).not.toBeInTheDocument();
     unmount();
     sessionStorage.clear();
 
     renderizar('/usuarios', tokenDoDev());
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Sua conta');
+  });
+});
+
+describe('Licença por usuário (US #687, proposta admin-usuarios v005)', () => {
+  it('a coluna Licença, a contagem no título e o filtro por licença', async () => {
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([
+      ...usuarios,
+      {
+        ...usuarios[1], id: 3, login: 'gestor.globex', nome: '', papel: 'gestor', deveTrocarSenha: false,
+        licenca: { tipo: 'empresa', situacao: 'vencida', validaAte: '2026-10-21T23:59:59Z', diasRestantes: -4, inicio: '2026-10-01T10:00:00Z', definidaPeloAdmin: false, ultimoUso: null },
+      },
+    ])));
+    renderizar('/usuarios', tokenValido());
+
+    const ana = await linhaDe('ana.dev');
+    expect(within(ana).getByText('vence em 3 dias')).toHaveClass('licenca-alerta');
+    expect(within(ana).getByText('até 28/10/2026 · trial')).toBeInTheDocument();
+    const globex = await linhaDe('gestor.globex');
+    expect(within(globex).getByText('vencida há 4 dias')).toHaveClass('licenca-ruim');
+    expect(within(globex).getByText('Bloqueado: licença')).toHaveClass('insignia-marca');
+    expect(within(await linhaDe('sem nome cadastrado')).getByText('Sem prazo')).toBeInTheDocument();
+    expect(screen.getByText('1 licença vence em 7 dias')).toHaveClass('licenca-alerta');
+    expect(screen.getByText('1 vencida')).toHaveClass('licenca-ruim');
+
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar por licença'), 'vencida');
+    expect(screen.queryByText('Ana Souza')).not.toBeInTheDocument();
+    expect(screen.getByText('gestor.globex')).toBeInTheDocument();
+  });
+
+  it('o painel da licença mostra a validade, a prévia e aplica com o motivo', async () => {
+    renderizar('/usuarios', tokenValido());
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    expect(painel.getByText('28/10/2026')).toBeInTheDocument();
+    expect(painel.getByText('trial · vence em 3 dias')).toBeInTheDocument();
+    expect(painel.getByText(/14\/10 · validade até 28\/10\/2026 · trial — trial de 14 dias · admin/)).toBeInTheDocument();
+
+    await userEvent.click(painel.getByRole('button', { name: '+30 dias' }));
+    expect(await painel.findByText(/Nova validade: 27\/11\/2026 \(33 dias a partir de hoje\)/)).toBeInTheDocument();
+
+    // Sem motivo, não aplica: o motivo vai para o histórico.
+    await userEvent.click(painel.getByRole('button', { name: 'Aplicar validade' }));
+    expect(painel.getByRole('alert')).toHaveTextContent('Informe o motivo');
+    await userEvent.type(painel.getByLabelText('Motivo'), 'piloto Acme estendido');
+    await userEvent.click(painel.getByRole('button', { name: 'Aplicar validade' }));
+
+    await waitFor(() => expect(escritas.at(-1)).toEqual({
+      metodo: 'PUT', caminho: '/api/usuarios/2/licenca', corpo: { modo: 'somar', dias: 30, tipo: 'trial', motivo: 'piloto Acme estendido' },
+    }));
+    expect(await screen.findByText(/Licença de Ana Souza aplicada/)).toBeInTheDocument();
+  });
+
+  it('até uma data e sem prazo, e o Revogar com confirmação', async () => {
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderizar('/usuarios', tokenValido());
+    await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+
+    await userEvent.click(painel.getByRole('radio', { name: 'Sem prazo' }));
+    expect(await painel.findByText(/Sem prazo: a licença do dev.kit de Ana renova sem data-limite/)).toBeInTheDocument();
+    await userEvent.click(painel.getByRole('radio', { name: 'Até uma data' }));
+    expect(painel.getByLabelText('Até a data')).toBeInTheDocument();
+
+    await userEvent.type(painel.getByLabelText('Motivo'), 'saiu do projeto');
+    await userEvent.click(painel.getByRole('button', { name: 'Revogar' }));
+
+    await waitFor(() => expect(escritas.at(-1)).toEqual({ metodo: 'POST', caminho: '/api/usuarios/2/licenca/revogar', corpo: { motivo: 'saiu do projeto' } }));
+    expect(confirmar).toHaveBeenCalled();
+    confirmar.mockRestore();
   });
 });

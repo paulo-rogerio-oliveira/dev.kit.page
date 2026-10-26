@@ -28,7 +28,7 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
   await page.getByRole('button', { name: 'Trocar senha' }).click();
 
   // 3. O dashboard de uma base nova: nenhuma máquina ainda.
-  await expect(page.getByRole('heading', { name: 'Quantidade de uso' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Saúde agora' })).toBeVisible();
   await expect(page.getByText(/Nenhuma máquina enviou telemetria ainda/)).toBeVisible();
 
   // 4. Uma máquina se registra com o código e envia um lote (e o reenvia: não pode dobrar).
@@ -56,12 +56,12 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
     expect(envio.status()).toBe(202);
   }
 
-  // 5. Os números no dashboard — os do lote, uma vez só.
+  // 5. Os números no dashboard — os do lote, uma vez só. Desde a US #687 a contagem fica no resultado do uso
+  //    (os turnos e os arquivos na nota de "Turnos por entrega") e na qualidade.
   await page.reload();
-  await expect(page.getByTestId('kpi-Sessões')).toHaveText('1');
-  await expect(page.getByTestId('kpi-Turnos')).toHaveText('3');
-  await expect(page.getByTestId('kpi-Ferramentas acionadas')).toHaveText('12');
-  await expect(page.getByTestId('kpi-Arquivos alterados')).toHaveText('5');
+  const porEntrega = page.getByRole('group', { name: 'Turnos por entrega' });
+  await expect(porEntrega).toContainText('3 turnos');
+  await expect(porEntrega).toContainText('5 arquivos');
   await expect(page.getByTestId('kpi-Taxa de falha de turno')).toHaveText(/33,3\s?%/);
   await expect(page.getByTestId('kpi-Duração média do turno')).toHaveText('20,0 s');
   await expect(page.getByTestId('kpi-Nota média dos avaliadores')).toHaveText('95,0');
@@ -71,11 +71,10 @@ test('base nova → admin troca a senha → a máquina envia → os números apa
   await page.screenshot({ path: 'test-results/capturas/04-dashboard.png', fullPage: true });
 
   // 6. O filtro pela máquina mantém os números (ela é a única).
-  // O primeiro combobox é o filtro de máquina: o getByLabel('Máquina') casa também os KPIs "Máquinas …".
+  // O primeiro combobox é o filtro de máquina.
   await page.getByRole('combobox').first().selectOption({ label: 'máquina e2e0maqu (dev.kit versão 1.4.0)' });
-  await expect(page.getByTestId('kpi-Turnos')).toHaveText('3');
-  await expect(page.getByTestId('kpi-Máquinas ativas')).toHaveText('1');
-  await expect(page.getByTestId('kpi-Máquinas registradas')).toHaveText('1');
+  await expect(porEntrega).toContainText('3 turnos');
+  await expect(page.getByTestId('kpi-Taxa de falha de turno')).toHaveText(/33,3\s?%/);
 
   // 7. (US #381) A máquina envia uma exceção não classificada — com um caminho que escapou do
   //    sanitizador do dev.kit, para provar a máscara de defesa da API — e o grupo aparece com o trace.

@@ -5,6 +5,7 @@ import type {
   ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
   ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
+  AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -33,6 +34,10 @@ export const colaboradores: ColaboradorResumo[] = [
 export const empresa: EmpresaResumo = {
   id: 4, nome: 'Empresa A', plano: 'Empresarial', assentos: 10, codigoDeAdesao: 'DK-7QH4-M2XA', colaboradores: 2, criadaEm: '2026-10-01T10:00:00Z',
   gestor: null, assentosEmUso: 3,
+  dados: {
+    cnpj: '11222333000181', segmento: 'Software / ERP', cidade: 'São Paulo', uf: 'SP', contato: 'gestor@empresa-a.com.br', telefone: '', site: '',
+    contratoAte: '2027-03-16', alteradaEm: '2026-10-22T10:00:00Z', alteradaPor: 'admin',
+  },
 };
 
 /** A segunda empresa (US #461): já tem gestor e o único assento ocupado. */
@@ -96,9 +101,69 @@ export const tokenDoDev = (): LoginResponse => ({
 
 /** Os usuários da lista do admin (US #405). */
 export const usuarios: UsuarioResumo[] = [
-  { id: 1, login: 'admin', nome: '', papel: 'admin', empresaId: null, empresa: null, bloqueado: false, bloqueadoAte: null, deveTrocarSenha: false, criadoEm: '2026-10-01T10:00:00Z' },
-  { id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z' },
+  {
+    id: 1, login: 'admin', nome: '', papel: 'admin', empresaId: null, empresa: null, bloqueado: false, bloqueadoAte: null, deveTrocarSenha: false, criadoEm: '2026-10-01T10:00:00Z',
+    licenca: { tipo: 'admin', situacao: 'sem-prazo', validaAte: null, diasRestantes: null, inicio: '2026-10-01T10:00:00Z', definidaPeloAdmin: false, ultimoUso: null },
+  },
+  {
+    id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z',
+    licenca: { tipo: 'trial', situacao: 'vencendo', validaAte: '2026-10-28T23:59:59Z', diasRestantes: 3, inicio: '2026-10-02T10:00:00Z', definidaPeloAdmin: true, ultimoUso: '2026-10-25T11:42:00Z' },
+  },
 ];
+
+// ----- US #687 -----
+
+/** O painel de utilidade (GET /api/dashboard/utilidade). */
+export const utilidade: UtilidadeResposta = {
+  de: '2026-09-26', ate: '2026-10-25',
+  saude: {
+    tasksParadas: { quantidade: 6, novos24h: 4, maisAntigo: '2026-10-08T10:00:00Z', itens: [] },
+    perguntas: { quantidade: 10, novos24h: 2, maisAntigo: '2026-10-22T10:00:00Z', itens: [] },
+    fechamentos: { quantidade: 2, novos24h: 1, maisAntigo: '2026-10-24T10:00:00Z', itens: ['#669', '#585'] },
+    maquinas: { quantidade: 1, novos24h: 1, maisAntigo: '2026-10-25T10:00:00Z', itens: ['máquina a1b2c3d4: disco 8 MB · memória 124 MB livres'] },
+  },
+  resultado: {
+    aprovadas: 14, integradas: 11, aprovadasNaSemana: 11, percentualNaPrimeira: 57, variacaoNaPrimeira: 9, notaMedia: 91, rodadasAteANota: 2.1,
+    medianaAteAprovacaoMinutos: 400, variacaoDaMedianaMinutos: 110, percentualEsperandoDev: 62, turnosPorEntrega: 17.7, turnos: 248, comandosDelegados: 63,
+    arquivosAlterados: 296,
+  },
+  turnosPorDesfecho: [
+    { dia: '2026-10-24', trabalhou: 9, esperouDev: 2, limiteDeUso: 1, falhou: 1 },
+    { dia: '2026-10-25', trabalhou: 5, esperouDev: 1, limiteDeUso: 0, falhou: 2 },
+  ],
+  ondeTravam: [
+    { causa: 'Esperou processo em segundo plano que morreu', vezes: 9, selo: 'sugestão #3', tipoDoSelo: 'sugestao' },
+    { causa: 'Pergunta sem chegar ao dev', vezes: 7, selo: 'corrigido #568', tipoDoSelo: 'corrigido' },
+  ],
+};
+
+/** A licença da Ana (GET /api/usuarios/2/licenca). */
+export const licencaDaAna: DetalheDaLicenca = {
+  usuarioId: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresa: 'Empresa A', licenca: usuarios[1].licenca!,
+  historico: [
+    { em: '2026-10-21T10:00:00Z', acao: 'renovada', descricao: 'login renovou a licença do dev.kit até 28/10/2026', motivo: '', autor: 'ana.dev' },
+    { em: '2026-10-14T10:00:00Z', acao: 'definida', descricao: 'validade até 28/10/2026 · trial', motivo: 'trial de 14 dias', autor: 'admin' },
+  ],
+};
+
+/** O catálogo da edição de artefato: a skill do básico com o rascunho da v2. */
+export const itemDoBasico: ItemEditavel = {
+  id: 31, tipo: 'skill', nome: 'compilar-net-framework', descricao: 'Compilar projetos .NET Framework', categoria: '.NET', hash: 'h31', versaoPublicada: 1,
+  situacao: 'alterado', alteradoEm: '2026-10-25T11:58:00Z', alteradoPor: 'admin', dependencias: [], conteudo: null, catalogo: 'basico', escopo: 'base', stack: '',
+  ruleDeImpacto: false,
+};
+
+export const diferencasDoItem: DiferencasDoItem = {
+  versaoPublicada: 1, publicado: '---\nname: compilar-net-framework\n---\n\n1. Ache o MSBuild.', rascunho: '', adicionadas: 1, removidas: 0,
+  linhas: [{ tipo: 'igual', texto: '---', numero: 1 }, { tipo: 'adicionada', texto: '3. Use -m:1 -nodeReuse:false', numero: 7 }],
+};
+
+export const historicoDoItem: HistoricoDoItem[] = [
+  { em: '2026-10-25T11:58:00Z', acao: 'rascunho', versao: 1, release: '', autor: 'admin' },
+  { em: '2026-10-23T10:00:00Z', acao: 'publicado', versao: 1, release: 'catalogo-v1', autor: 'admin' },
+];
+
+export const anexosDoItem: AnexoDoItem[] = [{ id: 1, nome: 'exemplo.log', tipoDeConteudo: 'text/plain', tamanhoBytes: 2048, autor: 'admin', em: '2026-10-24T10:00:00Z' }];
 
 /** O que chegou às rotas de escrita da gestão de usuários (o corpo, ou a ação). */
 export const gestaoDeUsuarios: { metodo: string; caminho: string; corpo: unknown }[] = [];
@@ -391,6 +456,50 @@ export const handlersPadrao = [
   http.get(`${API}/api/dashboard/quantidade`, ({ request }) => {
     requisicoes.push(new URL(request.url));
     return HttpResponse.json(quantidade);
+  }),
+  // US #687: o painel de utilidade, a licença por usuário, a edição da empresa e a edição de artefato do catálogo.
+  http.get(`${API}/api/dashboard/utilidade`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json(utilidade);
+  }),
+  http.get(`${API}/api/usuarios/:id/licenca`, () => HttpResponse.json(licencaDaAna)),
+  http.post(`${API}/api/usuarios/:id/licenca/previa`, async ({ request }) => {
+    const corpo = (await request.json()) as { modo: string; dias?: number };
+    return HttpResponse.json({
+      validaAte: '2026-11-27T23:59:59Z', semPrazo: corpo.modo === 'sem-prazo', diasAPartirDeHoje: 33, tipo: 'individual',
+      mensagem: corpo.modo === 'sem-prazo' ? 'Sem prazo: a licença do dev.kit de Ana renova sem data-limite, no próximo login.'
+        : 'Nova validade: 27/11/2026 (33 dias a partir de hoje). A licença do dev.kit de Ana renova no próximo login, sem precisar sair.',
+    });
+  }),
+  http.put(`${API}/api/usuarios/:id/licenca`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/licenca`, corpo });
+    return HttpResponse.json({ ...licencaDaAna, licenca: { ...licencaDaAna.licenca, situacao: 'valida', validaAte: '2026-11-27T23:59:59Z', diasRestantes: 33 } });
+  }),
+  http.post(`${API}/api/usuarios/:id/licenca/revogar`, async ({ params, request }) => {
+    const corpo = await request.json();
+    escritas.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/licenca/revogar`, corpo });
+    return HttpResponse.json({ ...licencaDaAna, licenca: { ...licencaDaAna.licenca, situacao: 'revogada', validaAte: null, diasRestantes: null } });
+  }),
+  http.put(`${API}/api/empresas/:id`, async ({ params, request }) => {
+    const corpo = (await request.json()) as object;
+    escritas.push({ metodo: 'PUT', caminho: `/api/empresas/${params.id}`, corpo });
+    return HttpResponse.json({ ...empresa, ...corpo, id: Number(params.id) });
+  }),
+  http.get(`${API}/api/catalogos/itens`, ({ request }) => {
+    requisicoes.push(new URL(request.url));
+    return HttpResponse.json([itemDoBasico]);
+  }),
+  http.get(`${API}/api/catalogos/basico/itens/31`, () => HttpResponse.json({
+    ...itemDoBasico,
+    conteudo: JSON.stringify({ name: 'compilar-net-framework', description: 'Compilar projetos .NET Framework', content: '# Compilar\n\n1. Ache o MSBuild.' }),
+  })),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/diferencas`, () => HttpResponse.json(diferencasDoItem)),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/historico`, () => HttpResponse.json(historicoDoItem)),
+  http.get(`${API}/api/catalogos/:slug/itens/:id/anexos`, () => HttpResponse.json(anexosDoItem)),
+  http.post(`${API}/api/catalogos/:slug/itens/:id/descartar`, ({ params }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/catalogos/${params.slug}/itens/${params.id}/descartar`, corpo: null });
+    return HttpResponse.json({ ...itemDoBasico, situacao: 'publicado', conteudo: JSON.stringify({ name: 'compilar-net-framework', description: 'x', content: 'v1' }) });
   }),
   http.get(`${API}/api/dashboard/qualidade`, ({ request }) => {
     requisicoes.push(new URL(request.url));

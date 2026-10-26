@@ -92,7 +92,7 @@ describe('Releases do catálogo (US #425, a antiga /catalogo-base; aba da US #46
     renderizar('/catalogo-base', tokenValido());
 
     expect(await screen.findByRole('tab', { name: 'Releases' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Vitrine' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Itens' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Catálogos' })).toBeInTheDocument();
     expect(await screen.findByRole('article', { name: 'Release atual catalogo-v2' })).toBeInTheDocument();
     expect(screen.getByLabelText('Catálogo')).toHaveValue('basico');
@@ -150,7 +150,7 @@ describe('Releases do catálogo (US #425, a antiga /catalogo-base; aba da US #46
 
   it('o gestor que abre a rota antiga vai ao dashboard; o dev, à conta', async () => {
     const { unmount } = renderizar('/catalogo-base', tokenDoGestor());
-    expect(await screen.findByRole('heading', { name: 'Quantidade de uso' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
     unmount();
     sessionStorage.clear();
 
