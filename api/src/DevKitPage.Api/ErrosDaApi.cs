@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Diagnostics;
+using DevKitPage.Core;
 using DevKitPage.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -65,4 +66,16 @@ public sealed class EsquemaDoBancoCheck(EsquemaDoBanco esquema) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
         => Task.FromResult(esquema.Faltas.Count == 0 ? HealthCheckResult.Healthy() : HealthCheckResult.Degraded(esquema.Descrever()));
+}
+
+/// <summary>
+/// O <c>/health</c> com a chave das licenças (bug de 27/10): sem a <c>Licencas:ChavePrivada</c> (ou com ela inválida) a
+/// renovação responde 503 a todo dev.kit — e o <c>/health</c> dizia "Healthy". Agora fica "Degraded", com o que falta.
+/// </summary>
+public sealed class LicencasCheck(ILicencas licencas) : IHealthCheck
+{
+    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+        => Task.FromResult(licencas.Disponivel
+            ? HealthCheckResult.Healthy()
+            : HealthCheckResult.Degraded("Licencas:ChavePrivada ausente ou inválida (o segredo Licencas--ChavePrivada do Key Vault): a renovação da licença responde 503."));
 }

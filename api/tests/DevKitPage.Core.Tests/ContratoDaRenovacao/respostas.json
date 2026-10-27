@@ -1,0 +1,13 @@
+{
+  "respostas": [
+    { "recusa": "Indisponivel", "status": 503, "detalhe": "A renovação da licença está fora do ar: o dev.kit.page está sem a chave que assina as licenças (Licencas:ChavePrivada). Avise o admin do dev.kit.page — o /health da API mostra o que falta." },
+    { "recusa": "UsuarioBloqueado", "status": 403, "detalhe": "Usuário bloqueado: a licença não renova. Fale com o gestor." },
+    { "recusa": "SemAssento", "status": 403, "detalhe": "A sua empresa não tem assento para você: a licença não renova. Fale com o gestor." },
+    { "recusa": "SemEmpresa", "status": 403, "detalhe": "O seu usuário não é de uma empresa com assinatura: a licença não renova." },
+    { "recusa": "AssinaturaCancelada", "status": 402, "detalhe": "A assinatura foi cancelada: a licença não renova." },
+    { "recusa": "LicencaVencida", "status": 403, "detalhe": "A validade da sua licença terminou: ela não renova. Fale com o gestor ou com o admin do dev.kit.page." },
+    { "recusa": "LicencaRevogada", "status": 403, "detalhe": "A sua licença foi revogada pelo admin: ela não renova. Fale com o gestor ou com o admin do dev.kit.page." },
+    { "recusa": "TesteEncerrado", "status": 403, "detalhe": "O seu teste grátis do dev.kit terminou: assine em dev.kit.page, ou entre com a conta da sua empresa, para continuar." },
+    { "recusa": "CedoDemais", "status": 409, "detalhe": "Ainda não é hora de renovar: a licença atual renova a partir do 7º dia." }
+  ]
+}
