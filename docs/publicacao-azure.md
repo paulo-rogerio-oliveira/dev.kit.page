@@ -176,7 +176,7 @@ repositório e NUNCA versionada. Antes de gravar, confira no Git Bash que ela é
 read -s -p "Semente (base64): " CANDIDATA; echo
 P=$( (printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'; printf %s "$CANDIDATA" | base64 -d 2>/dev/null) \
   | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | tail -c 32 | base64)
-[ "$P" = "P0vtkP0vsfmUBrfCEGzxsAY4BEJnOop3cJKTs2tRBlI=" ] && echo "confere" || echo "não confere"
+[ "$P" = "kf1FN8DD7HQC1V6JgctluuP5ZfDbgbIW4YPOokrpR/c=" ] && echo "confere" || echo "não confere"
 ```
 
 Conferida, grave e reinicie (o valor entra pelo prompt acima, fora do histórico do shell):
