@@ -145,6 +145,18 @@ public sealed class Us687Tests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_maquina_no_limite_com_memoria_em_gb_sai_com_virgula_sem_cultura_com_nome()
+    {
+        // Em produção (InvariantGlobalization), o "1,5 GB" pela cultura pt-BR derrubava o painel inteiro.
+        var maquina = await _base.MaquinaAsync("m-gb");
+        await EnviarAsync(maquina, Evento("a1", TiposDeEvento.AmostraDaMaquina, Agora.AddMinutes(-10), "disco-mb=600;memoria-mb=1536;limite=disco", 600, sessao: ""));
+
+        var painel = await UtilidadeAsync();
+
+        Assert.Equal("máquina m-gb: disco 600 MB · memória 1,5 GB livres", Assert.Single(painel.Saude.Maquinas.Itens));
+    }
+
+    [Fact]
     public async Task O_periodo_vazio_e_o_gestor_sem_maquina_que_consentiu_tem_tudo_zerado()
     {
         var empresa = await Com(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("Acme", "Empresarial", 5), default));
