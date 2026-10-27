@@ -95,7 +95,8 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 /// <see cref="GeradorDeSenha"/> — o mesmo do admin semeado e do gestor convidado —, devolvida UMA vez, e a
 /// troca obrigatória no primeiro acesso (a regra que a API já aplica a todo token com a troca pendente).
 /// </summary>
-public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio) : IGestaoDeUsuarios
+public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio, IOptions<OpcoesDeLicenca> licencas)
+    : IGestaoDeUsuarios
 {
     public async Task<IReadOnlyList<UsuarioResumo>> ListarAsync(CancellationToken ct)
     {
@@ -117,10 +118,14 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
             .Select(g => new { Usuario = g.Key, Ultima = g.Max(l => l.EmitidaEmUtc) })
             .ToDictionaryAsync(x => x.Usuario, x => x.Ultima, ct);
 
-    /// <summary>A licença do usuário como o contrato v1 a leva (US #687): a regra do Core, a situação e o último uso.</summary>
-    internal static LicencaDoUsuarioV1 Licenca(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
+    /// <summary>
+    /// A licença do usuário como o contrato v1 a leva (US #687): a regra do Core, a situação e o último uso. Os
+    /// <paramref name="diasDoTeste"/> são os de <see cref="OpcoesDeLicenca.TrialDias"/>, os mesmos que a renovação usa:
+    /// o admin vê a validade do teste que o dev.kit vai respeitar.
+    /// </summary>
+    internal static LicencaDoUsuarioV1 Licenca(Usuario u, DateTimeOffset agora, DateTime? ultimoUso, int diasDoTeste)
     {
-        var licenca = RegrasDeLicenca.Licenca(u, u.Empresa);
+        var licenca = RegrasDeLicenca.Licenca(u, u.Empresa, diasDoTeste);
         var (situacao, dias) = RegrasDeLicenca.Situacao(licenca, agora);
         return new LicencaDoUsuarioV1(licenca.Tipo, situacao, licenca.ValidaAte, dias, DevKitPageDb.Utc(u.CriadoEmUtc), licenca.DefinidaPeloAdmin,
             ultimoUso is { } uso ? DevKitPageDb.Utc(uso) : null);
@@ -232,10 +237,10 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
         => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow(),
             (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id));
 
-    private static UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
+    private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
         => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
             u.BloqueadoAteUtc is { } ate && ate > agora.UtcDateTime ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc),
-            Licenca(u, agora, ultimoUso));
+            Licenca(u, agora, ultimoUso, licencas.Value.TrialDias));
 }
 
 /// <summary>

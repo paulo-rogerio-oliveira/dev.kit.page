@@ -33,6 +33,25 @@ public sealed class Us687Tests : IAsyncLifetime
             new Periodo(DateOnly.FromDateTime(Agora.UtcDateTime).AddDays(-(dias - 1)), DateOnly.FromDateTime(Agora.UtcDateTime)), maquina, harness, Agora, default));
 
     [Fact]
+    public async Task O_admin_ve_o_teste_gratis_pelos_dias_configurados_os_mesmos_da_renovacao()
+    {
+        // Task 388: com Licencas:TrialDias = 7, a lista, o detalhe e a prévia contam 7 dias do cadastro — não os 14 do padrão.
+        await using var base7 = new BaseDeTeste(new() { ["Licencas:TrialDias"] = "7" });
+        await base7.InicializarAsync();
+        var trial = (await base7.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().CriarAsync(new UsuarioNovo("teste", "Teste", Papeis.Dev, null), default))).Valor!.Usuario;
+        var fim = RegrasDeLicenca.FimDoTeste(base7.Relogio.Agora.UtcDateTime, 7);
+
+        var naLista = (await base7.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().ListarAsync(default))).Single(u => u.Login == "teste").Licenca!;
+        var detalhe = (await base7.ComAsync(sp => sp.GetRequiredService<ILicencasDosUsuarios>().DetalheAsync(trial.Id, default))).Valor!.Licenca;
+        var previa = (await base7.ComAsync(sp => sp.GetRequiredService<ILicencasDosUsuarios>()
+            .PreviaAsync(trial.Id, new DefinicaoDeLicencaV1(ModosDaValidade.Somar, 3), default))).Valor!;
+
+        Assert.Equal((TiposDaLicencaDoUsuario.Trial, fim, 7), (naLista.Tipo, naLista.ValidaAte!.Value, naLista.DiasRestantes!.Value));
+        Assert.Equal(fim, detalhe.ValidaAte);
+        Assert.Equal(RegrasDeLicenca.FimDoDia(DateOnly.FromDateTime(fim.UtcDateTime).AddDays(3)), previa.ValidaAte); // somar parte do fim do teste
+    }
+
+    [Fact]
     public void Script_do_azure_sql_cria_as_tabelas_e_as_colunas_da_us()
     {
         var script = BaseDeTeste.ScriptDoAzureSql("Us687.sql");

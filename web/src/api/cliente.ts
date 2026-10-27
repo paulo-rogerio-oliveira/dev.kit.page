@@ -35,6 +35,15 @@ export function mensagemDaFalha(falha: unknown): string {
   return falha instanceof Error ? falha.message : 'Falha ao consultar a API.';
 }
 
+/**
+ * O 5xx SEM `detail` (uma API anterior ao tratamento de erro útil, ou um proxy): no lugar do título genérico do ASP.NET
+ * ("An error occurred while processing your request"), a rota que falhou e o código que acha o erro no log.
+ */
+export function falhaDoServidor(caminho: string, status: number, codigo?: string): string {
+  const rota = caminho.split('?')[0];
+  return `A API falhou ao processar ${rota} (${status}).${codigo ? ` Código para o log da API: ${codigo}.` : ''}`;
+}
+
 interface Opcoes {
   metodo?: string;
   corpo?: unknown;
@@ -60,8 +69,8 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
     let corpo: unknown = null;
     try {
       corpo = await resposta.json();
-      const problema = (corpo ?? {}) as { detail?: string; title?: string; errors?: Record<string, string[]> };
-      mensagem = problema.detail ?? problema.title ?? mensagem;
+      const problema = (corpo ?? {}) as { detail?: string; title?: string; errors?: Record<string, string[]>; traceId?: string };
+      mensagem = problema.detail ?? (resposta.status >= 500 ? falhaDoServidor(caminho, resposta.status, problema.traceId) : problema.title ?? mensagem);
       erros = problema.errors ?? {};
     } catch {
       // Sem corpo (o 401 do JWT): fica a mensagem padrão.

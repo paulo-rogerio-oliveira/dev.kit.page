@@ -553,7 +553,10 @@ branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina d
   admin)` e recusa a licença vencida ou revogada (403). A janela de renovação é a MESMA regra nos dois lados — `agora >=
   emitida + 7 dias` ou `agora >= validade − 7 dias`, e a alteração do admin depois da emissão abre a janela —,
   conferida pelo mesmo arquivo de casos (`ContratoDaRenovacao/casos.json`) nos testes da API e do dev.kit. Sem licença
-  definida pelo admin vale a da empresa (o contrato até) ou, sem ela, os 30 dias corridos de antes.
+  definida pelo admin vale a da empresa (o contrato até) ou, sem ela, os 30 dias corridos de antes. O usuário SEM
+  empresa e sem licença definida é o do TESTE grátis (bug de 26/10: antes ele levava 403 "não é de uma empresa" e nunca
+  renovava): a validade dele é o fim do teste, `Licencas:TrialDias` (14) dias do cadastro, a renovação emite sem passar
+  dela e, depois, recusa com `TesteEncerrado` (403, "assine em dev.kit.page").
 - **Edição da empresa** (`/empresas`, `PUT /api/empresas/{id}`): os dados (CNPJ com dígitos verificadores), o plano, o
   contrato e os assentos — nunca abaixo dos que estão em uso (`RegrasDaEmpresa`).
 - **Editor de artefato** (`/catalogo`, aba Itens; `GET /api/catalogos/itens` e `/api/catalogos/{slug}/itens/{id}/`
@@ -575,6 +578,14 @@ idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
 `GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`, e a da US #687, `Us687.sql`, e a da US #693, `Us693.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
+
+**O script esquecido fica dito (bug do painel Uso, 26/10).** Sem o `Us687.sql`, o painel de utilidade lia
+`FotosDeEstado`, que não existia, e a tela mostrava só "An error occurred while processing your request". Agora a
+subida no SQL Server compara o modelo com o `INFORMATION_SCHEMA` (`EsquemaDoBanco`, com os scripts embutidos só para
+dizer qual traz cada falta): o que falta vai para o log, deixa o `/health` em `Degraded` e entra na mensagem do 500
+(`ErroUtilDaApi`: a rota, a causa e o código do log para o admin; a rota e o código para os outros). A API NÃO roda os
+scripts sozinha: idempotentes um a um, eles não o são em sequência (o `Us491.sql` recria o índice único que o
+`Us663.sql` derruba). O teste `Cada_tabela_do_modelo_tem_o_script_que_a_cria` trava a tabela nova sem script.
 
 **Privacidade.** A API só recebe o que o dev.kit manda, e o dev.kit não manda caminhos, nomes de
 repositório ou cliente, argumentos de comando, prompt, resposta, código, e-mail nem usuário do

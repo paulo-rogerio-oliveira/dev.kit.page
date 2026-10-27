@@ -7,8 +7,10 @@ builder.Services.AdicionarInfraestrutura(builder.Configuration);
 builder.Services.AdicionarSeguranca(builder.Environment);
 builder.Services.AdicionarLimiteDeTaxa(builder.Configuration);
 builder.Services.AddProblemDetails();
+// O 500 com a rota, a causa e o código do log, no lugar do "An error occurred while processing your request".
+builder.Services.AddExceptionHandler<ErroUtilDaApi>();
 builder.Services.AddOpenApi();
-builder.Services.AddHealthChecks().AddDbContextCheck<DevKitPageDb>("banco");
+builder.Services.AddHealthChecks().AddDbContextCheck<DevKitPageDb>("banco").AddCheck<EsquemaDoBancoCheck>("esquema");
 builder.Services.AddHostedService<ExpurgoDiario>();
 
 // CORS por configuração: em Development, o Vite; no Azure, a origem do Static Web App.

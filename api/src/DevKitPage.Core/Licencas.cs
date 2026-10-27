@@ -75,7 +75,10 @@ public enum RecusaDaRenovacao
     /// <summary>O usuário foi bloqueado pelo gestor ou pelo admin (403).</summary>
     UsuarioBloqueado,
 
-    /// <summary>O usuário não é de nenhuma empresa — quem renova é quem assina (403).</summary>
+    /// <summary>
+    /// O usuário não é de nenhuma empresa — quem renova é quem assina (403). Desde o bug do trial (26/10) a regra não a
+    /// devolve mais: o usuário sem empresa é o do TESTE, e renova até o fim dele (<see cref="TesteEncerrado"/>).
+    /// </summary>
     SemEmpresa,
 
     /// <summary>A assinatura da empresa foi cancelada no gateway (402).</summary>
@@ -92,6 +95,9 @@ public enum RecusaDaRenovacao
 
     /// <summary>O admin revogou a licença do usuário (US #687, 403).</summary>
     LicencaRevogada,
+
+    /// <summary>O teste grátis do usuário sem empresa terminou e ninguém definiu outra validade para ele (403).</summary>
+    TesteEncerrado,
 }
 
 /// <summary>
@@ -115,6 +121,9 @@ public static partial class RegrasDeLicenca
     /// <summary>O tamanho máximo do motivo no histórico.</summary>
     public const int TamanhoMaximoDoMotivo = 300;
 
+    /// <summary>Os dias do teste grátis (o padrão de <see cref="OpcoesDeLicenca.TrialDias"/>).</summary>
+    public const int DiasDoTeste = 14;
+
     /// <summary>A licença atual pode ser renovada? Só a partir do <paramref name="aPartirDoDia"/>º dia da emissão.</summary>
     public static bool NaJanela(DateTimeOffset emitidaEm, DateTimeOffset agora, int aPartirDoDia)
         => agora >= emitidaEm.AddDays(Math.Max(0, aPartirDoDia));
@@ -134,18 +143,22 @@ public static partial class RegrasDeLicenca
     /// a licença (do usuário ou o contrato da empresa) depois da emissão dela; o trial renova a qualquer hora (é a
     /// primeira licença de quem acabou de entrar). A validade do admin vem antes da empresa: a vencida e a revogada são
     /// recusadas, e a licença definida para um usuário sem empresa renova.
+    /// <para>
+    /// O usuário SEM empresa e sem licença definida pelo admin é o do teste grátis: renova até o fim do teste
+    /// (<paramref name="diasDoTeste"/> dias do cadastro), e depois a recusa é <see cref="RecusaDaRenovacao.TesteEncerrado"/>.
+    /// Antes (bug de 26/10) ele caía no <see cref="RecusaDaRenovacao.SemEmpresa"/> e não renovava nunca.
+    /// </para>
     /// </summary>
-    public static RecusaDaRenovacao Avaliar(Usuario usuario, Empresa? empresa, ConteudoDaLicenca? atual, DateTimeOffset agora, int aPartirDoDia)
+    public static RecusaDaRenovacao Avaliar(
+        Usuario usuario, Empresa? empresa, ConteudoDaLicenca? atual, DateTimeOffset agora, int aPartirDoDia, int diasDoTeste = DiasDoTeste)
     {
         if (usuario.BloqueadoPeloAdmin)
             return RecusaDaRenovacao.UsuarioBloqueado;
-        var licenca = Licenca(usuario, empresa);
+        var licenca = Licenca(usuario, empresa, diasDoTeste);
         if (licenca.Revogada)
             return RecusaDaRenovacao.LicencaRevogada;
         if (licenca.ValidaAte is { } fim && fim <= agora)
-            return RecusaDaRenovacao.LicencaVencida;
-        if (empresa is null && !licenca.DefinidaPeloAdmin)
-            return RecusaDaRenovacao.SemEmpresa;
+            return empresa is null && !licenca.DefinidaPeloAdmin ? RecusaDaRenovacao.TesteEncerrado : RecusaDaRenovacao.LicencaVencida;
         if (empresa?.AssinaturaCanceladaEmUtc is not null)
             return RecusaDaRenovacao.AssinaturaCancelada;
         if (atual is { Tipo: TiposDeLicenca.Assinatura } && !NaJanela(atual.EmitidaEm, atual.ValidaAte, agora, aPartirDoDia)
@@ -167,9 +180,11 @@ public static partial class RegrasDeLicenca
 
     /// <summary>
     /// A licença do usuário: a conta de administração não tem prazo; a revogação e a validade do admin valem antes do
-    /// contrato da empresa; sem nada definido, a renovação segue como antes (sem data-limite, a situação automática).
+    /// contrato da empresa; sem nada definido, a renovação segue como antes (sem data-limite, a situação automática) — menos
+    /// para o usuário sem empresa, que é o do TESTE: a validade dele é o fim do teste, <paramref name="diasDoTeste"/> dias
+    /// depois do cadastro (o "começo da licença" do histórico).
     /// </summary>
-    public static LicencaDoUsuario Licenca(Usuario usuario, Empresa? empresa)
+    public static LicencaDoUsuario Licenca(Usuario usuario, Empresa? empresa, int diasDoTeste = DiasDoTeste)
     {
         if (usuario.EhAdmin || usuario.Papel == Papeis.Admin)
             return new LicencaDoUsuario(TiposDaLicencaDoUsuario.Admin, null, SemPrazo: true, Revogada: false, DefinidaPeloAdmin: false);
@@ -185,8 +200,14 @@ public static partial class RegrasDeLicenca
             return new LicencaDoUsuario(tipo, Utc(doAdmin), false, false, DefinidaPeloAdmin: true);
         if (empresa?.ContratoAteUtc is { } contrato)
             return new LicencaDoUsuario(tipo, Utc(contrato), false, false, DefinidaPeloAdmin: false);
+        if (empresa is null)
+            return new LicencaDoUsuario(tipo, FimDoTeste(usuario.CriadoEmUtc, diasDoTeste), false, false, false);
         return new LicencaDoUsuario(tipo, null, false, false, false);
     }
+
+    /// <summary>O fim do teste grátis: o fim do dia do cadastro mais os <paramref name="diasDoTeste"/> (cadastro em 26/10 → até 09/11).</summary>
+    public static DateTimeOffset FimDoTeste(DateTime cadastroUtc, int diasDoTeste)
+        => FimDoDia(DateOnly.FromDateTime(cadastroUtc).AddDays(Math.Max(1, diasDoTeste)));
 
     /// <summary>A situação (<see cref="SituacoesDaLicenca"/>) e os dias que faltam, contados por DATA (vence amanhã = 1).</summary>
     public static (string Situacao, int? DiasRestantes) Situacao(LicencaDoUsuario licenca, DateTimeOffset agora)

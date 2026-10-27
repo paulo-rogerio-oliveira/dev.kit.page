@@ -82,6 +82,33 @@
       "forcar": true,
       "admin": { "modo": "data", "validaAte": "2026-10-17T23:59:59Z", "alteradaEm": "2026-10-05T12:00:00Z" },
       "esperado": { "clienteChama": true, "apiRenova": false, "recusa": "LicencaVencida" }
+    },
+    {
+      "nome": "teste grátis (sem empresa), no 8º dia: renova sem passar do fim do teste",
+      "emitidaEm": "2026-10-20T12:00:00Z",
+      "validaAte": "2026-11-03T23:59:59Z",
+      "agora": "2026-10-28T12:00:00Z",
+      "forcar": false,
+      "admin": { "modo": "trial", "cadastro": "2026-10-20T09:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-11-03T23:59:59Z" }
+    },
+    {
+      "nome": "teste grátis perto do fim: a janela abre a menos de 7 dias do fim e o login renova",
+      "emitidaEm": "2026-10-25T12:00:00Z",
+      "validaAte": "2026-11-03T23:59:59Z",
+      "agora": "2026-10-29T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "trial", "cadastro": "2026-10-20T09:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": true, "validaAteEmitida": "2026-11-03T23:59:59Z" }
+    },
+    {
+      "nome": "teste grátis encerrado: a API recusa (TesteEncerrado) e manda assinar",
+      "emitidaEm": "2026-10-28T12:00:00Z",
+      "validaAte": "2026-11-03T23:59:59Z",
+      "agora": "2026-11-04T12:00:00Z",
+      "forcar": true,
+      "admin": { "modo": "trial", "cadastro": "2026-10-20T09:00:00Z" },
+      "esperado": { "clienteChama": true, "apiRenova": false, "recusa": "TesteEncerrado" }
     }
   ]
 }
