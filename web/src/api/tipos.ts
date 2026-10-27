@@ -931,6 +931,20 @@ export interface UtilidadeResposta {
   resultado: ResultadoDoUso;
   turnosPorDesfecho: TurnosDoDia[];
   ondeTravam: CausaDeTravamento[];
+  /** A faixa Adoção; ausente só numa API anterior a ela. */
+  adocao?: Adocao | null;
+}
+
+/**
+ * A adoção no período, nos filtros do painel (período, máquina e harness): o usuário ativo é o dono da licença que uma
+ * máquina ativa pediu com o login dele; a máquina ativa sem licença de usuário é o uso sem login.
+ */
+export interface Adocao {
+  usuariosAtivos: number;
+  usuariosCadastrados: number;
+  maquinasAtivas: number;
+  maquinasRegistradas: number;
+  maquinasSemLogin: number;
 }
 
 /** O harness — o CLI do provedor cognitivo que roda o turno — dos filtros do log e das exceções (o codex desde a versão 5). */

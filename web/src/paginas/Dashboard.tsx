@@ -59,7 +59,7 @@ export function Dashboard() {
   const [dias, setDias] = useState<number>(30);
   const [maquina, setMaquina] = useState<number | null>(null);
   const filtro = useMemo<Filtro>(() => ({ ...ultimosDias(dias), maquina }), [dias, maquina]);
-  // O harness e o recorte do log não mudam os totais (que não têm sessão): valem para o log e as exceções.
+  // O harness e o recorte do log não mudam os totais (que não têm sessão): valem para o log e as exceções — e o harness, para a adoção.
   const [harness, setHarness] = useState<Harness | null>(null);
   const [tipoDoLog, setTipoDoLog] = useState('');
   const [detalheDoLog, setDetalheDoLog] = useState('');
@@ -103,14 +103,14 @@ export function Dashboard() {
     let vivo = true;
     setCarregando(true);
     setErro('');
-    Promise.all([api.utilidade(token, filtro), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
+    Promise.all([api.utilidade(token, filtro, harness), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
       .then(([utilidade, qualidade, eventos]) => vivo && setDados({ utilidade, qualidade, eventos }))
       .catch((falha) => vivo && tratar(falha))
       .finally(() => vivo && setCarregando(false));
     return () => {
       vivo = false;
     };
-  }, [token, filtro, pagina, recorte, tratar]);
+  }, [token, filtro, harness, pagina, recorte, tratar]);
 
   const filtrandoOLog = Boolean(tipoDoLog || detalheDoLog || harness);
 
@@ -151,7 +151,7 @@ export function Dashboard() {
               {PERIODOS.map((p) => <option key={p} value={p}>Últimos {p} dias</option>)}
             </select>
           </label>
-          <label title="O CLI de agente da sessão: filtra o log de eventos e as exceções não classificadas.">
+          <label title="O CLI de agente da sessão: filtra a adoção, o log de eventos e as exceções não classificadas.">
             Harness
             <select value={harness ?? ''} onChange={(e) => { setPagina(1); setHarness((e.target.value || null) as Harness | null); }}>
               <option value="">Todos os harnesses</option>

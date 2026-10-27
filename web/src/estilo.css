@@ -1031,6 +1031,15 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
 .cartao-de-saude-nota { margin: 0; font-size: 0.78rem; color: var(--texto-mudo); line-height: 1.45; }
 .variacao-ruim { color: var(--erro); }
 .variacao-boa { color: var(--sucesso); }
+/* A faixa Adoção (admin-dashboard v003 da semana6): os usuários ativos ao lado das máquinas ativas, e a nota da conta. */
+.faixa-de-adocao { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 8px; align-items: center; }
+@media (min-width: 1100px) { .faixa-de-adocao { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); } }
+.faixa-de-adocao .nota-da-secao { margin: 0; }
+.metrica-de-adocao { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+.metrica-de-adocao-destaque { border-color: rgba(226, 38, 28, 0.5); background: linear-gradient(180deg, rgba(226, 38, 28, 0.14), transparent 80%), var(--superficie); }
+.metrica-de-adocao-valor { font-size: 1.9rem; font-weight: 900; letter-spacing: -0.03em; }
+.metrica-de-adocao-textos { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
+.metrica-de-adocao-textos small { font-size: 0.78rem; color: var(--texto-mudo); }
 .kpis-resultado .kpi:first-child { border-color: var(--borda); background: var(--superficie); }
 .kpi-resultado .kpi-valor { display: flex; align-items: baseline; gap: 8px; font-size: 1.8rem; }
 .painel-em-duas-colunas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 16px 0 24px; align-items: start; }

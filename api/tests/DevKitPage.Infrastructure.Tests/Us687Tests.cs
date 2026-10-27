@@ -28,9 +28,9 @@ public sealed class Us687Tests : IAsyncLifetime
     private static TelemetryEventV1 Evento(string id, string tipo, DateTimeOffset em, string detalhe, long? valor = null, string sessao = "s1")
         => new(id, tipo, sessao, 1, valor, detalhe, em);
 
-    private Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel? escopo = null, int dias = 30)
+    private Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel? escopo = null, int dias = 30, int? maquina = null, string? harness = null)
         => Com(sp => sp.GetRequiredService<IConsultasDoPainel>().UtilidadeAsync(escopo ?? EscopoDoPainel.Tudo,
-            new Periodo(DateOnly.FromDateTime(Agora.UtcDateTime).AddDays(-(dias - 1)), DateOnly.FromDateTime(Agora.UtcDateTime)), null, Agora, default));
+            new Periodo(DateOnly.FromDateTime(Agora.UtcDateTime).AddDays(-(dias - 1)), DateOnly.FromDateTime(Agora.UtcDateTime)), maquina, harness, Agora, default));
 
     [Fact]
     public async Task O_admin_ve_o_teste_gratis_pelos_dias_configurados_os_mesmos_da_renovacao()
@@ -159,6 +159,54 @@ public sealed class Us687Tests : IAsyncLifetime
         Assert.Equal((0L, (double?)null, (double?)null), (vazio.Resultado.Aprovadas, vazio.Resultado.PercentualNaPrimeira, vazio.Resultado.MedianaAteAprovacaoMinutos));
         Assert.Empty(vazio.OndeTravam);
         Assert.All(vazio.TurnosPorDesfecho, d => Assert.Equal(0, d.Trabalhou + d.EsperouDev + d.LimiteDeUso + d.Falhou));
+        Assert.Equal(new AdocaoV1(0, 0, 0, 0, 0), vazio.Adocao);
+        Assert.Equal((0L, 0L), (doGestor.Adocao!.UsuariosAtivos, doGestor.Adocao.MaquinasAtivas));
+    }
+
+    [Fact]
+    public async Task A_adocao_conta_os_usuarios_ativos_ao_lado_das_maquinas_ativas_nos_filtros()
+    {
+        var empresa = await Com(sp => sp.GetRequiredService<IEmpresas>().CriarAsync(new EmpresaNova("Acme", "Empresarial", 5), default));
+        async Task<int> Dev(string login, int? empresaId)
+            => (await Com(sp => sp.GetRequiredService<IGestaoDeUsuarios>().CriarAsync(new UsuarioNovo(login, login, Papeis.Dev, empresaId), default))).Valor!.Usuario.Id;
+        var ana = await Dev("ana", empresa.Id);
+        var bruno = await Dev("bruno", empresa.Id);
+        await Dev("carla", null); // cadastrada, sem uso no período
+
+        // A Ana no Claude (há 1 dia), o Bruno no Kiro (há 3 dias), a máquina sem login no Claude e a registrada sem uso.
+        var daAna = await _base.MaquinaAsync("m-ana");
+        var doBruno = await _base.MaquinaAsync("m-bruno");
+        var anonima = await _base.MaquinaAsync("m-anonima");
+        await _base.MaquinaAsync("m-parada");
+        await EnviarAsync(daAna, Evento("a1", TiposDeEvento.TurnoExecutado, Agora.AddDays(-1), Harnesses.Claude, 1000));
+        await EnviarAsync(doBruno, Evento("b1", TiposDeEvento.TurnoExecutado, Agora.AddDays(-3), Harnesses.Kiro, 1000));
+        await EnviarAsync(anonima, Evento("c1", TiposDeEvento.TurnoExecutado, Agora.AddDays(-2), Harnesses.Claude, 1000));
+
+        var agora = Agora.UtcDateTime;
+        await Com(async sp =>
+        {
+            var db = sp.GetRequiredService<DevKitPageDb>();
+            db.LicencasEmitidas.AddRange(
+                new LicencaEmitida { MaquinaId = daAna, UsuarioId = ana, Tipo = "assinatura", EmitidaEmUtc = agora.AddDays(-3), ValidaAteUtc = agora.AddDays(4) },
+                new LicencaEmitida { MaquinaId = doBruno, UsuarioId = bruno, Tipo = "assinatura", EmitidaEmUtc = agora.AddDays(-4), ValidaAteUtc = agora.AddDays(3) },
+                // O trial da máquina sem login não tem usuário; e a licença do Bruno na máquina da Ana venceu antes do período.
+                new LicencaEmitida { MaquinaId = anonima, UsuarioId = null, Tipo = "trial", EmitidaEmUtc = agora.AddDays(-5), ValidaAteUtc = agora.AddDays(2) },
+                new LicencaEmitida { MaquinaId = daAna, UsuarioId = bruno, Tipo = "assinatura", EmitidaEmUtc = agora.AddDays(-60), ValidaAteUtc = agora.AddDays(-53) });
+            return await db.SaveChangesAsync();
+        });
+
+        var tudo = (await UtilidadeAsync()).Adocao;
+        var doClaude = (await UtilidadeAsync(harness: Harnesses.Claude)).Adocao;
+        var daMaquina = (await UtilidadeAsync(maquina: doBruno)).Adocao;
+        var doisDias = (await UtilidadeAsync(dias: 2)).Adocao;
+        var doGestor = (await UtilidadeAsync(new EscopoDoPainel(empresa.Id))).Adocao;
+
+        Assert.Equal(new AdocaoV1(2, 3, 3, 4, 1), tudo);
+        Assert.Equal(new AdocaoV1(1, 3, 2, 4, 1), doClaude);
+        Assert.Equal(new AdocaoV1(1, 3, 1, 1, 0), daMaquina);
+        Assert.Equal(new AdocaoV1(1, 3, 1, 4, 0), doisDias);
+        // O gestor: nenhuma máquina consentiu, então nada de uso — e os cadastrados são só os devs da empresa dele.
+        Assert.Equal(new AdocaoV1(0, 2, 0, 0, 0), doGestor);
     }
 
     /// <summary>Uma base sem nada além da semente: o período vazio de verdade.</summary>
@@ -170,7 +218,7 @@ public sealed class Us687Tests : IAsyncLifetime
             await vazia.InicializarAsync();
             var hoje = DateOnly.FromDateTime(vazia.Relogio.Agora.UtcDateTime);
             return await vazia.ComAsync(sp => sp.GetRequiredService<IConsultasDoPainel>()
-                .UtilidadeAsync(EscopoDoPainel.Tudo, new Periodo(hoje.AddDays(-6), hoje), null, vazia.Relogio.Agora, default));
+                .UtilidadeAsync(EscopoDoPainel.Tudo, new Periodo(hoje.AddDays(-6), hoje), null, null, vazia.Relogio.Agora, default));
         }
     }
 

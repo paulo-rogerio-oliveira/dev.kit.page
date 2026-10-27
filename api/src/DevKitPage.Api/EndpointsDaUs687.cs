@@ -65,19 +65,22 @@ public static class EndpointsDaUs687
 
     /// <summary>
     /// O painel de utilidade, no grupo do painel: o escopo do token (o gestor só a empresa dele, e o filtro de máquina
-    /// fora do escopo é 403, como nas outras rotas do dashboard).
+    /// fora do escopo é 403, como nas outras rotas do dashboard). O <c>harness</c> recorta a adoção (o desconhecido é 400).
     /// </summary>
     public static void MapearPainelDeUtilidade(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/dashboard/utilidade", async (DateOnly? de, DateOnly? ate, int? maquina, ClaimsPrincipal quem, IConsultasDoPainel consultas,
-                TimeProvider relogio, CancellationToken ct) =>
+        app.MapGet("/api/dashboard/utilidade", async (DateOnly? de, DateOnly? ate, int? maquina, string? harness, ClaimsPrincipal quem,
+                IConsultasDoPainel consultas, TimeProvider relogio, CancellationToken ct) =>
             {
+                if (!RegrasDoHarness.TryNormalizar(harness, out var cli))
+                    return Results.Problem(RegrasDoHarness.Invalido, statusCode: StatusCodes.Status400BadRequest);
                 if (Seguranca.Escopo(quem) is not { } escopo)
                     return Results.Forbid();
                 if (maquina is { } id && !await consultas.MaquinaVisivelAsync(escopo, id, ct))
                     return Results.Forbid();
                 var agora = relogio.GetUtcNow();
-                return Results.Ok(await consultas.UtilidadeAsync(escopo, Periodo.Pedido(de, ate, DateOnly.FromDateTime(agora.UtcDateTime)), maquina, agora, ct));
+                return Results.Ok(await consultas.UtilidadeAsync(escopo, Periodo.Pedido(de, ate, DateOnly.FromDateTime(agora.UtcDateTime)), maquina, cli,
+                    agora, ct));
             })
             .RequireAuthorization(Seguranca.PoliticaPainel).WithTags("Dashboard");
     }

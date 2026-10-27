@@ -135,6 +135,7 @@ export const utilidade: UtilidadeResposta = {
     { causa: 'Esperou processo em segundo plano que morreu', vezes: 9, selo: 'sugestão #3', tipoDoSelo: 'sugestao' },
     { causa: 'Pergunta sem chegar ao dev', vezes: 7, selo: 'corrigido #568', tipoDoSelo: 'corrigido' },
   ],
+  adocao: { usuariosAtivos: 3, usuariosCadastrados: 4, maquinasAtivas: 4, maquinasRegistradas: 5, maquinasSemLogin: 1 },
 };
 
 /** A licença da Ana (GET /api/usuarios/2/licenca). */
