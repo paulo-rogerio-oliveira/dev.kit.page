@@ -11,8 +11,8 @@ namespace DevKitPage.Api;
 public static class RespostasDaRenovacao
 {
     /// <summary>
-    /// A API sem a chave privada que assina as licenças (<c>Licencas:ChavePrivada</c>, segredo <c>Licencas--ChavePrivada</c>
-    /// do Key Vault). Era "indisponível no momento, tente de novo em alguns minutos" — e tentar de novo não resolvia nada:
+    /// A API sem a chave privada que assina as licenças (<c>Licencas:ChavePrivada</c>, a app setting
+    /// <c>Licencas__ChavePrivada</c> do App Service — sem Key Vault). Era "indisponível no momento, tente de novo em alguns minutos" — e tentar de novo não resolvia nada:
     /// sem a chave, a renovação não volta sozinha (bug de 27/10). O <c>/health</c> diz o mesmo (<c>LicencasCheck</c>).
     /// </summary>
     public const string Indisponivel =

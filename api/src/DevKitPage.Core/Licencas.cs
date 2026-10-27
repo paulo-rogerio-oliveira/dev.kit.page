@@ -19,7 +19,7 @@ public sealed record ConteudoDaLicenca(int Versao, string Tipo, string Maquina, 
 /// <summary>
 /// A licença assinada do dev.kit (US #425): <c>DKL2.&lt;payload&gt;.&lt;assinatura&gt;</c>, os dois em base64url, a
 /// assinatura Ed25519 sobre os BYTES do payload. Substitui o <c>DKL1</c> (AES-GCM com chave simétrica no binário,
-/// que só impedia a edição casual): a chave privada fica no Key Vault, e o app só tem a pública.
+/// que só impedia a edição casual): a chave privada fica só na configuração da API (<c>Licencas__ChavePrivada</c>), e o app só tem a pública.
 /// </summary>
 public static class LicencaAssinada
 {

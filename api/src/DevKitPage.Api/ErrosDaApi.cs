@@ -77,5 +77,5 @@ public sealed class LicencasCheck(ILicencas licencas) : IHealthCheck
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
         => Task.FromResult(licencas.Disponivel
             ? HealthCheckResult.Healthy()
-            : HealthCheckResult.Degraded("Licencas:ChavePrivada ausente ou inválida (o segredo Licencas--ChavePrivada do Key Vault): a renovação da licença responde 503."));
+            : HealthCheckResult.Degraded("Licencas:ChavePrivada ausente ou inválida (a app setting Licencas__ChavePrivada do App Service): a renovação da licença responde 503."));
 }
