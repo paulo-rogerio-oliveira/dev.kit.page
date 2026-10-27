@@ -79,7 +79,7 @@ public sealed class LicencasApiTests : IDisposable
         var bloqueada = await ana.PostAsJsonAsync("/api/licencas/renovar", new RenovacaoV1());
 
         Assert.Equal(HttpStatusCode.Forbidden, bloqueada.StatusCode);
-        Assert.Contains("bloqueado", await bloqueada.Content.ReadAsStringAsync());
+        Assert.Equal(Resposta("UsuarioBloqueado").Detalhe, (await bloqueada.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>())!.Detail);
     }
 
     /// <summary>
@@ -126,6 +126,46 @@ public sealed class LicencasApiTests : IDisposable
         Assert.NotEmpty(registro.Chave);
         Assert.Null(registro.Trial);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, renovar.StatusCode);
+        // Bug de 27/10: a 503 diz o motivo (a chave que falta), e não "tente de novo em alguns minutos"; o /health também.
+        Assert.Equal(Resposta("Indisponivel").Detalhe, (await renovar.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>())!.Detail);
+        var saude = await semChave.CreateClient().GetStringAsync("/health");
+        Assert.Equal("Degraded", saude);
+    }
+
+    // ----- O contrato das respostas da renovação (bug de 27/10, Rule de impacto "Licença") -----
+
+    private sealed record RespostaDoContrato(string Recusa, int Status, string Detalhe);
+
+    private sealed record ContratoDasRespostas(IReadOnlyList<RespostaDoContrato> Respostas);
+
+    /// <summary>
+    /// O <c>respostas.json</c> do <c>ContratoDaRenovacao/</c> (em <c>DevKitPage.Core.Tests</c>) — o MESMO arquivo está no
+    /// git.kit, onde o aviso da licença vencida confere que mostra cada mensagem com o status.
+    /// </summary>
+    private static IReadOnlyList<RespostaDoContrato> Respostas()
+    {
+        for (var pasta = new DirectoryInfo(AppContext.BaseDirectory); pasta is not null; pasta = pasta.Parent)
+        {
+            var arquivo = Path.Combine(pasta.FullName, "DevKitPage.Core.Tests", "ContratoDaRenovacao", "respostas.json");
+            if (File.Exists(arquivo))
+                return System.Text.Json.JsonSerializer.Deserialize<ContratoDasRespostas>(File.ReadAllText(arquivo),
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!.Respostas;
+        }
+
+        throw new DirectoryNotFoundException("DevKitPage.Core.Tests/ContratoDaRenovacao/respostas.json não encontrado.");
+    }
+
+    private static RespostaDoContrato Resposta(string recusa) => Respostas().Single(r => r.Recusa == recusa);
+
+    [Fact]
+    public void Cada_recusa_responde_o_status_e_a_mensagem_do_contrato()
+    {
+        var recusas = Enum.GetValues<RecusaDaRenovacao>().Where(r => r != RecusaDaRenovacao.Nenhuma).ToArray();
+
+        foreach (var recusa in recusas)
+            Assert.Equal((Resposta(recusa.ToString()).Status, Resposta(recusa.ToString()).Detalhe), RespostasDaRenovacao.Para(recusa));
+        Assert.Equal((503, RespostasDaRenovacao.Indisponivel), (Resposta("Indisponivel").Status, Resposta("Indisponivel").Detalhe));
+        Assert.Equal(recusas.Length + 1, Respostas().Count); // nenhuma resposta do contrato sem dono na API
     }
 
     private async Task<HttpResponseMessage> AvisarAsync(object aviso, string? segredo = ApiDeTeste.SegredoDoWebhook, DateTimeOffset? em = null)

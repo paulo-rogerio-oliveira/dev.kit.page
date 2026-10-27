@@ -55,7 +55,7 @@ No App Service, além das variáveis da tabela abaixo:
 | `Atualizacao__Repositorio` | `owner/nome` das releases — padrão `paulo-rogerio-oliveira/git.kit` |
 | `Atualizacao__CacheMinutos` | 5 — por quanto tempo a lista de releases fica em memória (o GitHub limita as chamadas por token) |
 | `DEVKIT_LOGIN_OBRIGATORIO` | `true` (ou `1`) liga a política de login do app (US #405), devolvida em `GET /api/auth/politica` e no `loginObrigatorio` da última versão; ausente, desligada |
-| `Licencas__ChavePrivada` | **Segredo** (US #425): a semente Ed25519 (32 bytes em base64) que assina as licenças. Referência ao Key Vault (`Licencas--ChavePrivada`). A PÚBLICA correspondente está embutida no git.kit (`LicencaAssinada.ChavePublicaDeProducao`): trocar a chave exige um dev.kit novo. Sem ela, a renovação responde 503 e o registro da máquina sai sem o trial assinado (o app conta o trial local) |
+| `Licencas__ChavePrivada` | **Segredo** (US #425): a semente Ed25519 (32 bytes em base64) que assina as licenças, gravada DIRETO na app setting do App Service `devkit` (o dev.kit.page não usa Key Vault; uma referência `@Microsoft.KeyVault(...)` também funciona, se um dia houver cofre). Confira o valor antes de gravar: a pública derivada dele tem de ser a do git.kit (comando abaixo). A PÚBLICA correspondente está embutida no git.kit (`LicencaAssinada.ChavePublicaDeProducao`): trocar a chave exige um dev.kit novo. Sem ela, a renovação responde 503 (dizendo que falta a chave), o `/health` fica `Degraded` (check `licencas`) e o registro da máquina sai sem o trial assinado (o app conta o trial local) |
 | `Conta__UrlDoSite` | A URL da web, para o link de definir a senha (US #425) |
 | `Email__Host`, `Email__Porta`, `Email__Usuario`, `Email__Remetente` | O SMTP dos e-mails da conta (US #425). Sem `Email__Host`, o e-mail vai só para o log — serve para teste, não para produção |
 | `Email__Senha` | **Segredo**: a senha do SMTP. Referência ao Key Vault (`Email--Senha`) |
@@ -164,9 +164,33 @@ links de senha, dos trials por impressão de máquina, das licenças emitidas e 
 acrescenta as colunas novas a `Usuarios` (`Email`), `Empresas` (política de login, individual, assinatura
 externa e cancelamento) e `Maquinas` (`Impressao`). Sem elas, o login e o registro de máquina falham com 500.
 
-Antes de publicar, crie no Key Vault os segredos `Licencas--ChavePrivada` (a chave privada de produção,
-gerada uma vez e NUNCA versionada), `Email--Senha` e `Pagamentos--SegredoDoWebhook`, e configure as variáveis
-da tabela acima. O download do dev.kit passa a ser anônimo: confira o `Atualizacao__DownloadsPorHora`.
+Antes de publicar, configure os segredos `Email--Senha` e `Pagamentos--SegredoDoWebhook` e as variáveis da tabela
+acima. O download do dev.kit passa a ser anônimo: confira o `Atualizacao__DownloadsPorHora`.
+
+**A chave das licenças (`Licencas__ChavePrivada`) vai DIRETO na app setting, sem Key Vault** (o dev.kit.page não usa
+cofre; bug de 27/10). É a semente Ed25519 com que o desenvolvedor assina as licenças — gerada uma vez, guardada fora do
+repositório e NUNCA versionada. Antes de gravar, confira no Git Bash que ela é o par da pública embutida no git.kit
+(imprime só `confere` ou `não confere`, sem ecoar a semente):
+
+```bash
+read -s -p "Semente (base64): " CANDIDATA; echo
+P=$( (printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20'; printf %s "$CANDIDATA" | base64 -d 2>/dev/null) \
+  | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | tail -c 32 | base64)
+[ "$P" = "kf1FN8DD7HQC1V6JgctluuP5ZfDbgbIW4YPOokrpR/c=" ] && echo "confere" || echo "não confere"
+```
+
+Conferida, grave e reinicie (o valor entra pelo prompt acima, fora do histórico do shell):
+
+```bash
+az webapp config appsettings set -g <grupo> -n devkit --settings "Licencas__ChavePrivada=$CANDIDATA" --query "[?name=='Licencas__ChavePrivada'].name" -o tsv
+unset CANDIDATA P
+az webapp restart -g <grupo> -n devkit
+```
+
+(Pelo portal: App Service `devkit` → *Settings → Environment variables* → *+ Add* `Licencas__ChavePrivada` → *Apply* →
+*Restart*.) Para conferir: com o login de um dev, `POST /api/licencas/renovar` sem a `X-Machine-Key` passa de **503**
+(falta a chave) a **401** (a API pede a chave da máquina), e o `/health` deixa de ficar `Degraded`. Trocar a semente
+exige um par novo, a pública nova no `LicencaAssinada.ChavePublicaDeProducao` do git.kit e um pacote novo do dev.kit.
 
 ### Catálogos nomeados (US #461)
 
