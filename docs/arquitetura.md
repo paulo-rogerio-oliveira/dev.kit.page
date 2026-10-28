@@ -339,7 +339,7 @@ nenhuma consulta a mais. A taxa de correção sem cobrança é nula. Na web, os 
   `codigo` (`CodigosDeRecusa`), e `POST /api/auth/renovar` troca o token válido por um novo com as MESMAS
   recusas — o app renova sozinho, e o corte do gestor vale também ali.
 - **Licenças** (`/api/licencas/renovar`): exige o JWT E o `X-Machine-Key`; emite a licença `DKL2` (Ed25519,
-  `LicencaAssinada`, chave privada `Licencas:ChavePrivada` do Key Vault) de 30 dias, a partir do 7º dia da
+  `LicencaAssinada`, chave privada `Licencas:ChavePrivada` na app setting `Licencas__ChavePrivada`, sem Key Vault) de 30 dias, a partir do 7º dia da
   atual; bloqueado, sem assento ou assinatura cancelada não renovam (`RecusaDaRenovacao`). O registro da
   máquina com a impressão (`/api/maquinas/registrar`) devolve o TRIAL assinado, contado do primeiro registro
   daquela impressão.

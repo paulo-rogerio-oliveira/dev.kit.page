@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 namespace DevKitPage.Infrastructure;
 
 /// <summary>
-/// As licenças assinadas (US #425, fase 4). A chave privada Ed25519 vem do Key Vault (<see cref="OpcoesDeLicenca.ChavePrivada"/>)
+/// As licenças assinadas (US #425, fase 4). A chave privada Ed25519 vem da configuração (<see cref="OpcoesDeLicenca.ChavePrivada"/>, a app setting <c>Licencas__ChavePrivada</c>)
 /// e só existe aqui; cada emissão fica em <c>LicencasEmitidas</c>. O trial é da IMPRESSÃO da máquina, e não do id
 /// anônimo: reinstalar o dev.kit (que gera um id novo) não ganha outros 14 dias.
 /// </summary>

@@ -21,11 +21,12 @@ public sealed partial class ConsultasDoPainel
     /// <summary>Os tipos dos totais que o gráfico de turnos por desfecho lê (o desfecho, e a conta de antes dele).</summary>
     private static readonly string[] TiposDosTurnos = [TiposDeEvento.DesfechoDoTurno, TiposDeEvento.TurnoExecutado, TiposDeEvento.TurnoFalhou];
 
-    public async Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, DateTimeOffset agora, CancellationToken ct)
+    public async Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, string? harness, DateTimeOffset agora, CancellationToken ct)
     {
         var saude = await SaudeAsync(escopo, maquina, agora, ct);
         var resultado = await ResultadoAsync(escopo, periodo, maquina, ct);
         var turnos = await TurnosPorDesfechoAsync(escopo, periodo, maquina, ct);
+        var adocao = await AdocaoAsync(escopo, periodo, maquina, harness, ct);
 
         var de = periodo.De.ToDateTime(TimeOnly.MinValue);
         var ate = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
@@ -36,7 +37,34 @@ public sealed partial class ConsultasDoPainel
             .Select(RegrasDoPainelDeUtilidade.LerSugestao)
             .OfType<SugestaoLida>();
 
-        return new UtilidadeResposta(periodo.De, periodo.Ate, saude, resultado, turnos, RegrasDoPainelDeUtilidade.OndeTravam(sugestoes));
+        return new UtilidadeResposta(periodo.De, periodo.Ate, saude, resultado, turnos, RegrasDoPainelDeUtilidade.OndeTravam(sugestoes), adocao);
+    }
+
+    /// <summary>
+    /// A adoção do período: as máquinas ativas saem dos MESMOS totais diários dos outros números (com o harness, as que
+    /// rodaram turno naquele CLI), e os usuários, das licenças emitidas para elas e válidas no período — a máquina é anônima,
+    /// e é o login que pede a licença que diz de quem ela é. A máquina ativa sem licença de usuário é o uso sem login.
+    /// </summary>
+    private async Task<AdocaoV1> AdocaoAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, string? harness, CancellationToken ct)
+    {
+        var totais = Totais(escopo, periodo, maquina);
+        if (harness is not null)
+            totais = totais.Where(t => t.Tipo == TiposDeEvento.TurnoExecutado && t.Detalhe == harness);
+        var ativas = await totais.Select(t => t.MaquinaId).Distinct().ToListAsync(ct);
+
+        var inicio = periodo.De.ToDateTime(TimeOnly.MinValue);
+        var fim = periodo.Ate.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var donos = await db.LicencasEmitidas.AsNoTracking()
+            .Where(l => ativas.Contains(l.MaquinaId) && l.UsuarioId != null && l.EmitidaEmUtc < fim && l.ValidaAteUtc >= inicio)
+            .Select(l => new { l.MaquinaId, UsuarioId = l.UsuarioId!.Value })
+            .Distinct()
+            .ToListAsync(ct);
+
+        var registradas = await DoEscopo(escopo).CountAsync(m => m.RegistradaEmUtc < fim && (maquina == null || m.Id == maquina), ct);
+        var (todas, empresa) = (escopo.EhAdmin, escopo.EmpresaId);
+        var cadastrados = await db.Usuarios.CountAsync(u => u.Papel == Papeis.Dev && u.CriadoEmUtc < fim && (todas || u.EmpresaId == empresa), ct);
+        var comLogin = donos.Select(d => d.MaquinaId).ToHashSet();
+        return new AdocaoV1(donos.Select(d => d.UsuarioId).Distinct().Count(), cadastrados, ativas.Count, registradas, ativas.Count(m => !comLogin.Contains(m)));
     }
 
     /// <summary>

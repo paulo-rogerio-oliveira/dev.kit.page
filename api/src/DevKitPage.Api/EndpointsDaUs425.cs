@@ -155,7 +155,7 @@ public static class EndpointsDaUs425
         app.MapPost("/api/licencas/renovar", async (RenovacaoV1? pedido, HttpContext http, ClaimsPrincipal quem, IMaquinas maquinas, ILicencas licencas, CancellationToken ct) =>
         {
             if (!licencas.Disponivel)
-                return Results.Problem("A renovação da licença está indisponível no momento. Tente de novo em alguns minutos.", statusCode: StatusCodes.Status503ServiceUnavailable);
+                return Results.Problem(RespostasDaRenovacao.Indisponivel, statusCode: StatusCodes.Status503ServiceUnavailable);
             if (Seguranca.UsuarioId(quem) is not { } usuario)
                 return Results.Unauthorized();
             var chave = http.Request.Headers[ContratoV1.CabecalhoDaChave].ToString();
@@ -163,23 +163,10 @@ public static class EndpointsDaUs425
                 return Results.Problem("Informe a chave da máquina (X-Machine-Key): a licença é de um usuário numa máquina.", statusCode: StatusCodes.Status401Unauthorized);
 
             var (licenca, recusa) = await licencas.RenovarAsync(usuario, maquina.Id, pedido?.LicencaAtual, ct);
-            return recusa switch
-            {
-                RecusaDaRenovacao.Nenhuma => Results.Ok(licenca),
-                RecusaDaRenovacao.UsuarioBloqueado => Results.Problem("Usuário bloqueado: a licença não renova. Fale com o gestor.", statusCode: StatusCodes.Status403Forbidden),
-                RecusaDaRenovacao.SemAssento => Results.Problem("A sua empresa não tem assento para você: a licença não renova. Fale com o gestor.", statusCode: StatusCodes.Status403Forbidden),
-                RecusaDaRenovacao.SemEmpresa => Results.Problem("O seu usuário não é de uma empresa com assinatura: a licença não renova.", statusCode: StatusCodes.Status403Forbidden),
-                RecusaDaRenovacao.AssinaturaCancelada => Results.Problem("A assinatura foi cancelada: a licença não renova.", statusCode: StatusCodes.Status402PaymentRequired),
-                // US #687: a validade que o admin definiu (ou a do contrato da empresa) é respeitada pela renovação.
-                RecusaDaRenovacao.LicencaVencida => Results.Problem(
-                    "A validade da sua licença terminou: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
-                RecusaDaRenovacao.LicencaRevogada => Results.Problem(
-                    "A sua licença foi revogada pelo admin: ela não renova. Fale com o gestor ou com o admin do dev.kit.page.", statusCode: StatusCodes.Status403Forbidden),
-                RecusaDaRenovacao.TesteEncerrado => Results.Problem(
-                    "O seu teste grátis do dev.kit terminou: assine em dev.kit.page, ou entre com a conta da sua empresa, para continuar.",
-                    statusCode: StatusCodes.Status403Forbidden),
-                _ => Results.Problem("Ainda não é hora de renovar: a licença atual renova a partir do 7º dia.", statusCode: StatusCodes.Status409Conflict),
-            };
+            if (recusa == RecusaDaRenovacao.Nenhuma)
+                return Results.Ok(licenca);
+            var (status, detalhe) = RespostasDaRenovacao.Para(recusa);
+            return Results.Problem(detalhe, statusCode: status);
         }).WithTags("Licenças");
     }
 

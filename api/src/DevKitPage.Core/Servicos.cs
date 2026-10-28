@@ -141,9 +141,10 @@ public interface IConsultasDoPainel
 
     /// <summary>
     /// O painel de UTILIDADE (US #687), no escopo (e da máquina, quando filtrada): a saúde de <paramref name="agora"/> (as
-    /// fotos), o resultado do período contra o anterior, os turnos de cada dia pelo desfecho e onde as tasks travam.
+    /// fotos), o resultado do período contra o anterior, os turnos de cada dia pelo desfecho, onde as tasks travam e a
+    /// adoção — que é a única parte recortada pelo <paramref name="harness"/> (normalizado; nulo é sem filtro).
     /// </summary>
-    Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, DateTimeOffset agora, CancellationToken ct);
+    Task<UtilidadeResposta> UtilidadeAsync(EscopoDoPainel escopo, Periodo periodo, int? maquina, string? harness, DateTimeOffset agora, CancellationToken ct);
 }
 
 /// <summary>As empresas do plano empresarial e os gestores delas (US #381) — só o admin.</summary>

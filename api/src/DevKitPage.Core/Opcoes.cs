@@ -240,8 +240,9 @@ public sealed class OpcoesDeEmail
 }
 
 /// <summary>
-/// A licença assinada do dev.kit (seção <c>Licencas</c>, US #425): Ed25519, com a chave privada no Key Vault
-/// (o segredo <c>Licencas--ChavePrivada</c>, a semente de 32 bytes em base64). A pública vai embutida no app.
+/// A licença assinada do dev.kit (seção <c>Licencas</c>, US #425): Ed25519, com a chave privada na configuração
+/// (a app setting <c>Licencas__ChavePrivada</c> do App Service, sem Key Vault — a semente de 32 bytes em base64). A
+/// pública vai embutida no app.
 /// </summary>
 public sealed class OpcoesDeLicenca
 {

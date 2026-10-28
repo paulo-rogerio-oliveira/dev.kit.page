@@ -182,9 +182,22 @@ public sealed record RoiTotais(
 /// entregou no período, os turnos de cada dia pelo desfecho e onde as tasks travam. As medidas sem denominador são nulas
 /// (a tela mostra um traço).
 /// </summary>
+/// <param name="Adocao">A faixa Adoção (os usuários ativos ao lado das máquinas ativas); nula só numa API anterior a ela.</param>
 public sealed record UtilidadeResposta(
     DateOnly De, DateOnly Ate, SaudeAgoraV1 Saude, ResultadoDoUsoV1 Resultado, IReadOnlyList<TurnosDoDiaV1> TurnosPorDesfecho,
-    IReadOnlyList<CausaDeTravamentoV1> OndeTravam);
+    IReadOnlyList<CausaDeTravamentoV1> OndeTravam, AdocaoV1? Adocao = null);
+
+/// <summary>
+/// A ADOÇÃO no período: quem usou o dev.kit, nos filtros do painel (o período, a máquina e o harness). A máquina ativa é a que
+/// tem total no período (com o harness, a que rodou turno naquele CLI); o usuário ativo é o dono de uma licença emitida para
+/// uma máquina ativa e válida no período — é o login que liga a máquina anônima à pessoa.
+/// </summary>
+/// <param name="UsuariosAtivos">Usuários distintos com uso no período.</param>
+/// <param name="UsuariosCadastrados">Os usuários do dev.kit (papel dev) cadastrados até o fim do período, no escopo.</param>
+/// <param name="MaquinasAtivas">Máquinas distintas com uso no período.</param>
+/// <param name="MaquinasRegistradas">Máquinas registradas até o fim do período, no escopo.</param>
+/// <param name="MaquinasSemLogin">As máquinas ativas sem licença de usuário no período (o uso anônimo).</param>
+public sealed record AdocaoV1(long UsuariosAtivos, long UsuariosCadastrados, long MaquinasAtivas, long MaquinasRegistradas, long MaquinasSemLogin);
 
 /// <summary>
 /// A SAÚDE DE AGORA — não depende do período: a última foto de cada task, work item e máquina (a máquina do filtro, quando

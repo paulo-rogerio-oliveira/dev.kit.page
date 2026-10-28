@@ -401,7 +401,9 @@ export const api = {
     chamar<EmpresaResumo>(`/api/empresas/${id}`, { metodo: 'PUT', corpo: edicao, token }),
 
   // O painel de utilidade: a saúde de agora, o resultado do período, os turnos por desfecho e onde as tasks travam.
-  utilidade: (token: string, filtro: Filtro) => chamar<UtilidadeResposta>(`/api/dashboard/utilidade?${consulta(filtro)}`, { token }),
+  // O harness recorta só a adoção (os usuários e as máquinas que rodaram turno naquele CLI).
+  utilidade: (token: string, filtro: Filtro, harness: Harness | null = null) =>
+    chamar<UtilidadeResposta>(`/api/dashboard/utilidade?${consulta(filtro, preenchidos({ harness }))}`, { token }),
 
   // A edição de artefato do catálogo: a lista de todos (com a busca no conteúdo), as diferenças, o histórico, o descarte
   // do rascunho e os anexos — o anexo por fetch e blob, porque a rota é autenticada.
