@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { textoDoBug } from '../componentes/ExcecoesNaoClassificadas';
 import { entregues } from '../testes/navegador';
 import { renderizar } from '../testes/renderizar';
@@ -31,6 +31,55 @@ async function abrirOGrupo(sessao = tokenValido()) {
 }
 
 describe('Dashboard', () => {
+  it('aguarda a lista de máquinas antes de concluir o carregamento', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/maquinas`, async () => {
+      await delay(150);
+      return HttpResponse.json([]);
+    }));
+    renderizar('/dashboard', tokenValido());
+    expect(within(screen.getByRole('search')).getByText('Carregando…')).toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma máquina enviou/)).not.toBeInTheDocument();
+    expect(await screen.findByText(/Nenhuma máquina enviou/)).toBeInTheDocument();
+    expect(within(screen.getByRole('search')).queryByText('Carregando…')).not.toBeInTheDocument();
+  });
+
+  it('encerra a sessão se a API recusar o token vencido', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => new HttpResponse(null, { status: 401 })));
+    renderizar('/dashboard', tokenValido());
+    expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Saúde agora' })).not.toBeInTheDocument();
+  });
+
+  it('permite repetir a consulta após falha da API', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/utilidade`, () => HttpResponse.json({ detail: 'Consulta indisponível.' }, { status: 503 }), { once: true }));
+    renderizar('/dashboard', tokenValido());
+    expect(await screen.findByRole('alert')).toHaveTextContent('Consulta indisponível.');
+    expect(screen.queryByRole('heading', { name: 'Saúde agora' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    expect(await screen.findByRole('heading', { name: 'Saúde agora' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('não mantém dados do período anterior quando a consulta do novo filtro falha', async () => {
+    renderizar('/dashboard', tokenValido());
+    await screen.findByRole('heading', { name: 'Saúde agora' });
+    servidor.use(http.get(`${API}/api/dashboard/qualidade`, () => HttpResponse.json({}, { status: 500 })));
+    await userEvent.selectOptions(screen.getByLabelText('Período'), '7');
+    await screen.findByRole('alert');
+    expect(screen.queryByRole('heading', { name: 'Saúde agora' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma máquina enviou/)).not.toBeInTheDocument();
+  });
+
+  it('a falha ao carregar máquinas pode ser recuperada sem recarregar a página', async () => {
+    servidor.use(http.get(`${API}/api/dashboard/maquinas`, () => HttpResponse.json({}, { status: 503 }), { once: true }));
+    renderizar('/dashboard', tokenValido());
+    await screen.findByRole('alert');
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    await screen.findByRole('heading', { name: 'Saúde agora' });
+    expect(screen.getByLabelText('Máquina').querySelectorAll('option').length).toBeGreaterThan(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   // US #687 (proposta admin-dashboard v008): a saúde de agora e o resultado do período, com os valores da API.
   it('mostra a saúde de agora e o resultado do período, e a qualidade abaixo', async () => {
     renderizar('/dashboard', tokenValido());
