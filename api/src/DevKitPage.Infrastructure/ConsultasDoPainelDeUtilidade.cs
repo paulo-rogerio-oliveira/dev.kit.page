@@ -198,7 +198,13 @@ public sealed partial class ConsultasDoPainel
             m.Id == f.MaquinaId && m.EmpresaId == empresa && m.ConsentiuEmUtc != null && f.EmUtc >= m.ConsentiuEmUtc));
     }
 
+    /// <summary>
+    /// A vírgula decimal do cartão, num formato EXPLÍCITO: a API roda com <c>InvariantGlobalization</c> e não cria cultura
+    /// com nome (o <c>GetCultureInfo("pt-BR")</c> derrubava o painel com <see cref="System.Globalization.CultureNotFoundException"/>).
+    /// </summary>
+    private static readonly System.Globalization.NumberFormatInfo VirgulaDecimal = new() { NumberDecimalSeparator = "," };
+
     /// <summary>"8 MB", "1,2 GB" — o tamanho como o cartão o escreve; o desconhecido é um traço.</summary>
     private static string Megas(long mb)
-        => mb < 0 ? "—" : mb < 1024 ? $"{mb} MB" : (mb / 1024d).ToString("0.0", System.Globalization.CultureInfo.GetCultureInfo("pt-BR")) + " GB";
+        => mb < 0 ? "—" : mb < 1024 ? $"{mb} MB" : (mb / 1024d).ToString("0.0", VirgulaDecimal) + " GB";
 }

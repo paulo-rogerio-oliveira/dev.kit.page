@@ -6,6 +6,9 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Os testes rodam com a globalização INVARIANTE, como a API em produção (DevKitPage.Api.csproj): a cultura com nome
+         que quebraria lá quebra aqui também. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

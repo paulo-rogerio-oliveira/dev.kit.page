@@ -132,15 +132,28 @@ public static class FormatosDoCatalogo
     public static string ChaveDe(string descricao) => Slug(descricao, "plano");
 
     /// <summary>
+    /// A letra latina acentuada (minúscula) e a base dela — o que a decomposição FormD do git.kit tira. A tabela é
+    /// EXPLÍCITA porque a API roda com <c>InvariantGlobalization</c>, e nela o <c>Normalize(FormD)</c> não decompõe: o
+    /// "í" de "mínimo" sumia, e a chave saía "build-mnimo-rpido".
+    /// </summary>
+    private static readonly Dictionary<char, char> SemAcento = new (string Acentuadas, char Base)[]
+    {
+        ("àáâãäåāăą", 'a'), ("çćĉċč", 'c'), ("ď", 'd'), ("èéêëēĕėęě", 'e'), ("ĝğġģ", 'g'), ("ĥ", 'h'), ("ìíîïĩīĭį", 'i'),
+        ("ĵ", 'j'), ("ķ", 'k'), ("ĺļľ", 'l'), ("ñńņň", 'n'), ("òóôõöōŏő", 'o'), ("ŕŗř", 'r'), ("śŝşš", 's'), ("ţť", 't'),
+        ("ùúûüũūŭůűų", 'u'), ("ŵ", 'w'), ("ýÿŷ", 'y'), ("źżž", 'z'),
+    }.SelectMany(g => g.Acentuadas.Select(c => (c, g.Base))).ToDictionary(p => p.c, p => p.Base);
+
+    /// <summary>
     /// O slug do git.kit (<c>AgentSkillsWriter.Slugify</c>): minúsculas sem acento, letras e números ASCII, e espaço,
     /// hífen ou sublinhado viram um hífen só.
     /// </summary>
     public static string Slug(string nome, string reserva)
     {
-        var normalizado = (nome ?? string.Empty).Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var normalizado = (nome ?? string.Empty).Trim().ToLowerInvariant();
         var sb = new StringBuilder(normalizado.Length);
-        foreach (var c in normalizado)
+        foreach (var letra in normalizado)
         {
+            var c = SemAcento.TryGetValue(letra, out var semAcento) ? semAcento : letra;
             if (char.IsLetterOrDigit(c) && c < 128)
                 sb.Append(c);
             else if ((c == ' ' || c == '-' || c == '_') && sb.Length > 0 && sb[^1] != '-')
