@@ -21,7 +21,7 @@ describe('Aba Catálogos do admin (US #461)', () => {
     const lista = await screen.findByRole('region', { name: 'Catálogos cadastrados' });
     const linhas = within(lista).getAllByRole('row').slice(1);
     expect(linhas[0]).toHaveTextContent(/Catálogo básico.*basico · básico.*2.*Todas/);
-    expect(linhas[1]).toHaveTextContent(/Equipe UAU.*equipe-uau.*—.*2 pendente\(s\).*Empresa A/);
+    expect(linhas[1]).toHaveTextContent(/Equipe UAU.*equipe-uau.*—.*2 a publicar.*Empresa A/);
     expect(screen.getByRole('tab', { name: 'Catálogos' })).toHaveAttribute('aria-selected', 'true');
   });
 

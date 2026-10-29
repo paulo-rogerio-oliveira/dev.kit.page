@@ -192,6 +192,9 @@ export const api = {
   // Os catálogos nomeados (US #461) — só o admin, menos o /meus. O slug vai codificado: é texto do admin.
   catalogos: (token: string) => chamar<CatalogoNomeado[]>('/api/catalogos', { token }),
 
+  importarCatalogo: (token: string, pedido: { catalogo: CatalogoNovo; arquivos?: { caminho: string; conteudo: string }[]; repositorio?: string; referencia?: string; pasta?: string }) =>
+    chamar<{ catalogo: CatalogoNomeado; skills: number; rules: number; fluxos: number }>('/api/catalogos/importar', { metodo: 'POST', corpo: pedido, token }),
+
   criarCatalogo: (token: string, catalogo: CatalogoNovo) =>
     chamar<CatalogoNomeado>('/api/catalogos', { metodo: 'POST', corpo: catalogo, token }),
 

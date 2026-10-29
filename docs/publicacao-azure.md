@@ -223,6 +223,13 @@ pelo admin (`LicencaValidaAteUtc`, `LicencaSemPrazo`, `LicencaTipo`, `LicencaRev
 ele, `/api/usuarios`, `/api/empresas`, a ingestão da telemetria e `/api/catalogos/itens` respondem 500. Nenhuma
 configuração nova.
 
+### Importação de catálogos (US #738)
+
+Antes de publicar a API em uma base Azure SQL existente, execute
+`api/scripts/sqlserver/us738-origem-catalogo.sql` (idempotente, depois de `Us461.sql`). Ele acrescenta
+`Catalogos.Origem` e `Catalogos.MinDevKitDaOrigem`, sem alterar os catálogos existentes. SQLite aplica a migration
+automaticamente. A importação do GitHub usa somente repositórios públicos, sem `REPO_KEY` e sem configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

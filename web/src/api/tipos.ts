@@ -577,6 +577,7 @@ export interface EmpresaVinculada {
 
 /** Um catálogo na gestão do admin (GET /api/catalogos) — o básico vem primeiro. */
 export interface CatalogoNomeado {
+  origem?: string | null;
   id: number;
   slug: string;
   nome: string;

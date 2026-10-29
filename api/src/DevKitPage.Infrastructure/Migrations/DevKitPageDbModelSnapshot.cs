@@ -184,6 +184,12 @@ namespace DevKitPage.Infrastructure.Migrations
 
             modelBuilder.Entity("DevKitPage.Core.Catalogo", b =>
                 {
+                    b.Property<int?>("MinDevKitDaOrigem")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Origem")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
