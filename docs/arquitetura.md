@@ -1,5 +1,25 @@
 # Arquitetura do dev.kit.page
 
+## Importação de catálogos (US 738)
+
+`POST /api/catalogos/importar` exige administrador e o limite de taxa da publicação. O navegador envia somente
+JSON da pasta escolhida com caminhos relativos; a API nunca lê um caminho local do servidor. O formato é
+`manifesto.json` com itens em `skills/`, `plans/`, `fluxos/`, também aceitando essas pastas sob `base/`.
+
+`ImportacaoDeCatalogos` reutiliza `ManifestoJson`, `RegrasDosCatalogos.Conferir`, a conferência de hashes existente
+e as tabelas de catálogo/itens. Catálogo, origem e rascunhos entram numa transação, sem importação parcial.
+Não se importa o histórico de releases da origem: o novo catálogo começa em v1 ao publicar pelo diálogo existente.
+Colisões com o básico são recusadas; dependências passam pela conferência existente antes da publicação.
+
+GitHub aceita repositório público, branch/tag (padrão `main`) e pasta opcional. Cliente HTTP separado, sem
+`REPO_KEY`, acessa somente `codeload.github.com`, sem redirecionamentos. Não há clone, extração no disco, execução
+ou hooks. Caminhos absolutos, segmentos `..`, duplicatas e links simbólicos são recusados. Limites: 2000 JSON,
+1 MB por arquivo, 16 MB no catálogo/download, 32 MB descompactados, 10000 entradas no repositório e timeout de 45s.
+A origem fica em `Catalogos.Origem`: migration SQLite e script `api/scripts/sqlserver/us738-origem-catalogo.sql`
+para bases Azure SQL existentes. Repositórios privados exigem outra definição de acesso e ficam fora deste fluxo.
+`MinDevKitDaOrigem` preserva o maior requisito de versão mínima do manifesto e dos seus itens, inclusive quando
+o usuário publicar sem informá-lo ou tentar um mínimo menor. A numeração do novo catálogo é independente da origem.
+
 ## As peças
 
 ```

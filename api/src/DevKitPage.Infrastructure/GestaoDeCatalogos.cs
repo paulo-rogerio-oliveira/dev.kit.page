@@ -293,6 +293,12 @@ public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatal
             return ([], "o zip não abre.");
         }
 
+        return ItensDosArquivos(arquivos, manifesto);
+    }
+
+    internal static (List<ItemDoCatalogoEditavel> Itens, string Problema) ItensDosArquivos(
+        IReadOnlyDictionary<string, string> arquivos, ManifestoDoCatalogoV1 manifesto)
+    {
         var itens = new List<ItemDoCatalogoEditavel>();
         foreach (var publicado in manifesto.Itens)
         {
@@ -335,7 +341,7 @@ public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatal
             catalogo.Id, catalogo.Slug, catalogo.Nome, catalogo.Descricao, catalogo.Basico, ultima?.Versao ?? 0,
             ultima is null ? null : DevKitPageDb.Utc(ultima.PublicadaEmUtc), itens.Count(i => i.RetiradoEmUtc is null), pendentes,
             empresas.Select(e => new EmpresaVinculadaV1(e.EmpresaId, e.Nome, DevKitPageDb.Utc(e.RelacionadoEmUtc))).ToArray(),
-            DevKitPageDb.Utc(catalogo.CriadoEmUtc));
+            DevKitPageDb.Utc(catalogo.CriadoEmUtc), catalogo.Origem);
     }
 
     /// <summary>Os itens da última release do catálogo, por tipo e nome (vazio sem release).</summary>

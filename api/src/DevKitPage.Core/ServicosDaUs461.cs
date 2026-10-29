@@ -37,6 +37,11 @@ public interface IArmazemDePacotes
 /// A GESTÃO dos catálogos nomeados pelo admin (US #461): o cadastro, o vínculo com as empresas (com a recusa da colisão
 /// de nomes) e os itens editáveis — que gravam rascunho: nada chega às máquinas antes de publicar.
 /// </summary>
+public interface IImportacaoDeCatalogos
+{
+    Task<ResultadoDaGestao<CatalogoImportadoV1>> ImportarAsync(ImportarCatalogoV1 pedido, string autor, CancellationToken ct);
+}
+
 public interface IGestaoDeCatalogos
 {
     /// <summary>Os catálogos (o básico primeiro), com a versão publicada, os itens, as pendências e as empresas.</summary>
