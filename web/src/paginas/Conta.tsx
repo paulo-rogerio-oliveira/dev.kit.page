@@ -33,6 +33,7 @@ export function Conta() {
         {daEmpresa && <Link className="botao botao-fantasma" to="/empresa/conhecimento">Repositórios e convenções</Link>}
         <Link className="botao botao-fantasma" to="/catalogo">Catálogo</Link>
         <Link className="botao botao-fantasma" to="/design">Design</Link>
+        <Link className="botao botao-fantasma" to="/projetos">Projetos</Link>
       </Topo>
       <main className="painel conta">
         <header className="cabecalho-da-conta">

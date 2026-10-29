@@ -14,6 +14,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['junit', { outputFile: 'test-results/e2e-junit.xml' }], ['html', { open: 'never' }]],
   use: {
+    channel: process.env.DEVKIT_E2E_BROWSER_CHANNEL,
     baseURL: `http://localhost:${PORTA_DA_WEB}`,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
