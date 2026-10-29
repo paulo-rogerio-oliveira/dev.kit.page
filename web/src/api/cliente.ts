@@ -7,7 +7,7 @@ import type {
   ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
-  UtilidadeResposta,
+  UtilidadeResposta, AssinanteDoItem,
 } from './tipos';
 import type { Projeto } from './projetos';
 
@@ -254,6 +254,9 @@ export const api = {
     baixar(`/api/catalogos/${encodeURIComponent(slug)}/releases/${release.versao}/download`, token, `${release.tag}.zip`),
 
   catalogoDaEmpresa: (token: string) => chamar<ItemDaEmpresa[]>('/api/catalogo/empresa', { token }),
+
+  assinantesDoItem: (token: string, id: number, pagina = 1) =>
+    chamar<Pagina<AssinanteDoItem>>(`/api/catalogo/empresa/${id}/assinantes?pagina=${pagina}&tamanho=20`, { token }),
 
   retirarItem: (token: string, id: number) => chamar<ItemDaEmpresa>(`/api/catalogo/empresa/${id}`, { metodo: 'DELETE', token }),
 

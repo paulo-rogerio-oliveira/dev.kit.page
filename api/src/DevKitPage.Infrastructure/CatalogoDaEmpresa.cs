@@ -11,6 +11,27 @@ namespace DevKitPage.Infrastructure;
 /// </summary>
 public sealed class CatalogoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : ICatalogoDaEmpresa
 {
+    public async Task<ResultadoDaGestao<Pagina<AssinanteDoItemV1>>> AssinantesAsync(EscopoDaEmpresa escopo, long id, int pagina, int tamanho, CancellationToken ct)
+    {
+        if (!escopo.EhGestor)
+            return ResultadoDaGestao<Pagina<AssinanteDoItemV1>>.Falhou(FalhaNaGestao.Proibida, "Só o gestor consulta os assinantes.");
+        var (item, recusa) = await DaEmpresaAsync<Pagina<AssinanteDoItemV1>>(escopo, id, ct);
+        if (item is null)
+            return recusa!;
+
+        tamanho = Math.Clamp(tamanho, 1, 100);
+        pagina = Math.Clamp(pagina, 1, int.MaxValue / tamanho);
+        var consulta = db.AssinaturasDeCatalogo.AsNoTracking().Where(a => a.ItemId == id)
+            .Join(db.Usuarios.Where(u => u.EmpresaId == escopo.EmpresaId), a => a.UsuarioId, u => u.Id,
+                (a, u) => new { u.Id, u.Nome, a.AssinadaEmUtc });
+        var total = await consulta.CountAsync(ct);
+        var registros = await consulta.OrderBy(a => a.Nome).ThenBy(a => a.Id)
+            .Skip((pagina - 1) * tamanho).Take(tamanho).ToListAsync(ct);
+        var assinantes = registros.Select(a => new AssinanteDoItemV1(a.Id,
+            string.IsNullOrWhiteSpace(a.Nome) ? $"Usuário {a.Id}" : a.Nome, DevKitPageDb.Utc(a.AssinadaEmUtc))).ToArray();
+        return new(new Pagina<AssinanteDoItemV1>(assinantes, total, pagina, tamanho));
+    }
+
     public async Task<IReadOnlyList<ItemDaEmpresaV1>> ListarAsync(EscopoDaEmpresa escopo, CancellationToken ct)
     {
         var itens = await db.ItensDeCatalogo.AsNoTracking().Include(i => i.Autor)

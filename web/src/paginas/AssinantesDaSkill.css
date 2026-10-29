@@ -1,0 +1,16 @@
+.cartao.assinantes-da-skill { margin-top: 38px; padding: 22px; }
+.assinantes-cabecalho { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.assinantes-cabecalho h2 { font: 700 16px/1.3 var(--mono); margin: 8px 0; overflow-wrap: anywhere; }
+.assinantes-cabecalho h2:focus-visible { outline: 2px solid var(--serie-1); outline-offset: 4px; }
+.assinantes-cabecalho p, .assinantes-rodape { font-size: 12px; }
+.assinantes-da-skill .assinantes-observacao { border-left: 2px solid var(--serie-1); background: #60a5fa08; margin: 16px 0 12px; padding: 10px 12px; font-size: 12px; }
+.assinantes-rodape { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; }
+.assinantes-rodape .paginacao { margin-top: 0; flex-wrap: wrap; }
+.assinantes-link { color: var(--primaria); background: none; border: 0; cursor: pointer; font: inherit; padding: 0; }
+.assinantes-link span { text-decoration: underline; font-size: 11px; margin-left: 8px; }
+.skill-selecionada { background: #ff493e0a; }
+@media (max-width: 640px) {
+  .cartao.assinantes-da-skill { padding: 16px; }
+  .assinantes-rodape { align-items: flex-start; flex-direction: column; }
+  .assinantes-rodape .paginacao { gap: 8px; justify-content: flex-start; }
+}

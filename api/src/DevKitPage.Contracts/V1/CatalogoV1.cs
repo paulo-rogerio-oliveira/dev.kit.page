@@ -89,3 +89,6 @@ public sealed record ItemAssinadoV1(long Id, string Tipo, string Nome, int Versa
 
 /// <summary>O que assinar fez: o item e as dependências que vieram junto.</summary>
 public sealed record AssinaturaFeitaV1(long Id, IReadOnlyList<string> Trouxe);
+
+/// <summary>Adesão registrada, sem comprovação de instalação; dados nominais exclusivos do gestor.</summary>
+public sealed record AssinanteDoItemV1(int UsuarioId, string Nome, DateTimeOffset AssinadaEm);
