@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using DevKitPage.Infrastructure;
@@ -64,6 +65,60 @@ public sealed class ImportacaoDeCatalogosApiTests : IDisposable
         var pedido = Local() with { Arquivos = [.. Local().Arquivos!, new(caminho, "{}")] };
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/catalogos/importar", pedido)).StatusCode);
         Assert.Single((await admin.GetFromJsonAsync<CatalogoV1[]>("/api/catalogos"))!);
+    }
+
+    [Theory]
+    [InlineData(false, 60, 200, true)]
+    [InlineData(false, 61, 50, false)]
+    [InlineData(false, 60, 201, false)]
+    [InlineData(true, 60, 200, true)]
+    [InlineData(true, 61, 50, false)]
+    [InlineData(true, 60, 201, false)]
+    public async Task Metadados_respeitam_limites_persistidos_antes_de_gravar(bool doGitHub, int tamanhoCategoria, int tamanhoArquivo, bool valido)
+    {
+        var pedido = Local();
+        var manifesto = ManifestoJson.Ler(pedido.Arquivos![0].Conteudo);
+        var caminho = "skills/" + new string('a', tamanhoArquivo - "skills/.json".Length) + ".json";
+        var categoria = new string('c', tamanhoCategoria);
+        manifesto = manifesto with { Itens = [manifesto.Itens[0] with { Arquivo = caminho, Tecnologia = categoria }] };
+        pedido = pedido with { Arquivos = [new("manifesto.json", ManifestoJson.Serializar(manifesto)), new(caminho, pedido.Arquivos[1].Conteudo)] };
+        var github = new GitHubDoCatalogo(Pacote(prefixo: "repo-main/", pedido: pedido));
+        using var api = _api.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            s.AddHttpClient(ImportacaoDeCatalogos.ClienteGitHub).ConfigurePrimaryHttpMessageHandler(() => github)));
+        var admin = await _api.AdminAsync();
+        using var cliente = api.CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = admin.DefaultRequestHeaders.Authorization;
+        var resposta = await cliente.PostAsJsonAsync("/api/catalogos/importar", doGitHub
+            ? pedido with { Arquivos = null, Repositorio = "org/repo" } : pedido);
+        Assert.Equal(valido ? HttpStatusCode.OK : HttpStatusCode.BadRequest, resposta.StatusCode);
+        using (var escopo = api.Services.CreateScope())
+        {
+            var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
+            if (!valido)
+            {
+                Assert.Single(await db.Catalogos.AsNoTracking().ToListAsync());
+                Assert.Empty(await db.ItensEditaveis.AsNoTracking().ToListAsync());
+                Assert.Empty(await db.VersoesDoCatalogo.AsNoTracking().ToListAsync());
+            }
+            else
+            {
+                var item = Assert.Single(await db.ItensEditaveis.AsNoTracking().ToListAsync());
+                Assert.Equal((categoria, caminho), (item.Categoria, item.Arquivo));
+            }
+        }
+        if (!valido)
+        {
+            var problema = await resposta.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Contains(tamanhoCategoria > 60 ? "categoria tem até 60" : "arquivo do item tem até 200", problema.GetProperty("detail").GetString());
+            Assert.Equal(HttpStatusCode.NotFound, (await cliente.PostAsJsonAsync("/api/catalogos/importado/publicar", new PublicarCatalogoV1())).StatusCode);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.Created, (await cliente.PostAsJsonAsync("/api/catalogos/importado/publicar", new PublicarCatalogoV1())).StatusCode);
+            var publicado = (await cliente.GetFromJsonAsync<ManifestoDoCatalogoV1>("/api/catalogos/importado/releases/1/manifesto"))!;
+            Assert.Equal((categoria, caminho), (Assert.Single(publicado.Itens).Tecnologia, publicado.Itens[0].Arquivo));
+        }
+        Assert.Equal(doGitHub ? 1 : 0, github.Pedidos.Count);
     }
 
     [Fact]
@@ -137,12 +192,12 @@ public sealed class ImportacaoDeCatalogosApiTests : IDisposable
         }
     }
 
-    private static byte[] Pacote(string prefixo = "repo-main/catalogo/", string? caminhoExtra = null)
+    private static byte[] Pacote(string prefixo = "repo-main/catalogo/", string? caminhoExtra = null, ImportarCatalogoV1? pedido = null)
     {
         using var memoria = new MemoryStream();
         using (var zip = new ZipArchive(memoria, ZipArchiveMode.Create, true))
         {
-            foreach (var arquivo in Local().Arquivos!)
+            foreach (var arquivo in (pedido ?? Local()).Arquivos!)
             {
                 using var escritor = new StreamWriter(zip.CreateEntry(prefixo + arquivo.Caminho).Open(), new UTF8Encoding(false));
                 escritor.Write(arquivo.Conteudo);

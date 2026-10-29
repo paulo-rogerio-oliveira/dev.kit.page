@@ -237,7 +237,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(i => i.Nome).HasMaxLength(RegrasDoCatalogoDaEmpresa.TamanhoMaximoDoNome);
             e.Property(i => i.Descricao).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaDescricao);
             e.Property(i => i.Categoria).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaCategoria);
-            e.Property(i => i.Arquivo).HasMaxLength(200);
+            e.Property(i => i.Arquivo).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDoArquivo);
             // Até 256 KB de UTF-8 (a regra do Core): nvarchar(max) no SQL Server, como o EF gera sem tamanho.
             e.Property(i => i.Hash).HasMaxLength(64);
             e.Property(i => i.Dependencias).HasMaxLength(4000);

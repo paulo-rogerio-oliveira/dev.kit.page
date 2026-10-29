@@ -23,6 +23,7 @@ public static partial class RegrasDosCatalogos
     public const int TamanhoMaximoDoNome = 80;
     public const int TamanhoMaximoDaDescricao = 500;
     public const int TamanhoMaximoDaCategoria = 60;
+    public const int TamanhoMaximoDoArquivo = 200;
 
     /// <summary>O slug do catálogo: minúsculas, números e hífen, de 2 a 40, começando por letra ou número, e não reservado.</summary>
     public static bool SlugValido(string? slug)
