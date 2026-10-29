@@ -16,5 +16,10 @@ alteração — ou `trial`, o usuário do teste grátis, SEM empresa, com o `cad
   passar da validade do admin — nem do fim do teste, no `trial` (a recusa depois dele é `TesteEncerrado`).
 
 Testes: `ContratoDaRenovacaoTests` no dev.kit.page (`api/tests/DevKitPage.Core.Tests`) e no git.kit
-(`tests/GitKit.Core.Tests/Setup`). **O MESMO arquivo existe nos dois repositórios**: mudar a regra de um lado obriga a
+(`tests/GitKit.Core.Tests/Setup`).
+
+`respostas.json` (bug de 27/10) trava o status e a mensagem (o `detail` do ProblemDetails) de cada recusa da renovação,
+inclusive a `Indisponivel` (503, a API sem a chave que assina as licenças): a API responde exatamente isso
+(`RespostasDaRenovacao`, testado em `LicencasApiTests` do dev.kit.page), e o dev.kit leva cada mensagem, com o status,
+até o aviso da licença vencida (`ContratoDaRenovacaoTests` e `AvisoDaLicencaVencidaTests` no git.kit) — nunca uma genérica. **O MESMO arquivo existe nos dois repositórios**: mudar a regra de um lado obriga a
 atualizar os casos e copiar a pasta inteira para o outro no mesmo pedido de mudança.
