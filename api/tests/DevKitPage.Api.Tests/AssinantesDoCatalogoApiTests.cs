@@ -108,4 +108,46 @@ public sealed class AssinantesDoCatalogoApiTests : IDisposable
         Assert.Equal(3, extremo.Total);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Transferencia_de_empresa_alinha_tabela_painel_e_retirada_sem_apagar_assinaturas(bool paraOutraEmpresa)
+    {
+        var admin = await _api.AdminAsync();
+        var a = await ApiDeTeste.EmpresaAsync(admin, "Empresa A");
+        var b = await ApiDeTeste.EmpresaAsync(admin, "Empresa B");
+        var gestor = await _api.GestorAsync(admin, a.Id, "gestor.a");
+        var outroGestor = await _api.GestorAsync(admin, b.Id, "gestor.b");
+        var (dev, _) = await _api.UsuarioAsync(admin, "pessoa.demo", Papeis.Dev, a.Id);
+        var id = await Publicar(gestor, "skill-transferencia");
+        (await dev.PostAsync($"/api/catalogo/empresa/{id}/assinatura", null)).EnsureSuccessStatusCode();
+        var url = $"/api/catalogo/empresa/{id}/assinantes";
+        var antes = (await gestor.GetFromJsonAsync<Pagina<AssinanteDoItemV1>>(url))!;
+        var usuarioId = Assert.Single(antes.Itens).UsuarioId;
+        Assert.Equal(1, antes.Total);
+        Assert.Equal(antes.Total, Assert.Single((await gestor.GetFromJsonAsync<ItemDaEmpresaV1[]>("/api/catalogo/empresa"))!).Assinantes);
+
+        int? destino = paraOutraEmpresa ? b.Id : null;
+        (await admin.PutAsJsonAsync($"/api/usuarios/{usuarioId}", new UsuarioEditado("Pessoa Transferida", Papeis.Dev, destino))).EnsureSuccessStatusCode();
+        var depois = (await gestor.GetFromJsonAsync<Pagina<AssinanteDoItemV1>>(url))!;
+        var listado = Assert.Single((await gestor.GetFromJsonAsync<ItemDaEmpresaV1[]>("/api/catalogo/empresa"))!);
+        Assert.Empty(depois.Itens);
+        Assert.Equal(0, depois.Total);
+        Assert.Equal(depois.Total, listado.Assinantes);
+        Assert.Equal(HttpStatusCode.Forbidden, (await outroGestor.GetAsync(url)).StatusCode);
+        var retirada = await gestor.DeleteAsync($"/api/catalogo/empresa/{id}");
+        retirada.EnsureSuccessStatusCode();
+        Assert.Equal(depois.Total, (await retirada.Content.ReadFromJsonAsync<ItemDaEmpresaV1>())!.Assinantes);
+
+        // A consulta não apaga histórico: o registro volta ao escopo quando a pessoa retorna à empresa.
+        using var escopo = _api.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
+        Assert.Equal(1, await db.AssinaturasDeCatalogo.CountAsync(s => s.ItemId == id && s.UsuarioId == usuarioId));
+        (await admin.PutAsJsonAsync($"/api/usuarios/{usuarioId}", new UsuarioEditado("Pessoa Retornou", Papeis.Dev, a.Id))).EnsureSuccessStatusCode();
+        var retorno = (await gestor.GetFromJsonAsync<Pagina<AssinanteDoItemV1>>(url))!;
+        Assert.Equal("Pessoa Retornou", Assert.Single(retorno.Itens).Nome);
+        Assert.Equal(1, retorno.Total);
+        Assert.Equal(retorno.Total, Assert.Single((await gestor.GetFromJsonAsync<ItemDaEmpresaV1[]>("/api/catalogo/empresa"))!).Assinantes);
+    }
+
 }
