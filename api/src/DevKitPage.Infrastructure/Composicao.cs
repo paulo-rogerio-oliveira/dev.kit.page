@@ -84,6 +84,7 @@ public static class Composicao
                 ? new ArmazemDeImagensNoBlob(sp.GetRequiredService<IOptions<OpcoesDoDesign>>())
                 : new ArmazemDeImagensEmDisco(sp.GetRequiredService<IOptions<OpcoesDoDesign>>()));
         servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
+        servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();

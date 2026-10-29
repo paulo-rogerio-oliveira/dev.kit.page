@@ -9,6 +9,7 @@ import type {
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta,
 } from './tipos';
+import type { Projeto } from './projetos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -109,6 +110,8 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
+  projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 

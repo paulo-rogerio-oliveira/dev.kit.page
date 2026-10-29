@@ -11,6 +11,7 @@ namespace DevKitPage.Infrastructure;
 /// </summary>
 public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbContext(options)
 {
+    public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
     public DbSet<Maquina> Maquinas => Set<Maquina>();
     public DbSet<EventoDeUso> Eventos => Set<EventoDeUso>();
@@ -461,6 +462,19 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(f => new { f.MaquinaId, f.Tipo, f.Chave }).IsUnique();
             e.HasIndex(f => new { f.Tipo, f.EmUtc });
             e.HasOne(f => f.Maquina).WithMany().HasForeignKey(f => f.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProjetoCompartilhado>(e =>
+        {
+            e.ToTable("ProjetosCompartilhados");
+            e.Property(p => p.Espaco).HasMaxLength(60);
+            e.Property(p => p.Slug).HasMaxLength(96);
+            e.Property(p => p.Nivel).HasMaxLength(10);
+            e.Property(p => p.Time).HasMaxLength(100);
+            e.Property(p => p.Autor).HasMaxLength(200);
+            e.Property(p => p.Versao).IsConcurrencyToken();
+            e.HasIndex(p => new { p.Espaco, p.Nivel, p.Time, p.UsuarioId, p.Slug }).IsUnique();
+            e.HasIndex(p => p.AtualizadoEmUtc);
         });
 
         modelBuilder.Entity<HistoricoDeItemDoCatalogo>(e =>

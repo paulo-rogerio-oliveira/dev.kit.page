@@ -974,6 +974,64 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("PedidosDeDemonstracao", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Documento")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EmpresaId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Espaco")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Time")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Versao")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtualizadoEmUtc");
+
+                    b.HasIndex("Espaco", "Nivel", "Time", "UsuarioId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("ProjetosCompartilhados", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
                 {
                     b.Property<long>("Id")
