@@ -269,6 +269,18 @@ Sem o `Us687.sql`, o painel Uso do admin mostrava só "An error occurred while p
 A API não roda os scripts sozinha: aplique o indicado (são idempotentes) e reinicie a API — o `/health` volta a
 `Healthy`.
 
+### Importação de catálogos (US #738)
+
+Para a sincronização completa de projetos (US #747), execute também `api/scripts/sqlserver/Us747.sql`,
+depois de `Us693.sql`. A integração acrescenta `Documento` à tabela existente; os projetos e itens antigos
+continuam legíveis. A versão mais recente preserva itens ausentes no reenvio e mantém a exclusão explícita
+restrita ao autor ou gestor. SQLite aplica essa alteração automaticamente pela migration da US #747.
+
+Antes de publicar a API em uma base Azure SQL existente, execute
+`api/scripts/sqlserver/us738-origem-catalogo.sql` (idempotente, depois de `Us461.sql`). Ele acrescenta
+`Catalogos.Origem` e `Catalogos.MinDevKitDaOrigem`, sem alterar os catálogos existentes. SQLite aplica a migration
+automaticamente. A importação do GitHub usa somente repositórios públicos, sem `REPO_KEY` e sem configuração nova.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

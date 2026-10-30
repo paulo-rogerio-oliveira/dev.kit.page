@@ -58,6 +58,7 @@ app.MapearOrigemDoContexto();
 app.MapearRelatos();
 app.MapearDesign();
 app.MapearProjetos();
+app.MapearExclusaoDeProjetos();
 app.MapearLicencas();
 app.MapearLicencaDosUsuarios();
 app.MapearEdicaoDeEmpresas();

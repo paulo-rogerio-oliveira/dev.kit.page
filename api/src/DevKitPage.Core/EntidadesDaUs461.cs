@@ -12,6 +12,8 @@ public sealed class Catalogo
     public string Nome { get; set; } = string.Empty;
     public string Descricao { get; set; } = string.Empty;
     public bool Basico { get; set; }
+    public string? Origem { get; set; }
+    public int? MinDevKitDaOrigem { get; set; }
     public DateTime CriadoEmUtc { get; set; }
 }
 

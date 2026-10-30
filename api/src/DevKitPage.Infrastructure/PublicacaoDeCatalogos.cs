@@ -179,7 +179,7 @@ public sealed class PublicacaoDeCatalogos(DevKitPageDb db, IArmazemDePacotes arm
             .Where(i => i.CatalogoId == catalogo.Id && i.RetiradoEmUtc == null)
             .OrderBy(i => i.Tipo).ThenBy(i => i.Nome)
             .ToListAsync(ct);
-        var minimo = Math.Max(1, minDevKit ?? (anterior.MinDevKit > 0 ? anterior.MinDevKit : 1));
+        var minimo = Math.Max(catalogo.MinDevKitDaOrigem ?? 1, Math.Max(1, minDevKit ?? (anterior.MinDevKit > 0 ? anterior.MinDevKit : 1)));
 
         var problemas = new List<string>();
         var lidos = new List<GeradorDoManifesto.ItemLido>();

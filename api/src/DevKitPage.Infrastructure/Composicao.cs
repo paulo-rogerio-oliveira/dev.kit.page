@@ -85,6 +85,7 @@ public static class Composicao
                 : new ArmazemDeImagensEmDisco(sp.GetRequiredService<IOptions<OpcoesDoDesign>>()));
         servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
+        servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
@@ -97,6 +98,9 @@ public static class Composicao
         servicos.AddScoped<PublicacaoDeCatalogos>();
         servicos.AddScoped<IPublicacaoDeCatalogos>(sp => sp.GetRequiredService<PublicacaoDeCatalogos>());
         servicos.AddScoped<IGestaoDeCatalogos, GestaoDeCatalogos>();
+        servicos.AddScoped<IImportacaoDeCatalogos, ImportacaoDeCatalogos>();
+        servicos.AddHttpClient(ImportacaoDeCatalogos.ClienteGitHub, cliente => cliente.Timeout = TimeSpan.FromSeconds(45))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         // O teste troca o envio por um falso que guarda as mensagens (o TryAdd deixa o dele valer).
         servicos.TryAddSingleton<IEnvioDeEmail, EnvioDeEmail>();
         servicos.AddScoped<InicializadorDaBase>();

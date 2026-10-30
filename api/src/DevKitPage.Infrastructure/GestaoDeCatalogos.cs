@@ -293,12 +293,23 @@ public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatal
             return ([], "o zip não abre.");
         }
 
+        return ItensDosArquivos(arquivos, manifesto);
+    }
+
+    internal static (List<ItemDoCatalogoEditavel> Itens, string Problema) ItensDosArquivos(
+        IReadOnlyDictionary<string, string> arquivos, ManifestoDoCatalogoV1 manifesto)
+    {
         var itens = new List<ItemDoCatalogoEditavel>();
         foreach (var publicado in manifesto.Itens)
         {
+            if (string.IsNullOrEmpty(publicado.Arquivo) || publicado.Arquivo.Length > RegrasDosCatalogos.TamanhoMaximoDoArquivo)
+                return ([], $"O arquivo do item tem até {RegrasDosCatalogos.TamanhoMaximoDoArquivo} caracteres.");
             if (!arquivos.TryGetValue(publicado.Arquivo, out var texto))
                 return ([], $"{publicado.Arquivo} não está no zip.");
-            var (conferido, erro) = RegrasDosCatalogos.Conferir(new ItemEditadoV1(publicado.Tipo, texto));
+            var categoria = (publicado.Tecnologia ?? string.Empty).Trim();
+            if (categoria == GeradorDoManifesto.Tecnologia(publicado.Tipo, publicado.Nome))
+                categoria = string.Empty;
+            var (conferido, erro) = RegrasDosCatalogos.Conferir(new ItemEditadoV1(publicado.Tipo, texto, categoria));
             if (conferido is null)
                 return ([], $"{publicado.Tipo}:{publicado.Nome}: {erro}");
             if (conferido.Hash != publicado.Hash)
@@ -308,7 +319,7 @@ public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatal
             {
                 // O fluxo é pelo nome do arquivo (a identidade no git.kit); a skill e o plan, pelo próprio conteúdo.
                 Tipo = publicado.Tipo, Nome = publicado.Nome, Descricao = conferido.Descricao, Arquivo = publicado.Arquivo,
-                Categoria = publicado.Tecnologia == GeradorDoManifesto.Tecnologia(publicado.Tipo, publicado.Nome) ? string.Empty : publicado.Tecnologia,
+                Categoria = categoria,
                 Conteudo = conferido.Conteudo, Hash = conferido.Hash, Dependencias = string.Join('\n', conferido.Dependencias),
             });
         }
@@ -335,7 +346,7 @@ public sealed partial class GestaoDeCatalogos(DevKitPageDb db, PublicacaoDeCatal
             catalogo.Id, catalogo.Slug, catalogo.Nome, catalogo.Descricao, catalogo.Basico, ultima?.Versao ?? 0,
             ultima is null ? null : DevKitPageDb.Utc(ultima.PublicadaEmUtc), itens.Count(i => i.RetiradoEmUtc is null), pendentes,
             empresas.Select(e => new EmpresaVinculadaV1(e.EmpresaId, e.Nome, DevKitPageDb.Utc(e.RelacionadoEmUtc))).ToArray(),
-            DevKitPageDb.Utc(catalogo.CriadoEmUtc));
+            DevKitPageDb.Utc(catalogo.CriadoEmUtc), catalogo.Origem);
     }
 
     /// <summary>Os itens da última release do catálogo, por tipo e nome (vazio sem release).</summary>

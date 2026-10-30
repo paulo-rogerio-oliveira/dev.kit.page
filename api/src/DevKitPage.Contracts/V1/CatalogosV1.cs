@@ -27,7 +27,16 @@ public sealed record EmpresaVinculadaV1(int Id, string Nome, DateTimeOffset Rela
 /// <param name="Pendentes">Os itens com rascunho que ainda não chegou às máquinas (novo, alterado ou retirado).</param>
 public sealed record CatalogoV1(
     int Id, string Slug, string Nome, string Descricao, bool Basico, int Versao, DateTimeOffset? PublicadaEm, int Itens, int Pendentes,
-    IReadOnlyList<EmpresaVinculadaV1> Empresas, DateTimeOffset CriadoEm);
+    IReadOnlyList<EmpresaVinculadaV1> Empresas, DateTimeOffset CriadoEm, string? Origem = null);
+
+/// <summary>Somente os arquivos selecionados no navegador, relativos à pasta do catálogo.</summary>
+public sealed record ArquivoDeCatalogoV1(string Caminho, string Conteudo);
+
+/// <summary>Importação como rascunho, sem executar conteúdo da origem.</summary>
+public sealed record ImportarCatalogoV1(CatalogoNovoV1 Catalogo, IReadOnlyList<ArquivoDeCatalogoV1>? Arquivos = null,
+    string? Repositorio = null, string? Referencia = null, string? Pasta = null);
+
+public sealed record CatalogoImportadoV1(CatalogoV1 Catalogo, int Skills, int Rules, int Fluxos);
 
 /// <summary>Um catálogo novo: o slug (a identidade, imutável) e o nome que o dev.kit mostra na coluna Origem.</summary>
 public sealed record CatalogoNovoV1(string Slug, string Nome, string? Descricao);

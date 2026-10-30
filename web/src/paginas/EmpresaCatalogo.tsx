@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ItemDaEmpresa } from '../api/tipos';
 import { Selo } from '../componentes/Selo';
@@ -6,6 +6,7 @@ import { MenuDaEmpresa, Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 import { NOME_DO_TIPO } from './catalogo/tipos';
+import { AssinantesDaSkill } from './AssinantesDaSkill';
 
 /**
  * O catálogo da empresa visto pelo GESTOR (US #425, /empresa/catalogo): os itens que o time publicou (pelo
@@ -18,6 +19,8 @@ export function EmpresaCatalogo() {
   const [itens, setItens] = useState<ItemDaEmpresa[] | null>(null);
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
+  const [selecionado, setSelecionado] = useState<ItemDaEmpresa | null>(null);
+  const origemDoFoco = useRef<HTMLButtonElement | null>(null);
 
   const tratar = useCallback((falha: unknown) => {
     if (falha instanceof ErroDaApi && falha.status === 401) {
@@ -80,12 +83,16 @@ export function EmpresaCatalogo() {
                   </thead>
                   <tbody>
                     {itens.map((i) => (
-                      <tr key={i.id}>
+                      <tr key={i.id} className={selecionado?.id === i.id ? 'skill-selecionada' : undefined}>
                         <td className="nome-do-item">{i.nome}</td>
                         <td><Selo variante="sucesso">{NOME_DO_TIPO[i.tipo] ?? i.tipo}</Selo></td>
                         <td className="numero">{i.versao}</td>
                         <td>{i.autor || '—'}</td>
-                        <td className="numero">{i.assinantes}</td>
+                        <td className="numero">{sessao!.papel === 'gestor' && i.tipo === 'skill' ? (
+                          <button className="assinantes-link" type="button" aria-label={`Ver assinantes de ${i.nome}`} aria-expanded={selecionado?.id === i.id} aria-controls={selecionado?.id === i.id ? 'titulo-assinantes' : undefined} onClick={(evento) => { origemDoFoco.current = evento.currentTarget; setSelecionado(i); }}>
+                            {i.assinantes}<span>Ver assinantes</span>
+                          </button>
+                        ) : i.assinantes}</td>
                         <td>{formatar.dataHora(i.publicadoEm)}</td>
                         <td><Selo variante={i.retirado ? 'neutro' : 'sucesso'} ponto={!i.retirado}>{i.retirado ? 'Retirado' : 'Publicado'}</Selo></td>
                         <td>
@@ -100,6 +107,7 @@ export function EmpresaCatalogo() {
               </div>
             </div>
           )}
+          {sessao!.papel === 'gestor' && selecionado && <AssinantesDaSkill key={selecionado.id} item={selecionado} fechar={() => { setSelecionado(null); origemDoFoco.current?.focus(); }} />}
         </section>
       </main>
     </div>

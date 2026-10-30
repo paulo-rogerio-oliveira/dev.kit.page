@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,9 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
 
     public async Task<ResultadoDaGestao<ProjetoGravado>> GravarAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio, CancellationToken ct)
     {
+        var problema = RegrasDosProjetos.Validar(envio);
+        if (problema.Length > 0)
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, problema);
         var nivel = RegrasDoDesign.NivelEfetivo(escopo, envio.Nivel);
         var time = nivel == NiveisDeConvencao.Time ? RegrasDoConhecimentoDaEmpresa.NormalizarTime(envio.Time) : string.Empty;
         if (nivel == NiveisDeConvencao.Time && time.Length == 0)
@@ -59,6 +63,15 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                 : $"O projeto {envio.Slug} mudou (v{projeto.Versao}, você leu a v{envio.Versao}): releia e envie de novo.");
         }
 
+        var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
+        var enviados = envio.Itens ?? [];
+        var itens = anteriores.Where(i => enviados.All(n => n.Numero != i.Numero))
+            .Concat(enviados).OrderBy(i => i.Numero).ToArray();
+        var erroDoPlano = RegrasDosProjetos.ValidarItens(itens);
+        if (erroDoPlano.Length > 0)
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, erroDoPlano);
+        envio = envio with { Itens = itens };
+        projeto.Documento = JsonSerializer.Serialize(envio);
         projeto.Nome = envio.Nome!.Trim();
         projeto.Repositorios = RegrasDosProjetos.Linhas(envio.Repositorios);
         projeto.Branch = envio.Branch!.Trim();
@@ -73,7 +86,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         projeto.AtualizadoPorId = escopo.UsuarioId;
         projeto.AtualizadoEmUtc = agora;
 
-        // O plano é uma coisa só: os itens vêm inteiros e substituem os gravados.
+        // A lista consolidada preserva os itens ausentes do envio mais recente.
         db.ItensDeProjetoCompartilhado.RemoveRange(projeto.Itens);
         projeto.Itens = (envio.Itens ?? []).OrderBy(i => i.Numero).Select(i => new ItemDeProjetoCompartilhado
         {
@@ -123,12 +136,24 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                     && (p.Nivel == NiveisDeConvencao.Empresa || (p.Nivel == NiveisDeConvencao.Time && (doTime == string.Empty || p.Time == doTime)))));
     }
 
-    private static ProjetoV1 Leitura(EscopoDoDesign escopo, ProjetoCompartilhado p) => new(
+    private static ProjetoV1 Leitura(EscopoDoDesign escopo, ProjetoCompartilhado p)
+    {
+        var documento = p.Documento.Length == 0 ? null : JsonSerializer.Deserialize<EnvioDeProjetoV1>(p.Documento);
+        return new ProjetoV1(
         p.Id, p.Slug, p.Nome, p.Nivel, p.Time, RegrasDosProjetos.Lista(p.Repositorios), p.Branch, p.SemanaConvertida, p.Definicao,
         RegrasDosProjetos.Lista(p.Anexos), p.Autonomia, p.Paralelismo, p.DestinoDaPr, p.Situacao, p.Versao,
         p.Autor is null ? string.Empty : p.Autor.Nome.Length > 0 ? p.Autor.Nome : p.Autor.Login, DevKitPageDb.Utc(p.AtualizadoEmUtc),
         p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
             i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios), RegrasDosProjetos.Lista(i.Componentes),
             RegrasDosProjetos.Dependencias(i.Dependencias), i.Onda, i.WorkItemId, i.Situacao)).ToArray(),
-        RegrasDoDesign.PodeApagar(escopo, p.AutorId, p.EmpresaId));
+        RegrasDoDesign.PodeApagar(escopo, p.AutorId, p.EmpresaId),
+        documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
+        documento?.BranchesDasTasks, documento?.AtualizadoEm) with
+        {
+            Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
+                i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),
+                RegrasDosProjetos.Lista(i.Componentes), RegrasDosProjetos.Dependencias(i.Dependencias),
+                i.Onda, i.WorkItemId, i.Situacao)).ToArray()
+        };
+    }
 }

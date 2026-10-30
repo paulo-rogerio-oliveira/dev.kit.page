@@ -15,6 +15,8 @@ BEGIN
         [Nome] nvarchar(80) NOT NULL,
         [Descricao] nvarchar(500) NOT NULL,
         [Basico] bit NOT NULL,
+        [Origem] nvarchar(max) NULL,
+        [MinDevKitDaOrigem] int NULL,
         [CriadoEmUtc] datetime2 NOT NULL,
         CONSTRAINT [PK_Catalogos] PRIMARY KEY ([Id])
     );

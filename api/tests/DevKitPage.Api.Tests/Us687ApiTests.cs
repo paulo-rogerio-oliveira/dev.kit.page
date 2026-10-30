@@ -177,6 +177,30 @@ public sealed class Us687ApiTests : IDisposable
     }
 
     [Fact]
+    public async Task O_painel_de_utilidade_com_os_filtros_da_captura_responde_com_a_globalizacao_invariante()
+    {
+        // O cenário de produção (27/10): a API em InvariantGlobalization — e a suíte também, como prova o pt-BR recusado —,
+        // uma máquina no limite com memória em GB, e o painel com Todas as máquinas, Últimos 30 dias e Todos os harnesses.
+        Assert.Throws<System.Globalization.CultureNotFoundException>(() => System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+        var admin = await _api.AdminAsync();
+        var maquina = await _api.MaquinaAsync("m-gb");
+        (await maquina.PostAsJsonAsync("/api/telemetria/lote", new TelemetryBatchV1("v1", "m-gb", "5.2.0",
+        [
+            Evento("g1", TiposDeEvento.AmostraDaMaquina, "disco-mb=600;memoria-mb=1536;limite=disco", 600, sessao: ""),
+            Evento("g2", TiposDeEvento.TurnoExecutado, "claude", 1000),
+        ]))).EnsureSuccessStatusCode();
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var resposta = await admin.GetAsync($"/api/dashboard/utilidade?de={hoje.AddDays(-29):yyyy-MM-dd}&ate={hoje:yyyy-MM-dd}");
+
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var painel = (await resposta.Content.ReadFromJsonAsync<UtilidadeResposta>())!;
+        Assert.Equal((hoje.AddDays(-29), hoje), (painel.De, painel.Ate));
+        Assert.EndsWith(": disco 600 MB · memória 1,5 GB livres", Assert.Single(painel.Saude.Maquinas.Itens));
+        Assert.Equal(1, painel.TurnosPorDesfecho[^1].Trabalhou);
+    }
+
+    [Fact]
     public async Task O_painel_de_utilidade_exige_o_painel_e_o_filtro_fora_do_escopo_e_403()
     {
         var admin = await _api.AdminAsync();
