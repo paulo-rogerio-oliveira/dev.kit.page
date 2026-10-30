@@ -137,6 +137,9 @@ public static partial class RegrasDosProjetos
                 return $"O item {item.Numero} precisa de título (até {ProjetosV1.TamanhoMaximoDoNome} caracteres).";
             if ((item.Descricao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoTexto || (item.Fluxo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome)
                 return $"Um dos textos do item {item.Numero} passa do tamanho do contrato.";
+            if (item.Prioridade is < 0 or > 4 || !double.IsFinite(item.Horas) || item.Horas < 0
+                || item.WorkItemId < 0 || item.Branch is null || item.Branch.Length > ProjetosV1.TamanhoMaximoDoBranch)
+                return $"Metadados inválidos no item {item.Numero}.";
             if (item.Onda < 0)
                 return $"A onda do item {item.Numero} não é negativa.";
             if (!ProjetosV1.SituacoesDoItem.Contains(item.Situacao ?? ProjetosV1.ItemPlanejado))

@@ -32,6 +32,7 @@ export function Design() {
   return (
     <div className="pagina">
       <Topo secao="design">
+        <Link className="botao botao-fantasma" to="/projetos">Projetos</Link>
         <Link className="botao botao-fantasma" to="/conta">Conta</Link>
       </Topo>
       <Pagina rotulo={sessao!.empresa ?? 'Design'} titulo="Design" subtitulo="As capturas e as propostas de tela do dev.kit, por repositório.">

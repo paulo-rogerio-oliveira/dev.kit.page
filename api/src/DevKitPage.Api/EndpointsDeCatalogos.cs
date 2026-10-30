@@ -56,6 +56,10 @@ public static class EndpointsDeCatalogos
 
         admin.MapGet("/", (IGestaoDeCatalogos gestao, CancellationToken ct) => gestao.ListarAsync(ct));
 
+        admin.MapPost("/importar", async (ImportarCatalogoV1 pedido, ClaimsPrincipal quem, IImportacaoDeCatalogos importacao, CancellationToken ct)
+            => Resultado(await importacao.ImportarAsync(pedido, Autor(quem), ct)))
+            .RequireRateLimiting(LimiteDeTaxa.PoliticaDaExportacao);
+
         admin.MapPost("/", async (CatalogoNovoV1? novo, IGestaoDeCatalogos gestao, CancellationToken ct) =>
         {
             var erros = RegrasDosCatalogos.Validar(novo);

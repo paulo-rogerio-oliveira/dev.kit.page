@@ -7,8 +7,9 @@ import type {
   ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
-  UtilidadeResposta,
+  UtilidadeResposta, AssinanteDoItem,
 } from './tipos';
+import type { Projeto } from './projetos';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -118,6 +119,8 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
+  projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 
@@ -198,6 +201,9 @@ export const api = {
   // Os catálogos nomeados (US #461) — só o admin, menos o /meus. O slug vai codificado: é texto do admin.
   catalogos: (token: string) => chamar<CatalogoNomeado[]>('/api/catalogos', { token }),
 
+  importarCatalogo: (token: string, pedido: { catalogo: CatalogoNovo; arquivos?: { caminho: string; conteudo: string }[]; repositorio?: string; referencia?: string; pasta?: string }) =>
+    chamar<{ catalogo: CatalogoNomeado; skills: number; rules: number; fluxos: number }>('/api/catalogos/importar', { metodo: 'POST', corpo: pedido, token }),
+
   criarCatalogo: (token: string, catalogo: CatalogoNovo) =>
     chamar<CatalogoNomeado>('/api/catalogos', { metodo: 'POST', corpo: catalogo, token }),
 
@@ -257,6 +263,9 @@ export const api = {
     baixar(`/api/catalogos/${encodeURIComponent(slug)}/releases/${release.versao}/download`, token, `${release.tag}.zip`),
 
   catalogoDaEmpresa: (token: string) => chamar<ItemDaEmpresa[]>('/api/catalogo/empresa', { token }),
+
+  assinantesDoItem: (token: string, id: number, pagina = 1) =>
+    chamar<Pagina<AssinanteDoItem>>(`/api/catalogo/empresa/${id}/assinantes?pagina=${pagina}&tamanho=20`, { token }),
 
   retirarItem: (token: string, id: number) => chamar<ItemDaEmpresa>(`/api/catalogo/empresa/${id}`, { metodo: 'DELETE', token }),
 

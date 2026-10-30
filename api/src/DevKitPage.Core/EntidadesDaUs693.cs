@@ -27,6 +27,7 @@ public sealed class ProjetoCompartilhado
 
     public string Slug { get; set; } = string.Empty;
     public string Nome { get; set; } = string.Empty;
+    public string Documento { get; set; } = string.Empty;
 
     /// <summary>As URLs dos repositórios, uma por linha.</summary>
     public string Repositorios { get; set; } = string.Empty;

@@ -17,30 +17,9 @@ namespace DevKitPage.Api;
 /// </summary>
 public static class EndpointsDaUs693
 {
-    public static void MapearProjetos(this IEndpointRouteBuilder app)
+    public static void MapearExclusaoDeProjetos(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
-
-        grupo.MapGet("/", (string? time, DateTimeOffset? desde, ClaimsPrincipal quem, IProjetosDaEmpresa projetos, CancellationToken ct)
-            => ComEscopo(quem, async escopo => Results.Ok(await projetos.ListarAsync(escopo, time, desde, ct))));
-
-        grupo.MapGet("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosDaEmpresa projetos, CancellationToken ct)
-            => ComEscopo(quem, async escopo => await projetos.ObterAsync(escopo, id, ct) is { } projeto
-                ? Results.Ok(projeto)
-                : Results.Problem("Projeto não encontrado.", statusCode: StatusCodes.Status404NotFound)));
-
-        grupo.MapPut("/", (EnvioDeProjetoV1? envio, ClaimsPrincipal quem, IProjetosDaEmpresa projetos, CancellationToken ct)
-            => ComEscopo(quem, async escopo =>
-            {
-                var problema = RegrasDosProjetos.Validar(envio);
-                if (problema.Length > 0)
-                    return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
-
-                var gravado = await projetos.GravarAsync(escopo, envio!, ct);
-                if (gravado.Valor is not { } feito)
-                    return EndpointsDaUs425.Resultado(gravado);
-                return feito.Novo ? Results.Created($"/api/projetos/{feito.Projeto.Id}", feito.Projeto) : Results.Ok(feito.Projeto);
-            }));
 
         grupo.MapDelete("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosDaEmpresa projetos, CancellationToken ct)
             => ComEscopo(quem, async escopo => EndpointsDaUs425.Resultado(await projetos.ApagarAsync(escopo, id, ct))));

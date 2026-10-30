@@ -11,6 +11,27 @@ namespace DevKitPage.Infrastructure;
 /// </summary>
 public sealed class CatalogoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : ICatalogoDaEmpresa
 {
+    public async Task<ResultadoDaGestao<Pagina<AssinanteDoItemV1>>> AssinantesAsync(EscopoDaEmpresa escopo, long id, int pagina, int tamanho, CancellationToken ct)
+    {
+        if (!escopo.EhGestor)
+            return ResultadoDaGestao<Pagina<AssinanteDoItemV1>>.Falhou(FalhaNaGestao.Proibida, "Só o gestor consulta os assinantes.");
+        var (item, recusa) = await DaEmpresaAsync<Pagina<AssinanteDoItemV1>>(escopo, id, ct);
+        if (item is null)
+            return recusa!;
+
+        tamanho = Math.Clamp(tamanho, 1, 100);
+        pagina = Math.Clamp(pagina, 1, int.MaxValue / tamanho);
+        var consulta = AssinaturasDaEmpresa(escopo).Where(a => a.ItemId == id)
+            .Join(db.Usuarios, a => a.UsuarioId, u => u.Id,
+                (a, u) => new { u.Id, u.Nome, a.AssinadaEmUtc });
+        var total = await consulta.CountAsync(ct);
+        var registros = await consulta.OrderBy(a => a.Nome).ThenBy(a => a.Id)
+            .Skip((pagina - 1) * tamanho).Take(tamanho).ToListAsync(ct);
+        var assinantes = registros.Select(a => new AssinanteDoItemV1(a.Id,
+            string.IsNullOrWhiteSpace(a.Nome) ? $"Usuário {a.Id}" : a.Nome, DevKitPageDb.Utc(a.AssinadaEmUtc))).ToArray();
+        return new(new Pagina<AssinanteDoItemV1>(assinantes, total, pagina, tamanho));
+    }
+
     public async Task<IReadOnlyList<ItemDaEmpresaV1>> ListarAsync(EscopoDaEmpresa escopo, CancellationToken ct)
     {
         var itens = await db.ItensDeCatalogo.AsNoTracking().Include(i => i.Autor)
@@ -18,10 +39,10 @@ public sealed class CatalogoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             .OrderBy(i => i.Tipo).ThenBy(i => i.Nome)
             .ToListAsync(ct);
         var ids = itens.Select(i => i.Id).ToArray();
-        var assinantes = await db.AssinaturasDeCatalogo.Where(a => ids.Contains(a.ItemId))
+        var assinantes = await AssinaturasDaEmpresa(escopo).Where(a => ids.Contains(a.ItemId))
             .GroupBy(a => a.ItemId).Select(g => new { g.Key, Quantos = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Quantos, ct);
-        var meus = (await db.AssinaturasDeCatalogo.Where(a => a.UsuarioId == escopo.UsuarioId && ids.Contains(a.ItemId)).Select(a => a.ItemId).ToListAsync(ct)).ToHashSet();
+        var meus = (await AssinaturasDaEmpresa(escopo).Where(a => a.UsuarioId == escopo.UsuarioId && ids.Contains(a.ItemId)).Select(a => a.ItemId).ToListAsync(ct)).ToHashSet();
 
         return itens.Select(i => Resumo(i, assinantes.GetValueOrDefault(i.Id), meus.Contains(i.Id))).ToArray();
     }
@@ -90,8 +111,8 @@ public sealed class CatalogoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
 
         item.RetiradoEmUtc ??= relogio.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
-        var assinantes = await db.AssinaturasDeCatalogo.CountAsync(a => a.ItemId == id, ct);
-        var assinado = await db.AssinaturasDeCatalogo.AnyAsync(a => a.ItemId == id && a.UsuarioId == escopo.UsuarioId, ct);
+        var assinantes = await AssinaturasDaEmpresa(escopo).CountAsync(a => a.ItemId == id, ct);
+        var assinado = await AssinaturasDaEmpresa(escopo).AnyAsync(a => a.ItemId == id && a.UsuarioId == escopo.UsuarioId, ct);
         await db.Entry(item).Reference(i => i.Autor).LoadAsync(ct);
         return new(Resumo(item, assinantes, assinado));
     }
@@ -184,6 +205,11 @@ public sealed class CatalogoDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             return (null, ResultadoDaGestao<T>.Falhou(FalhaNaGestao.Proibida, "O item é de outra empresa."));
         return (item, null);
     }
+
+    // Transferir o usuário não apaga a assinatura; totais e nomes seguem a empresa atual dele.
+    private IQueryable<AssinaturaDeCatalogo> AssinaturasDaEmpresa(EscopoDaEmpresa escopo)
+        => db.AssinaturasDeCatalogo.AsNoTracking()
+            .Where(a => db.Usuarios.Any(u => u.Id == a.UsuarioId && u.EmpresaId == escopo.EmpresaId));
 
     private static IEnumerable<(string Tipo, string Nome)> Dependencias(ItemDeCatalogo item)
         => item.Dependencias.Split('\n', StringSplitOptions.RemoveEmptyEntries)

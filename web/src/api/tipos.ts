@@ -458,6 +458,13 @@ export interface ReleaseDoCatalogo {
   sha256: string | null;
 }
 
+/** Adesão registrada no catálogo da empresa, consultável somente pelo gestor. */
+export interface AssinanteDoItem {
+  usuarioId: number;
+  nome: string;
+  assinadaEm: string;
+}
+
 /** Um item do catálogo da empresa, na lista de quem é dela. */
 export interface ItemDaEmpresa {
   id: number;
@@ -577,6 +584,7 @@ export interface EmpresaVinculada {
 
 /** Um catálogo na gestão do admin (GET /api/catalogos) — o básico vem primeiro. */
 export interface CatalogoNomeado {
+  origem?: string | null;
   id: number;
   slug: string;
   nome: string;

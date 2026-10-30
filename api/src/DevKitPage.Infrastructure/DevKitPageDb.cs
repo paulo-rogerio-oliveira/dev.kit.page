@@ -225,6 +225,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(p => p.Branch).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoBranch);
             e.Property(p => p.DestinoDaPr).HasMaxLength(Contracts.V1.ProjetosV1.TamanhoMaximoDoBranch);
             e.Property(p => p.Situacao).HasMaxLength(20);
+            e.Property(p => p.Documento).HasDefaultValue("");
+            e.Property(p => p.Versao).IsConcurrencyToken();
             // O UsuarioId é o dono do nível usuário e vale 0 nos outros: sem FK, como no design.
             e.HasIndex(p => new { p.Espaco, p.Nivel, p.Time, p.UsuarioId, p.Slug }).IsUnique();
             e.HasIndex(p => new { p.EmpresaId, p.AtualizadoEmUtc });
@@ -270,7 +272,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(i => i.Nome).HasMaxLength(RegrasDoCatalogoDaEmpresa.TamanhoMaximoDoNome);
             e.Property(i => i.Descricao).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaDescricao);
             e.Property(i => i.Categoria).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDaCategoria);
-            e.Property(i => i.Arquivo).HasMaxLength(200);
+            e.Property(i => i.Arquivo).HasMaxLength(RegrasDosCatalogos.TamanhoMaximoDoArquivo);
             // Até 256 KB de UTF-8 (a regra do Core): nvarchar(max) no SQL Server, como o EF gera sem tamanho.
             e.Property(i => i.Hash).HasMaxLength(64);
             e.Property(i => i.Dependencias).HasMaxLength(4000);
@@ -496,6 +498,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(f => new { f.Tipo, f.EmUtc });
             e.HasOne(f => f.Maquina).WithMany().HasForeignKey(f => f.MaquinaId).OnDelete(DeleteBehavior.Cascade);
         });
+
 
         modelBuilder.Entity<HistoricoDeItemDoCatalogo>(e =>
         {

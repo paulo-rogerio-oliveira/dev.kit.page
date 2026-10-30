@@ -67,6 +67,9 @@ public static class EndpointsDaUs425
         grupo.MapGet("/", (ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, CancellationToken ct)
             => ComEmpresa(quem, async escopo => Results.Ok(await catalogo.ListarAsync(escopo, ct))));
 
+        grupo.MapGet("/{id:long}/assinantes", (long id, int? pagina, int? tamanho, ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, CancellationToken ct)
+            => ComGestor(quem, async escopo => Resultado(await catalogo.AssinantesAsync(escopo, id, pagina ?? 1, tamanho ?? 20, ct))));
+
         grupo.MapPost("/", (PublicacaoV1? publicacao, ClaimsPrincipal quem, ICatalogoDaEmpresa catalogo, IPublicacaoDeCatalogos basico, CancellationToken ct)
             => ComEmpresa(quem, async escopo =>
             {

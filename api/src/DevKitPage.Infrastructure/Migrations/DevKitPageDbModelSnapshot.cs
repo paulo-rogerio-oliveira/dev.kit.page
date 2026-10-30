@@ -184,6 +184,12 @@ namespace DevKitPage.Infrastructure.Migrations
 
             modelBuilder.Entity("DevKitPage.Core.Catalogo", b =>
                 {
+                    b.Property<int?>("MinDevKitDaOrigem")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Origem")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
@@ -1071,7 +1077,6 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("TEXT");
-
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
 
@@ -1118,7 +1123,14 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<int>("UsuarioId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Documento")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<int>("Versao")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");

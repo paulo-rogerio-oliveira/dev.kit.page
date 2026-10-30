@@ -24,6 +24,9 @@ public interface ICatalogoDaEmpresa
     /// <summary>Os itens da empresa (inclusive os retirados, marcados), com os assinantes de cada um.</summary>
     Task<IReadOnlyList<ItemDaEmpresaV1>> ListarAsync(EscopoDaEmpresa escopo, CancellationToken ct);
 
+    /// <summary>Assinantes do item, somente para o gestor, em páginas de até 100 usuários.</summary>
+    Task<ResultadoDaGestao<Pagina<AssinanteDoItemV1>>> AssinantesAsync(EscopoDaEmpresa escopo, long id, int pagina, int tamanho, CancellationToken ct);
+
     /// <summary>
     /// Publica o item JÁ validado (<see cref="RegrasDoCatalogoDaEmpresa.Validar"/>): o novo nasce na versão 1; o que já
     /// existe ganha versão nova só se o hash mudou; o retirado volta. Publicar por cima do item de outro autor é do

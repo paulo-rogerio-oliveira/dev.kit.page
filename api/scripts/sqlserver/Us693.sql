@@ -18,6 +18,7 @@ BEGIN
         [UsuarioId] int NOT NULL,
         [Slug] nvarchar(60) NOT NULL,
         [Nome] nvarchar(200) NOT NULL,
+        [Documento] nvarchar(max) NOT NULL DEFAULT N'',
         [Repositorios] nvarchar(max) NOT NULL,
         [Branch] nvarchar(250) NOT NULL,
         [SemanaConvertida] bit NOT NULL,

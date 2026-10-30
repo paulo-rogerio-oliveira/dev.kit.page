@@ -44,7 +44,7 @@ public sealed class Us693Tests
     }
 
     [Fact]
-    public async Task Regravar_com_a_versao_lida_substitui_o_plano_inteiro_e_soma_a_versao()
+    public async Task Regravar_com_a_versao_lida_preserva_itens_ausentes_e_soma_a_versao()
     {
         await using var baseDeTeste = new BaseDeTeste();
         await baseDeTeste.InicializarAsync();
@@ -62,7 +62,8 @@ public sealed class Us693Tests
         var regravado = await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IProjetosDaEmpresa>().GravarAsync(escopo, Envio(1, Item(1)), default));
         Assert.False(regravado.Valor!.Novo);
         Assert.Equal(2, regravado.Valor.Projeto.Versao);
-        Assert.Single(regravado.Valor.Projeto.Itens);
+        Assert.Equal(2, regravado.Valor.Projeto.Itens.Count);
+        Assert.Equal([1], regravado.Valor.Projeto.Itens.Single(i => i.Numero == 2).Dependencias);
 
         // A versão velha é conflito: quem leu a v1 não sobrescreve a v2.
         var velho = await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IProjetosDaEmpresa>().GravarAsync(escopo, Envio(1, Item(1)), default));
@@ -71,5 +72,37 @@ public sealed class Us693Tests
         // Apagar leva os itens junto.
         await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IProjetosDaEmpresa>().ApagarAsync(escopo, criado.Valor.Projeto.Id, default));
         Assert.Equal(0, await baseDeTeste.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().ItensDeProjetoCompartilhado.CountAsync()));
+    }
+
+    [Fact]
+    public async Task Projeto_relacional_anterior_continua_legivel_e_ganha_snapshot_sem_perder_itens()
+    {
+        await using var baseDeTeste = new BaseDeTeste();
+        await baseDeTeste.InicializarAsync();
+        var autor = await baseDeTeste.ComAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<DevKitPageDb>();
+            var usuario = await db.Usuarios.SingleAsync();
+            db.ProjetosCompartilhados.Add(new ProjetoCompartilhado
+            {
+                Slug = "anterior", Nome = "Projeto anterior", Nivel = "usuario", Espaco = $"usuario:{usuario.Id}",
+                UsuarioId = usuario.Id, AutorId = usuario.Id, Versao = 3, Documento = "",
+                Branch = "feature/dev/projeto-anterior", Repositorios = "https://github.com/acme/portal",
+                Paralelismo = 2, Situacao = "aprovado",
+                Itens = [new() { Numero = 1, Titulo = "Item existente", Situacao = "integrado" }]
+            });
+            await db.SaveChangesAsync();
+            return usuario.Id;
+        });
+        var escopo = new EscopoDoDesign(autor, null, false);
+        var anterior = Assert.Single(await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IProjetosDaEmpresa>()
+            .ListarAsync(escopo, null, null, default)));
+        Assert.Equal((3, "Item existente"), (anterior.Versao, Assert.Single(anterior.Itens).Titulo));
+        var envio = new EnvioDeProjetoV1("anterior", anterior.Nome, "usuario", "", anterior.Repositorios,
+            anterior.Branch, false, "", [], true, 2, "", "aprovado", anterior.Versao, [],
+            FeatureId: 747, Board: "vincular");
+        var gravado = await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IProjetosDaEmpresa>().GravarAsync(escopo, envio, default));
+        Assert.Equal((4, 747, "vincular"), (gravado.Valor!.Projeto.Versao, gravado.Valor.Projeto.FeatureId, gravado.Valor.Projeto.Board));
+        Assert.Equal("Item existente", Assert.Single(gravado.Valor.Projeto.Itens).Titulo);
     }
 }

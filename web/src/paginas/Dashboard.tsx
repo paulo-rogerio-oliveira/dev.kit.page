@@ -71,6 +71,7 @@ export function Dashboard() {
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [carregando, setCarregando] = useState(true);
+  const [tentativa, setTentativa] = useState(0);
 
   const tratar = useCallback((falha: unknown) => {
     if (falha instanceof ErroDaApi && falha.status === 401) {
@@ -79,15 +80,6 @@ export function Dashboard() {
     }
     setErro(falha instanceof Error ? falha.message : 'Falha ao consultar a API.');
   }, [sair]);
-
-  // O filtro do admin são as máquinas; o do gestor, os colaboradores que consentiram (US #381) —
-  // a API devolve ao gestor só a empresa dele, e o nome vem do que o colaborador informou no dev.kit.
-  useEffect(() => {
-    const carregar: Promise<OpcaoDoFiltro[]> = ehAdmin
-      ? api.maquinas(token).then((lista: MaquinaResumo[]) => lista.map((m) => ({ id: m.id, rotulo: `${m.apelido} (${formatar.versaoDoDevKit(m.versaoDevKit)})` })))
-      : api.colaboradores(token).then((lista: ColaboradorResumo[]) => lista.map((c) => ({ id: c.maquinaId, rotulo: c.colaborador || c.apelido })));
-    carregar.then(setOpcoes).catch(tratar);
-  }, [token, ehAdmin, tratar]);
 
   async function exportar() {
     setAviso('');
@@ -103,14 +95,26 @@ export function Dashboard() {
     let vivo = true;
     setCarregando(true);
     setErro('');
-    Promise.all([api.utilidade(token, filtro, harness), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
-      .then(([utilidade, qualidade, eventos]) => vivo && setDados({ utilidade, qualidade, eventos }))
-      .catch((falha) => vivo && tratar(falha))
+    // O filtro e o painel pertencem à mesma tentativa; falhas e respostas antigas não se misturam.
+    const carregar: Promise<OpcaoDoFiltro[]> = ehAdmin
+      ? api.maquinas(token).then((lista: MaquinaResumo[]) => lista.map((m) => ({ id: m.id, rotulo: `${m.apelido} (${formatar.versaoDoDevKit(m.versaoDevKit)})` })))
+      : api.colaboradores(token).then((lista: ColaboradorResumo[]) => lista.map((c) => ({ id: c.maquinaId, rotulo: c.colaborador || c.apelido })));
+    Promise.all([carregar, api.utilidade(token, filtro, harness), api.qualidade(token, filtro), api.eventos(token, filtro, pagina, 20, recorte)])
+      .then(([lista, utilidade, qualidade, eventos]) => {
+        if (!vivo) return;
+        setOpcoes(lista);
+        setDados({ utilidade, qualidade, eventos });
+      })
+      .catch((falha) => {
+        if (!vivo) return;
+        setDados(null);
+        tratar(falha);
+      })
       .finally(() => vivo && setCarregando(false));
     return () => {
       vivo = false;
     };
-  }, [token, filtro, harness, pagina, recorte, tratar]);
+  }, [token, ehAdmin, filtro, harness, pagina, recorte, tratar, tentativa]);
 
   const filtrandoOLog = Boolean(tipoDoLog || detalheDoLog || harness);
 
@@ -163,7 +167,7 @@ export function Dashboard() {
         </div>
         </div>
 
-        {erro && <p className="erro" role="alert">{erro}</p>}
+        {erro && <div role="alert"><p className="erro">{erro}</p><button className="botao botao-fantasma" type="button" onClick={() => setTentativa((atual) => atual + 1)}>Tentar novamente</button></div>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
 
         {!carregando && !erro && opcoes?.length === 0 && (
@@ -175,7 +179,7 @@ export function Dashboard() {
         )}
 
         {u && ql && (
-          <>
+          <div style={{ display: carregando ? 'none' : 'contents' }}>
             <PainelDeUtilidade dados={u} aoFiltrarLog={filtrarLog} />
 
             <section aria-labelledby="titulo-qualidade">
@@ -248,7 +252,7 @@ export function Dashboard() {
                 </>
               )}
             </section>
-          </>
+          </div>
         )}
 
         {/* Contatos de venda da landing: só do admin (a API recusa ao gestor). */}

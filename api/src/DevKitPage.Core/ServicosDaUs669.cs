@@ -122,16 +122,11 @@ public static partial class RegrasDoDesign
     /// pedido, <c>empresa</c>, que é o compartilhamento que motivou a US.
     /// </summary>
     public static string NivelEfetivo(EscopoDoDesign escopo, string? pedido)
-    {
-        if (escopo.EmpresaId is null)
-            return NiveisDeConvencao.Usuario;
-        var nivel = (pedido ?? string.Empty).Trim().ToLowerInvariant();
-        return nivel.Length == 0 ? NiveisDeConvencao.Empresa : nivel;
-    }
+        => RegrasDeCompartilhamento.NivelEfetivo(escopo, pedido);
 
     /// <summary>De quem é o teto: a empresa, ou o próprio usuário sem empresa.</summary>
     public static string EspacoDe(EscopoDoDesign escopo)
-        => escopo.EmpresaId is { } empresa ? $"empresa:{empresa}" : $"usuario:{escopo.UsuarioId}";
+        => RegrasDeCompartilhamento.EspacoDe(escopo);
 
     /// <summary>
     /// A visibilidade, numa regra só (a do contexto): o nível usuário só para o dono; o resto só na mesma empresa — o
