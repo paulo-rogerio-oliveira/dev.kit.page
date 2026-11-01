@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { formatar } from '../formatar';
 import { renderizar } from '../testes/renderizar';
 import { API, escritas, gestaoDeUsuarios, servidor, tokenDoDev, tokenDoGestor, tokenValido, usuarios } from '../testes/servidor';
 
@@ -39,6 +40,15 @@ describe('Usuários (US #405; visual da US #461)', () => {
     expect(within(admin).getByText('Admin')).toHaveClass('insignia-papel');
     expect(within(admin).getByText('—')).toBeInTheDocument();
     expect(screen.getByText(/^2 usuários · 1 admin, 1 dev/)).toBeInTheDocument();
+  });
+
+  it('mostra o último login de cada usuário, e "nunca" em quem ainda não entrou', async () => {
+    renderizar('/usuarios', tokenValido());
+
+    const ana = await linhaDe('ana.dev');
+    expect(within(await screen.findByRole('table')).getByRole('columnheader', { name: 'Último login' })).toBeInTheDocument();
+    expect(within(ana).getByText(formatar.dataHora('2026-10-25T11:40:00Z'))).toBeInTheDocument();
+    expect(within(await linhaDe('sem nome cadastrado')).getByText('nunca')).toBeInTheDocument();
   });
 
   it('a linha do próprio admin não tem o Bloquear', async () => {

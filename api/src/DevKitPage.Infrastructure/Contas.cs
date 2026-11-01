@@ -260,7 +260,8 @@ public sealed class GestaoDaEmpresa(DevKitPageDb db, IOptions<OpcoesDeLogin> log
             empresa.LoginObrigatorio, RegrasDaConta.LoginObrigatorio(empresa.LoginObrigatorio, login.Value.Obrigatorio));
 
     private static UsuarioDaEmpresaV1 Resumo(Usuario u)
-        => new(u.Id, u.Login, u.Nome, u.Email, u.EhAdmin ? Papeis.Admin : u.Papel, u.BloqueadoPeloAdmin, DevKitPageDb.Utc(u.CriadoEmUtc));
+        => new(u.Id, u.Login, u.Nome, u.Email, u.EhAdmin ? Papeis.Admin : u.Papel, u.BloqueadoPeloAdmin, DevKitPageDb.Utc(u.CriadoEmUtc),
+            u.UltimoLoginEmUtc is { } login ? DevKitPageDb.Utc(login) : null);
 }
 
 /// <summary>
