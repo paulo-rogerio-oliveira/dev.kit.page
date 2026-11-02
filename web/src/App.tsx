@@ -19,6 +19,7 @@ import { EmpresaConhecimento } from './paginas/EmpresaConhecimento';
 import { Relatos } from './paginas/Relatos';
 import { Design, VersaoDoDesign } from './paginas/Design';
 import { Projetos } from './paginas/Projetos';
+import { Board } from './paginas/Board';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
@@ -73,6 +74,7 @@ export function App() {
       {/* O design compartilhado (US #669): de todo usuário logado (sem empresa, o nível usuário) e o link estável da PR. */}
       <Route path="/design" element={<RotaProtegida><Design /></RotaProtegida>} />
       <Route path="/projetos" element={<RotaProtegida><Projetos /></RotaProtegida>} />
+      <Route path="/board" element={<RotaProtegida><Board /></RotaProtegida>} />
       <Route path="/design/:projeto/:tela/:versao" element={<RotaProtegida><VersaoDoDesign /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

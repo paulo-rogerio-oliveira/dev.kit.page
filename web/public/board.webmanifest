@@ -1,0 +1,16 @@
+{
+  "id": "/board",
+  "name": "dev.kit · Board remoto",
+  "short_name": "dev.kit",
+  "description": "Acompanhe o Board do dev.kit. Fase 1 somente leitura; requer internet e login.",
+  "lang": "pt-BR",
+  "start_url": "/board",
+  "scope": "/board",
+  "display": "standalone",
+  "background_color": "#222a38",
+  "theme_color": "#222a38",
+  "icons": [
+    { "src": "/board-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/board-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

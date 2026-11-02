@@ -10,6 +10,7 @@ import type {
   UtilidadeResposta, AssinanteDoItem,
 } from './tipos';
 import type { Projeto } from './projetos';
+import type { MaquinaRemota, PainelRemoto } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -46,6 +47,7 @@ export function falhaDoServidor(caminho: string, status: number, codigo?: string
 }
 
 interface Opcoes {
+  cache?: RequestCache;
   metodo?: string;
   corpo?: unknown;
   token?: string;
@@ -59,6 +61,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
+    cache: opcoes.cache,
     method: opcoes.metodo ?? 'GET',
     headers: cabecalhos,
     body: opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo),
@@ -119,6 +122,9 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  maquinasRemotas: (token: string) => chamar<MaquinaRemota[]>('/api/remoto/v1/maquinas', { token, cache: 'no-store' }),
+  painelRemoto: (token: string, maquina: string) =>
+    chamar<PainelRemoto>(`/api/remoto/v1/maquinas/${encodeURIComponent(maquina)}`, { token, cache: 'no-store' }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>
