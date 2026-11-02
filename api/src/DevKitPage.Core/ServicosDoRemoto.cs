@@ -76,7 +76,15 @@ public static partial class RegrasDoRemoto
     public static bool IdentificadorContemDadoDeCliente(string? valor)
         => !string.IsNullOrEmpty(valor) && !MaquinaValida(valor) && ContemDocumentoOuTelefone(valor);
 
-    private static bool ContemDocumentoOuTelefone(string texto) => Documento().IsMatch(texto) || Telefone().IsMatch(texto);
+    private static bool ContemDocumentoOuTelefone(string texto) => Documento().IsMatch(texto) || Telefone().IsMatch(SemFaixaDeAnos(texto));
+
+    /// <summary>
+    /// Tira a faixa de anos de um slug: <c>sprint-11-2026-2027</c> tem o formato de um telefone fixo, e o que a separa de um é
+    /// o rótulo na frente e os dois anos em ordem. O número que cair exatamente nisso, escrito como slug, passa: fora dele, o
+    /// telefone continua recusado, em qualquer formato.
+    /// </summary>
+    private static string SemFaixaDeAnos(string texto)
+        => FaixaDeAnos().Replace(texto, faixa => string.CompareOrdinal(faixa.Groups["inicio"].Value, faixa.Groups["fim"].Value) < 0 ? " " : faixa.Value);
 
     /// <summary>A recusa do heartbeat, ou nula quando ele vale.</summary>
     public static RecusaDoRemoto? Validar(HeartbeatV1? heartbeat)
@@ -266,11 +274,18 @@ public static partial class RegrasDoRemoto
     [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,99}\z", RegexOptions.CultureInvariant)]
     private static partial Regex IdRegex();
 
-    /// <summary>CPF e CNPJ, com ou sem pontuação.</summary>
-    [GeneratedRegex(@"(?<!\d)(?:\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{2}\.?\d{3}\.?\d{3}[/-]?\d{4}-?\d{2})(?!\d)")]
+    /// <summary>
+    /// CPF e CNPJ, com ou sem pontuação. A filial do CNPJ vem depois da barra, nunca de um hífen: com ele, a data e hora
+    /// <c>20261102-095333</c> seria um CNPJ e derrubaria o retrato inteiro.
+    /// </summary>
+    [GeneratedRegex(@"(?<!\d)(?:\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})(?!\d)")]
     private static partial Regex Documento();
 
     /// <summary>Telefone brasileiro com DDD: <c>(11) 91234-5678</c>, <c>11 3456-7890</c>.</summary>
     [GeneratedRegex(@"(?<!\d)\(?\d{2}\)?[ -]?9?\d{4}-\d{4}(?!\d)")]
     private static partial Regex Telefone();
+
+    /// <summary>A faixa de anos depois do rótulo de um slug, com os dois dígitos que vêm antes dela: ver <see cref="SemFaixaDeAnos"/>.</summary>
+    [GeneratedRegex(@"(?<=\p{L}-)\d{2}-(?<inicio>(?:19|20)\d{2})-(?<fim>(?:19|20)\d{2})(?!\d)")]
+    private static partial Regex FaixaDeAnos();
 }

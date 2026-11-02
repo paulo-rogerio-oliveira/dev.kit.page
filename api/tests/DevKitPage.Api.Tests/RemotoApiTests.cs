@@ -6,6 +6,8 @@ using System.Text.Json;
 using DevKitPage.Api;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -340,9 +342,11 @@ public sealed class ContratoDoRemotoApiTests : IDisposable
     [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, "text/plain")]
     [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, null)]
     [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, "application/json; charset=nao-existe")]
+    [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, "application/json; charset=utf-7")]
     [InlineData("retrato.json", DadosDoRemoto.Retrato, "text/plain")]
     [InlineData("retrato.json", DadosDoRemoto.Retrato, null)]
     [InlineData("retrato.json", DadosDoRemoto.Retrato, "application/json; charset=nao-existe")]
+    [InlineData("retrato.json", DadosDoRemoto.Retrato, "application/json; charset=utf-7")]
     public async Task O_corpo_que_nao_e_json_e_415_e_nao_500(string arquivo, string rota, string? tipo)
     {
         var cliente = await _api.AdminAsync();
@@ -354,6 +358,42 @@ public sealed class ContratoDoRemotoApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, resposta.StatusCode);
         Assert.Contains("application/json", await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>A leitura falhar é defeito do lado de cá: com um 415, o dev.kit acharia que o erro é dele e não saberia o que corrigir.</summary>
+    [Theory]
+    [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat)]
+    [InlineData("retrato.json", DadosDoRemoto.Retrato)]
+    public async Task Outra_falha_na_leitura_do_corpo_e_500_e_nao_415(string arquivo, string rota)
+    {
+        using var api = _api.WithWebHostBuilder(b => b.ConfigureServices(s => s.AddSingleton<IStartupFilter>(new CorpoQueFalha())));
+        var admin = await _api.AdminAsync();
+        using var cliente = api.CreateClient();
+        cliente.DefaultRequestHeaders.Authorization = admin.DefaultRequestHeaders.Authorization;
+
+        var resposta = await cliente.PutAsync(rota, Json(Fixture(arquivo)));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, resposta.StatusCode);
+        Assert.Equal(ErroUtilDaApi.Titulo, (await resposta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task A_data_e_hora_e_a_faixa_de_anos_no_slug_nao_derrubam_o_retrato()
+    {
+        var cliente = await _api.AdminAsync();
+        await cliente.PutAsJsonAsync(DadosDoRemoto.Heartbeat, DadosDoRemoto.Sinal());
+        var foto = DadosDoRemoto.Foto(titulo: "Rodada de 20261102-095333");
+        var retrato = foto with
+        {
+            Projetos = [foto.Projetos[0] with { Slug = "sprint-11-2026-2027" }],
+            Fluxos = [foto.Fluxos[0] with { Id = "20261102-095333", Projeto = "sprint-11-2026-2027" }],
+            Pendencias = [foto.Pendencias[0] with { Projeto = "sprint-11-2026-2027" }],
+        };
+
+        Assert.Equal(HttpStatusCode.OK, (await cliente.PutAsJsonAsync(DadosDoRemoto.Retrato, retrato)).StatusCode);
+
+        var gravado = (await DadosDoRemoto.PainelAsync(cliente)).Retrato!;
+        Assert.Equal(("sprint-11-2026-2027", "20261102-095333"), (gravado.Projetos[0].Slug, gravado.Fluxos[0].Id));
     }
 
     [Fact]
@@ -452,5 +492,28 @@ public sealed class ContratoDoRemotoApiTests : IDisposable
 
         Assert.Equal(HttpStatusCode.NotFound, resposta.StatusCode);
         Assert.Contains("heartbeat", await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    /// <summary>O corpo que falha ao ser lido, com a exceção que o charset desconhecido também lança: a resposta não pode confundi-los.</summary>
+    private sealed class CorpoQueFalha : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> proximo) => app =>
+        {
+            app.Use((http, seguir) =>
+            {
+                http.Request.Body = new LeituraQueFalha();
+                return seguir(http);
+            });
+            proximo(app);
+        };
+    }
+
+    private sealed class LeituraQueFalha : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw new InvalidOperationException("Falha simulada na leitura.");
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => throw new InvalidOperationException("Falha simulada na leitura.");
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => throw new InvalidOperationException("Falha simulada na leitura.");
     }
 }

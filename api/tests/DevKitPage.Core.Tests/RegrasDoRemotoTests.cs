@@ -43,9 +43,14 @@ public sealed class RegrasDoRemotoTests
     [InlineData("123.456.789-09")]
     [InlineData("12345678909")]
     [InlineData("12.345.678/0001-95")]
+    [InlineData("12345678/0001-95")]
+    [InlineData("12345678000195")]
     [InlineData("cliente-12345678909")]
     [InlineData("(11) 91234-5678")]
     [InlineData("11 3456-7890")]
+    [InlineData("11-3456-7890")]
+    [InlineData("11-91234-5678")]
+    [InlineData("cliente-11-91234-5678")]
     public void Reconhece_o_dado_de_cliente(string texto) => Assert.True(RegrasDoRemoto.ContemDadoDeCliente(texto));
 
     [Theory]
@@ -54,9 +59,36 @@ public sealed class RegrasDoRemotoTests
     [InlineData("Onda 10 de 10")]
     [InlineData("Versão 1.61.0 em 02/11/2026")]
     [InlineData("Work item 123456")]
+    [InlineData("20261102-095333")]
+    [InlineData("Rodada de 20261102-095333")]
+    [InlineData("sprint-11-2026-2027")]
+    [InlineData("Sprint-11-1999-2000 · item 3")]
     [InlineData("")]
     [InlineData(null)]
     public void Nao_barra_o_texto_comum_do_retrato(string? texto) => Assert.False(RegrasDoRemoto.ContemDadoDeCliente(texto));
+
+    /// <summary>A faixa de anos só passa num slug com rótulo e em ordem: fora disso, tem a cara de um telefone real.</summary>
+    [Theory]
+    [InlineData("sprint-11-3456-7890")]
+    [InlineData("sprint-11-2026-7890")]
+    [InlineData("sprint-11-3456-2026")]
+    [InlineData("sprint-11-2027-2026")]
+    [InlineData("sprint-11-2026-2026")]
+    [InlineData("sprint-11-1899-1900")]
+    [InlineData("sprint-11-91234-5678")]
+    [InlineData("11-2026-2027")]
+    [InlineData("55-11-2026-2027")]
+    [InlineData("11 2026-2027")]
+    [InlineData("(11) 2026-2027")]
+    public void O_telefone_parecido_com_a_faixa_de_anos_continua_barrado(string texto) => Assert.True(RegrasDoRemoto.ContemDadoDeCliente(texto));
+
+    [Fact]
+    public void A_data_e_hora_e_a_faixa_de_anos_nao_derrubam_o_retrato() => Assert.Multiple(
+        () => Assert.Null(RegrasDoRemoto.Validar(Foto([Projeto("sprint-11-2026-2027")]))),
+        () => Assert.Null(RegrasDoRemoto.Validar(Foto([Projeto("20261102-095333")]))),
+        () => Assert.Null(RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo("20261102-095333")]))),
+        () => Assert.Null(RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Projeto = "sprint-11-2026-2027", Titulo = "Rodada de 20261102-095333" }]))),
+        () => Assert.Null(RegrasDoRemoto.Validar(Foto(pendencias: [Pendencia("20261102-095333") with { Projeto = "sprint-11-2026-2027" }]))));
 
     [Fact]
     public void O_heartbeat_e_o_retrato_validos_passam() => Assert.Multiple(
@@ -170,7 +202,9 @@ public sealed class RegrasDoRemotoTests
                 (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo("12345678909")])), "fluxos[0].id"),
                 (RegrasDoRemoto.Validar(Foto(pendencias: [Pendencia("11-91234-5678")])), "pendencias[0].id"),
                 (RegrasDoRemoto.Validar(Foto([Projeto("12345678000195")])), "projetos[0].slug"),
+                (RegrasDoRemoto.Validar(Foto([Projeto("sprint-11-3456-7890")])), "projetos[0].slug"),
                 (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Projeto = "12345678909" }])), "fluxos[0].projeto"),
+                (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Projeto = "11-2026-2027" }])), "fluxos[0].projeto"),
                 (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Situacao = "cpf-12345678909" }])), "fluxos[0].situacao"),
             },
             caso => Assert.Equal((422, caso.Campo, RemotoV1.MotivoDadoDeCliente), (caso.Recusa?.Status, caso.Recusa?.Campo, caso.Recusa?.Motivo)));

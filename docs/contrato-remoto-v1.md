@@ -114,6 +114,13 @@ retrato anterior continua valendo.
 O 422 traz o campo, e nunca o valor. Os casos canônicos, para o sanitizador conferir antes de enviar, estão em
 [`textos.json`](../api/tests/DevKitPage.Api.Tests/ContratoDoRemoto/textos.json).
 
+Dois formatos parecidos com dado de cliente passam, porque um falso positivo derruba o retrato inteiro: a data e hora
+`20261102-095333` (o CNPJ só é reconhecido com a barra antes da filial ou sem separador, então `12.345.678-0001-95` também passa)
+e a faixa de anos num slug com rótulo, como `sprint-11-2026-2027`. A faixa vale com os dois anos entre 1900 e 2099, em ordem
+crescente: `11-2026-2027` e `(11) 2026-2027`, sem o rótulo, continuam recusados, e um telefone fixo escrito exatamente como
+`cliente-11-2026-2027` passa, porque não há como distingui-lo da faixa. Isso só afrouxa a regra: o que já era aceito continua
+sendo, e a versão do contrato não muda.
+
 ```json
 { "status": 422, "detail": "fluxos[0].titulo parece ter um segredo (token, senha, chave ou connection string): nada foi gravado.", "campo": "fluxos[0].titulo", "motivo": "segredo" }
 ```
