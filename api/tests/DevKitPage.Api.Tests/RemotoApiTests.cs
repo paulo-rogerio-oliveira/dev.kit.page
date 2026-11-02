@@ -192,7 +192,8 @@ public sealed class ContratoDoRemotoApiTests : IDisposable
     private readonly ApiDeTeste _api = new();
     public void Dispose() => _api.Dispose();
 
-    private sealed record Textos(string[] Aceitos, string[] Segredo, string[] DadoDeCliente);
+    private sealed record Textos(
+        string[] Aceitos, string[] Segredo, string[] DadoDeCliente, string[] IdentificadoresAceitos, string[] IdentificadoresComDado, string[] CodigosComSegredo);
 
     private static string Fixture(string nome)
     {
@@ -293,6 +294,77 @@ public sealed class ContratoDoRemotoApiTests : IDisposable
             await RecusaAsync(texto, RemotoV1.MotivoSegredo);
         foreach (var texto in textos.DadoDeCliente)
             await RecusaAsync(texto, RemotoV1.MotivoDadoDeCliente);
+    }
+
+    [Fact]
+    public async Task Cada_identificador_e_codigo_do_contrato_e_aceito_ou_recusado_e_nada_e_gravado()
+    {
+        var textos = JsonSerializer.Deserialize<Textos>(Fixture("textos.json"), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var cliente = await _api.AdminAsync();
+        await cliente.PutAsJsonAsync(DadosDoRemoto.Heartbeat, DadosDoRemoto.Sinal());
+        var foto = DadosDoRemoto.Foto(nome: "Antes", geradoEm: DateTimeOffset.UtcNow.AddMinutes(-30));
+        await cliente.PutAsJsonAsync(DadosDoRemoto.Retrato, foto);
+
+        async Task<(HttpStatusCode Status, string? Motivo, string? Campo)> EnviarAsync(RetratoV1 retrato)
+        {
+            var resposta = await cliente.PutAsJsonAsync(DadosDoRemoto.Retrato, retrato with { GeradoEm = DateTimeOffset.UtcNow.AddMinutes(-20), Projetos = [retrato.Projetos[0] with { Nome = "Depois" }] });
+            if (resposta.StatusCode != HttpStatusCode.UnprocessableEntity)
+                return (resposta.StatusCode, null, null);
+            var problema = await resposta.Content.ReadFromJsonAsync<JsonElement>();
+            return (resposta.StatusCode, problema.GetProperty("motivo").GetString(), problema.GetProperty("campo").GetString());
+        }
+
+        foreach (var id in textos.IdentificadoresComDado)
+            Assert.Equal((HttpStatusCode.UnprocessableEntity, RemotoV1.MotivoDadoDeCliente, "fluxos[0].id"), await EnviarAsync(foto with { Fluxos = [foto.Fluxos[0] with { Id = id }] }));
+        foreach (var codigo in textos.CodigosComSegredo)
+            Assert.Equal((HttpStatusCode.UnprocessableEntity, RemotoV1.MotivoSegredo, "fluxos[0].situacao"), await EnviarAsync(foto with { Fluxos = [foto.Fluxos[0] with { Situacao = codigo }] }));
+        Assert.Equal("Antes", (await DadosDoRemoto.PainelAsync(cliente)).Retrato!.Projetos[0].Nome);
+
+        foreach (var id in textos.IdentificadoresAceitos)
+            Assert.Equal(HttpStatusCode.OK, (await EnviarAsync(foto with { Fluxos = [foto.Fluxos[0] with { Id = id }] })).Status);
+    }
+
+    [Fact]
+    public async Task O_agente_com_token_nao_entra_pelo_heartbeat()
+    {
+        var cliente = await _api.AdminAsync();
+
+        var resposta = await cliente.PutAsJsonAsync(DadosDoRemoto.Heartbeat, DadosDoRemoto.Sinal() with { Agente = "sk-abcdefghijklmnopqrstuvwxyz0" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, resposta.StatusCode);
+        Assert.Equal("agente", (await resposta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("campo").GetString());
+        Assert.Empty((await cliente.GetFromJsonAsync<MaquinaRemotaV1[]>(DadosDoRemoto.Maquinas))!);
+    }
+
+    [Theory]
+    [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, "text/plain")]
+    [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, null)]
+    [InlineData("heartbeat.json", DadosDoRemoto.Heartbeat, "application/json; charset=nao-existe")]
+    [InlineData("retrato.json", DadosDoRemoto.Retrato, "text/plain")]
+    [InlineData("retrato.json", DadosDoRemoto.Retrato, null)]
+    [InlineData("retrato.json", DadosDoRemoto.Retrato, "application/json; charset=nao-existe")]
+    public async Task O_corpo_que_nao_e_json_e_415_e_nao_500(string arquivo, string rota, string? tipo)
+    {
+        var cliente = await _api.AdminAsync();
+        var corpo = new ByteArrayContent(Encoding.UTF8.GetBytes(Fixture(arquivo)));
+        if (tipo is not null)
+            corpo.Headers.TryAddWithoutValidation("Content-Type", tipo);
+
+        var resposta = await cliente.PutAsync(rota, corpo);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, resposta.StatusCode);
+        Assert.Contains("application/json", await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task O_corpo_que_nao_e_utf8_valido_ou_vazio_e_400_e_nao_500()
+    {
+        var cliente = await _api.AdminAsync();
+        var invalido = new ByteArrayContent([0x7B, 0x22, 0x76, 0x65, 0x72, 0x73, 0x61, 0x6F, 0x22, 0x3A, 0x22, 0xFF, 0xFE, 0x22, 0x7D]);
+        invalido.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsync(DadosDoRemoto.Heartbeat, invalido)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsync(DadosDoRemoto.Heartbeat, Json(""))).StatusCode);
     }
 
     [Fact]

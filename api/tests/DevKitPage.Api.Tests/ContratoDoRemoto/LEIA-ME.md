@@ -7,8 +7,8 @@ quem lê é o Board web (item 3).
 - `heartbeat.json` — o corpo de `PUT /api/remoto/v1/heartbeat`.
 - `retrato.json` — o corpo de `PUT /api/remoto/v1/retrato`, com o exemplo da tela `app-remoto` v4.
 - `painel.json` — a resposta de `GET /api/remoto/v1/maquinas/{maquinaId}`, com os nomes e os tipos de cada campo.
-- `textos.json` — o que a API aceita num texto do retrato e o que ela recusa com 422, por motivo (`segredo` ou
-  `dado-de-cliente`). O sanitizador do dev.kit tem de passar por estes casos antes de enviar.
+- `textos.json` — o que a API aceita num texto, num identificador e num código do retrato, e o que ela recusa com 422, por
+  motivo (`segredo` ou `dado-de-cliente`). O sanitizador do dev.kit tem de passar por estes casos antes de enviar.
 
 Teste: `ContratoDoRemotoApiTests`, em `api/tests/DevKitPage.Api.Tests`, que manda estes arquivos pela rota de verdade.
 Mudar um nome aqui quebra as máquinas instaladas: campo novo é opcional e entra primeiro na API, publicada antes do pacote

@@ -43,6 +43,7 @@ public sealed class RegrasDoRemotoTests
     [InlineData("123.456.789-09")]
     [InlineData("12345678909")]
     [InlineData("12.345.678/0001-95")]
+    [InlineData("cliente-12345678909")]
     [InlineData("(11) 91234-5678")]
     [InlineData("11 3456-7890")]
     public void Reconhece_o_dado_de_cliente(string texto) => Assert.True(RegrasDoRemoto.ContemDadoDeCliente(texto));
@@ -75,6 +76,10 @@ public sealed class RegrasDoRemotoTests
             Sinal() with { VersaoDevKit = "" },
             Sinal() with { Apelido = new string('a', RemotoV1.TamanhoMaximoDoApelido + 1) },
             Sinal() with { Apelido = "duas\nlinhas" },
+            Sinal() with { Apelido = "na ponta\n" },
+            Sinal() with { Apelido = "duas" + (char)0x2028 + "linhas" },
+            Sinal() with { Apelido = null! },
+            Sinal() with { Agente = "ativo\n" },
         },
         h => Assert.Equal(400, RegrasDoRemoto.Validar(h)?.Status));
 
@@ -95,15 +100,24 @@ public sealed class RegrasDoRemotoTests
             Foto([Projeto("Com Espaco")]),
             Foto([Projeto() with { Situacao = "Em andamento" }]),
             Foto([Projeto() with { Integrados = 3, Rodando = 1 }]),
+            Foto([Projeto() with { Itens = int.MaxValue, Integrados = int.MaxValue, Rodando = int.MaxValue }]),
             Foto([Projeto() with { Onda = 3 }]),
             Foto([Projeto(), Projeto()]),
             Foto([Projeto() with { Nome = "" }]),
+            Foto([Projeto("portal\n")]),
+            Foto([Projeto() with { Situacao = "aprovado\n" }]),
             Foto(fluxos: [Fluxo("id com espaço")]),
+            Foto(fluxos: [Fluxo("a7d04c1e\n")]),
             Foto(fluxos: [Fluxo() with { Situacao = "" }]),
             Foto(fluxos: [Fluxo() with { Projeto = null }]),
             Foto(fluxos: [Fluxo() with { Item = 0 }]),
             Foto(fluxos: [Fluxo(), Fluxo()]),
             Foto(fluxos: [Fluxo() with { Titulo = new string('a', RemotoV1.TamanhoMaximoDoTitulo + 1) }]),
+            Foto(fluxos: [Fluxo() with { Titulo = "Item 1" + new string(' ', RemotoV1.TamanhoMaximoDoTitulo) }]),
+            Foto(fluxos: [Fluxo() with { Titulo = "Item 1\n" }]),
+            Foto(fluxos: [Fluxo() with { Fluxo = null! }]),
+            Foto(fluxos: [Fluxo() with { Etapa = null! }]),
+            Foto(pendencias: [Pendencia() with { Resumo = null! }]),
             Foto(pendencias: [Pendencia() with { Tipo = "Pergunta" }]),
             Foto(pendencias: [Pendencia() with { Opcoes = null! }]),
             Foto(pendencias: [Pendencia() with { Opcoes = Enumerable.Repeat("x", RemotoV1.MaximoDeOpcoes + 1).ToArray() }]),
@@ -130,6 +144,43 @@ public sealed class RegrasDoRemotoTests
         var recusa = RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo("ghp_abcdefghijklmnopqrstuvwxyz0123456789")]))!;
         Assert.Equal((422, "fluxos[0].id", RemotoV1.MotivoSegredo), (recusa.Status, recusa.Campo, recusa.Motivo));
     }
+
+    [Fact]
+    public void Os_codigos_passam_pela_conferencia_de_segredo()
+    {
+        const string token = "sk-abcdefghijklmnopqrstuvwxyz0";
+
+        Assert.All(
+            new (RecusaDoRemoto? Recusa, string Campo)[]
+            {
+                (RegrasDoRemoto.Validar(Sinal() with { Agente = token }), "agente"),
+                (RegrasDoRemoto.Validar(Foto([Projeto() with { Situacao = token }])), "projetos[0].situacao"),
+                (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Situacao = token }])), "fluxos[0].situacao"),
+                (RegrasDoRemoto.Validar(Foto(pendencias: [Pendencia() with { Tipo = token }])), "pendencias[0].tipo"),
+            },
+            caso => Assert.Equal((422, caso.Campo, RemotoV1.MotivoSegredo), (caso.Recusa?.Status, caso.Recusa?.Campo, caso.Recusa?.Motivo)));
+    }
+
+    [Fact]
+    public void Os_identificadores_e_os_codigos_nao_levam_documento_nem_telefone()
+    {
+        Assert.All(
+            new (RecusaDoRemoto? Recusa, string Campo)[]
+            {
+                (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo("12345678909")])), "fluxos[0].id"),
+                (RegrasDoRemoto.Validar(Foto(pendencias: [Pendencia("11-91234-5678")])), "pendencias[0].id"),
+                (RegrasDoRemoto.Validar(Foto([Projeto("12345678000195")])), "projetos[0].slug"),
+                (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Projeto = "12345678909" }])), "fluxos[0].projeto"),
+                (RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo() with { Situacao = "cpf-12345678909" }])), "fluxos[0].situacao"),
+            },
+            caso => Assert.Equal((422, caso.Campo, RemotoV1.MotivoDadoDeCliente), (caso.Recusa?.Status, caso.Recusa?.Campo, caso.Recusa?.Motivo)));
+    }
+
+    [Theory]
+    [InlineData("ab123456-1234-4234-8234-123456789012")]
+    [InlineData("ab12345678901234567890123456cdef")]
+    public void O_guid_cujos_digitos_parecem_telefone_ou_documento_continua_valendo(string id)
+        => Assert.Null(RegrasDoRemoto.Validar(Foto(fluxos: [Fluxo(id)])));
 
     [Fact]
     public void O_segredo_tem_prioridade_e_o_formato_vem_antes_dos_dois()

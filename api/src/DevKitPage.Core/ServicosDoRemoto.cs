@@ -66,8 +66,17 @@ public static partial class RegrasDoRemoto
     public static bool ContemDadoDeCliente(string? texto)
     {
         var limpo = (texto ?? string.Empty).Trim();
-        return limpo.Length > 0 && (Documento().IsMatch(limpo) || Telefone().IsMatch(limpo) || !string.Equals(RegrasDeErro.Mascarar(limpo), limpo, StringComparison.Ordinal));
+        return limpo.Length > 0 && (ContemDocumentoOuTelefone(limpo) || !string.Equals(RegrasDeErro.Mascarar(limpo), limpo, StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// O identificador ou código tem dado de cliente? O formato deles já barra caminho, URL e e-mail, e sobra o documento e o
+    /// telefone. O GUID inteiro é o id legítimo e passa: os dígitos dele podem parecer um telefone por acaso.
+    /// </summary>
+    public static bool IdentificadorContemDadoDeCliente(string? valor)
+        => !string.IsNullOrEmpty(valor) && !MaquinaValida(valor) && ContemDocumentoOuTelefone(valor);
+
+    private static bool ContemDocumentoOuTelefone(string texto) => Documento().IsMatch(texto) || Telefone().IsMatch(texto);
 
     /// <summary>A recusa do heartbeat, ou nula quando ele vale.</summary>
     public static RecusaDoRemoto? Validar(HeartbeatV1? heartbeat)
@@ -82,7 +91,8 @@ public static partial class RegrasDoRemoto
             return Formato("Os turnos em andamento não são negativos.");
         return Textos(
             new Texto("apelido", heartbeat.Apelido, RemotoV1.TamanhoMaximoDoApelido),
-            new Texto("versaoDevKit", heartbeat.VersaoDevKit, RemotoV1.TamanhoMaximoDaVersaoDoDevKit, Obrigatorio: true));
+            new Texto("versaoDevKit", heartbeat.VersaoDevKit, RemotoV1.TamanhoMaximoDaVersaoDoDevKit, Obrigatorio: true),
+            new Texto("agente", heartbeat.Agente, RemotoV1.TamanhoMaximoDoCodigo, Livre: false));
     }
 
     /// <summary>A recusa do retrato, ou nula quando ele vale.</summary>
@@ -109,7 +119,7 @@ public static partial class RegrasDoRemoto
                 return Formato($"O slug de projetos[{i}] usa minúsculas, dígitos e hífen (até {ProjetosV1.TamanhoMaximoDoSlug}).");
             if (!Codigo(projeto.Situacao))
                 return Formato($"A situação de projetos[{i}] é um código em minúsculas.");
-            if (projeto.Itens < 0 || projeto.Integrados < 0 || projeto.Rodando < 0 || projeto.Integrados + projeto.Rodando > projeto.Itens)
+            if (projeto.Itens < 0 || projeto.Integrados < 0 || projeto.Rodando < 0 || (long)projeto.Integrados + projeto.Rodando > projeto.Itens)
                 return Formato($"Os contadores de itens de projetos[{i}] não fecham.");
             if (projeto.Onda < 0 || projeto.Ondas < 0 || projeto.Onda > projeto.Ondas)
                 return Formato($"A onda de projetos[{i}] não fecha com as ondas do plano.");
@@ -150,19 +160,21 @@ public static partial class RegrasDoRemoto
         return Unicos(pendencias.Select(p => p.Id), "pendência");
     }
 
-    /// <summary>Todos os textos do retrato, com o caminho de cada um; os ids e os slugs passam pela conferência de segredo.</summary>
+    /// <summary>Todo campo de texto do retrato, com o caminho de cada um: nenhum deles fica de fora da conferência.</summary>
     private static IEnumerable<Texto> TextosDe(RetratoV1 retrato)
     {
         foreach (var (p, i) in retrato.Projetos.Select((p, i) => (p, i)))
         {
             yield return new Texto($"projetos[{i}].slug", p.Slug, ProjetosV1.TamanhoMaximoDoSlug, Livre: false);
+            yield return new Texto($"projetos[{i}].situacao", p.Situacao, RemotoV1.TamanhoMaximoDoCodigo, Livre: false);
             yield return new Texto($"projetos[{i}].nome", p.Nome, RemotoV1.TamanhoMaximoDoTitulo, Obrigatorio: true);
         }
 
         foreach (var (f, i) in retrato.Fluxos.Select((f, i) => (f, i)))
         {
             yield return new Texto($"fluxos[{i}].id", f.Id, RemotoV1.TamanhoMaximoDoId, Livre: false);
-            yield return new Texto($"fluxos[{i}].projeto", f.Projeto, ProjetosV1.TamanhoMaximoDoSlug, Livre: false);
+            yield return new Texto($"fluxos[{i}].situacao", f.Situacao, RemotoV1.TamanhoMaximoDoCodigo, Livre: false);
+            yield return new Texto($"fluxos[{i}].projeto", f.Projeto, ProjetosV1.TamanhoMaximoDoSlug, Livre: false, AceitaNulo: true);
             yield return new Texto($"fluxos[{i}].titulo", f.Titulo, RemotoV1.TamanhoMaximoDoTitulo, Obrigatorio: true);
             yield return new Texto($"fluxos[{i}].fluxo", f.Fluxo, RemotoV1.TamanhoMaximoDoTitulo);
             yield return new Texto($"fluxos[{i}].etapa", f.Etapa, RemotoV1.TamanhoMaximoDoTitulo);
@@ -171,7 +183,8 @@ public static partial class RegrasDoRemoto
         foreach (var (p, i) in retrato.Pendencias.Select((p, i) => (p, i)))
         {
             yield return new Texto($"pendencias[{i}].id", p.Id, RemotoV1.TamanhoMaximoDoId, Livre: false);
-            yield return new Texto($"pendencias[{i}].projeto", p.Projeto, ProjetosV1.TamanhoMaximoDoSlug, Livre: false);
+            yield return new Texto($"pendencias[{i}].tipo", p.Tipo, RemotoV1.TamanhoMaximoDoCodigo, Livre: false);
+            yield return new Texto($"pendencias[{i}].projeto", p.Projeto, ProjetosV1.TamanhoMaximoDoSlug, Livre: false, AceitaNulo: true);
             yield return new Texto($"pendencias[{i}].titulo", p.Titulo, RemotoV1.TamanhoMaximoDoTitulo, Obrigatorio: true);
             yield return new Texto($"pendencias[{i}].resumo", p.Resumo, RemotoV1.TamanhoMaximoDoResumo);
             foreach (var (opcao, j) in p.Opcoes.Select((o, j) => (o, j)))
@@ -179,17 +192,22 @@ public static partial class RegrasDoRemoto
         }
     }
 
-    /// <summary>Confere os textos em ordem: primeiro o formato (400), e o que não pode sair da máquina (422) sem ecoar o valor.</summary>
+    /// <summary>
+    /// Confere os textos em ordem: primeiro o formato (400), e o que não pode sair da máquina (422) sem ecoar o valor. O
+    /// formato olha o valor CRU, sem tirar as pontas: é ele que é gravado.
+    /// </summary>
     private static RecusaDoRemoto? Textos(params Texto[] textos)
     {
         foreach (var texto in textos)
         {
-            var valor = texto.Valor?.Trim() ?? string.Empty;
-            if (texto.Obrigatorio && valor.Length == 0)
+            if (texto.Valor is null && !texto.AceitaNulo)
+                return Formato($"Informe {texto.Campo}, vazio quando não se aplica.");
+            var valor = texto.Valor ?? string.Empty;
+            if (texto.Obrigatorio && string.IsNullOrWhiteSpace(valor))
                 return Formato($"Informe {texto.Campo}.");
             if (valor.Length > texto.Teto)
                 return Formato($"{texto.Campo} passa de {texto.Teto} caracteres.");
-            if (valor.Any(char.IsControl))
+            if (valor.Any(ForaDeUmaLinha))
                 return Formato($"{texto.Campo} é uma linha só, sem caractere de controle.");
         }
 
@@ -197,7 +215,7 @@ public static partial class RegrasDoRemoto
         {
             if (RegrasDosRelatos.ContemSegredo(texto.Valor))
                 return new RecusaDoRemoto(422, $"{texto.Campo} parece ter um segredo (token, senha, chave ou connection string): nada foi gravado.", texto.Campo, RemotoV1.MotivoSegredo);
-            if (texto.Livre && ContemDadoDeCliente(texto.Valor))
+            if (texto.Livre ? ContemDadoDeCliente(texto.Valor) : IdentificadorContemDadoDeCliente(texto.Valor))
                 return new RecusaDoRemoto(422, $"{texto.Campo} parece ter dado de cliente (caminho, URL, e-mail, usuário, documento ou telefone): nada foi gravado.", texto.Campo, RemotoV1.MotivoDadoDeCliente);
         }
 
@@ -228,21 +246,28 @@ public static partial class RegrasDoRemoto
 
     private static RecusaDoRemoto Formato(string mensagem) => new(400, mensagem);
 
+    /// <summary>O caractere que quebra a linha sem ser de controle também fica de fora: o site mostra cada texto numa linha.</summary>
+    private static bool ForaDeUmaLinha(char c)
+        => char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator;
+
     private static bool Codigo(string? valor) => valor is not null && CodigoRegex().IsMatch(valor);
 
     private static bool Id(string? valor) => valor is not null && IdRegex().IsMatch(valor);
 
-    /// <summary>Um texto do envio. <paramref name="Livre"/> falso é identificador: pode ser um GUID, mas nunca um segredo.</summary>
-    private readonly record struct Texto(string Campo, string? Valor, int Teto, bool Obrigatorio = false, bool Livre = true);
+    /// <summary>
+    /// Um texto do envio. <paramref name="Livre"/> falso é identificador ou código: pode ser um GUID, mas nunca um segredo,
+    /// um documento ou um telefone. <paramref name="AceitaNulo"/> é o vínculo opcional; os outros vão vazios, nunca nulos.
+    /// </summary>
+    private readonly record struct Texto(string Campo, string? Valor, int Teto, bool Obrigatorio = false, bool Livre = true, bool AceitaNulo = false);
 
-    [GeneratedRegex(@"^[a-z][a-z0-9-]{0,29}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\A[a-z][a-z0-9-]{0,29}\z", RegexOptions.CultureInvariant)]
     private static partial Regex CodigoRegex();
 
-    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\A[A-Za-z0-9][A-Za-z0-9._:-]{0,99}\z", RegexOptions.CultureInvariant)]
     private static partial Regex IdRegex();
 
     /// <summary>CPF e CNPJ, com ou sem pontuação.</summary>
-    [GeneratedRegex(@"(?<![\d.\-/])(?:\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2})(?![\d.\-/])")]
+    [GeneratedRegex(@"(?<!\d)(?:\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{2}\.?\d{3}\.?\d{3}[/-]?\d{4}-?\d{2})(?!\d)")]
     private static partial Regex Documento();
 
     /// <summary>Telefone brasileiro com DDD: <c>(11) 91234-5678</c>, <c>11 3456-7890</c>.</summary>

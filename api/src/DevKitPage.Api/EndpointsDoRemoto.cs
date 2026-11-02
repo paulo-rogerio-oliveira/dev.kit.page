@@ -56,14 +56,17 @@ public static class EndpointsDoRemoto
     }
 
     /// <summary>
-    /// O corpo lido à mão, com o teto em bytes e o JSON quebrado ou fora do contrato em 400. A mensagem não traz o erro do
-    /// serializador: ele citaria o que veio no corpo.
+    /// O corpo lido à mão, com o teto em bytes, o <c>Content-Type</c> que não é JSON em 415 e o JSON quebrado ou fora do
+    /// contrato em 400. A mensagem não traz o erro do serializador: ele citaria o que veio no corpo.
     /// </summary>
     private static async Task<(T? Corpo, IResult? Recusa)> LerAsync<T>(HttpContext http, long limite, string oQue, CancellationToken ct) where T : class
     {
         var acimaDoTeto = Results.Problem($"O {oQue} passa de {limite} bytes.", statusCode: StatusCodes.Status413PayloadTooLarge);
+        var tipoErrado = Results.Problem($"Envie o {oQue} como application/json, numa codificação conhecida.", statusCode: StatusCodes.Status415UnsupportedMediaType);
         if (http.Request.ContentLength > limite)
             return (null, acimaDoTeto);
+        if (!http.Request.HasJsonContentType())
+            return (null, tipoErrado);
         if (http.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } corpo)
             corpo.MaxRequestBodySize = limite; // o corpo sem Content-Length (chunked) também para no limite
 
@@ -78,6 +81,11 @@ public static class EndpointsDoRemoto
         catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
         {
             return (null, acimaDoTeto);
+        }
+        catch (InvalidOperationException)
+        {
+            // O tipo é JSON, mas com um charset que não existe: é assim que a leitura o recusa.
+            return (null, tipoErrado);
         }
     }
 

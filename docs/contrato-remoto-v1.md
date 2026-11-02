@@ -43,7 +43,7 @@ Publique a cada `proximoEmSegundos`, com o app aberto ou fechado.
 | Campo | O que é |
 |---|---|
 | `maquinaId` | O GUID anônimo, com ou sem hífens. O hostname é recusado. A API devolve e guarda 32 dígitos minúsculos, sem hífens. |
-| `apelido` | O nome que o usuário deu à máquina, até 100 caracteres. Vazio, a API usa `máquina 3f2b1c9e`. Nunca o hostname. |
+| `apelido` | O nome que o usuário deu à máquina, até 100 caracteres. Vazio (nunca nulo), a API usa `máquina 3f2b1c9e`. Nunca o hostname. |
 | `versaoDevKit` | A versão instalada, até 50 caracteres. |
 | `devKitAberto` | O app está aberto. |
 | `agente` | `ativo`, `pausado`, `limite` ou `desconhecido`. |
@@ -86,8 +86,8 @@ substitui o anterior, e lista vazia quer dizer que não há nada: mande as três
 | Lista | Teto | Campos |
 |---|---|---|
 | `projetos` | 100 | `slug`, `nome` (até 200), `situacao`, `itens`, `integrados`, `rodando`, `onda`, `ondas`. Os contadores têm de fechar: `integrados + rodando <= itens` e `onda <= ondas`. |
-| `fluxos` | 100 | `id` interno e estável, sem pasta nem nome; `titulo` (até 200); `fluxo` e `etapa` (até 200, vazios quando não se aplicam); `situacao` (`rodando`, `na-fila`, `pergunta`, `falhou`); `projeto` e `item` (nulos fora de projeto); `desde`. |
-| `pendencias` | 50 | `id` estável, o que uma decisão futura referencia; `tipo` (`pergunta`, `decisao`, `aprovacao`); `titulo` (até 200); `resumo` (até 500); `opcoes` (até 6 botões, vazia quando não há); `projeto`, `item`, `desde`. |
+| `fluxos` | 100 | `id` interno e estável, sem pasta nem nome; `titulo` (até 200); `fluxo` e `etapa` (até 200, vazios quando não se aplicam, nunca nulos); `situacao` (`rodando`, `na-fila`, `pergunta`, `falhou`); `projeto` e `item` (nulos fora de projeto); `desde`. |
+| `pendencias` | 50 | `id` estável, o que uma decisão futura referencia; `tipo` (`pergunta`, `decisao`, `aprovacao`); `titulo` (até 200); `resumo` (até 500, vazio quando não há, nunca nulo); `opcoes` (até 6 botões, vazia quando não há); `projeto`, `item`, `desde`. |
 
 Resposta **200**:
 
@@ -106,9 +106,10 @@ retrato anterior continua valendo.
 
 | Resposta | Quando |
 |---|---|
-| **422** `motivo: segredo` | Token, senha, chave, `Bearer`, JWT ou connection string em qualquer texto ou identificador. |
-| **422** `motivo: dado-de-cliente` | Caminho, URL, e-mail, usuário de domínio, GUID, CPF, CNPJ ou telefone em qualquer texto livre. |
-| **400** | Campo fora do contrato, versão diferente de `v1`, id que não é GUID, texto acima do teto ou com quebra de linha, contadores que não fecham, id repetido, JSON inválido. |
+| **422** `motivo: segredo` | Token, senha, chave, `Bearer`, JWT ou connection string em qualquer texto, identificador ou código: `id`, `slug`, `situacao`, `tipo` e `agente` também passam por aqui. |
+| **422** `motivo: dado-de-cliente` | Caminho, URL, e-mail, usuário de domínio, GUID, CPF, CNPJ ou telefone em qualquer texto livre; CPF, CNPJ ou telefone em identificador ou código. O `id` que é um GUID inteiro é legítimo. |
+| **400** | Campo fora do contrato, versão diferente de `v1`, id que não é GUID, texto acima do teto ou com quebra de linha (nas pontas também), campo de texto nulo, contadores que não fecham, id repetido, JSON inválido. |
+| **415** | `Content-Type` ausente, que não é JSON ou com um charset desconhecido. |
 
 O 422 traz o campo, e nunca o valor. Os casos canônicos, para o sanitizador conferir antes de enviar, estão em
 [`textos.json`](../api/tests/DevKitPage.Api.Tests/ContratoDoRemoto/textos.json).

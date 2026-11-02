@@ -29,5 +29,24 @@
     "CNPJ 12.345.678/0001-95",
     "Ligar para (11) 91234-5678",
     "3f2b1c9e-5d7a-4b60-a1c2-d3e4f5061728"
+  ],
+  "identificadoresAceitos": [
+    "a7d04c1e",
+    "integracao-item-20",
+    "sessao:42",
+    "3f2b1c9e-5d7a-4b60-a1c2-d3e4f5061728",
+    "ab123456-1234-4234-8234-123456789012",
+    "ab12345678901234567890123456cdef"
+  ],
+  "identificadoresComDado": [
+    "12345678909",
+    "123.456.789-09",
+    "12345678000195",
+    "12.345.678-0001-95",
+    "11-91234-5678",
+    "maquina-12345678909"
+  ],
+  "codigosComSegredo": [
+    "sk-abcdefghijklmnopqrstuvwxyz0"
   ]
 }

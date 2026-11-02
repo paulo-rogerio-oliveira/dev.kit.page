@@ -581,7 +581,8 @@ lugar. O contrato está em [`contrato-remoto-v1.md`](contrato-remoto-v1.md), e o
   o `geradoEm` é limitado à hora do servidor, para um relógio adiantado não congelar a foto.
 - **O que não entra:** o envio é fechado (`JsonUnmappedMemberHandling.Disallow`), então campo fora do contrato é 400. Texto com
   segredo (`RegrasDosRelatos.ContemSegredo`) ou dado de cliente (`RegrasDoRemoto.ContemDadoDeCliente`, a máscara do trace mais
-  CPF, CNPJ e telefone) é 422, com o campo e sem o valor, e nada é gravado. Recusar em vez de mascarar é de propósito: o
+  CPF, CNPJ e telefone) é 422, com o campo e sem o valor, e nada é gravado. Identificadores e códigos passam pela mesma
+  conferência de segredo e pelo documento e telefone, exceto o GUID inteiro. Recusar em vez de mascarar é de propósito: o
   sanitizador do dev.kit com defeito aparece na hora, e não vira um retrato truncado no site. Nome de cliente num título não
   tem formato: o que protege é o contrato não ter campo de texto longo.
 - **Tetos:** `Remoto:EnviosPorMinuto` por usuário, `Remoto:MaximoDeMaquinas`, `Remoto:MaxBytesPorEnvio` e as listas do contrato.
