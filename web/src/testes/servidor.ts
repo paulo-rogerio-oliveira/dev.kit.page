@@ -108,6 +108,7 @@ export const usuarios: UsuarioResumo[] = [
   {
     id: 2, login: 'ana.dev', nome: 'Ana Souza', papel: 'dev', empresaId: 4, empresa: 'Empresa A', bloqueado: false, bloqueadoAte: null, deveTrocarSenha: true, criadoEm: '2026-10-02T10:00:00Z',
     licenca: { tipo: 'trial', situacao: 'vencendo', validaAte: '2026-10-28T23:59:59Z', diasRestantes: 3, inicio: '2026-10-02T10:00:00Z', definidaPeloAdmin: true, ultimoUso: '2026-10-25T11:42:00Z' },
+    ultimoLogin: '2026-10-25T11:40:00Z',
   },
 ];
 
@@ -329,7 +330,7 @@ export const empresaDoGestor: EmpresaDoGestor = {
 };
 
 export const usuariosDaEmpresa: UsuarioDaEmpresa[] = [
-  { id: 2, login: 'ana@empresa.com', nome: 'Ana Souza', email: 'ana@empresa.com', papel: 'dev', bloqueado: false, criadoEm: '2026-10-02T10:00:00Z' },
+  { id: 2, login: 'ana@empresa.com', nome: 'Ana Souza', email: 'ana@empresa.com', papel: 'dev', bloqueado: false, criadoEm: '2026-10-02T10:00:00Z', ultimoLogin: '2026-10-25T11:40:00Z' },
   { id: 3, login: 'bia@empresa.com', nome: '', email: 'bia@empresa.com', papel: 'dev', bloqueado: true, criadoEm: '2026-10-03T10:00:00Z' },
   { id: 5, login: 'gestor.a', nome: '', email: '', papel: 'gestor', bloqueado: false, criadoEm: '2026-10-01T10:00:00Z' },
 ];

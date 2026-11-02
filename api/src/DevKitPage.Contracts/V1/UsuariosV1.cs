@@ -8,9 +8,10 @@ namespace DevKitPage.Contracts.V1;
 /// <param name="BloqueadoAte">O bloqueio TEMPORÁRIO por falhas seguidas de login, quando está valendo.</param>
 /// <param name="DeveTrocarSenha">Ainda com a senha temporária: o primeiro acesso exige a troca.</param>
 /// <param name="Licenca">A licença do dev.kit do usuário (US #687); nula só numa API anterior a ela.</param>
+/// <param name="UltimoLogin">O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou.</param>
 public sealed record UsuarioResumo(
     int Id, string Login, string Nome, string Papel, int? EmpresaId, string? Empresa, bool Bloqueado,
-    DateTimeOffset? BloqueadoAte, bool DeveTrocarSenha, DateTimeOffset CriadoEm, LicencaDoUsuarioV1? Licenca = null);
+    DateTimeOffset? BloqueadoAte, bool DeveTrocarSenha, DateTimeOffset CriadoEm, LicencaDoUsuarioV1? Licenca = null, DateTimeOffset? UltimoLogin = null);
 
 /// <summary>Os tipos da licença de um usuário como a gestão os mostra e o admin os escolhe (US #687).</summary>
 public static class TiposDaLicencaDoUsuario

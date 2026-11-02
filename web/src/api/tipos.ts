@@ -141,6 +141,8 @@ export interface UsuarioResumo {
   criadoEm: string;
   /** A licença do dev.kit (US #687); ausente numa API anterior a ela. */
   licenca?: LicencaDoUsuario | null;
+  /** O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou. */
+  ultimoLogin?: string | null;
 }
 
 // ----- US #687: a licença por usuário que o admin define -----
@@ -519,6 +521,8 @@ export interface UsuarioDaEmpresa {
   papel: Papel;
   bloqueado: boolean;
   criadoEm: string;
+  /** O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou. */
+  ultimoLogin?: string | null;
 }
 
 /** Um repositório do catálogo da empresa (US #491): o caminho e a descrição que o agente do dev.kit grava. */

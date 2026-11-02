@@ -138,7 +138,7 @@ export function EmpresaUsuarios() {
               <div className="tabela-rolavel-simples">
                 <table className="tabela tabela-do-cartao">
                   <thead>
-                    <tr><th>Login</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Desde</th><th>Ações</th></tr>
+                    <tr><th>Login</th><th>Nome</th><th>Papel</th><th>Situação</th><th>Desde</th><th>Último login</th><th>Ações</th></tr>
                   </thead>
                   <tbody>
                     {usuarios.map((u) => (
@@ -148,6 +148,7 @@ export function EmpresaUsuarios() {
                         <td><Selo variante={u.papel === 'gestor' ? 'marca' : 'neutro'}>{u.papel === 'gestor' ? 'Gestor' : 'Dev'}</Selo></td>
                         <td><Selo variante={u.bloqueado ? 'aviso' : 'sucesso'} ponto>{u.bloqueado ? 'Bloqueado' : 'Ativo'}</Selo></td>
                         <td>{formatar.dataHora(u.criadoEm)}</td>
+                        <td>{u.ultimoLogin ? formatar.dataHora(u.ultimoLogin) : 'nunca'}</td>
                         <td>
                           {u.login === sessao!.login ? <span className="texto-mudo">você</span> : (
                             <button className="botao botao-fantasma" type="button" aria-label={`${u.bloqueado ? 'Desbloquear' : 'Bloquear'} ${u.login}`} onClick={() => void alternar(u)}>

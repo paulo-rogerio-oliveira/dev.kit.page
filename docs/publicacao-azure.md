@@ -281,6 +281,12 @@ Antes de publicar a API em uma base Azure SQL existente, execute
 `Catalogos.Origem` e `Catalogos.MinDevKitDaOrigem`, sem alterar os catálogos existentes. SQLite aplica a migration
 automaticamente. A importação do GitHub usa somente repositórios públicos, sem `REPO_KEY` e sem configuração nova.
 
+### Último login do usuário
+
+Rode `api/scripts/sqlserver/UltimoLogin.sql` (idempotente) **antes de publicar a API** desta versão: ele acrescenta
+`Usuarios.UltimoLoginEmUtc`, que o login grava. Sem a coluna, todo login falha. Os usuários que já existem aparecem como
+"nunca" nas listas de `/usuarios` e `/empresa/usuarios` até entrarem de novo. SQLite aplica a migration automaticamente.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

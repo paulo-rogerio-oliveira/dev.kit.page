@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
+import { formatar } from '../formatar';
 import { renderizar } from '../testes/renderizar';
 import { escritas, tokenDoDev, tokenDoGestor, tokenValido } from '../testes/servidor';
 import { api, ErroDaApi } from '../api/cliente';
@@ -18,6 +19,10 @@ describe('Usuários da empresa (US #425)', () => {
     expect(within(tabela).getAllByRole('row').slice(1).map((l) => l.firstChild!.textContent)).toEqual(['ana@empresa.com', 'bia@empresa.com', 'gestor.a']);
     // O gestor não bloqueia a si mesmo.
     expect(screen.queryByRole('button', { name: 'Bloquear gestor.a' })).not.toBeInTheDocument();
+    // O último login: a data de quem entrou e "nunca" de quem ainda não entrou.
+    expect(within(tabela).getByRole('columnheader', { name: 'Último login' })).toBeInTheDocument();
+    expect(within(tabela).getAllByRole('row')[1]).toHaveTextContent(formatar.dataHora('2026-10-25T11:40:00Z'));
+    expect(within(tabela).getAllByRole('row')[2]).toHaveTextContent('nunca');
   });
 
   it('bloquear libera o assento; desbloquear volta a ocupar', async () => {
