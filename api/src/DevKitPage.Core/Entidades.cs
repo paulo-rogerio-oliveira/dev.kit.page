@@ -45,6 +45,12 @@ public sealed class Usuario
     public DateTime CriadoEmUtc { get; set; }
 
     /// <summary>
+    /// O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou (ou não entrou desde esta
+    /// coluna). A renovação do token não conta: ela é o "último uso" da licença, lido da trilha das licenças emitidas.
+    /// </summary>
+    public DateTime? UltimoLoginEmUtc { get; set; }
+
+    /// <summary>
     /// A validade da licença DEFINIDA PELO ADMIN (US #687): a renovação do dev.kit não passa dela. Nula com
     /// <see cref="LicencaSemPrazo"/>, ou quando o admin nunca definiu (vale o contrato da empresa).
     /// </summary>

@@ -295,7 +295,7 @@ export function Usuarios() {
               <div className="tabela-rolavel-simples">
                 <table className="tabela tabela-do-cartao">
                   <thead>
-                    <tr><th>Usuário</th><th>Papel</th><th>Empresa</th><th>Licença</th><th>Situação</th><th><span className="visualmente-oculto">Ações</span></th></tr>
+                    <tr><th>Usuário</th><th>Papel</th><th>Empresa</th><th>Licença</th><th>Situação</th><th>Último login</th><th><span className="visualmente-oculto">Ações</span></th></tr>
                   </thead>
                   <tbody>
                     {visiveis.map((u) => {
@@ -318,7 +318,7 @@ export function Usuarios() {
                             </select>
                           </td>
                           <td>{seletorDeEmpresa(edicao.empresaId, (id) => setEdicao({ ...edicao, empresaId: id }), `Empresa de ${u.login}`, edicao.papel)}</td>
-                          <td colSpan={2}>
+                          <td colSpan={3}>
                             <input aria-label={`Nome de ${u.login}`} value={edicao.nome} maxLength={100} placeholder="Nome" onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} />
                           </td>
                           <td>
@@ -342,6 +342,7 @@ export function Usuarios() {
                             </button>
                           </td>
                           <td><Selo variante={s.variante} ponto={s.variante === 'sucesso'}>{s.texto}</Selo></td>
+                          <td>{u.ultimoLogin ? formatar.dataHora(u.ultimoLogin) : 'nunca'}</td>
                           <td className="coluna-do-menu">
                             <MenuDoUsuario
                               usuario={u}

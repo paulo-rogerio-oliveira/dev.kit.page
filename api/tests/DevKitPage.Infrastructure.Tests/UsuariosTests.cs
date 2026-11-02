@@ -167,6 +167,42 @@ public sealed class UsuariosTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task O_login_com_a_senha_certa_grava_o_ultimo_login_e_a_lista_o_mostra()
+    {
+        var criado = (await Gestao(g => g.CriarAsync(new UsuarioNovo("ana.dev", "Ana", Papeis.Dev, null), default))).Valor!;
+        Assert.Null(criado.Usuario.UltimoLogin);
+
+        // A senha errada não é um login: a coluna fica como está.
+        Assert.Equal(ResultadoDoLogin.CredencialInvalida, (await Entrar("ana.dev", "errada")).Resultado);
+        Assert.Null((await Gestao(g => g.ListarAsync(default))).Single(u => u.Login == "ana.dev").UltimoLogin);
+
+        Assert.Equal(ResultadoDoLogin.Ok, (await Entrar("ana.dev", criado.SenhaTemporaria)).Resultado);
+
+        var agora = await _base.ComAsync(sp => Task.FromResult(sp.GetRequiredService<TimeProvider>().GetUtcNow()));
+        Assert.Equal(agora, (await Gestao(g => g.ListarAsync(default))).Single(u => u.Login == "ana.dev").UltimoLogin);
+    }
+
+    [Fact]
+    public async Task Renovar_o_token_nao_e_login()
+    {
+        var criado = (await Gestao(g => g.CriarAsync(new UsuarioNovo("ana.dev", "Ana", Papeis.Dev, null), default))).Valor!;
+
+        Assert.Equal(ResultadoDoLogin.Ok, (await _base.ComAsync(sp => sp.GetRequiredService<IUsuarios>().RenovarAsync(criado.Usuario.Id, default))).Resultado);
+
+        Assert.Null((await Gestao(g => g.ListarAsync(default))).Single(u => u.Login == "ana.dev").UltimoLogin);
+    }
+
+    [Fact]
+    public void Script_do_azure_sql_acrescenta_o_ultimo_login_com_o_tipo_do_modelo()
+    {
+        var script = BaseDeTeste.ScriptDoAzureSql("UltimoLogin.sql");
+
+        Assert.Contains("COL_LENGTH(N'dbo.Usuarios', N'UltimoLoginEmUtc') IS NULL", script);
+        Assert.Contains(BaseDeTeste.ColunasNoSqlServer("Usuarios").Single(c => c.StartsWith("[UltimoLoginEmUtc]", StringComparison.Ordinal)), script);
+        Assert.Equal(["UltimoLogin.sql"], EsquemaDoBanco.ScriptsQueTrazem("Usuarios", "UltimoLoginEmUtc"));
+    }
+
+    [Fact]
     public void Script_do_azure_sql_acrescenta_o_nome_e_o_bloqueio_com_o_tipo_do_modelo()
     {
         var script = BaseDeTeste.ScriptDoAzureSql("Usuarios.sql");

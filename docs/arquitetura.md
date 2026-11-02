@@ -336,6 +336,12 @@ admin, não. O admin não muda o próprio papel nem se bloqueia. A política de 
 GitHub — e no `loginObrigatorio` da última versão. Colunas novas: migration `GestaoDeUsuarios` e
 `api/scripts/sqlserver/Usuarios.sql`.
 
+**Último login.** `IUsuarios.AutenticarAsync` grava `Usuarios.UltimoLoginEmUtc` só no login que deu certo, pelo site ou
+pelo dev.kit (a rota é a mesma); a senha errada, o bloqueio e a renovação do token não contam — a renovação já é o "último
+uso" da licença (US #687), lido da trilha das licenças emitidas. A coluna sai no `ultimoLogin` de `UsuarioResumo` e de
+`UsuarioDaEmpresaV1`, e as listas `/usuarios` e `/empresa/usuarios` mostram a data, ou "nunca". Coluna nova: migration
+`UltimoLoginDoUsuario` e `api/scripts/sqlserver/UltimoLogin.sql`, que sobe ANTES da API: sem a coluna, todo login falha.
+
 **Impasses e árbitro na qualidade (US #405).** Os tipos `ImpasseDetectado`, `ImpasseResolvido` e
 `ArbitroAgiu` (ver o [contrato](contrato-telemetria-v1.md#o-impasse-e-o-árbitro-us-405)) entram nos totais
 diários como os outros; o `CalculoDeQualidade` monta os cartões Impasses e Árbitro a partir das MESMAS

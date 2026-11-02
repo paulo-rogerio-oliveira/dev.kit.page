@@ -49,6 +49,7 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
             usuario.SenhaHash = hasher.HashPassword(usuario, senha!);
         usuario.FalhasSeguidas = 0;
         usuario.BloqueadoAteUtc = null;
+        usuario.UltimoLoginEmUtc = agora;
         await db.SaveChangesAsync(ct);
         return (ResultadoDoLogin.Ok, usuario);
     }
@@ -240,7 +241,7 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
     private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
         => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
             u.BloqueadoAteUtc is { } ate && ate > agora.UtcDateTime ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc),
-            Licenca(u, agora, ultimoUso, licencas.Value.TrialDias));
+            Licenca(u, agora, ultimoUso, licencas.Value.TrialDias), u.UltimoLoginEmUtc is { } login ? DevKitPageDb.Utc(login) : null);
 }
 
 /// <summary>

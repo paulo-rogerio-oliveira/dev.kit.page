@@ -45,7 +45,7 @@ public sealed record EmpresaDoGestorV1(
     int Id, string Nome, string Plano, int Assentos, int AssentosOcupados, string CodigoDeAdesao, bool? LoginObrigatorio, bool LoginObrigatorioEfetivo);
 
 /// <summary>Um usuário da empresa na lista do gestor.</summary>
-public sealed record UsuarioDaEmpresaV1(int Id, string Login, string Nome, string Email, string Papel, bool Bloqueado, DateTimeOffset CriadoEm);
+public sealed record UsuarioDaEmpresaV1(int Id, string Login, string Nome, string Email, string Papel, bool Bloqueado, DateTimeOffset CriadoEm, DateTimeOffset? UltimoLogin = null);
 
 /// <summary>A política de login da empresa: <c>true</c>/<c>false</c> sobrepõem o padrão global; nulo volta a ele.</summary>
 public sealed record PoliticaDaEmpresaV1(bool? LoginObrigatorio);
