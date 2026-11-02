@@ -9,7 +9,7 @@ próprio dev.kit envia (repositório `git.kit`; ligado por padrão, desliga-se e
 |---|---|
 | [`api/`](api) | A API ASP.NET Core (.NET 10): autenticação JWT, registro e ingestão das máquinas, consultas do dashboard e os pedidos de demonstração. Base SQLite embarcada, criada na primeira subida já com o usuário **admin**; scripts do Azure SQL em `api/scripts/sqlserver`. |
 | [`web/`](web) | A web em React + Vite + TypeScript: landing (conteúdo em `src/conteudo`, mídias em `public/midia`, gravador em `midia/`), login (com a troca obrigatória de senha) e dashboard. |
-| [`docs/`](docs) | [Arquitetura](docs/arquitetura.md), a [mensagem e o roteiro das mídias da landing](docs/landing-conteudo.md), o [contrato v1 da telemetria](docs/contrato-telemetria-v1.md) e a [publicação no Azure](docs/publicacao-azure.md). |
+| [`docs/`](docs) | [Arquitetura](docs/arquitetura.md), a [mensagem e o roteiro das mídias da landing](docs/landing-conteudo.md), o [contrato v1 da telemetria](docs/contrato-telemetria-v1.md), o [contrato v1 do controle remoto](docs/contrato-remoto-v1.md) e a [publicação no Azure](docs/publicacao-azure.md). |
 
 ## Executar localmente
 
@@ -87,6 +87,9 @@ publica os resultados.
 | `Telemetria:MaxEventosPorLote` · `MaxBytesPorLote` | 1000 · 1 MB | Acima disto, 413. |
 | `Demonstracoes:RetencaoDias` | 365 | Por quanto tempo o pedido de demonstração é guardado (LGPD); o expurgo diário apaga os vencidos. |
 | `Demonstracoes:LimitePorMinuto` | 5 | Pedidos por minuto por IP de cliente no formulário; acima disto, 429. |
+| `Remoto:IntervaloDoHeartbeatSegundos` · `ToleranciaDoHeartbeatSegundos` | 60 · 180 | O ritmo que a API dita ao dev.kit, e sem heartbeat por quanto tempo a máquina aparece desconectada. |
+| `Remoto:EnviosPorMinuto` · `MaximoDeMaquinas` · `MaxBytesPorEnvio` | 60 · 10 · 256 KB | Envios por usuário (429), máquinas por usuário (409) e o corpo do envio (413). |
+| `Remoto:RetencaoDias` | 30 | Por quanto tempo a máquina sem heartbeat é guardada, com o retrato; o expurgo diário apaga as vencidas. |
 | `Proxy:RedesConfiaveis` | — (só loopback) | As redes (CIDR) dos proxies cujo `X-Forwarded-For` vale — no Azure, a do Container Apps. |
 | `Cors:Origens` | (Development: Vite) | As origens da web. |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |

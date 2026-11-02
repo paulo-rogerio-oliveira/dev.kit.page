@@ -1,0 +1,54 @@
+{
+  "maquina": {
+    "maquinaId": "3f2b1c9e5d7a4b60a1c2d3e4f5061728",
+    "apelido": "Notebook",
+    "versaoDevKit": "1.61.0",
+    "conectada": true,
+    "devKitAberto": true,
+    "agente": "ativo",
+    "turnosEmAndamento": 1,
+    "ultimoHeartbeat": "2026-11-02T08:52:30+00:00",
+    "retratoRecebidoEm": "2026-11-02T08:52:01+00:00"
+  },
+  "retrato": {
+    "versao": "v1",
+    "maquinaId": "3f2b1c9e5d7a4b60a1c2d3e4f5061728",
+    "geradoEm": "2026-11-02T08:52:00+00:00",
+    "projetos": [
+      {
+        "slug": "projeto",
+        "nome": "projeto",
+        "situacao": "aprovado",
+        "itens": 21,
+        "integrados": 20,
+        "rodando": 1,
+        "onda": 10,
+        "ondas": 10
+      }
+    ],
+    "fluxos": [
+      {
+        "id": "a7d04c1e",
+        "titulo": "Item 20 · layout do plano",
+        "fluxo": "Fluxo simples · padrão",
+        "etapa": "Implementação",
+        "situacao": "rodando",
+        "projeto": "projeto",
+        "item": 20,
+        "desde": "2026-11-02T08:40:00+00:00"
+      }
+    ],
+    "pendencias": [
+      {
+        "id": "integracao-item-20",
+        "tipo": "aprovacao",
+        "titulo": "Integrar o item 20 no projeto?",
+        "resumo": "Nota 100 · regressão sem falhas",
+        "opcoes": ["Revisar e aprovar", "Pedir ajuste"],
+        "projeto": "projeto",
+        "item": 20,
+        "desde": "2026-11-02T08:50:00+00:00"
+      }
+    ]
+  }
+}

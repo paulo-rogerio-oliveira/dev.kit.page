@@ -93,6 +93,33 @@ public sealed class OpcoesDosRelatos
     public int EnviosPorHora { get; set; } = 20;
 }
 
+/// <summary>O controle remoto (seção <c>Remoto</c>): o ritmo do heartbeat, os tetos do que cada usuário publica e a retenção.</summary>
+public sealed class OpcoesDoRemoto
+{
+    public const string Secao = "Remoto";
+
+    /// <summary>De quantos em quantos segundos o dev.kit publica o heartbeat: a API o devolve a cada resposta.</summary>
+    public int IntervaloDoHeartbeatSegundos { get; set; } = 60;
+
+    /// <summary>Sem heartbeat há mais do que isto, o site mostra a máquina desconectada: três intervalos toleram uma falha de rede.</summary>
+    public int ToleranciaDoHeartbeatSegundos { get; set; } = 180;
+
+    /// <summary>
+    /// Quantos envios (heartbeat e retrato) um mesmo usuário faz por minuto; acima disto, 429. Com o ritmo padrão e o teto
+    /// de máquinas, sobra folga para o retrato sair a cada mudança.
+    /// </summary>
+    public int EnviosPorMinuto { get; set; } = 60;
+
+    /// <summary>Quantas máquinas um usuário tem ao mesmo tempo; a nova acima disto é 409, até o expurgo liberar a vaga.</summary>
+    public int MaximoDeMaquinas { get; set; } = 10;
+
+    /// <summary>O corpo máximo do heartbeat e do retrato, em bytes (413 acima disto).</summary>
+    public long MaxBytesPorEnvio { get; set; } = 262_144;
+
+    /// <summary>Por quantos dias a máquina sem heartbeat é guardada, com o retrato: depois disso o expurgo diário a apaga.</summary>
+    public int RetencaoDias { get; set; } = 30;
+}
+
 /// <summary>
 /// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
 /// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta

@@ -46,10 +46,13 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
     public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
     public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
+    public DbSet<MaquinaRemota> MaquinasRemotas => Set<MaquinaRemota>();
+    public DbSet<RetratoRemoto> RetratosRemotos => Set<RetratoRemoto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
+        ConfigurarControleRemoto(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -518,6 +521,32 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(a => a.Autor).HasMaxLength(100);
             e.HasIndex(a => a.ItemId);
             e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    /// <summary>
+    /// O controle remoto: uma máquina por (dono, id), com o retrato à parte para o heartbeat não regravar o documento. No
+    /// Azure SQL as tabelas vêm de api/scripts/sqlserver/ControleRemoto.sql.
+    /// </summary>
+    private static void ConfigurarControleRemoto(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<MaquinaRemota>(e =>
+        {
+            e.ToTable("MaquinasRemotas");
+            e.Property(m => m.MaquinaId).HasMaxLength(32);
+            e.Property(m => m.Apelido).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoApelido);
+            e.Property(m => m.VersaoDevKit).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDaVersaoDoDevKit);
+            e.Property(m => m.Agente).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoCodigo);
+            e.HasIndex(m => new { m.UsuarioId, m.MaquinaId }).IsUnique();
+            e.HasIndex(m => m.UltimoHeartbeatEmUtc);
+            e.HasOne(m => m.Usuario).WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.Retrato).WithOne(r => r.Maquina).HasForeignKey<RetratoRemoto>(r => r.MaquinaRemotaId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RetratoRemoto>(e =>
+        {
+            e.ToTable("RetratosRemotos");
+            e.HasKey(r => r.MaquinaRemotaId);
         });
     }
 

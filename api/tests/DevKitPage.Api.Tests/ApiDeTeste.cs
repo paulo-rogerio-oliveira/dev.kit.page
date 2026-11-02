@@ -47,6 +47,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly int _downloadsPorHora;
     private readonly int _relatosPorHora;
     private readonly int? _tetoDoDesign;
+    private readonly int _remotoPorMinuto;
 
     /// <summary>A pasta das imagens do design (US #669) desta API: temporária, apagada no fim.</summary>
     public string PastaDoDesign { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-design-{Guid.NewGuid():N}");
@@ -59,13 +60,15 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <param name="downloadsPorHora">O limite de downloads anônimos por IP (US #425).</param>
     /// <param name="relatosPorHora">O limite de relatos por usuário (US #602).</param>
     /// <param name="tetoDoDesign">O teto de versões de design de TODO plano (US #669); nulo é o da configuração.</param>
+    /// <param name="remotoPorMinuto">O limite de envios do controle remoto por usuário.</param>
     public ApiDeTeste(
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
         string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100,
-        int relatosPorHora = 100, int? tetoDoDesign = null)
+        int relatosPorHora = 100, int? tetoDoDesign = null, int remotoPorMinuto = 1000)
     {
         _relatosPorHora = relatosPorHora;
         _tetoDoDesign = tetoDoDesign;
+        _remotoPorMinuto = remotoPorMinuto;
         _ambiente = ambiente;
         _comSegredo = comSegredo;
         _ipDaConexao = ipDaConexao;
@@ -106,6 +109,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         // O design (US #669): as imagens numa pasta temporária, sem limite de envio que atrapalhe, e o teto do teste.
         builder.UseSetting("Design:Pasta", PastaDoDesign);
         builder.UseSetting("Design:EnviosPorMinuto", "1000");
+        builder.UseSetting("Remoto:EnviosPorMinuto", _remotoPorMinuto.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (_tetoDoDesign is { } teto)
         {
             builder.UseSetting("Design:Tetos:Empresarial:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));

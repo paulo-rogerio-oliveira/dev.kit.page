@@ -1,0 +1,33 @@
+{
+  "aceitos": [
+    "Integrar o item 20 no projeto?",
+    "Nota 100 · regressão sem falhas",
+    "Item 20 · layout do plano",
+    "Renovar o token do serviço",
+    "Atualizar a versão 1.61.0 em 02/11"
+  ],
+  "segredo": [
+    "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+    "github_pat_11ABCDEFG0abcdefghijklmnopqrstuv",
+    "Authorization: Bearer abc.def-ghi",
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJh",
+    "senha: hunter2",
+    "token=abc123",
+    "Server=sql.acme.com;Database=vendas;User Id=app;Password=123;",
+    "sk-abcdefghijklmnopqrstuvwxyz012345"
+  ],
+  "dadoDeCliente": [
+    "C:\\Users\\ana\\clientes\\acme.txt",
+    "\\\\servidor\\clientes\\contrato.pdf",
+    "/home/ana/clientes/acme.txt",
+    "https://acme.visualstudio.com/projeto",
+    "git@github.com:acme/portal.git",
+    "ana.souza@acme.com.br",
+    "ACME\\ana.souza",
+    "CPF 123.456.789-09",
+    "12345678909",
+    "CNPJ 12.345.678/0001-95",
+    "Ligar para (11) 91234-5678",
+    "3f2b1c9e-5d7a-4b60-a1c2-d3e4f5061728"
+  ]
+}

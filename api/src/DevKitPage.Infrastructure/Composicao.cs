@@ -86,6 +86,10 @@ public static class Composicao
         servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
         servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
+        // O controle remoto: o heartbeat e o retrato de cada máquina, lidos só pelo dono.
+        servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
+        servicos.AddScoped<IControleRemoto, ControleRemoto>();
+        servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();
