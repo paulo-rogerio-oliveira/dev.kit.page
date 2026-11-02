@@ -287,6 +287,15 @@ Rode `api/scripts/sqlserver/UltimoLogin.sql` (idempotente) **antes de publicar a
 `Usuarios.UltimoLoginEmUtc`, que o login grava. Sem a coluna, todo login falha. Os usuários que já existem aparecem como
 "nunca" nas listas de `/usuarios` e `/empresa/usuarios` até entrarem de novo. SQLite aplica a migration automaticamente.
 
+### Controle remoto: heartbeat e retrato
+
+Rode `api/scripts/sqlserver/ControleRemoto.sql` (idempotente) **antes de publicar a API** desta versão: ele cria
+`MaquinasRemotas` e `RetratosRemotos`. Sem as tabelas, o `/health` fica em `Degraded` e `/api/remoto/v1` responde 500; o resto
+da API segue. Publique a API ANTES do pacote do dev.kit que chama a rota. SQLite aplica a migration automaticamente.
+
+Nenhuma configuração é obrigatória. Os padrões estão no `appsettings.json` e na tabela do README, na seção `Remoto`. A
+retenção de 30 dias vale para as máquinas sem heartbeat, e o expurgo diário as apaga com o retrato.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as
