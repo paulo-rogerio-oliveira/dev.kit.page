@@ -121,6 +121,78 @@ public sealed class OpcoesDoRemoto
 }
 
 /// <summary>
+/// A provisão no Azure (seção <c>Provisao</c>, projeto controle-remoto, item 4): os nomes, as regiões, o ritmo das tentativas e
+/// quem pode pedir. É lida pela API, que grava os pedidos, e pelo trabalhador, que os executa. A assinatura e a identidade do
+/// Azure NÃO estão aqui: são só do trabalhador (<c>Provisao:Azure</c>, no projeto dele), e a API não as conhece.
+/// </summary>
+public sealed class OpcoesDaProvisao
+{
+    public const string Secao = "Provisao";
+
+    /// <summary>As regiões aceitas quando a configuração não diz outras.</summary>
+    public static readonly IReadOnlyList<string> RegioesPadrao = ["brazilsouth", "eastus2"];
+
+    /// <summary>
+    /// O ambiente que entra no nome da conta (<c>dev</c>, <c>prod</c>): o mesmo usuário em dois ambientes não disputa o mesmo
+    /// nome, que é único no Azure inteiro.
+    /// </summary>
+    public string Ambiente { get; set; } = "dev";
+
+    /// <summary>O começo do nome do grupo de recursos de cada usuário: <c>rg-devkit-u42</c>.</summary>
+    public string PrefixoDoGrupo { get; set; } = "rg-devkit";
+
+    /// <summary>As regiões aceitas no pedido; vazia é <see cref="RegioesPadrao"/>.</summary>
+    public string[] Regioes { get; set; } = [];
+
+    /// <summary>A região que a tela sugere; precisa estar nas aceitas, senão vale a primeira delas.</summary>
+    public string RegiaoPadrao { get; set; } = "brazilsouth";
+
+    /// <summary>O nome da fila de comandos dentro da conta do usuário.</summary>
+    public string NomeDaFila { get; set; } = "comandos";
+
+    /// <summary>
+    /// Os planos de empresa (<c>Empresa.Plano</c>) que liberam a provisão sem a liberação do admin: o tier de assinatura. Vazio
+    /// hoje, então só o admin libera, usuário a usuário.
+    /// </summary>
+    public string[] PlanosQueLiberam { get; set; } = [];
+
+    /// <summary>Quantas falhas seguidas antes de o recurso ir a falhou; o usuário pode repetir depois.</summary>
+    public int MaximoDeTentativas { get; set; } = 5;
+
+    /// <summary>A espera depois da primeira falha; dobra a cada falha seguinte, até <see cref="EsperaMaximaSegundos"/>.</summary>
+    public int EsperaInicialSegundos { get; set; } = 30;
+
+    public int EsperaMaximaSegundos { get; set; } = 1800;
+
+    /// <summary>De quanto em quanto tempo o trabalhador volta a uma operação que o Azure ainda está fazendo (não conta como falha).</summary>
+    public int AcompanhamentoSegundos { get; set; } = 15;
+
+    /// <summary>Por quanto tempo o trabalhador tem o pedido; depois disso, outro o retoma.</summary>
+    public int ConcessaoSegundos { get; set; } = 300;
+
+    /// <summary>A pausa do trabalhador quando não há pedido.</summary>
+    public int IntervaloSegundos { get; set; } = 5;
+
+    /// <summary>Quantos pedidos (criar, repetir, remover) um usuário faz por minuto; acima disto, 429.</summary>
+    public int PedidosPorMinuto { get; set; } = 10;
+
+    /// <summary>As regiões que valem: as configuradas ou, sem elas, <see cref="RegioesPadrao"/>, em minúsculas e sem repetição.</summary>
+    public IReadOnlyList<string> RegioesAceitas()
+    {
+        var configuradas = Regioes.Select(r => (r ?? string.Empty).Trim().ToLowerInvariant()).Where(r => r.Length > 0).Distinct().ToArray();
+        return configuradas.Length > 0 ? configuradas : RegioesPadrao;
+    }
+
+    /// <summary>A região sugerida, se for aceita; senão, a primeira aceita.</summary>
+    public string RegiaoSugerida()
+    {
+        var aceitas = RegioesAceitas();
+        var padrao = (RegiaoPadrao ?? string.Empty).Trim().ToLowerInvariant();
+        return aceitas.Contains(padrao) ? padrao : aceitas[0];
+    }
+}
+
+/// <summary>
 /// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
 /// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta
 /// em desenvolvimento e nos testes.

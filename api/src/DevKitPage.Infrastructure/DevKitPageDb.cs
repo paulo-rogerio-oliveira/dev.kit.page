@@ -48,11 +48,15 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
     public DbSet<MaquinaRemota> MaquinasRemotas => Set<MaquinaRemota>();
     public DbSet<RetratoRemoto> RetratosRemotos => Set<RetratoRemoto>();
+    public DbSet<LiberacaoDeProvisao> LiberacoesDeProvisao => Set<LiberacaoDeProvisao>();
+    public DbSet<RecursoNaNuvem> RecursosNaNuvem => Set<RecursoNaNuvem>();
+    public DbSet<EventoDaProvisao> EventosDaProvisao => Set<EventoDaProvisao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
         ConfigurarControleRemoto(modelBuilder);
+        ConfigurarProvisao(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -547,6 +551,54 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         {
             e.ToTable("RetratosRemotos");
             e.HasKey(r => r.MaquinaRemotaId);
+        });
+    }
+
+    /// <summary>
+    /// A provisão (projeto controle-remoto, item 4): a liberação por usuário, os recursos com o pedido que os move e a auditoria.
+    /// O recurso é único por (usuário, tipo, geração) — o que barra a segunda fila de dois pedidos ao mesmo tempo — e a conta,
+    /// de nome único no Azure, também aqui. O usuário com recurso não sai em cascata: o recurso pago continua existindo no Azure.
+    /// No Azure SQL as tabelas vêm de api/scripts/sqlserver/Provisao.sql.
+    /// </summary>
+    private static void ConfigurarProvisao(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<LiberacaoDeProvisao>(e =>
+        {
+            e.ToTable("LiberacoesDeProvisao");
+            e.HasKey(l => l.UsuarioId);
+            e.Property(l => l.AlteradaPor).HasMaxLength(100);
+            e.HasOne(l => l.Usuario).WithOne().HasForeignKey<LiberacaoDeProvisao>(l => l.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecursoNaNuvem>(e =>
+        {
+            e.ToTable("RecursosNaNuvem");
+            e.Property(r => r.Tipo).HasMaxLength(20);
+            e.Property(r => r.Operacao).HasMaxLength(20);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.Property(r => r.Regiao).HasMaxLength(Contracts.V1.ProvisaoV1.TamanhoMaximoDaRegiao);
+            e.Property(r => r.GrupoDeRecursos).HasMaxLength(90);
+            e.Property(r => r.Conta).HasMaxLength(24);
+            e.Property(r => r.Fila).HasMaxLength(63);
+            e.Property(r => r.Trabalhador).HasMaxLength(100);
+            e.Property(r => r.UltimoErro).HasMaxLength(Contracts.V1.ProvisaoV1.TamanhoMaximoDaMensagem);
+            e.Property(r => r.ChaveDoCliente).HasMaxLength(Contracts.V1.ProvisaoV1.TamanhoMaximoDaChaveDoCliente);
+            e.HasIndex(r => new { r.UsuarioId, r.Tipo, r.Geracao }).IsUnique();
+            e.HasIndex(r => r.Conta).IsUnique();
+            // O trabalhador procura os pedidos vencidos pelo estado e pela hora.
+            e.HasIndex(r => new { r.Estado, r.ProximaTentativaEmUtc });
+            e.HasOne(r => r.Usuario).WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(r => r.Eventos).WithOne(ev => ev.Recurso).HasForeignKey(ev => ev.RecursoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventoDaProvisao>(e =>
+        {
+            e.ToTable("EventosDaProvisao");
+            e.Property(ev => ev.Operacao).HasMaxLength(20);
+            e.Property(ev => ev.Estado).HasMaxLength(20);
+            e.Property(ev => ev.Autor).HasMaxLength(120);
+            e.Property(ev => ev.Mensagem).HasMaxLength(Contracts.V1.ProvisaoV1.TamanhoMaximoDaMensagem);
+            e.HasIndex(ev => ev.RecursoId);
         });
     }
 

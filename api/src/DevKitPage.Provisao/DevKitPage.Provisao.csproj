@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O trabalhador da provisão (projeto controle-remoto, item 4): um processo SEPARADO da API pública, com a identidade
+    gerenciada própria no Azure, que executa os pedidos gravados no banco. É o ÚNICO projeto que referencia o Azure.Identity
+    e fala com o Azure Resource Manager: a API não carrega essa permissão. O host genérico vem do framework do ASP.NET Core,
+    o mesmo que a Infrastructure já usa, sem pacote a mais.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevKitPage.Infrastructure\DevKitPage.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

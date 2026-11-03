@@ -1,0 +1,17 @@
+# O trabalhador da provisão em contêiner (Azure Container Apps), SEPARADO da API pública: é ele que tem a identidade gerenciada
+# com papel no Azure. Contexto do build: a pasta api/.   docker build -f Dockerfile.provisao -t devkitpage-provisao .
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY src/ src/
+# Os scripts do Azure SQL vão embutidos na Infrastructure (a verificação do esquema da API): o projeto os referencia.
+COPY scripts/ scripts/
+RUN dotnet publish src/DevKitPage.Provisao/DevKitPage.Provisao.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+# Sem porta: o trabalhador só faz chamadas de saída (o banco e o Azure Resource Manager). Nada de segredo na imagem:
+# Banco__Provider=SqlServer e ConnectionStrings__DevKitPage com Authentication=Active Directory Managed Identity, e
+# Provisao__Azure__AssinaturaId e Provisao__Azure__IdentidadeClientId (ids, não segredos) vêm do ambiente.
+ENTRYPOINT ["dotnet", "DevKitPage.Provisao.dll"]

@@ -90,6 +90,11 @@ public static class Composicao
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IControleRemoto, ControleRemoto>();
         servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
+        // A provisão (item 4 do controle remoto): a API grava o pedido e lê o estado. O motor e o provedor do Azure ficam no
+        // trabalhador (ComposicaoDoMotor e o projeto DevKitPage.Provisao), e não aqui.
+        servicos.Configure<OpcoesDaProvisao>(configuracao.GetSection(OpcoesDaProvisao.Secao));
+        servicos.AddScoped<IProvisao, Provisao>();
+        servicos.AddScoped<ILiberacoesDaProvisao, LiberacoesDaProvisao>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();

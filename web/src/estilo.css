@@ -839,8 +839,30 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
   .painel.conta { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); align-items: start; gap: 24px; }
   .conta > .cabecalho-da-conta { grid-column: 1 / -1; }
   .conta > section { grid-column: 1; }
-  .conta > .secao-do-contexto { grid-column: 2; grid-row: 2 / span 4; }
+  /* Três linhas: o perfil, a assinatura (só a individual) e "O dev.kit"; a seção da nuvem vem embaixo, em largura cheia. */
+  .conta > .secao-do-contexto { grid-column: 2; grid-row: 2 / span 3; }
+  .conta > .secao-da-nuvem { grid-column: 1 / -1; }
 }
+
+/* Os recursos na nuvem da conta (item 4 do controle remoto): a fila do usuário, com o estado, as ações e a auditoria. */
+.pedido-da-fila { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin: 0 0 18px; }
+.pedido-da-fila label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.pedido-da-fila select { min-width: 220px; }
+.aviso-da-nuvem { margin: 0 0 14px; color: var(--texto-2); }
+.lista-da-nuvem { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.recurso-na-nuvem { border: 1px solid var(--borda); border-radius: 12px; padding: 18px 20px; background: var(--superficie-2); }
+.recurso-cabecalho { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.recurso-na-nuvem code { font-family: var(--mono); font-size: 0.82rem; overflow-wrap: anywhere; background: var(--pagina); border: 1px solid var(--borda); border-radius: 6px; padding: 1px 6px; }
+.conta .recurso-dados { grid-template-columns: repeat(4, max-content minmax(0, 1fr)); gap: 6px 14px; font-size: 0.9rem; }
+.conta .recurso-dados dt { color: var(--texto-2); }
+.conta .recurso-dados dd { font-weight: 600; }
+.recurso-na-nuvem .acoes { margin-top: 14px; }
+.erro-da-nuvem { margin: 12px 0 0; color: var(--erro); font-size: 0.9rem; }
+.historico-da-nuvem { margin: 14px 0 0; padding-left: 20px; color: var(--texto-2); font-size: 0.85rem; line-height: 1.8; }
+@media (max-width: 900px) {
+  .conta .recurso-dados { grid-template-columns: max-content minmax(0, 1fr); }
+}
+.selos-da-situacao { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 
 /* O topo numa linha só a partir de 1200px: o menu e quem está logado mais compactos (o gestor tem cinco links). */
 @media (min-width: 1200px) {
