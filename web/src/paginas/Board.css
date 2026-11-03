@@ -1,0 +1,96 @@
+/* Tokens e proporções da proposta app-remoto v35–v40, restritos ao Board. */
+.board-remoto {
+  --accent:#c7362b; --tint:#fbedeb; --ink:#1d2129; --muted:#5b6270; --soft:#737d8e;
+  --line:#e3e6eb; --panel:#fafbfc; --surface:#fff; --violet:#6d3bd8; --violettint:#f3effd;
+  --ok:#1e6b3a; --warn:#8a5300; --warntint:#fbf0dd; --blue:#2f6fde; --bluetint:#e9f0fd; --needline:#e8b9b4;
+  color-scheme:light; color:var(--ink); background:var(--surface); font:13px/1.4 "Segoe UI",system-ui,sans-serif;
+  height:100vh; height:100dvh; min-height:360px; display:flex; flex-direction:column;
+}
+@media (prefers-color-scheme:dark) {
+  .board-remoto {
+    color-scheme:dark; --accent:#ff786e; --tint:#352323; --ink:#f1f2f5; --muted:#b5bcc8; --soft:#a1aabb;
+    --line:#343943; --panel:#1b1e24; --surface:#242830; --violet:#b49aff; --violettint:#302743;
+    --ok:#83d7a2; --warn:#efc37c; --warntint:#3c3020; --blue:#9bbdff; --bluetint:#26354e; --needline:#73514b;
+  }
+}
+.board-remoto b,.board-remoto strong {font-weight:650}
+.board-remoto button,.board-remoto textarea,.board-remoto select {font:inherit; color:inherit}
+.board-remoto button {cursor:pointer}
+.board-remoto button:disabled {cursor:default; background:var(--panel); color:var(--soft); border-color:var(--line)}
+.board-remoto :focus-visible {outline:2px solid var(--accent); outline-offset:2px}
+.board-remoto small {color:var(--muted); font-size:11.5px}
+.br-spacer {flex:1}
+.br-top {height:64px; flex:none; display:flex; align-items:center; gap:12px; padding:0 16px; border-bottom:1px solid var(--line)}
+.br-top>b {font-size:17px}
+.br-machine {min-width:0}
+.br-machine small {display:block; text-align:right; margin-top:2px; font-size:11px}
+.br-host {display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ok)}
+.br-host i {width:8px; height:8px; flex:none; border-radius:50%; background:currentColor}
+.br-host.br-offline {color:var(--muted)}
+.br-host select {max-width:190px; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
+.br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
+.br-tabs,.br-mobile-state {display:none}
+.br-main {flex:1; min-height:0; display:grid; grid-template-columns:300px minmax(0,1fr)}
+.br-side {border-right:1px solid var(--line); background:var(--panel); padding:12px; display:flex; flex-direction:column; gap:10px; overflow:auto; overflow-wrap:anywhere}
+.br-side h2 {font-size:11.5px; line-height:1.4; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; margin:0}
+.br-card {border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--surface)}
+.br-need {border-color:var(--needline); background:var(--tint)}
+.br-need b {display:block; margin-bottom:2px}
+.br-need p {margin:0 0 8px; color:var(--muted); font-size:12px}
+.br-row {display:flex; gap:6px}
+.br-row .br-btn {flex:1}
+.br-readonly {display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:11.5px; color:var(--muted)}
+.br-readonly strong {color:var(--ink)}
+.br-note {color:var(--muted); font-size:11.5px; line-height:1.45; margin:0}
+.br-proj b {display:flex; justify-content:space-between; gap:8px}
+.br-proj b span {font-weight:400; color:var(--muted); font-size:12px; flex:none}
+.br-bar {height:5px; border-radius:3px; background:var(--line); margin:7px 0 5px; overflow:hidden}
+.br-bar i {display:block; height:100%; background:var(--ok)}
+.br-item {display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-top:1px solid var(--line)}
+.br-item:first-child {border-top:0}
+.br-item small {display:block}
+.br-chip {font-size:11px; padding:2px 7px; border-radius:9px; background:var(--bluetint); color:var(--blue); white-space:nowrap}
+.br-chip.br-warn {background:var(--warntint); color:var(--warn)}
+.br-chat {display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--panel); overflow:auto}
+.br-chathead {padding:10px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; background:var(--surface)}
+.br-chathead small {display:block}
+.br-logo {width:30px; height:30px; flex:none; border-radius:50%; background:var(--bluetint); color:var(--blue); display:grid; place-items:center; font-weight:700}
+.br-mensagens {flex:1; padding:28px 24px; display:flex; align-items:center; justify-content:center}
+.br-indisponivel {width:100%; max-width:440px; text-align:center; padding:26px 22px; background:var(--surface); border:1px solid var(--line); border-radius:12px}
+.br-lock {width:42px; height:42px; border-radius:50%; display:grid; place-items:center; margin:0 auto 14px; background:var(--violettint); color:var(--violet); font-size:20px}
+.br-indisponivel h1 {font-size:17px; margin:0 0 8px; line-height:1.4}
+.br-indisponivel p {font-size:13px; color:var(--muted); margin:0 0 12px; line-height:1.65}
+.br-indisponivel small {display:block}
+.br-composer {border:1px solid var(--line); border-radius:12px; margin:10px 14px 8px; padding:9px 10px; background:var(--surface)}
+.br-composer textarea {width:100%; height:28px; min-height:28px; resize:none; display:block; border:0; border-radius:0; background:transparent; color:var(--soft); padding:0; font-size:12px; overflow:hidden}
+.br-composer textarea::placeholder {color:var(--soft); opacity:1}
+.br-bottom {display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.br-bottom button {font-size:11px; padding:3px 7px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--soft)}
+.br-bottom .br-send {min-width:32px; height:32px; border:0; border-radius:50%; padding:0; font-size:16px}
+.br-hint {font-size:11px; line-height:1.5; color:var(--muted); text-align:center; margin:0 12px 10px}
+.br-pwa {font-size:11px; color:var(--muted); padding:10px 12px; border-top:1px solid var(--line); background:var(--surface); flex:none}
+.br-pwa strong {color:var(--ink)}
+@media (max-width:700px) {
+  .br-top {height:auto; min-height:64px; padding:12px 16px 10px; flex-wrap:wrap; gap:0 8px; position:relative; align-items:flex-start}
+  .br-top>b {font-size:16px}
+  .br-machine {padding-bottom:20px}
+  .br-machine small {position:absolute; left:16px; bottom:10px; right:16px; text-align:left; font-size:11px}
+  .br-host select {max-width:170px}
+  .br-desktop-state,.br-restart {display:none}
+  .br-mobile-state {display:inline}
+  .br-tabs {display:flex; border-bottom:1px solid var(--line); background:var(--surface); flex:none}
+  .br-tabs button {flex:1; text-align:center; padding:10px 0; color:var(--muted); border:0; background:transparent}
+  .br-tabs [aria-current] {color:var(--accent); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent)}
+  .br-main {display:flex; flex-direction:column}
+  .br-side {flex:1; border:0; padding:12px; gap:9px}
+  .br-chat {flex:1}
+  .board-remoto[data-aba='chat'] .br-side,.board-remoto[data-aba='board'] .br-chat {display:none}
+  .br-chathead {padding:10px 12px}
+  .br-mensagens {padding:16px 12px}
+  .br-indisponivel {padding:20px 16px}
+  .br-indisponivel h1 {font-size:16px}
+  .br-composer {margin:8px 10px}
+  .br-hint {margin-bottom:12px}
+  .br-note {font-size:11px}
+  .br-need p {font-size:11.5px}
+}
