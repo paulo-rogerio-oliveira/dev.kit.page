@@ -64,12 +64,18 @@ public static class EndpointsDoRemoto
     /// A recusa do envio já lido, na ordem: o contrato desconhecido (400 com <c>codigo</c> e o contrato aceito), a forma
     /// (400) e o dado sensível (422 com os campos); nula quando ele pode ser gravado.
     /// </summary>
-    private static IResult? Recusar(int contrato, string problema, Func<IReadOnlyList<CampoSensivelV1>> sensiveis)
+    internal static IResult? Recusar(int contrato, string problema, Func<IReadOnlyList<CampoSensivelV1>> sensiveis)
     {
         if (!RegrasDoRemoto.ContratoConhecido(contrato))
             return Results.Problem($"Esta API fala o contrato {RemotoV1.Contrato} do controle remoto, e o envio é do {contrato}.",
                 statusCode: StatusCodes.Status400BadRequest,
                 extensions: new Dictionary<string, object?> { ["codigo"] = RemotoV1.CodigoContratoDesconhecido, ["contratoAceito"] = RemotoV1.Contrato });
+        return Recusar(problema, sensiveis);
+    }
+
+    /// <summary>A recusa do envio sem contrato (o do site): a forma (400) e o dado sensível (422); nula quando ele pode ser gravado.</summary>
+    internal static IResult? Recusar(string problema, Func<IReadOnlyList<CampoSensivelV1>> sensiveis)
+    {
         if (problema.Length > 0)
             return Results.Problem(problema, statusCode: StatusCodes.Status400BadRequest);
         var campos = sensiveis();
@@ -80,6 +86,6 @@ public static class EndpointsDoRemoto
     }
 
     /// <summary>A ação com o usuário do token; o token sem usuário é 403.</summary>
-    private static Task<IResult> ComUsuario(ClaimsPrincipal quem, Func<int, Task<IResult>> acao)
+    internal static Task<IResult> ComUsuario(ClaimsPrincipal quem, Func<int, Task<IResult>> acao)
         => Seguranca.UsuarioId(quem) is { } usuario ? acao(usuario) : Task.FromResult(Results.Forbid());
 }

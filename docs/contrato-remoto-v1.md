@@ -1,7 +1,8 @@
 # Contrato v1 do controle remoto
 
 O que o dev.kit publica e o site lê na fase 1 do controle remoto (projeto `controle-remoto-v2`): o **heartbeat** de cada
-máquina e o **retrato** sanitizado dos projetos, fluxos e pendências. Os tipos estão em
+máquina e o **retrato** sanitizado dos projetos, fluxos e pendências — e, na fase 2, a **conversa e os comandos remotos**
+(seção 4), no mesmo contrato 1. Os tipos estão em
 `api/src/DevKitPage.Contracts/V1/RemotoV1.cs`; as regras, em `api/src/DevKitPage.Core/ServicosDoRemoto.cs`. JSON em
 camelCase; datas em ISO 8601 (UTC).
 
@@ -103,11 +104,114 @@ Todo texto do envio é conferido, inclusive ids e slugs. Tipos: `segredo`, `emai
 - `GET /api/remoto/maquinas/{maquinaId}/retrato` → `RetratoDaMaquinaV1`: `maquina`, `retrato` (o último aplicado) e
   `recebidoEm`. **404** para a máquina sem retrato ou de outro usuário.
 
+## 4. Conversa e comandos remotos (fase 2)
+
+O site manda um **comando** a UMA máquina do usuário; a API grava no SQL e põe na **fila do usuário** (a Storage Queue
+criada pela provisão, item 4 do plano) com id, destino e TTL. O serviço da máquina lê a fila com uma **SAS curta** pedida à
+API, confirma o recebimento e o dev.kit manda as **respostas** por HTTPS; o site as recebe pelo **SSE**. A fila é só
+transporte (a mensagem lida some): o histórico fica no SQL. Tipos em `api/src/DevKitPage.Contracts/V1/ConversaV1.cs`;
+regras em `api/src/DevKitPage.Core/ServicosDaConversa.cs`. Todas as rotas exigem o JWT do usuário, e o comando, a máquina
+e a fila de outro usuário são **404**.
+
+### 4.1 Do site
+
+**`POST /api/remoto/comandos`**
+
+```json
+{ "id": "9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d", "maquinaId": "3f2b9c0e5d7a4b1f8e6d2c4a9b0f1e3d", "tipo": "mensagem",
+  "texto": "Como está o projeto controle-remoto-v2?", "ttlSegundos": 900, "dispositivo": "celular" }
+```
+
+- `tipo`: `mensagem` (ao Orquestrador; `texto` obrigatório, até 4000), `ligar` ou `reiniciar` (para o serviço; sem texto).
+- `id`: escolhido pelo site (um GUID). O reenvio com o MESMO id e o mesmo conteúdo devolve o comando que já existe (**200**),
+  sem outra mensagem na fila e sem contar no limite — o duplo toque no celular não duplica. O mesmo id com outro conteúdo é
+  **409** `id-em-uso`. Sem id, a API sorteia.
+- `ttlSegundos`: de `Remoto:TtlMinimoSegundos` (60) a `TtlMaximoSegundos` (86400); vazio é `TtlPadraoSegundos` (900).
+- `reiniciar` com `turnoEmAndamento` no último heartbeat exige `"confirmarReinicio": true` — sem ela, **409**
+  `turno-em-andamento` (o reinício seguro).
+- Resposta **202** com `Location: /api/remoto/comandos/{id}` e o `ComandoRemotoV1`:
+  `id`, `maquinaId`, `tipo`, `texto`, `dispositivo`, `estado`, `criadoEm`, `expiraEm`, `entregueEm`, `concluidoEm`, `erro`.
+
+| Estado | Quando |
+|---|---|
+| `pendente` | Gravado no SQL, entrando na fila. |
+| `na-fila` | Na fila do usuário, esperando o serviço da máquina. |
+| `entregue` | O dev.kit confirmou o recebimento. |
+| `respondido` · `concluido` · `recusado` | O dev.kit respondeu, executou (o ligar) ou recusou (o chat não aprova nada). |
+| `expirado` | O TTL venceu ANTES do recebimento (a máquina desligada): volta assim, e o dev.kit não o executa. |
+| `falhou` | A fila não aceitou (**503** `fila-indisponivel`, com o `comando` no corpo); o reenvio com o mesmo id tenta de novo. |
+
+**`GET /api/remoto/comandos/{id}`** → o comando. **`GET /api/remoto/maquinas/{maquinaId}/conversa`** →
+`{ "comandos": [...], "respostas": [...], "ultimoEvento": 42 }`, os mais antigos primeiro (até 200 de cada).
+
+**`GET /api/remoto/conversa/eventos[?maquinaId=...]`** → `text/event-stream`. Cada evento:
+
+```
+id: 43
+event: comando
+data: {"id":43,"tipo":"comando","maquinaId":"3f2b...","comando":{"id":"9b1d...","estado":"entregue",...},"resposta":null,"em":"..."}
+```
+
+- `event` é `comando` (o comando mudou de estado) ou `resposta` (chegou uma resposta); `ping`, sem `id` e com `data: null`,
+  mantém a conexão viva.
+- O site abre o SSE com `Last-Event-ID: <ultimoEvento>` do histórico (ou `?desde=`) e não perde nada entre as duas chamadas;
+  a reconexão retoma do último `id` recebido. O fluxo fecha sozinho depois de `Remoto:DuracaoDoSseSegundos` (300).
+- O JWT vai no cabeçalho `Authorization`: o site usa `fetch` com o corpo em fluxo (o `EventSource` do navegador não manda
+  cabeçalho).
+- Mais de uma instância da API: o evento gravado por outra chega na próxima releitura do SQL
+  (`Remoto:IntervaloDoSseSegundos`, 3 s); o da mesma instância, na hora.
+
+### 4.2 Do dev.kit
+
+**`POST /api/remoto/fila/sas`** `{ "contrato": 1, "maquinaId": "..." }` → **200**
+`{ "endpoint": "https://dkq...queue.core.windows.net/comandos", "sas": "sv=...&st=...&se=...&sp=p&spr=https&sig=...", "permissoes": "p", "expiraEm": "..." }`.
+
+- A SAS é de SERVIÇO, só da fila do usuário, só HTTPS e só `p` (process: ler e apagar mensagens — não espia, não escreve).
+  Vale `Remoto:SasMinutos` (15): o serviço pede outra antes de `expiraEm`.
+- A máquina precisa ter mandado o heartbeat (**404** sem ele); sem a fila pronta, **409** `sem-fila`.
+- A mensagem da fila (`MessageText`) é o JSON do `MensagemDaFilaV1` em **Base64** (UTF-8):
+  `{ "contrato": 1, "id", "maquinaId", "tipo", "texto", "origem": "remoto", "dispositivo", "criadoEm", "expiraEm" }`. A fila
+  descarta a mensagem no fim do TTL, lida ou não.
+
+**`POST /api/remoto/comandos/{id}/recebido`** `{ "contrato": 1, "maquinaId": "..." }` → **200**
+`{ "id", "estado", "executar", "repetido" }`.
+
+- A fila pode entregar de novo e fora de ordem. O serviço confirma ANTES de executar e só executa com `executar: true` — o
+  PRIMEIRO recebimento dentro do TTL. O repetido (`repetido: true`, também o que chega ao mesmo tempo) e o vencido
+  (`estado: expirado`) voltam com `executar: false`: apague a mensagem e não execute.
+- O comando de outra máquina do usuário (a fila é uma por usuário) é **409** `outra-maquina`: não o execute nem o apague — ele
+  volta visível para a máquina certa.
+
+**`POST /api/remoto/respostas`**
+
+```json
+{ "contrato": 1, "maquinaId": "...", "id": "r-0001", "comandoId": "9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d", "tipo": "mensagem",
+  "texto": "O item 5 está em implementação.", "geradaEm": "2026-11-03T12:01:00Z" }
+```
+
+- `tipo`: `mensagem` (o comando vai a `respondido`; sem `comandoId` é a mensagem espontânea do Orquestrador), `concluido` ou
+  `recusado` (estes dizem o `comandoId`).
+- **201** a nova; **200** com `repetida: true` o reenvio do mesmo `id` (idempotente). O `texto` passa pelas mesmas regras do
+  dado sensível (**422**): o dev.kit manda já sanitizado (`TraceSanitizado`).
+
+### 4.3 Recusas e limites
+
+As da seção "Recusas dos envios" (400, 401, 413 acima de 32 KB, 415, 422) e:
+
+| Resposta | Quando |
+|---|---|
+| **404** | O comando, a máquina ou a fila não é do usuário (ou não existe). |
+| **409** | `sem-fila`, `turno-em-andamento`, `id-em-uso`, `outra-maquina`. |
+| **429** | `limite-de-envio`: mais de `Remoto:ComandosPorHora` (30) comandos na última hora, contados no SQL (vale entre instâncias), com `Retry-After`. Cada mensagem pode abrir um turno do agente. As escritas da conversa também têm `Remoto:EnviosDaConversaPorMinuto` (60), separado do heartbeat. |
+| **503** | `fila-indisponivel`: a fila não aceitou, ou a SAS não pôde ser assinada. |
+
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no
-expurgo diário. O retrato guardado é só o último: não há histórico.
+expurgo diário. O retrato guardado é só o último: não há histórico. A conversa (comandos, respostas e eventos) sai depois
+de `Remoto:RetencaoDaConversaDias` (padrão 30), pela data de cada linha.
 
 ## No Azure SQL
 
-A tabela `MaquinasRemotas` vem de `api/scripts/sqlserver/Remoto.sql`, idempotente — rode-o antes de publicar a API.
+A tabela `MaquinasRemotas` vem de `api/scripts/sqlserver/Remoto.sql`, e as da conversa (`ComandosRemotos`,
+`RespostasRemotas`, `EventosDaConversa`), de `api/scripts/sqlserver/Conversa.sql` — idempotentes; rode-os antes de publicar a API.

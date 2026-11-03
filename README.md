@@ -92,6 +92,9 @@ publica os resultados.
 | `Cors:Origens` | (Development: Vite) | As origens da web. |
 | `Provisao:Regioes` · `RegiaoPadrao` · `MaximoDeFilasPorUsuario` · `PlanosQueLiberam` · `PedidosPorHora` | `brazilsouth`, `eastus2` · `brazilsouth` · 1 · — · 20 | A provisão no Azure na API: as regiões, a cota de filas, os planos que liberam sem a permissão do admin (o tier de assinatura) e o limite de pedidos. |
 | `Provisao:Provedor` · `AssinaturaId` · `IdentidadeClientId` (worker) | `azure` · — · — | O worker da provisão: o provedor (`simulado` só fora de Production), a assinatura e o client id da identidade gerenciada — **nenhum segredo**. |
+| `Remoto:Fila` · `IdentidadeClientId` | `azure` · — | A fila da conversa remota na API: `azure` lê a chave da conta pela identidade gerenciada da API (só `listKeys`); `simulado` só fora de Production — **nenhum segredo** na configuração. |
+| `Remoto:TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` · `SasMinutos` | 900 · 60 · 86400 · 15 | O TTL do comando (vencido antes da entrega, volta `expirado`) e a validade da SAS de consumo do serviço. |
+| `Remoto:ComandosPorHora` · `EnviosDaConversaPorMinuto` · `RetencaoDaConversaDias` | 30 · 60 · 30 | O limite de comandos por usuário (no SQL, 429 com `Retry-After`), o de escritas por minuto e a retenção do histórico da conversa. |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |
 
 ## Como verificar cada critério da US #270

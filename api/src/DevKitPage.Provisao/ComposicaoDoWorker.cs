@@ -1,5 +1,4 @@
 using Azure.Core;
-using Azure.Identity;
 using DevKitPage.Core;
 using DevKitPage.Infrastructure;
 using Microsoft.Extensions.Configuration;
@@ -60,16 +59,9 @@ public static class ComposicaoDoWorker
             throw new InvalidOperationException("Provisao:AssinaturaId não configurada: é a assinatura do dev.kit onde ficam os grupos dos usuários.");
     }
 
-    /// <summary>A credencial do Azure: a identidade gerenciada em produção; a padrão (o az login) no desenvolvimento.</summary>
+    /// <summary>A credencial do Azure: a identidade gerenciada em produção; a padrão (o az login) no desenvolvimento — a mesma regra da API.</summary>
     public static TokenCredential Credencial(OpcoesDoWorker cfg, IHostEnvironment ambiente)
-    {
-        var clientId = (cfg.IdentidadeClientId ?? string.Empty).Trim();
-        if (clientId.Length > 0)
-            return new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
-        return ambiente.IsProduction()
-            ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
-            : new DefaultAzureCredential(new DefaultAzureCredentialOptions { ExcludeInteractiveBrowserCredential = true });
-    }
+        => CredencialDoAzure.Criar(cfg.IdentidadeClientId, ambiente.IsProduction());
 
     private static bool Simulado(OpcoesDoWorker cfg) => string.Equals(cfg.Provedor?.Trim(), OpcoesDoWorker.ProvedorSimulado, StringComparison.OrdinalIgnoreCase);
 }

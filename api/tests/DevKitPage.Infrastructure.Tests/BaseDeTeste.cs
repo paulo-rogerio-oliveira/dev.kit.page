@@ -48,7 +48,8 @@ public sealed class BaseDeTeste : IAsyncDisposable
 
     public ServiceProvider Servicos { get; }
 
-    public BaseDeTeste(Dictionary<string, string?>? configuracao = null)
+    /// <param name="trocar">Registros que valem por cima da composição (o último vale): a fila falsa da conversa, por exemplo.</param>
+    public BaseDeTeste(Dictionary<string, string?>? configuracao = null, Action<IServiceCollection>? trocar = null)
     {
         var valores = new Dictionary<string, string?>
         {
@@ -65,6 +66,7 @@ public sealed class BaseDeTeste : IAsyncDisposable
         servicos.AdicionarInfraestrutura(cfg);
         // O e-mail falso (US #425) depois da composição: o registro de verdade é TryAdd, e o último vale.
         servicos.AddSingleton<IEnvioDeEmail>(Emails);
+        trocar?.Invoke(servicos);
         Servicos = servicos.BuildServiceProvider();
     }
 
