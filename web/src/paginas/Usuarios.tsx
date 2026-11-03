@@ -146,6 +146,8 @@ export function Usuarios() {
   const [senha, setSenha] = useState<SenhaMostrada | null>(null);
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
+  // A provisão (item 4 do controle remoto): quem tem a fila no Azure liberada, usuário a usuário.
+  const [comProvisao, setComProvisao] = useState<Set<number>>(new Set());
 
   const tratar = useCallback((falha: unknown) => {
     if (falha instanceof ErroDaApi && falha.status === 401) {
@@ -157,10 +159,15 @@ export function Usuarios() {
 
   const carregar = useCallback(() => api.usuarios(token).then(setUsuarios).catch(tratar), [token, tratar]);
 
+  const carregarProvisao = useCallback(() => api.liberacoesDaProvisao(token)
+    .then((lista) => setComProvisao(new Set(lista.filter((l) => l.liberada).map((l) => l.usuarioId))))
+    .catch(tratar), [token, tratar]);
+
   useEffect(() => {
     void carregar();
+    void carregarProvisao();
     api.empresas(token).then(setEmpresas).catch(tratar);
-  }, [carregar, token, tratar]);
+  }, [carregar, carregarProvisao, token, tratar]);
 
   function limpar() {
     setErro('');
@@ -208,6 +215,20 @@ export function Usuarios() {
     }
   }
 
+  /** Libera ou revoga a provisão; revogar não remove a fila que o usuário já tem (ele ainda a remove na conta). */
+  async function alternarProvisao(u: UsuarioResumo) {
+    limpar();
+    try {
+      const definida = await api.definirLiberacao(token, u.id, !comProvisao.has(u.id));
+      setAviso(definida.liberada
+        ? `Provisão liberada para ${u.login}: a ação Recursos na nuvem aparece na conta dele.`
+        : `Provisão revogada para ${u.login}: ele não pede recursos novos, e o que já tem continua até ele remover.`);
+      await carregarProvisao();
+    } catch (falha) {
+      tratar(falha);
+    }
+  }
+
   async function redefinir(u: UsuarioResumo) {
     limpar();
     if (!window.confirm(`Gerar uma senha temporária nova para ${u.login}? A atual deixa de valer.`)) return;
@@ -238,6 +259,7 @@ export function Usuarios() {
   const subtitulo = usuarios && (
     <>
       {resumoDosUsuarios(usuarios)}
+      {comProvisao.size > 0 && <> · {comProvisao.size} com provisão</>}
       {licencas.vencendo > 0 && <> · <span className="licenca-alerta">{licencas.vencendo} {licencas.vencendo === 1 ? 'licença vence' : 'licenças vencem'} em 7 dias</span></>}
       {licencas.vencidas > 0 && <> · <span className="licenca-ruim">{licencas.vencidas} {licencas.vencidas === 1 ? 'vencida' : 'vencidas'}</span></>}
     </>
@@ -341,7 +363,12 @@ export function Usuarios() {
                               <small>{apoioDaLicenca(u.licenca)}</small>
                             </button>
                           </td>
-                          <td><Selo variante={s.variante} ponto={s.variante === 'sucesso'}>{s.texto}</Selo></td>
+                          <td>
+                            <span className="selos-da-situacao">
+                              <Selo variante={s.variante} ponto={s.variante === 'sucesso'}>{s.texto}</Selo>
+                              {comProvisao.has(u.id) && <Selo variante="info">Provisão</Selo>}
+                            </span>
+                          </td>
                           <td>{u.ultimoLogin ? formatar.dataHora(u.ultimoLogin) : 'nunca'}</td>
                           <td className="coluna-do-menu">
                             <MenuDoUsuario
@@ -354,6 +381,7 @@ export function Usuarios() {
                                   ? [{ rotulo: u.bloqueado ? 'Desbloquear' : 'Bloquear', aoEscolher: () => void alternarBloqueio(u) }]
                                   : []),
                                 { rotulo: 'Redefinir senha', aoEscolher: () => void redefinir(u) },
+                                { rotulo: comProvisao.has(u.id) ? 'Revogar provisão' : 'Liberar provisão', aoEscolher: () => void alternarProvisao(u) },
                               ]}
                             />
                           </td>

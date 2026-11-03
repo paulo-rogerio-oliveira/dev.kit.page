@@ -57,7 +57,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Ações de admin' }));
 
     const menu = screen.getByRole('menu', { name: 'Ações de admin' });
-    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Licença', 'Editar', 'Redefinir senha']);
+    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Licença', 'Editar', 'Redefinir senha', 'Liberar provisão']);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -267,5 +267,34 @@ describe('Licença por usuário (US #687, proposta admin-usuarios v005)', () => 
     await waitFor(() => expect(escritas.at(-1)).toEqual({ metodo: 'POST', caminho: '/api/usuarios/2/licenca/revogar', corpo: { motivo: 'saiu do projeto' } }));
     expect(confirmar).toHaveBeenCalled();
     confirmar.mockRestore();
+  });
+});
+
+describe('Provisão por usuário (item 4 do controle remoto)', () => {
+  it('libera pelo menu ⋯ e, liberada, mostra o selo e oferece revogar', async () => {
+    const liberacoes: { usuarioId: number; login: string; liberada: boolean; alteradaPor: string; alteradaEm: string }[] = [];
+    servidor.use(
+      http.get(`${API}/api/provisao/v1/liberacoes`, () => HttpResponse.json(liberacoes)),
+      http.put(`${API}/api/provisao/v1/liberacoes/:id`, async ({ params, request }) => {
+        const corpo = (await request.json()) as { liberada: boolean };
+        escritas.push({ metodo: 'PUT', caminho: `/api/provisao/v1/liberacoes/${params.id}`, corpo });
+        const linha = { usuarioId: Number(params.id), login: 'ana.dev', liberada: corpo.liberada, alteradaPor: 'admin', alteradaEm: '2026-11-02T21:00:00Z' };
+        liberacoes.splice(0, liberacoes.length, linha);
+        return HttpResponse.json(linha);
+      }),
+    );
+    renderizar('/usuarios', tokenValido());
+
+    expect(within(await linhaDe('ana.dev')).queryByText('Provisão')).not.toBeInTheDocument();
+    await acao('ana.dev', 'Liberar provisão');
+
+    expect(await screen.findByText(/Provisão liberada para ana.dev/)).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'PUT', caminho: '/api/provisao/v1/liberacoes/2', corpo: { liberada: true } }]);
+    expect(await within(await linhaDe('ana.dev')).findByText('Provisão')).toHaveClass('insignia-info');
+    expect(screen.getByText(/1 com provisão/)).toBeInTheDocument();
+
+    await acao('ana.dev', 'Revogar provisão');
+    expect(await screen.findByText(/Provisão revogada para ana.dev: ele não pede recursos novos/)).toBeInTheDocument();
+    expect(escritas.at(-1)).toEqual({ metodo: 'PUT', caminho: '/api/provisao/v1/liberacoes/2', corpo: { liberada: false } });
   });
 });

@@ -296,6 +296,46 @@ da API segue. Publique a API ANTES do pacote do dev.kit que chama a rota. SQLite
 Nenhuma configuração é obrigatória. Os padrões estão no `appsettings.json` e na tabela do README, na seção `Remoto`. A
 retenção de 30 dias vale para as máquinas sem heartbeat, e o expurgo diário as apaga com o retrato.
 
+### Provisão: o trabalhador e a fila do usuário (controle remoto, item 4)
+
+A API pública NÃO cria nada no Azure: ela grava o pedido em `RecursosNaNuvem`, e quem cria é o trabalhador
+`DevKitPage.Provisao`, um processo separado, com identidade própria. Na ordem:
+
+1. Rode `api/scripts/sqlserver/Provisao.sql` (idempotente) **antes de publicar a API**: ele cria `LiberacoesDeProvisao`,
+   `RecursosNaNuvem` e `EventosDaProvisao`. SQLite aplica a migration `Provisao` sozinho.
+2. Crie a **identidade gerenciada atribuída pelo usuário** do trabalhador (ex.: `id-devkit-provisao`) e dê a ela, na
+   assinatura do dev.kit, só o que a fila precisa: um papel próprio com `Microsoft.Resources/subscriptions/resourceGroups/*`,
+   `Microsoft.Resources/subscriptions/resourceGroups/resources/read` e `Microsoft.Storage/storageAccounts/*` (o
+   `Contributor` também funciona, mas é mais largo do que o necessário). A identidade da API **não recebe papel nenhum** no
+   Azure. Se a assinatura for compartilhada com outros sistemas, prefira uma assinatura só dos recursos dos usuários.
+3. Publique o trabalhador como outro Container App (ou Container Apps Job contínuo), da imagem
+   `docker build -f Dockerfile.provisao -t devkitpage-provisao .` (contexto `api/`), com a identidade do passo 2 atribuída
+   e SEM ingress: ele só faz chamadas de saída. Variáveis (nenhuma é segredo):
+
+| Variável | Valor |
+|---|---|
+| `Banco__Provider` | `SqlServer` |
+| `ConnectionStrings__DevKitPage` | a mesma base da API, com `Authentication=Active Directory Managed Identity;User Id=<client id da identidade>` (a identidade precisa de usuário no banco: `CREATE USER [id-devkit-provisao] FROM EXTERNAL PROVIDER` e `db_datareader`/`db_datawriter`) |
+| `Provisao__Azure__AssinaturaId` | o id da assinatura dos recursos |
+| `Provisao__Azure__IdentidadeClientId` | o client id da identidade do passo 2 |
+| `Provisao__Ambiente` | `prod` — o MESMO da API: entra no nome único de cada conta |
+
+4. Na API, `Provisao__Ambiente` igual ao do trabalhador e, se quiser outras regiões, `Provisao__Regioes__0..n` e
+   `Provisao__RegiaoPadrao`. `Provisao__PlanosQueLiberam__0..n` fica vazio até existir o tier de assinatura.
+5. Libere a provisão usuário a usuário pelo admin (`/usuarios`, menu ⋯ → Liberar provisão, ou
+   `PUT /api/provisao/v1/liberacoes/{usuarioId}`). Sem a liberação, a ação não aparece na conta e a API recusa (403).
+
+O que o trabalhador cria por usuário: o grupo `rg-devkit-u<id>`, a conta de armazenamento `dk<16 caracteres>` (Standard_LRS,
+TLS 1.2, só HTTPS, sem acesso público a blob) e a fila `comandos`, todos com as etiquetas `devkit-usuario`,
+`devkit-recurso` e `devkit-ambiente` — é por elas que a análise de custos do Azure mostra o custo de cada usuário, e é a
+`devkit-usuario` que o trabalhador confere antes de apagar o grupo. A chave da conta continua ligada porque a SAS de fila
+(o próximo item, para o serviço do Windows) só existe assinada por ela; ela nunca é lida nem gravada aqui. Alerta de custo
+por grupo e cota além de uma fila por usuário ficam para a fase 4 (App Service e Static Web App), que reaproveita este motor.
+
+Sem `Provisao__Azure__AssinaturaId`, o trabalhador sobe e cada pedido termina em `falhou` com o motivo, sem chamar o
+Azure. `Provisao__Azure__Provedor=simulado` (só fora de Production; em Production o trabalhador não sobe) é o provedor de
+demonstração: passa por "em andamento" e fica pronto sem criar nada.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

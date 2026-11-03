@@ -90,6 +90,11 @@ publica os resultados.
 | `Remoto:IntervaloDoHeartbeatSegundos` · `ToleranciaDoHeartbeatSegundos` | 60 · 180 | O ritmo que a API dita ao dev.kit, e sem heartbeat por quanto tempo a máquina aparece desconectada. |
 | `Remoto:EnviosPorMinuto` · `MaximoDeMaquinas` · `MaxBytesPorEnvio` | 60 · 10 · 256 KB | Envios por usuário (429), máquinas por usuário (409) e o corpo do envio (413). |
 | `Remoto:RetencaoDias` | 30 | Por quanto tempo a máquina sem heartbeat é guardada, com o retrato; o expurgo diário apaga as vencidas. |
+| `Provisao:Ambiente` · `PrefixoDoGrupo` | `dev` · `rg-devkit` | Entram nos nomes no Azure (a conta única por ambiente, o grupo `rg-devkit-u<id>`): o MESMO na API e no trabalhador. |
+| `Provisao:Regioes` · `RegiaoPadrao` · `PlanosQueLiberam` | brazilsouth, eastus2 · brazilsouth · vazio | Onde a fila pode ser criada, a sugerida, e os planos que liberam a provisão sem o admin (o tier, quando existir). |
+| `Provisao:PedidosPorMinuto` | 10 | Pedidos de provisão (criar, repetir, remover) por usuário (429). |
+| `Provisao:MaximoDeTentativas` · `EsperaInicialSegundos` · `EsperaMaximaSegundos` · `AcompanhamentoSegundos` · `ConcessaoSegundos` | 5 · 30 · 1800 · 15 · 300 | Do trabalhador `DevKitPage.Provisao`: as falhas antes de `falhou`, a espera que dobra, a volta ao que o Azure ainda faz e a concessão de cada pedido. |
+| `Provisao:Azure:AssinaturaId` · `IdentidadeClientId` | vazio | Só no trabalhador: a assinatura e a identidade gerenciada atribuída a ele (ids, não segredos). Ver [publicação](docs/publicacao-azure.md). |
 | `Proxy:RedesConfiaveis` | — (só loopback) | As redes (CIDR) dos proxies cujo `X-Forwarded-For` vale — no Azure, a do Container Apps. |
 | `Cors:Origens` | (Development: Vite) | As origens da web. |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |

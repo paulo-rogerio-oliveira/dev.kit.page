@@ -587,10 +587,55 @@ lugar. O contrato está em [`contrato-remoto-v1.md`](contrato-remoto-v1.md), e o
   tem formato: o que protege é o contrato não ter campo de texto longo.
 - **Tetos:** `Remoto:EnviosPorMinuto` por usuário, `Remoto:MaximoDeMaquinas`, `Remoto:MaxBytesPorEnvio` e as listas do contrato.
   A retenção é `Remoto:RetencaoDias`: o `ExpurgoDiario` tira a máquina parada, e o retrato sai pela cascata.
-- **A liberação por usuário** é da provisão (itens 4 e 12), que cria recurso pago. Aqui qualquer usuário autenticado publica o
+- **A liberação por usuário** é da provisão (itens 4 e 12; ver *Provisão* abaixo), que cria recurso pago. Aqui qualquer usuário autenticado publica o
   que é dele, com os tetos acima; quem liga o envio é o dev.kit (item 2).
 - Tabelas novas pela migration `ControleRemoto` e, no Azure SQL, pelo script `api/scripts/sqlserver/ControleRemoto.sql`, publicados
   ANTES do pacote do dev.kit que chama a rota.
+
+**Provisão: o motor e a fila do usuário (projeto controle-remoto, item 4).** O usuário pede um recurso no Azure pelo site, e
+quem o cria é um TRABALHADOR separado da API pública, com identidade gerenciada própria — a API não carrega permissão nenhuma
+no Azure. O primeiro recurso é a fila de comandos do usuário (uma Storage Queue numa conta de armazenamento, no grupo de
+recursos dele); App Service e Static Web App (fase 4) entram pelo mesmo motor.
+- **As peças:** `ProvisaoV1` (Contracts); `RegrasDaProvisao`, `IProvisao`, `ILiberacoesDaProvisao`, `IMotorDeProvisao` e
+  `IProvedorDeNuvem` (Core, `ServicosDaProvisao.cs`); `Provisao`, `LiberacoesDaProvisao` e `MotorDeProvisao` (Infrastructure,
+  `Provisao.cs` — o motor só é registrado por `AdicionarMotorDeProvisao`, que a API não chama); `EndpointsDaProvisao` (Api);
+  e o projeto `DevKitPage.Provisao`: o host do trabalhador (`TrabalhadorDaProvisao`), o `ProvedorAzure` (o Resource Manager
+  por REST com o token do `Azure.Identity`, o único projeto que referencia o pacote) e o `ProvedorSimulado` (só fora de
+  Production). Um teste da API trava que ela não referencia o `Azure.Identity` nem o trabalhador, nem resolve o motor.
+- **O ciclo:** `pedido` → `em-provisao` → `pronto` ou `falhou`; a remoção (`operacao = remover`) termina em `removido`. A
+  linha fica, com a auditoria (`EventosDaProvisao`: quem — o usuário ou `trabalhador:<nome>` —, o estado e o motivo).
+- **Repetível:** os nomes saem do servidor e são determinísticos — o grupo `rg-devkit-u<id>` e a conta `dk` + 16 caracteres
+  do SHA-256 de (ambiente, usuário, geração) em base32 —, então repetir acerta o MESMO recurso; cada passo no Azure é
+  idempotente (PUT do grupo, GET antes do PUT da conta, PUT da fila; DELETE que aceita o 404). O pedido é idempotente
+  também: com uma fila ativa (ou a mesma `chaveDoCliente`), o POST devolve a mesma (200); o índice único (usuário, tipo,
+  geração) decide entre dois pedidos simultâneos.
+- **O motor:** pega um pedido vencido com uma CONCESSÃO no SQL (`ExecuteUpdate` condicionado ao estado e à hora: dois
+  trabalhadores não pegam o mesmo) e grava o desfecho só se ainda a tiver — o que travou e perdeu a vez não sobrescreve
+  quem retomou. A concessão vencida volta contando uma falha. O provedor responde `Pronto`, `EmAndamento` (202 do Azure:
+  volta em `AcompanhamentoSegundos`, sem contar falha), `FalhaTransitoria` (rede, 409 de operação em andamento, 429, 5xx:
+  espera que dobra de `EsperaInicialSegundos` até `EsperaMaximaSegundos`, e `falhou` em `MaximoDeTentativas`) ou
+  `FalhaDefinitiva` (401/403, 400, nome tomado, sem assinatura configurada: `falhou` na hora). O usuário repete o que falhou.
+  A mensagem que vai para a auditoria e a tela passa pela máscara dos relatos e do trace (sem segredo, GUID do Azure nem
+  caminho do ARM); a exceção inesperada vira o nome do tipo, sem a mensagem.
+- **A permissão:** `LiberacoesDeProvisao`, uma linha por usuário, que o admin liga e desliga (`GET|PUT
+  /api/provisao/v1/liberacoes`), com quem e quando. A outra origem é o plano da empresa com a assinatura ativa
+  (`Provisao:PlanosQueLiberam`, vazio até existir o tier): `RegrasDaProvisao.Origem` é a regra única, e a tela e a API usam a
+  mesma conta. Sem liberação, a seção da conta não aparece e a API recusa o pedido e o repetir da criação (403, antes de
+  olhar o corpo); a remoção do que o usuário já tem continua permitida — ela só reduz custo.
+- **Rotas** (JWT do usuário; o recurso de outro é 404): `GET /api/provisao/v1` (liberada, origem, regiões e os recursos),
+  `POST /filas` (202 com o recurso, 200 com o que já existia, 400 região fora de `Provisao:Regioes`, 409 com a anterior
+  sendo removida), `GET /recursos/{id}` (com o histórico), `POST /recursos/{id}/repetir` e `DELETE /recursos/{id}` (202; a
+  remoção durante a criação é 409). Limite por usuário: `Provisao:PedidosPorMinuto`.
+- **Segredo:** nenhum no código nem na configuração do trabalhador: o token do Azure sai da identidade gerenciada
+  (`Provisao:Azure:IdentidadeClientId`; sem ele, a credencial do ambiente de quem desenvolve) e o banco usa a identidade
+  também. O único segredo do caminho é a chave da conta de armazenamento, ligada porque a SAS de fila do próximo item só
+  existe assinada por ela — e ela não sai do Azure.
+- **Web:** a seção **Recursos na nuvem** da `/conta` (`componentes/RecursosNaNuvem.tsx`, proposta `conta` v3) pede a fila na
+  região escolhida, mostra o estado com o selo, relê sozinha enquanto há recurso em andamento, mostra o motivo da falha com
+  Repetir, pede confirmação para Remover e abre o histórico; o admin libera e revoga pelo menu ⋯ de `/usuarios`, com o
+  selo Provisão (proposta `admin-usuarios` v3).
+- Tabelas novas pela migration `Provisao` e, no Azure SQL, pelo script `api/scripts/sqlserver/Provisao.sql`. A publicação do
+  trabalhador (identidade, papel, variáveis) está em [publicacao-azure.md](publicacao-azure.md).
 
 ### O admin útil: painel de utilidade, licença, empresa e editor de artefato (US #687)
 
@@ -628,7 +673,7 @@ entram num projeto de migrations separado quando a base for para lá.
 já existe, uma tabela nova do modelo NÃO é criada. Por isso cada tabela nova vem com um script
 idempotente em `api/scripts/sqlserver` (`IF OBJECT_ID(...) IS NULL CREATE TABLE`), que se roda
 antes de publicar a versão que a usa — a da US #283 é `PedidosDeDemonstracao.sql`, e as da US #381,
-`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`, e a da US #687, `Us687.sql`, e a da US #693, `Us693.sql`, e a do controle remoto, `ControleRemoto.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
+`GruposDeErro.sql` e `Empresas.sql` (este também acrescenta colunas a `Usuarios` e `Maquinas`), e a da US #387, `RoiDeWorkItem.sql`, e a da US #417, `AvaliacoesDeEntrega.sql`, e a da US #425, `Us425.sql`, e a da US #461, `Us461.sql`, e a da US #491, `Us491.sql`, e a da US #550, `Us550.sql` (que só alarga uma coluna), e a da US #602, `Us602.sql`, e a da US #663, `Us663.sql` (a origem e a versão do contexto), e a da US #669, `Us669.sql`, e a da US #687, `Us687.sql`, e a da US #693, `Us693.sql`, e a do controle remoto, `ControleRemoto.sql`, e a da provisão, `Provisao.sql`. Os testes `Script_do_azure_sql_*` comparam cada script com o `CREATE TABLE` que o
 EF gera para o SQL Server a partir do mesmo modelo (`BaseDeTeste.ColunasNoSqlServer`).
 
 **O script esquecido fica dito (bug do painel Uso, 26/10).** Sem o `Us687.sql`, o painel de utilidade lia
@@ -664,4 +709,5 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | US #669 | Core: `RegrasDoDesignTests` (a URL normalizada em https/ssh/.git/maiúsculas/pasta, o nível usuário de quem não tem empresa, o escopo das claims, a visibilidade da regra do contexto, quem apaga, o teto do plano e a validação do envio); Infrastructure: `Us669Tests` (script `Us669.sql` contra o modelo, o armazém em disco preso à pasta, o envio cuja imagem falha sem deixar versão); Api: `DesignApiTests` (o envio com o branch como atributo e o mesmo repositório escrito de dois jeitos num projeto, o link estável devolvendo o PNG, a visibilidade usuário × equipe × empresa × outra empresa, quem não tem empresa no nível usuário, o reenvio idempotente e o 409, apagar autor/gestor/terceiro, a sincronização com `?desde=`, o 413 do teto); web: `componentes/DesignCompartilhado.test.tsx` (a comparação, a aba com o uso do teto e as colunas, o link copiado, o Apagar só de quem pode, o filtro de branch e o modo Uma, o escopo Minhas e o vazio, `/design` sem empresa, a página do link estável e a versão que não existe mais); e2e: `us669.spec.ts` (o envio multipart com o PNG gerado no teste, a comparação lado a lado, o branch, o Sobrepor e o link estável; capturas `90`–`92`) |
 | US #693 | Core: `RegrasDosProjetosTests` (o slug, as listas uma por linha, o envio completo, o que falta no envio inválido, o repositório e a situação, o ciclo recusado com o item que o fecha, a dependência de si mesmo, de fora do plano e o número repetido); Infrastructure: `Us693Tests` (script `Us693.sql` contra o modelo, a migration aplicada sem mudança de modelo pendente, regravar com a versão lida substituindo o plano e a velha em conflito, apagar levando os itens); Api: `ProjetosApiTests` (criar 201 com o plano, regravar com a versão lida 200 e a velha 409, a visibilidade usuário × equipe × empresa × outra empresa e o 404 pelo id, o time obrigatório no nível time e quem não tem empresa no nível usuário, apagar autor/gestor/terceiro, o ciclo e o slug inválido 400, o 401 sem login) |
 | Controle remoto | Core: `RegrasDoRemotoTests` (o GUID no lugar do hostname, o que conta como dado de cliente, o que recusa o heartbeat e o retrato, o campo sem o valor, o envio fechado no JSON); Infrastructure: `ControleRemotoTests` (script `ControleRemoto.sql` contra o modelo, a migration sem mudança pendente, o heartbeat pelo relógio do servidor, a tolerância, o primeiro heartbeat em dobro, o teto de máquinas, o retrato atrasado e o reenvio sem mudar nada, o relógio adiantado, o expurgo com a cascata); Api: `RemotoAutenticacaoApiTests` (sem token, chave de máquina, token vencido e forjado, troca pendente, o 429 por usuário), `RemotoIsolamentoApiTests` (o colega, o gestor, o admin e a outra empresa sem ler nem publicar, o mesmo GUID em dois usuários, o corpo que não escolhe o dono) e `ContratoDoRemotoApiTests` (os JSON de `ContratoDoRemoto/` pela rota de verdade, cada texto aceito ou recusado pelo motivo, nada gravado na recusa, 400, 404 e 413) |
+| Provisão (item 4) | Core: `RegrasDaProvisaoTests` (o nome da conta repetível e único por ambiente, usuário e geração, as regras do Azure para a conta e a fila, o grupo por usuário, a liberação do admin e a do plano, o pedido e as regiões, a espera que dobra até o teto, o que cada estado aceita, a mensagem da auditoria sem segredo nem GUID); Infrastructure: `ProvisaoTests` (script `Provisao.sql` e a migration contra o modelo, sem liberação nada é gravado e o corpo inválido também é 403, a revogação com o autor, o plano que libera e a assinatura cancelada que não, o pedido repetido e o simultâneo numa fila só, o motor em andamento sem contar falha, a falha transitória com espera até o máximo, a definitiva e o repetir no MESMO recurso, o recurso de outro usuário, a remoção que espera a criação e a geração nova com outro nome, a remoção sem liberação, o trabalhador que não pega o pedido com dono, a concessão vencida retomada e o desfecho atrasado ignorado, a queda repetida levando a falhou, a exceção sem a mensagem, a parada que devolve o pedido); Api: `ProvisaoApiTests` (401, 403 sem liberação e sem gravar, 202/200 e o `Location`, 400 fora do contrato, 404 ao colega, ao gestor e ao admin, 409 da remoção durante a criação, a remoção depois de revogada, o repetir que exige a liberação, só o admin libera, o 429 por usuário, a API sem o `Azure.Identity` nem o motor); Provisao: `ProvedorAzureTests` (o Resource Manager de mentira: o token da identidade e o escopo, o corpo da conta segura, a repetição sem novo PUT, o 202 em andamento, cada erro no resultado certo, rede e tempo, a identidade ausente, a remoção que só apaga o grupo vazio e do próprio usuário) e `TrabalhadorTests` (a composição com a identidade atribuída, o simulado recusado em Production, o nome da réplica); web: `RecursosNaNuvem.test.tsx` (escondida sem liberação, o pedido com a região e a chave, a releitura até pronta, o motivo e o Repetir, a confirmação do Remover, a auditoria, a revogada só com remover, a recusa da API) e `Usuarios.test.tsx` (liberar e revogar pelo menu, o selo) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

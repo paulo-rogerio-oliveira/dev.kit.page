@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, Conta as DadosDaConta } from '../api/tipos';
 import { EditorDeContexto, ehContexto, ehSugestao, temaDa } from '../componentes/EditorDeContexto';
+import { RecursosNaNuvem } from '../componentes/RecursosNaNuvem';
 import { Topo } from '../componentes/Topo';
 import { papelDa, useSessao } from '../sessao';
 
@@ -68,6 +69,8 @@ export function Conta() {
           <p className="nota-da-secao">Entre no dev.kit com o mesmo login: a licença se renova sozinha enquanto a assinatura estiver ativa.</p>
           <Link className="botao botao-fantasma" to="/">Baixar o dev.kit</Link>
         </section>
+        {/* A provisão (item 4 do controle remoto): só aparece com a liberação, ou com recursos que ele ainda tem. */}
+        <RecursosNaNuvem token={sessao!.token} sair={sair} />
       </main>
     </div>
   );

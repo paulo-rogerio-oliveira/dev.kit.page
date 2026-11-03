@@ -10,6 +10,7 @@ import type {
   UtilidadeResposta, AssinanteDoItem,
 } from './tipos';
 import type { Projeto } from './projetos';
+import type { LiberacaoDaProvisao, RecursoNaNuvem, SituacaoDaProvisao } from './provisao';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -456,4 +457,24 @@ export const api = {
 
   removerAnexo: (token: string, slug: string, id: number, anexoId: number) =>
     chamar<AnexoDoItem>(`/api/catalogos/${encodeURIComponent(slug)}/itens/${id}/anexos/${anexoId}`, { metodo: 'DELETE', token }),
+
+  // A provisão (projeto controle-remoto, item 4): a fila do usuário no Azure. A API grava o pedido (202) e o trabalhador
+  // o executa; sem a liberação, 403. A liberação usuário a usuário é do admin.
+  provisao: (token: string) => chamar<SituacaoDaProvisao>('/api/provisao/v1', { token }),
+
+  pedirFila: (token: string, regiao: string, chaveDoCliente: string) =>
+    chamar<RecursoNaNuvem>('/api/provisao/v1/filas', { metodo: 'POST', corpo: { regiao, chaveDoCliente }, token }),
+
+  recursoNaNuvem: (token: string, id: number) => chamar<RecursoNaNuvem>(`/api/provisao/v1/recursos/${id}`, { token }),
+
+  repetirProvisao: (token: string, id: number) =>
+    chamar<RecursoNaNuvem>(`/api/provisao/v1/recursos/${id}/repetir`, { metodo: 'POST', token }),
+
+  removerRecurso: (token: string, id: number) =>
+    chamar<RecursoNaNuvem>(`/api/provisao/v1/recursos/${id}`, { metodo: 'DELETE', token }),
+
+  liberacoesDaProvisao: (token: string) => chamar<LiberacaoDaProvisao[]>('/api/provisao/v1/liberacoes', { token }),
+
+  definirLiberacao: (token: string, usuarioId: number, liberada: boolean) =>
+    chamar<LiberacaoDaProvisao>(`/api/provisao/v1/liberacoes/${usuarioId}`, { metodo: 'PUT', corpo: { liberada }, token }),
 };

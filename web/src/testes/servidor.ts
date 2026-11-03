@@ -7,6 +7,7 @@ import type {
   ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
   AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
 } from '../api/tipos';
+import type { RecursoNaNuvem, SituacaoDaProvisao } from '../api/provisao';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
 export const API = 'http://api.test';
@@ -804,6 +805,18 @@ export const handlersPadrao = [
     gestaoDeUsuarios.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/senha`, corpo: null });
     return HttpResponse.json({ usuario: { ...usuarios.find((u) => String(u.id) === params.id)!, deveTrocarSenha: true }, senhaTemporaria: 'DkREDEFINIDA77a1' });
   }),
+  // A provisão (item 4 do controle remoto): por padrão, não liberada e sem recursos — a seção da conta não aparece.
+  http.get(`${API}/api/provisao/v1`, () => HttpResponse.json(situacaoSemProvisao)),
+  http.get(`${API}/api/provisao/v1/liberacoes`, () => HttpResponse.json([])),
 ];
+
+/** A provisão de quem não a tem liberada nem recurso nenhum (o padrão dos testes). */
+export const situacaoSemProvisao: SituacaoDaProvisao = { liberada: false, origem: null, regioes: ['brazilsouth', 'eastus2'], regiaoPadrao: 'brazilsouth', recursos: [] };
+
+/** Uma fila do usuário no estado pedido (a de um teste a muda pelo spread). */
+export const filaPedida: RecursoNaNuvem = {
+  id: 7, tipo: 'fila', operacao: 'criar', estado: 'pedido', regiao: 'brazilsouth', grupoDeRecursos: 'rg-devkit-u2', conta: 'dk4mq7vz2kq3ab5xty',
+  fila: 'comandos', tentativas: 0, ultimoErro: '', pedidoEm: '2026-11-02T21:04:00Z', atualizadoEm: '2026-11-02T21:04:00Z', prontoEm: null,
+};
 
 export const servidor = setupServer(...handlersPadrao);
