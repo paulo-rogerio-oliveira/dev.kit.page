@@ -8,6 +8,7 @@ próprio dev.kit envia (repositório `git.kit`; ligado por padrão, desliga-se e
 | Pasta | O que tem |
 |---|---|
 | [`api/`](api) | A API ASP.NET Core (.NET 10): autenticação JWT, registro e ingestão das máquinas, consultas do dashboard e os pedidos de demonstração. Base SQLite embarcada, criada na primeira subida já com o usuário **admin**; scripts do Azure SQL em `api/scripts/sqlserver`. |
+| [`api/src/DevKitPage.Provisao`](api/src/DevKitPage.Provisao) | O worker da provisão no Azure (a fila do controle remoto): outro processo, com a identidade gerenciada própria, que executa os pedidos gravados pela API ([arquitetura](docs/arquitetura.md), [publicação](docs/publicacao-azure.md#provisão-no-azure-e-o-worker-controle-remoto-v2-item-4)). Para testar local sem o Azure: `Provisao__Provedor=simulado` e a mesma `ConnectionStrings__DevKitPage` da API. |
 | [`web/`](web) | A web em React + Vite + TypeScript: landing (conteúdo em `src/conteudo`, mídias em `public/midia`, gravador em `midia/`), login (com a troca obrigatória de senha) e dashboard. |
 | [`docs/`](docs) | [Arquitetura](docs/arquitetura.md), a [mensagem e o roteiro das mídias da landing](docs/landing-conteudo.md), o [contrato v1 da telemetria](docs/contrato-telemetria-v1.md), o [contrato v1 do controle remoto](docs/contrato-remoto-v1.md) e a [publicação no Azure](docs/publicacao-azure.md). |
 
@@ -89,6 +90,8 @@ publica os resultados.
 | `Demonstracoes:LimitePorMinuto` | 5 | Pedidos por minuto por IP de cliente no formulário; acima disto, 429. |
 | `Proxy:RedesConfiaveis` | — (só loopback) | As redes (CIDR) dos proxies cujo `X-Forwarded-For` vale — no Azure, a do Container Apps. |
 | `Cors:Origens` | (Development: Vite) | As origens da web. |
+| `Provisao:Regioes` · `RegiaoPadrao` · `MaximoDeFilasPorUsuario` · `PlanosQueLiberam` · `PedidosPorHora` | `brazilsouth`, `eastus2` · `brazilsouth` · 1 · — · 20 | A provisão no Azure na API: as regiões, a cota de filas, os planos que liberam sem a permissão do admin (o tier de assinatura) e o limite de pedidos. |
+| `Provisao:Provedor` · `AssinaturaId` · `IdentidadeClientId` (worker) | `azure` · — · — | O worker da provisão: o provedor (`simulado` só fora de Production), a assinatura e o client id da identidade gerenciada — **nenhum segredo**. |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |
 
 ## Como verificar cada critério da US #270

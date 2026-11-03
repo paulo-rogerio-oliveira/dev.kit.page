@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O WORKER da provisão: um processo SEPARADO da API pública, com a identidade gerenciada própria no Azure. Lê os pedidos da
+    mesma base (DevKitPage.Infrastructure) e os executa no Azure Resource Manager pela REST, com o token da identidade. A API
+    não carrega essa permissão: só grava o pedido.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DevKitPage.Infrastructure\DevKitPage.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DevKitPage.Provisao.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

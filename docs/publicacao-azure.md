@@ -287,6 +287,47 @@ Rode `api/scripts/sqlserver/UltimoLogin.sql` (idempotente) **antes de publicar a
 `Usuarios.UltimoLoginEmUtc`, que o login grava. Sem a coluna, todo login falha. Os usuários que já existem aparecem como
 "nunca" nas listas de `/usuarios` e `/empresa/usuarios` até entrarem de novo. SQLite aplica a migration automaticamente.
 
+### Provisão no Azure e o worker (controle remoto v2, item 4)
+
+A API pública só GRAVA o pedido; quem cria e remove no Azure é o **worker** `DevKitPage.Provisao`, outro processo, com a
+identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
+
+1. **Banco.** Rode `api/scripts/sqlserver/Provisao.sql` (idempotente) antes de publicar a API desta versão: cria
+   `PermissoesDeUsuario`, `RecursosProvisionados` e `EventosDaProvisao`. Sem ele, o `/health` fica `Degraded` e aponta o script.
+2. **Identidade do worker.** Crie uma identidade gerenciada atribuída ao usuário (ex.: `id-devkit-provisao`) e dê a ela, na
+   assinatura do dev.kit, só o que a provisão usa — uma função personalizada com `Microsoft.Resources/subscriptions/resourceGroups/read`
+   e `/write`, `Microsoft.Storage/storageAccounts/read`, `/write` e `/delete` e
+   `Microsoft.Storage/storageAccounts/queueServices/queues/read` e `/write` (o `Contributor` da assinatura também serve, mas
+   dá mais do que precisa). A identidade da API continua sem papel na assinatura.
+3. **Banco para o worker, sem senha.** No Azure SQL, crie o usuário da identidade (`CREATE USER [id-devkit-provisao] FROM
+   EXTERNAL PROVIDER`) com leitura e escrita, e use na connection string do worker
+   `Authentication=Active Directory Managed Identity;User Id=<client id da identidade>`.
+4. **Publicar.** `dotnet publish api/src/DevKitPage.Provisao -c Release` num segundo Container App (ou App Service), **sem
+   ingress** — o worker não recebe chamada nenhuma —, com a identidade do passo 2 atribuída e uma réplica (mais de uma
+   também funciona: a reserva do pedido é concorrente-segura).
+
+| Variável do worker | O que é |
+|---|---|
+| `ConnectionStrings__DevKitPage` · `Banco__Provider` | A MESMA base da API (`SqlServer`), com a autenticação da identidade (passo 3). |
+| `Provisao__Provedor` | `azure` (padrão). O `simulado` é de desenvolvimento: o worker se recusa a subir com ele em Production. |
+| `Provisao__AssinaturaId` | A assinatura do dev.kit onde ficam os grupos `rg-devkit-u{id}` (obrigatória). |
+| `Provisao__IdentidadeClientId` | O client id da identidade do passo 2 (não é segredo). Vazio: a identidade do sistema. |
+| `Provisao__MaximoDeTentativas` · `EsperaInicialSegundos` · `EsperaMaximaSegundos` · `ReservaMinutos` | 5 · 30 · 900 · 10: a repetição da falha transitória (recuo exponencial) e a validade da reserva de um pedido. |
+
+| Variável da API | O que é |
+|---|---|
+| `Provisao__Regioes__0`, `__1`… · `Provisao__RegiaoPadrao` | As regiões aceitas (padrão `brazilsouth` e `eastus2`) e a sugerida. |
+| `Provisao__MaximoDeFilasPorUsuario` | A cota de filas ativas por usuário (1). |
+| `Provisao__PlanosQueLiberam__0`… | Os planos da empresa que liberam a provisão sem a permissão do admin — o tier de assinatura; vazio hoje. |
+| `Provisao__PedidosPorHora` | Pedidos (criar, repetir, remover) por usuário por hora (20); acima, 429. |
+
+**Liberar a um usuário**: `/usuarios` → a licença do usuário → **Recursos liberados** → Liberar. Retirar não apaga o que ele
+criou (só impede pedidos novos). **Custo**: um grupo por usuário com as tags `devkit=provisao`, `devkit-usuario` e
+`devkit-recurso`; crie o orçamento com alerta da assinatura filtrado pela tag `devkit=provisao` (os preços e a
+disponibilidade das regiões não foram conferidos nesta entrega). A conta de armazenamento aceita só HTTPS e TLS 1.2, sem
+acesso público a blob; a chave compartilhada continua ligada porque a fila não aceita SAS de delegação de usuário, e a SAS
+curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as
