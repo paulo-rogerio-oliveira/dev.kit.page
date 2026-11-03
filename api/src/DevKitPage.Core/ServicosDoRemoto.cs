@@ -233,8 +233,9 @@ public static partial class DadosSensiveis
     }
 
     /// <summary>
-    /// Um CNPJ com os DVs certos: numérico, formatado ou só os 14 dígitos; alfanumérico (desde 2026), só formatado — o
-    /// <c>XX.XXX.XXX/XXXX-DV</c> —, para um id de 14 caracteres não ser lido como CNPJ.
+    /// Um CNPJ com os DVs certos (a regra única, <see cref="RegrasDaEmpresa.CnpjValido"/>): numérico, formatado ou só os
+    /// 14 dígitos; alfanumérico (desde 2026), só formatado — o <c>XX.XXX.XXX/XXXX-DV</c> —, para um id de 14 caracteres
+    /// não ser lido como CNPJ.
     /// </summary>
     public static bool ContemCnpj(string texto)
     {
@@ -244,7 +245,7 @@ public static partial class DadosSensiveis
                 .Replace("-", string.Empty, StringComparison.Ordinal);
             if (bruto.Any(char.IsLetter) && !m.Value.Contains('/', StringComparison.Ordinal))
                 continue;
-            if (CnpjValido(bruto))
+            if (RegrasDaEmpresa.CnpjValido(bruto))
                 return true;
         }
         return false;
@@ -274,26 +275,6 @@ public static partial class DadosSensiveis
             return true;
         }
         return CelularSemDdd().IsMatch(texto);
-    }
-
-    /// <summary>Os DVs do CNPJ (o cálculo do alfanumérico, que vale também para o numérico): o valor do caractere é o ASCII menos 48.</summary>
-    public static bool CnpjValido(string cnpj)
-    {
-        if (cnpj.Length != 14 || !char.IsAsciiDigit(cnpj[12]) || !char.IsAsciiDigit(cnpj[13]) || cnpj.Distinct().Count() == 1
-            || cnpj.Any(c => !char.IsAsciiDigit(c) && !char.IsAsciiLetterUpper(c)))
-            return false;
-
-        static int Dv(string parte)
-        {
-            var soma = 0;
-            for (var i = 0; i < parte.Length; i++)
-                soma += (parte[parte.Length - 1 - i] - '0') * (i % 8 + 2);
-            var resto = soma % 11;
-            return resto < 2 ? 0 : 11 - resto;
-        }
-
-        var primeiro = Dv(cnpj[..12]);
-        return primeiro == cnpj[12] - '0' && Dv(cnpj[..13]) == cnpj[13] - '0';
     }
 
     /// <summary>Os DVs do CPF; os 11 dígitos iguais não valem.</summary>

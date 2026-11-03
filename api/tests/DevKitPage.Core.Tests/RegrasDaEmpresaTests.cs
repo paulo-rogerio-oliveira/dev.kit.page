@@ -18,6 +18,15 @@ public sealed class RegrasDaEmpresaTests
     public void Cnpj_pelos_digitos_verificadores(string texto, bool valido)
         => Assert.Equal(valido, RegrasDaEmpresa.CnpjValido(RegrasDaEmpresa.Cnpj(texto)));
 
+    /// <summary>A regra única também vale para o CNPJ alfanumérico da Receita (2026), que o detector do controle remoto usa.</summary>
+    [Theory]
+    [InlineData("12ABC34501DE35", true)]
+    [InlineData("12ABC34501DE36", false)]
+    [InlineData("12abc34501de35", false)]
+    [InlineData("12ABC34501DEA5", false)]
+    public void Cnpj_alfanumerico_pelos_digitos_verificadores(string cnpj, bool valido)
+        => Assert.Equal(valido, RegrasDaEmpresa.CnpjValido(cnpj));
+
     [Fact]
     public void Cnpj_formatado_para_a_tela()
         => Assert.Equal("11.222.333/0001-81", RegrasDaEmpresa.FormatarCnpj("11222333000181"));

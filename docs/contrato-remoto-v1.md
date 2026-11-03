@@ -31,7 +31,8 @@ O serviço do Windows (`GitKit.Scheduler`) envia a cada `IntervaloDoHeartbeatSeg
 
 - `maquinaId`: o id anônimo do dev.kit (o da telemetria) — letras, dígitos e hífen, até 64. Nunca o hostname.
 - `origem`: `servico` ou `app`. `estadoDoAgente`: `ativo`, `pausado`, `limite` ou `parado` (vazio é `parado`).
-- `turnoEmAndamento`: o site avisa antes de reiniciar o dev.kit (fase 5).
+- `turnoEmAndamento`: o site avisa antes de reiniciar o dev.kit, porque reiniciar interrompe o turno (o "reinício seguro"
+  da proposta; no plano do projeto, o item 8, "Serviço liga e reinicia o dev.kit").
 - Resposta **200** `{ "maquinaId", "recebidoEm", "intervaloSegundos": 60 }`.
 - A máquina aparece `conectada` enquanto o último heartbeat tem até `SegundosAteDesconectar` (180 s) pelo relógio da API.
 
@@ -62,7 +63,7 @@ Uma FOTO inteira do estado, enviada quando ele muda. Substitui a anterior; a mai
 - Situação do projeto e do item: as de `ProjetosV1` (`rascunho`, `aguardando`, `aprovado`, `pausado`, `fechando`,
   `concluido`; `planejado`, `rodando`, `pergunta`, `integrado`, `falhou`).
 - Pendência: `tipo` é `pergunta`, `aprovacao` ou `falha`. `pergunta`, `opcoes` e `jaTentei` são os campos do
-  `[GITKIT:PERGUNTA]` — as decisões remotas (fase 3) os mostram como botões. O `id` é estável: é por ele que a resposta volta.
+  `[GITKIT:PERGUNTA]` — as decisões remotas (fase 3 da proposta, item 9 do plano) os mostram como botões. O `id` é estável: é por ele que a resposta volta.
 - Tetos: 256 KB de corpo; 50 projetos de até 100 itens, 100 fluxos, 100 pendências de até 10 opções; nomes e títulos
   até 200 caracteres, `pergunta` e `jaTentei` até 2000.
 - Resposta **200** `{ "maquinaId", "recebidoEm", "aplicado" }`.

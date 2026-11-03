@@ -43,7 +43,7 @@ public sealed record FluxoNoRetratoV1(
 
 /// <summary>
 /// Uma PENDÊNCIA do dev (o que espera decisão). A pergunta leva os MESMOS campos do <c>[GITKIT:PERGUNTA]</c> —
-/// <see cref="Pergunta"/>, <see cref="Opcoes"/> e <see cref="JaTentei"/> —, que as decisões remotas (fase 3) mostram
+/// <see cref="Pergunta"/>, <see cref="Opcoes"/> e <see cref="JaTentei"/> —, que as decisões remotas (fase 3 da proposta) mostram
 /// como botões. O <see cref="Id"/> é estável: é por ele que a resposta volta.
 /// </summary>
 public sealed record PendenciaNoRetratoV1(
