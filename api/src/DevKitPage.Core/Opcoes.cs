@@ -109,6 +109,47 @@ public sealed class OpcoesDoRemoto
 }
 
 /// <summary>
+/// A provisão no Azure (seção <c>Provisao</c>): o que a API aceita no pedido e o que o worker segue ao executar. A API só
+/// grava o pedido; quem tem a permissão no Azure é o worker (<c>DevKitPage.Provisao</c>), com a identidade gerenciada dele.
+/// </summary>
+public sealed class OpcoesDaProvisao
+{
+    public const string Secao = "Provisao";
+
+    /// <summary>As regiões aceitas; vazia é <see cref="RegrasDaProvisao.RegioesPadrao"/> (o binder ACRESCENTA a uma lista com valor inicial).</summary>
+    public string[] Regioes { get; set; } = [];
+
+    /// <summary>A região sugerida; fora de <see cref="Regioes"/>, vale a primeira delas.</summary>
+    public string RegiaoPadrao { get; set; } = "brazilsouth";
+
+    /// <summary>A cota de filas ATIVAS (não removidas) por usuário.</summary>
+    public int MaximoDeFilasPorUsuario { get; set; } = 1;
+
+    /// <summary>
+    /// Os planos da empresa (<c>Empresa.Plano</c>) que liberam a provisão sem a permissão do admin — o tier de assinatura,
+    /// quando existir. Vazio: só a permissão libera.
+    /// </summary>
+    public string[] PlanosQueLiberam { get; set; } = [];
+
+    /// <summary>Quantos pedidos (criar, repetir, remover) um mesmo usuário faz por hora; acima disto, 429.</summary>
+    public int PedidosPorHora { get; set; } = 20;
+
+    /// <summary>Quantas execuções o worker faz da mesma operação antes de dar a falha transitória como definitiva.</summary>
+    public int MaximoDeTentativas { get; set; } = 5;
+
+    /// <summary>A espera depois da primeira falha transitória; dobra a cada tentativa, até <see cref="EsperaMaximaSegundos"/>.</summary>
+    public int EsperaInicialSegundos { get; set; } = 30;
+
+    public int EsperaMaximaSegundos { get; set; } = 900;
+
+    /// <summary>Por quanto tempo uma execução fica reservada a um worker: passou disto, outro a retoma (o worker caiu).</summary>
+    public int ReservaMinutos { get; set; } = 10;
+
+    /// <summary>O prefixo do grupo de recursos do usuário: <c>rg-devkit-u{id}</c>.</summary>
+    public string PrefixoDoGrupo { get; set; } = "rg-devkit-u";
+}
+
+/// <summary>
 /// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
 /// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta
 /// em desenvolvimento e nos testes.

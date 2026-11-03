@@ -9,9 +9,13 @@ namespace DevKitPage.Contracts.V1;
 /// <param name="DeveTrocarSenha">Ainda com a senha temporária: o primeiro acesso exige a troca.</param>
 /// <param name="Licenca">A licença do dev.kit do usuário (US #687); nula só numa API anterior a ela.</param>
 /// <param name="UltimoLogin">O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou.</param>
+/// <param name="RecursosLiberados">
+/// Os recursos que o admin liberou a este usuário (<see cref="ProvisaoV1.RecursosLiberaveis"/>); nulo só numa API anterior a eles.
+/// </param>
 public sealed record UsuarioResumo(
     int Id, string Login, string Nome, string Papel, int? EmpresaId, string? Empresa, bool Bloqueado,
-    DateTimeOffset? BloqueadoAte, bool DeveTrocarSenha, DateTimeOffset CriadoEm, LicencaDoUsuarioV1? Licenca = null, DateTimeOffset? UltimoLogin = null);
+    DateTimeOffset? BloqueadoAte, bool DeveTrocarSenha, DateTimeOffset CriadoEm, LicencaDoUsuarioV1? Licenca = null, DateTimeOffset? UltimoLogin = null,
+    IReadOnlyList<string>? RecursosLiberados = null);
 
 /// <summary>Os tipos da licença de um usuário como a gestão os mostra e o admin os escolhe (US #687).</summary>
 public static class TiposDaLicencaDoUsuario

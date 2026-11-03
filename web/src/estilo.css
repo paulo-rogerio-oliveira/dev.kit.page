@@ -840,7 +840,34 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
   .conta > .cabecalho-da-conta { grid-column: 1 / -1; }
   .conta > section { grid-column: 1; }
   .conta > .secao-do-contexto { grid-column: 2; grid-row: 2 / span 4; }
+  .conta > .secao-da-provisao { grid-column: 1 / -1; }
 }
+
+/* A fila do controle remoto na conta (controle remoto v2, item 4; proposta conta v12): o pedido, o recurso e o histórico. */
+.formulario-da-provisao { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 0 0 16px; }
+.formulario-da-provisao label { display: grid; gap: 6px; font-weight: 600; font-size: 0.875rem; }
+.formulario-da-provisao select { min-width: 220px; }
+.nota-da-cota { margin: 0; font-size: 0.8rem; color: var(--texto-2); }
+.recursos-da-conta { display: grid; gap: 12px; }
+.recurso-provisionado { border: 1px solid var(--borda); border-radius: 12px; padding: 16px 18px; }
+.recurso-removido { opacity: 0.7; }
+.recurso-cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
+.conta .cartao .recurso-cabecalho h3 { margin: 0; font-size: 1rem; font-weight: 800; }
+.conta .recurso-dados { display: grid; grid-template-columns: repeat(4, max-content minmax(0, 1fr)); gap: 8px 14px; margin: 0 0 12px; font-size: 0.875rem; }
+.conta .recurso-dados dt { color: var(--texto-2); }
+.conta .recurso-dados dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.recurso-provisionado .erro, .recurso-provisionado .nota-da-cota { margin: 0 0 12px; }
+.recurso-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.linha-do-tempo { list-style: none; margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--borda); display: grid; gap: 6px; font-size: 0.8rem; color: var(--texto-2); }
+.linha-do-tempo time { font-family: var(--mono); margin-right: 10px; color: var(--texto); }
+@media (max-width: 760px) {
+  .conta .recurso-dados { grid-template-columns: max-content minmax(0, 1fr); }
+}
+
+/* Os recursos liberados por usuário, no painel do admin (proposta admin-usuarios v8). */
+.recursos-liberados { margin: 0 0 8px; }
+.recurso-liberado { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 10px; }
+.recurso-liberado small { display: block; margin-top: 2px; font-size: 0.78rem; line-height: 1.4; }
 
 /* O topo numa linha só a partir de 1200px: o menu e quem está logado mais compactos (o gestor tem cinco links). */
 @media (min-width: 1200px) {

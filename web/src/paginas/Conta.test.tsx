@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
 import { vi } from 'vitest';
-import { API, contaIndividual, escritas, servidor, tokenDoDev } from '../testes/servidor';
+import { API, contaIndividual, escritas, filaPronta, permissaoLiberada, provisao, servidor, tokenDoDev } from '../testes/servidor';
+import { INTERVALO_DE_ACOMPANHAMENTO_MS } from '../componentes/FilaDoControleRemoto';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -156,5 +157,110 @@ describe('Conta (US #425)', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Entrar' })).toBeInTheDocument());
     expect(screen.getByText('Sua sessão expirou. Entre de novo.')).toBeInTheDocument();
+  });
+});
+
+describe('Fila do controle remoto na conta (controle remoto v2, item 4)', () => {
+  it('sem a provisão liberada, a seção não existe', async () => {
+    renderizar('/conta', tokenDoDev());
+
+    expect(await screen.findByText('Ana Souza')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Fila do controle remoto' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Criar a fila' })).not.toBeInTheDocument();
+  });
+
+  it('liberada e sem fila, pede na região escolhida e mostra o pedido', async () => {
+    provisao.permissao = permissaoLiberada;
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Fila do controle remoto' });
+    expect(await within(secao).findByText(/Nenhuma fila ainda/)).toBeInTheDocument();
+    await userEvent.selectOptions(within(secao).getByLabelText('Região'), 'eastus2');
+    await userEvent.click(within(secao).getByRole('button', { name: 'Criar a fila' }));
+
+    expect(await within(secao).findByText(/Pedido aceito: o worker cria o grupo, a conta e a fila/)).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'POST', caminho: '/api/provisao/filas', corpo: { regiao: 'eastus2' } }]);
+    const fila = await within(secao).findByRole('article', { name: 'Fila comandos na conta dkq2novafila1' });
+    expect(within(fila).getByText('Pedida')).toBeInTheDocument();
+    // A cota cheia: o Criar fica desligado, com o porquê.
+    expect(within(secao).getByRole('button', { name: 'Criar a fila' })).toBeDisabled();
+    expect(within(secao).getByText('Uma fila por usuário: remova a atual para criar outra.')).toBeInTheDocument();
+  });
+
+  it('a fila pronta mostra os nomes, o histórico da auditoria e remove com confirmação', async () => {
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    provisao.permissao = permissaoLiberada;
+    provisao.recursos = [filaPronta()];
+    renderizar('/conta', tokenDoDev());
+
+    const fila = await screen.findByRole('article', { name: 'Fila comandos na conta dkq2x7k4m9pa' });
+    expect(within(fila).getByText('Pronta')).toBeInTheDocument();
+    expect(within(fila).getByText('rg-devkit-u2')).toBeInTheDocument();
+    expect(within(fila).queryByRole('button', { name: 'Repetir' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(fila).getByRole('button', { name: 'Histórico' }));
+    const historico = await within(fila).findByRole('list', { name: 'Histórico' });
+    expect(within(historico).getByText(/Pedido · ana.dev · brazilsouth/)).toBeInTheDocument();
+    expect(within(historico).getByText(/Falhou \(transitória\) · O Azure limitou os pedidos/)).toBeInTheDocument();
+    expect(within(historico).getByText(/Pronta · grupo, conta e fila comandos prontos/)).toBeInTheDocument();
+
+    await userEvent.click(within(fila).getByRole('button', { name: 'Remover' }));
+
+    expect(confirmar).toHaveBeenCalledWith(expect.stringMatching(/Remover a conta dkq2x7k4m9pa e a fila comandos do Azure/));
+    expect(await screen.findByText(/Remoção pedida: o worker apaga a conta dkq2x7k4m9pa/)).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'DELETE', caminho: '/api/provisao/recursos/11', corpo: null }]);
+    expect(await within(fila).findByText('Remoção pedida')).toBeInTheDocument();
+    confirmar.mockRestore();
+  });
+
+  it('o que falhou mostra o erro e se repete', async () => {
+    provisao.permissao = permissaoLiberada;
+    provisao.recursos = [{ ...filaPronta(), estado: 'falhou', prontoEm: null, endpoint: '', erro: 'A identidade do worker não tem permissão para a conta de armazenamento (AuthorizationFailed).' }];
+    renderizar('/conta', tokenDoDev());
+
+    const fila = await screen.findByRole('article', { name: 'Fila comandos na conta dkq2x7k4m9pa' });
+    expect(within(fila).getByText('Falhou')).toBeInTheDocument();
+    expect(within(fila).getByRole('alert')).toHaveTextContent('AuthorizationFailed');
+    await userEvent.click(within(fila).getByRole('button', { name: 'Repetir' }));
+
+    expect(await screen.findByText(/Pedido devolvido ao worker/)).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'POST', caminho: '/api/provisao/recursos/11/repetir', corpo: null }]);
+  });
+
+  it('acompanha o worker: o pedido em provisão vira pronto na releitura', async () => {
+    // Só o relógio do acompanhamento é capturado (o teste o dispara à mão); os outros, como o do waitFor, seguem de verdade.
+    const relogios: (() => void)[] = [];
+    const original = window.setInterval.bind(window);
+    const intervalo = vi.spyOn(window, 'setInterval').mockImplementation(((acao: () => void, ms?: number, ...resto: unknown[]) => {
+      if (ms !== INTERVALO_DE_ACOMPANHAMENTO_MS) return original(acao, ms, ...resto);
+      relogios.push(acao);
+      return 0;
+    }) as typeof window.setInterval);
+    provisao.permissao = permissaoLiberada;
+    provisao.recursos = [{ ...filaPronta(), estado: 'em-provisao', prontoEm: null, tentativas: 1 }];
+    renderizar('/conta', tokenDoDev());
+
+    const fila = await screen.findByRole('article', { name: 'Fila comandos na conta dkq2x7k4m9pa' });
+    expect(within(fila).getByText('Em provisão')).toBeInTheDocument();
+    await waitFor(() => expect(relogios.length).toBeGreaterThan(0));
+
+    provisao.recursos = [filaPronta()];
+    relogios.at(-1)!();
+
+    expect(await within(fila).findByText('Pronta')).toBeInTheDocument();
+    intervalo.mockRestore();
+  });
+
+  it('o 403 da API (a liberação retirada no meio) aparece como erro', async () => {
+    provisao.permissao = permissaoLiberada;
+    servidor.use(http.post(`${API}/api/provisao/filas`, () =>
+      HttpResponse.json({ detail: 'A provisão no Azure não está liberada para o seu usuário. Peça a liberação ao administrador do dev.kit.' }, { status: 403 })));
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Fila do controle remoto' });
+    await within(secao).findByText(/Nenhuma fila ainda/);
+    await userEvent.click(within(secao).getByRole('button', { name: 'Criar a fila' }));
+
+    expect(await within(secao).findByRole('alert')).toHaveTextContent('não está liberada para o seu usuário');
   });
 });

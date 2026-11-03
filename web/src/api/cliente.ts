@@ -8,6 +8,7 @@ import type {
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta, AssinanteDoItem,
+  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { Projeto } from './projetos';
 import type { MaquinaRemota, RetratoDaMaquina } from './remoto';
@@ -397,6 +398,25 @@ export const api = {
 
   redefinirSenha: (token: string, id: number) =>
     chamar<UsuarioComSenha>(`/api/usuarios/${id}/senha`, { metodo: 'POST', token }),
+
+  liberarRecurso: (token: string, id: number, recurso: RecursoLiberavel, liberado: boolean) =>
+    chamar<UsuarioResumo>(`/api/usuarios/${id}/recursos/${recurso}`, { metodo: 'PUT', corpo: { liberado }, token }),
+
+  // A provisão no Azure (controle remoto v2, item 4): a permissão decide se a ação aparece; o resto, sem ela, é 403.
+  permissaoDeProvisao: (token: string) => chamar<PermissaoDeProvisao>('/api/provisao/permissao', { token }),
+
+  recursosProvisionados: (token: string) => chamar<RecursoProvisionado[]>('/api/provisao/recursos', { token }),
+
+  detalheDoRecurso: (token: string, id: number) => chamar<DetalheDoRecurso>(`/api/provisao/recursos/${id}`, { token }),
+
+  pedirFila: (token: string, regiao: string) =>
+    chamar<RecursoProvisionado>('/api/provisao/filas', { metodo: 'POST', corpo: { regiao }, token }),
+
+  repetirProvisao: (token: string, id: number) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/repetir`, { metodo: 'POST', token }),
+
+  removerRecurso: (token: string, id: number) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}`, { metodo: 'DELETE', token }),
 
   // ----- US #687 -----
 

@@ -103,9 +103,51 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
     {
         var agora = relogio.GetUtcNow();
         var usos = await UltimosUsosAsync(db, null, ct);
+        var liberados = await LiberadosAsync(null, ct);
         return (await db.Usuarios.AsNoTracking().Include(u => u.Empresa).OrderBy(u => u.Login).ToListAsync(ct))
-            .Select(u => Resumo(u, agora, usos.GetValueOrDefault(u.Id)))
+            .Select(u => Resumo(u, agora, usos.GetValueOrDefault(u.Id), liberados.GetValueOrDefault(u.Id)))
             .ToArray();
+    }
+
+    /// <summary>Os recursos liberados de cada usuário (ou só de um), na ordem do contrato.</summary>
+    private async Task<Dictionary<int, string[]>> LiberadosAsync(int? usuarioId, CancellationToken ct)
+        => (await db.PermissoesDeUsuario.AsNoTracking().Where(p => usuarioId == null || p.UsuarioId == usuarioId).ToListAsync(ct))
+            .GroupBy(p => p.UsuarioId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.Recurso).OrderBy(r => r, StringComparer.Ordinal).ToArray());
+
+    public async Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, string autor, CancellationToken ct)
+    {
+        if (!ProvisaoV1.RecursosLiberaveis.Contains(recurso))
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Recusada, $"O recurso é um de: {string.Join(", ", ProvisaoV1.RecursosLiberaveis)}.");
+        if (!await db.Usuarios.AnyAsync(u => u.Id == id, ct))
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.NaoEncontrado, "Usuário não encontrado.");
+
+        var agora = relogio.GetUtcNow().UtcDateTime;
+        var atual = await db.PermissoesDeUsuario.FirstOrDefaultAsync(p => p.UsuarioId == id && p.Recurso == recurso, ct);
+        if (liberado && atual is null)
+        {
+            db.PermissoesDeUsuario.Add(new PermissaoDeUsuario { UsuarioId = id, Recurso = recurso, ConcedidaPor = autor, ConcedidaEmUtc = agora });
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await MotorDeProvisao.AuditarAsync(db, null, id, ProvisaoV1.EventoLiberado, autor, recurso, agora, ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Dois cliques ao mesmo tempo: o índice único decide, e o resultado é o mesmo — liberado.
+                db.ChangeTracker.Clear();
+                if (!await db.PermissoesDeUsuario.AsNoTracking().AnyAsync(p => p.UsuarioId == id && p.Recurso == recurso, ct))
+                    throw;
+            }
+        }
+        else if (!liberado && atual is not null)
+        {
+            db.PermissoesDeUsuario.Remove(atual);
+            await db.SaveChangesAsync(ct);
+            await MotorDeProvisao.AuditarAsync(db, null, id, ProvisaoV1.EventoRetirado, autor, recurso, agora, ct);
+        }
+
+        return new(await ResumoAsync(id, ct));
     }
 
     /// <summary>
@@ -236,12 +278,13 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
 
     private async Task<UsuarioResumo> ResumoAsync(int id, CancellationToken ct)
         => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow(),
-            (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id));
+            (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id), (await LiberadosAsync(id, ct)).GetValueOrDefault(id));
 
-    private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso)
+    private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso, string[]? liberados)
         => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
             u.BloqueadoAteUtc is { } ate && ate > agora.UtcDateTime ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc),
-            Licenca(u, agora, ultimoUso, licencas.Value.TrialDias), u.UltimoLoginEmUtc is { } login ? DevKitPageDb.Utc(login) : null);
+            Licenca(u, agora, ultimoUso, licencas.Value.TrialDias), u.UltimoLoginEmUtc is { } login ? DevKitPageDb.Utc(login) : null,
+            liberados ?? []);
 }
 
 /// <summary>

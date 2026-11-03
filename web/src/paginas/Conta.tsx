@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, Conta as DadosDaConta } from '../api/tipos';
 import { EditorDeContexto, ehContexto, ehSugestao, temaDa } from '../componentes/EditorDeContexto';
+import { FilaDoControleRemoto } from '../componentes/FilaDoControleRemoto';
 import { Topo } from '../componentes/Topo';
 import { papelDa, useSessao } from '../sessao';
 
 /**
  * A conta de quem está logado (US #425, /conta) — o destino do dev depois do login: quem é, a empresa, a política
  * de login que vale para ele e, na assinatura individual, o "Gerenciar assinatura" (o portal do gateway). O gestor
- * chega daqui à administração da empresa. Desde a US #550, é aqui que cada um cadastra o PRÓPRIO contexto do dev.kit.
+ * chega daqui à administração da empresa. Desde a US #550, é aqui que cada um cadastra o PRÓPRIO contexto do dev.kit. Com a
+ * provisão liberada (controle remoto v2, item 4), a fila do controle remoto no Azure.
  */
 export function Conta() {
   const { sessao, sair } = useSessao();
@@ -69,6 +71,7 @@ export function Conta() {
           <p className="nota-da-secao">Entre no dev.kit com o mesmo login: a licença se renova sozinha enquanto a assinatura estiver ativa.</p>
           <Link className="botao botao-fantasma" to="/">Baixar o dev.kit</Link>
         </section>
+        <FilaDoControleRemoto token={sessao!.token} sair={sair} />
       </main>
     </div>
   );

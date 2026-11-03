@@ -215,6 +215,13 @@ public interface IGestaoDeUsuarios
     /// TEMPORÁRIO por falhas — o bloqueio do admin fica como está.
     /// </summary>
     Task<ResultadoDaGestao<UsuarioComSenha>> RedefinirSenhaAsync(int id, CancellationToken ct);
+
+    /// <summary>
+    /// Libera ou retira um recurso (<see cref="Contracts.V1.ProvisaoV1.RecursosLiberaveis"/>) do usuário, com a linha na
+    /// auditoria da provisão. Idempotente: liberar o liberado (ou retirar o retirado) não grava nada. Retirar NÃO remove o
+    /// que o usuário já criou no Azure — só impede pedidos novos.
+    /// </summary>
+    Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, string autor, CancellationToken ct);
 }
 
 /// <summary>

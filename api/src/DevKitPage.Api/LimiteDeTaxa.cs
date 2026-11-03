@@ -57,6 +57,12 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDoRemoto = "Remoto";
 
+    /// <summary>
+    /// A política dos pedidos de provisão (criar, repetir, remover): por USUÁRIO do token, com
+    /// <see cref="OpcoesDaProvisao.PedidosPorHora"/> numa janela de uma hora. Cada pedido mexe em recurso pago no Azure.
+    /// </summary>
+    public const string PoliticaDaProvisao = "Provisao";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -142,6 +148,17 @@ public static class LimiteDeTaxa
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaProvisao, http =>
+            {
+                var porHora = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDaProvisao>>().Value.PedidosPorHora);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("provisao:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porHora,
+                    Window = TimeSpan.FromHours(1),
                     QueueLimit = 0,
                 });
             });
