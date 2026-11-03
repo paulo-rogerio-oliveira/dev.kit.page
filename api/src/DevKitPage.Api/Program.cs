@@ -63,6 +63,7 @@ app.MapearLicencas();
 app.MapearLicencaDosUsuarios();
 app.MapearEdicaoDeEmpresas();
 app.MapearPagamentos();
+app.MapearRemoto();
 
 await app.RunAsync();
 

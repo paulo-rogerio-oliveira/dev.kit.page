@@ -571,8 +571,9 @@ public static partial class RegrasDeErro
     [GeneratedRegex(@"\b[A-Za-z][\w.\-]*\\[A-Za-z][\w.$\-]*")]
     private static partial Regex UsuarioDeDominio();
 
+    /// <summary>O e-mail — o mesmo padrão que o detector do retrato remoto usa (<see cref="DadosSensiveis"/>).</summary>
     [GeneratedRegex(@"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")]
-    private static partial Regex Email();
+    internal static partial Regex Email();
 
     [GeneratedRegex(@"\\\\[^\s\\""'<>|]+[^\n""'<>|]*?(?=:line\b|:\d|[""'<>|\n]|$)", RegexOptions.Multiline)]
     private static partial Regex CaminhoUnc();

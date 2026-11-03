@@ -46,10 +46,12 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
     public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
     public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
+    public DbSet<MaquinaRemota> MaquinasRemotas => Set<MaquinaRemota>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
+        ConfigurarRemoto(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -520,6 +522,26 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
         });
     }
+
+    /// <summary>
+    /// O controle remoto, fase 1: o heartbeat e o retrato de cada máquina, por usuário. No Azure SQL a tabela vem de
+    /// api/scripts/sqlserver/Remoto.sql. O retrato é nvarchar(max), com o teto do contrato conferido antes.
+    /// </summary>
+    private static void ConfigurarRemoto(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<MaquinaRemota>(e =>
+        {
+            e.ToTable("MaquinasRemotas");
+            e.Property(m => m.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(m => m.Nome).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoNome);
+            e.Property(m => m.VersaoDevKit).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDaVersao);
+            e.Property(m => m.Origem).HasMaxLength(20);
+            e.Property(m => m.EstadoDoAgente).HasMaxLength(20);
+            e.Property(m => m.Retrato).HasDefaultValue("");
+            // O isolamento: o mesmo id anônimo de dois usuários são duas máquinas, e nenhum grava na do outro.
+            e.HasIndex(m => new { m.UsuarioId, m.MaquinaId }).IsUnique();
+            e.HasIndex(m => m.AtualizadaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
 
     /// <summary>A data UTC lida do banco (o provider devolve <see cref="DateTimeKind.Unspecified"/>).</summary>
     public static DateTimeOffset Utc(DateTime data) => new(DateTime.SpecifyKind(data, DateTimeKind.Utc));

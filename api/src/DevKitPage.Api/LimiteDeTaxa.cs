@@ -50,6 +50,13 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDoDesign = "Design";
 
+    /// <summary>
+    /// A política dos envios do controle remoto (heartbeat e retrato): por USUÁRIO do token, com
+    /// <see cref="OpcoesDoRemoto.EnviosPorMinuto"/>. O 429 só atrasa o próximo heartbeat: a máquina não some do site antes
+    /// de <c>RemotoV1.SegundosAteDesconectar</c>.
+    /// </summary>
+    public const string PoliticaDoRemoto = "Remoto";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -121,6 +128,17 @@ public static class LimiteDeTaxa
                 var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoDesign>>().Value.EnviosPorMinuto);
                 var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
                 return RateLimitPartition.GetFixedWindowLimiter("design:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDoRemoto, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.EnviosPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("remoto:" + usuario, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),
