@@ -4,6 +4,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
 import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
+import { Abas } from '../componentes/Abas';
 import './Board.css';
 
 const motivo = 'Disponível somente no dev.kit da máquina nesta fase.';
@@ -147,17 +148,14 @@ export function Board() {
         <div className={`br-host${conectada ? '' : ' br-offline'}`}><i aria-hidden="true" />
           {maquinas.length > 1 ? <select aria-label="Máquina" value={selecionada} onChange={e => { setFoto(null); setErro(''); setCarregando(true); setSelecionada(e.target.value); }}>
             {maquinas.map(m => <option key={m.maquinaId} value={m.maquinaId}>{m.nome || 'Máquina'}</option>)}
-          </select> : <span>{maquina?.nome || 'Máquina'}</span>}
+          </select> : <span className="br-name" title={maquina?.nome || 'Máquina'}>{maquina?.nome || 'Máquina'}</span>}
           <span className="br-desktop-state"> · {estado.toLowerCase()}</span>
         </div>
-        <small><span className="br-mobile-state">{estado} · </span>{idade(maquina?.ultimoHeartbeatEm, agora)}{agente && ` · ${agente}`}{maquina?.turnoEmAndamento && ' · turno em andamento'}</small>
+        <small title="Idade do último heartbeat recebido"><span className="br-mobile-state">{estado} · </span><span className="br-desktop-state">Última atualização </span>{idade(maquina?.ultimoHeartbeatEm, agora)}{agente && ` · ${agente}`}{maquina?.turnoEmAndamento && ' · turno em andamento'}</small>
       </div>
       <button className="br-btn br-restart" disabled title={motivo}>Reiniciar dev.kit</button>
     </header>
-    <nav className="br-tabs" aria-label="Navegação do Board">
-      <button aria-current={aba === 'chat' ? 'page' : undefined} onClick={() => setParametros({ aba: 'chat' }, { replace: true })}>Chat</button>
-      <button aria-current={aba === 'board' ? 'page' : undefined} onClick={() => setParametros({ aba: 'board' }, { replace: true })}>Board</button>
-    </nav>
+    <div className="br-navegacao"><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Somente leitura</strong><span>Fase 1</span></div>
@@ -170,6 +168,8 @@ export function Board() {
       </aside>
       <ChatIndisponivel />
     </main>
-    <footer className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.<span className="br-desktop-state"> Reinicie o dev.kit pela máquina nesta fase.</span></footer>
+    </Abas></div>
+    <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
+    <footer className="br-footer"><span className="br-desktop-state">Reinicie o dev.kit pela máquina nesta fase.</span><span className="br-mobile-state">Somente leitura · decisões no dev.kit</span></footer>
   </div>;
 }

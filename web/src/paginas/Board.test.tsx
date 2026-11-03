@@ -67,10 +67,22 @@ describe('Board remoto, fase 1', () => {
     responder();
     renderizar('/board', tokenDoDev());
     await screen.findByText('Projeto de demonstração');
-    await userEvent.click(screen.getByRole('button', { name: 'Chat' }));
-    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
-    await userEvent.click(screen.getByRole('button', { name: 'Board' }));
-    expect(screen.getByRole('button', { name: 'Board' })).toHaveAttribute('aria-current', 'page');
+    const chat = screen.getByRole('tab', { name: 'Chat' });
+    const board = screen.getByRole('tab', { name: 'Board' });
+    expect(screen.getAllByRole('tab')).toHaveLength(2);
+    await userEvent.click(chat);
+    expect(chat).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(board).toHaveAttribute('aria-selected', 'true');
+    expect(board).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(chat).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{End}');
+    expect(board).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(chat).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(board);
+    expect(board).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('link', { name: /Projetos|Fluxos|Infra/ })).not.toBeInTheDocument();
   });
 

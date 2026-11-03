@@ -62,13 +62,17 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
       await expect(page.getByRole('button', { name: 'Decidir', exact: true })).toBeDisabled();
       if (width < 700) {
-        await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(2);
-        await page.getByRole('button', { name: 'Chat', exact: true }).click();
+        await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
+        await page.getByRole('tab', { name: 'Chat', exact: true }).click();
+        await page.keyboard.press('ArrowRight');
+        await expect(page.getByRole('tab', { name: 'Board', exact: true })).toHaveAttribute('aria-selected', 'true');
+        await page.keyboard.press('ArrowLeft');
+        await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
       }
       await expect(page.getByLabel('Mensagem ao Orquestrador')).toBeDisabled();
       await expect(page.getByText(/será liberado na fase 2/)).toBeVisible();
       await expect(page.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
-      if (width < 700) await page.getByRole('button', { name: 'Board', exact: true }).click();
+      if (width < 700) await page.getByRole('tab', { name: 'Board', exact: true }).click();
     }
   }
   expect(escritas).toEqual([]);
@@ -99,12 +103,27 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
   } finally { await persistente.close(); }
   expect(await page.evaluate(async () => (await caches.keys()).length)).toBe(0);
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.getByRole('heading', { name: 'Board sem conexão' })).toBeVisible();
-  await expect(page.getByText('Integrar o item 20 no projeto?')).toHaveCount(0);
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Board sem conexão' })).toBeVisible();
+    await expect(page.getByText('Integrar o item 20 no projeto?')).toHaveCount(0);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme);
+  }
   await context.setOffline(false);
   await page.getByRole('link', { name: 'Tentar novamente' }).click();
   await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+
+  // Limite aceito pelo contrato: uma máquina com nome sem espaços de 200 caracteres.
+  const nomeLongo = 'X'.repeat(200);
+  expect((await request.post(`${API}/api/remoto/heartbeat`, { headers, data: { ...heartbeat, nome: nomeLongo } })).ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByTitle(nomeLongo, { exact: true })).toBeVisible();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+    await expect(page.getByTitle(nomeLongo, { exact: true })).toBeVisible();
+  }
 
   // Falha de transporte, recuperação e posterior encerramento da sessão.
   await page.route('**/api/remoto/maquinas', route => route.abort('failed'));
