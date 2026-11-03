@@ -11,6 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { Projeto } from './projetos';
+import type { MaquinaRemota, RetratoDaMaquina } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -47,6 +48,7 @@ export function falhaDoServidor(caminho: string, status: number, codigo?: string
 }
 
 interface Opcoes {
+  signal?: AbortSignal;
   metodo?: string;
   corpo?: unknown;
   token?: string;
@@ -60,6 +62,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
+    signal: opcoes.signal,
     method: opcoes.metodo ?? 'GET',
     headers: cabecalhos,
     body: opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo),
@@ -120,6 +123,10 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  maquinasRemotas: (token: string, signal?: AbortSignal) =>
+    chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
+  retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<RetratoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/retrato`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>

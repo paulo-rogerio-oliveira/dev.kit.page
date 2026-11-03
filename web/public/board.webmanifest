@@ -1,0 +1,17 @@
+{
+  "id": "/board",
+  "name": "dev.kit — Board",
+  "short_name": "dev.kit",
+  "description": "Acompanhe suas máquinas, pendências e projetos. Fase 1: somente leitura.",
+  "lang": "pt-BR",
+  "start_url": "/board",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#242830",
+  "theme_color": "#242830",
+  "icons": [
+    { "src": "/board-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/board-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/board-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
