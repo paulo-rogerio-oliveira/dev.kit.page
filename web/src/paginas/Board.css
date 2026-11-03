@@ -21,14 +21,16 @@
 .board-remoto small {color:var(--muted); font-size:11.5px}
 .br-spacer {flex:1}
 .br-top {height:64px; flex:none; display:flex; align-items:center; gap:12px; padding:0 16px; border-bottom:1px solid var(--line)}
-.br-top>b {font-size:17px}
+.br-top>b {font-size:17px; flex:none}
 .br-machine {min-width:0}
 .br-machine small {display:block; text-align:right; margin-top:2px; font-size:11px}
 .br-host {display:flex; min-width:0; max-width:100%; align-items:center; gap:7px; font-size:12px; color:var(--ok)}
 .br-name {min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .br-host i {width:8px; height:8px; flex:none; border-radius:50%; background:currentColor}
 .br-host.br-offline {color:var(--muted)}
-.br-host select {max-width:190px; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
+.br-host>.br-desktop-state {flex:none; white-space:nowrap}
+.br-host select {min-width:0; max-width:190px; height:30px; min-height:30px; padding:4px 8px; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
+.br-restart {flex:none}
 .br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
 .br-mobile-state {display:none}
 .br-navegacao {display:flex; flex-direction:column; flex:1; min-height:0; min-width:0}

@@ -123,6 +123,23 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
     await page.setViewportSize({ width, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
     await expect(page.getByTitle(nomeLongo, { exact: true })).toBeVisible();
+    const cabecalho = await page.locator('.br-top').boundingBox();
+    const estado = await page.locator('.br-host').boundingBox();
+    expect(estado!.y + estado!.height).toBeLessThanOrEqual(cabecalho!.y + cabecalho!.height);
+  }
+
+  expect((await request.post(`${API}/api/remoto/heartbeat`, { headers, data: { ...heartbeat, maquinaId: 'estacao-demo', nome: 'Estação' } })).ok()).toBeTruthy();
+  // A lista seleciona a máquina mais recente ao reabrir; ela precisa do próprio retrato.
+  expect((await request.put(`${API}/api/remoto/retrato`, { headers, data: { ...retrato, maquinaId: 'estacao-demo' } })).ok()).toBeTruthy();
+  await page.reload();
+  await expect(page.getByLabel('Máquina')).toBeVisible();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    const cabecalho = await page.locator('.br-top').boundingBox();
+    const seletor = await page.getByLabel('Máquina').boundingBox();
+    expect(seletor!.y).toBeGreaterThanOrEqual(cabecalho!.y);
+    expect(seletor!.y + seletor!.height).toBeLessThanOrEqual(cabecalho!.y + cabecalho!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   }
 
   // Falha de transporte, recuperação e posterior encerramento da sessão.
