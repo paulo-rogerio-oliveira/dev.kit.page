@@ -143,6 +143,60 @@ export interface UsuarioResumo {
   licenca?: LicencaDoUsuario | null;
   /** O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou. */
   ultimoLogin?: string | null;
+  /** Os recursos que o admin liberou a este usuário (a provisão no Azure); ausente numa API anterior a eles. */
+  recursosLiberados?: RecursoLiberavel[] | null;
+}
+
+// ----- A provisão no Azure (controle remoto v2, item 4) -----
+
+/** O que o admin libera por usuário: a provisão, hoje. */
+export type RecursoLiberavel = 'provisao';
+
+/** De onde vem a liberação: a permissão do admin, o plano da assinatura (o tier) ou nenhuma. */
+export type OrigemDaLiberacao = 'permissao' | 'plano' | 'nenhuma';
+
+/** Se a ação aparece na conta, e o que o pedido aceita. */
+export interface PermissaoDeProvisao {
+  liberada: boolean;
+  origem: OrigemDaLiberacao;
+  regioes: string[];
+  regiaoPadrao: string;
+  maximoDeFilas: number;
+}
+
+export type EstadoDaProvisao = 'pedido' | 'em-provisao' | 'pronto' | 'falhou' | 'removido';
+export type OperacaoDaProvisao = 'criar' | 'remover';
+
+/** Um recurso do usuário no Azure — o pedido assíncrono e repetível que o worker executa. */
+export interface RecursoProvisionado {
+  id: number;
+  tipo: 'fila';
+  nome: string;
+  fila: string;
+  regiao: string;
+  grupoDeRecursos: string;
+  operacao: OperacaoDaProvisao;
+  estado: EstadoDaProvisao;
+  tentativas: number;
+  erro: string;
+  endpoint: string;
+  criadoEm: string;
+  atualizadoEm: string;
+  prontoEm: string | null;
+  proximaTentativaEm: string | null;
+}
+
+/** Uma linha da auditoria do recurso. */
+export interface EventoDaProvisao {
+  em: string;
+  evento: string;
+  autor: string;
+  detalhe: string;
+}
+
+export interface DetalheDoRecurso {
+  recurso: RecursoProvisionado;
+  eventos: EventoDaProvisao[];
 }
 
 // ----- US #687: a licença por usuário que o admin define -----

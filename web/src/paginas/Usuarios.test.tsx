@@ -269,3 +269,41 @@ describe('Licença por usuário (US #687, proposta admin-usuarios v005)', () => 
     confirmar.mockRestore();
   });
 });
+
+describe('A provisão liberada por usuário (controle remoto v2, item 4)', () => {
+  it('o painel do usuário libera a provisão, e a lista mostra o selo', async () => {
+    renderizar('/usuarios', tokenValido());
+    expect(within(await linhaDe('ana.dev')).queryByText('Provisão')).not.toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    expect(painel.getByText('Provisão no Azure')).toBeInTheDocument();
+    expect(painel.getByText('Não liberada')).toBeInTheDocument();
+
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], { ...usuarios[1], recursosLiberados: ['provisao'] }])));
+    await userEvent.click(painel.getByRole('button', { name: 'Liberar a provisão de ana.dev' }));
+
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: true } }]));
+    expect(await screen.findByText(/Provisão liberada para ana.dev/)).toBeInTheDocument();
+    expect(await within(await linhaDe('ana.dev')).findByText('Provisão')).toBeInTheDocument();
+    expect(painel.getByText('Liberada')).toBeInTheDocument();
+  });
+
+  it('retirar pede confirmação e avisa que o já criado continua', async () => {
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], { ...usuarios[1], recursosLiberados: ['provisao'] }])));
+    renderizar('/usuarios', tokenValido());
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    await userEvent.click(painel.getByRole('button', { name: 'Retirar a provisão de ana.dev' }));
+    expect(confirmar).toHaveBeenCalledWith(expect.stringMatching(/O que já foi criado continua lá/));
+    expect(gestaoDeUsuarios).toEqual([]);
+
+    confirmar.mockReturnValue(true);
+    await userEvent.click(painel.getByRole('button', { name: 'Retirar a provisão de ana.dev' }));
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: false } }]));
+    expect(await screen.findByText(/Provisão retirada de ana.dev/)).toBeInTheDocument();
+    confirmar.mockRestore();
+  });
+});

@@ -90,6 +90,10 @@ public static class Composicao
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();
         servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
+        // A provisão no Azure: a API grava o pedido (IProvisao) e o worker o executa (IMotorDeProvisao), na mesma base.
+        servicos.Configure<OpcoesDaProvisao>(configuracao.GetSection(OpcoesDaProvisao.Secao));
+        servicos.AddScoped<IProvisao, Provisao>();
+        servicos.AddScoped<IMotorDeProvisao, MotorDeProvisao>();
         servicos.AddScoped<IContas, Contas>();
         servicos.AddScoped<IGestaoDaEmpresa, GestaoDaEmpresa>();
         servicos.AddScoped<ILicencas, Licencas>();

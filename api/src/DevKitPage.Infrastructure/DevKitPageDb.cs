@@ -47,11 +47,15 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
     public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
     public DbSet<MaquinaRemota> MaquinasRemotas => Set<MaquinaRemota>();
+    public DbSet<PermissaoDeUsuario> PermissoesDeUsuario => Set<PermissaoDeUsuario>();
+    public DbSet<RecursoProvisionado> RecursosProvisionados => Set<RecursoProvisionado>();
+    public DbSet<EventoDaProvisao> EventosDaProvisao => Set<EventoDaProvisao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
         ConfigurarRemoto(modelBuilder);
+        ConfigurarProvisao(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -542,6 +546,58 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(m => m.AtualizadaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
+
+    /// <summary>
+    /// A provisão no Azure: a permissão por usuário, o recurso (que é também o pedido repetível) e a auditoria. No Azure SQL as
+    /// tabelas vêm de api/scripts/sqlserver/Provisao.sql.
+    /// </summary>
+    private static void ConfigurarProvisao(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<PermissaoDeUsuario>(e =>
+        {
+            e.ToTable("PermissoesDeUsuario");
+            e.Property(p => p.Recurso).HasMaxLength(40);
+            e.Property(p => p.ConcedidaPor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.HasIndex(p => new { p.UsuarioId, p.Recurso }).IsUnique();
+            e.HasOne<Usuario>().WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecursoProvisionado>(e =>
+        {
+            e.ToTable("RecursosProvisionados");
+            e.Property(r => r.Tipo).HasMaxLength(20);
+            e.Property(r => r.Nome).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDaConta);
+            e.Property(r => r.Fila).HasMaxLength(63);
+            e.Property(r => r.Regiao).HasMaxLength(40);
+            e.Property(r => r.GrupoDeRecursos).HasMaxLength(90);
+            e.Property(r => r.Operacao).HasMaxLength(20);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.Property(r => r.Erro).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            e.Property(r => r.IdNoAzure).HasMaxLength(400);
+            e.Property(r => r.Endpoint).HasMaxLength(300);
+            e.Property(r => r.ReservadoPor).HasMaxLength(100);
+            e.Property(r => r.Versao).IsConcurrencyToken();
+            // O nome é global no Azure: o índice único barra aqui o sorteio repetido antes de o worker o pedir.
+            e.HasIndex(r => r.Nome).IsUnique();
+            e.HasIndex(r => new { r.UsuarioId, r.Estado });
+            // A fila do worker: os pedidos por estado e pela próxima tentativa.
+            e.HasIndex(r => new { r.Estado, r.ProximaTentativaEmUtc });
+            // O recurso pago não some com o usuário: Restrict.
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventoDaProvisao>(e =>
+        {
+            e.ToTable("EventosDaProvisao");
+            e.Property(v => v.Evento).HasMaxLength(30);
+            e.Property(v => v.Autor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.Property(v => v.Detalhe).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            e.HasIndex(v => new { v.RecursoId, v.EmUtc });
+            e.HasIndex(v => new { v.UsuarioId, v.EmUtc });
+            // O UsuarioId é o dono (ou quem recebeu a permissão): sem FK, como nas convenções — a auditoria só acrescenta.
+            e.HasOne<RecursoProvisionado>().WithMany().HasForeignKey(v => v.RecursoId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
 
     /// <summary>A data UTC lida do banco (o provider devolve <see cref="DateTimeKind.Unspecified"/>).</summary>
     public static DateTimeOffset Utc(DateTime data) => new(DateTime.SpecifyKind(data, DateTimeKind.Utc));
