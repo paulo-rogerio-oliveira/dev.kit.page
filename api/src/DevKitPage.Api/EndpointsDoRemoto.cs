@@ -1,9 +1,11 @@
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace DevKitPage.Api;
 
@@ -57,7 +59,8 @@ public static class EndpointsDoRemoto
 
     /// <summary>
     /// O corpo lido à mão, com o teto em bytes, o <c>Content-Type</c> que não é JSON em 415 e o JSON quebrado ou fora do
-    /// contrato em 400. A mensagem não traz o erro do serializador: ele citaria o que veio no corpo.
+    /// contrato em 400. A mensagem não traz o erro do serializador: ele citaria o que veio no corpo. Qualquer outra falha da
+    /// leitura segue para o tratamento de erro da API, como 500.
     /// </summary>
     private static async Task<(T? Corpo, IResult? Recusa)> LerAsync<T>(HttpContext http, long limite, string oQue, CancellationToken ct) where T : class
     {
@@ -65,7 +68,7 @@ public static class EndpointsDoRemoto
         var tipoErrado = Results.Problem($"Envie o {oQue} como application/json, numa codificação conhecida.", statusCode: StatusCodes.Status415UnsupportedMediaType);
         if (http.Request.ContentLength > limite)
             return (null, acimaDoTeto);
-        if (!http.Request.HasJsonContentType())
+        if (!http.Request.HasJsonContentType() || !CharsetConhecido(http.Request.ContentType))
             return (null, tipoErrado);
         if (http.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } corpo)
             corpo.MaxRequestBodySize = limite; // o corpo sem Content-Length (chunked) também para no limite
@@ -82,10 +85,26 @@ public static class EndpointsDoRemoto
         {
             return (null, acimaDoTeto);
         }
-        catch (InvalidOperationException)
+    }
+
+    /// <summary>
+    /// O charset do <c>Content-Type</c>, já reconhecido como JSON, dá para ler? Conferido antes da leitura porque ela recusaria
+    /// com a <see cref="InvalidOperationException"/> de qualquer outra falha. O <c>utf-7</c> existe, mas o .NET não o lê.
+    /// </summary>
+    private static bool CharsetConhecido(string? tipo)
+    {
+        var charset = MediaTypeHeaderValue.Parse(tipo).Charset;
+        if (!charset.HasValue)
+            return true;
+
+        try
         {
-            // O tipo é JSON, mas com um charset que não existe: é assim que a leitura o recusa.
-            return (null, tipoErrado);
+            Encoding.GetEncoding(charset.Value);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
         }
     }
 

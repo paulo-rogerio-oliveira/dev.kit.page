@@ -4,7 +4,9 @@
     "Nota 100 · regressão sem falhas",
     "Item 20 · layout do plano",
     "Renovar o token do serviço",
-    "Atualizar a versão 1.61.0 em 02/11"
+    "Atualizar a versão 1.61.0 em 02/11",
+    "Rodada de 20261102-095333",
+    "sprint-11-2026-2027 · item 3"
   ],
   "segredo": [
     "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
@@ -28,6 +30,7 @@
     "12345678909",
     "CNPJ 12.345.678/0001-95",
     "Ligar para (11) 91234-5678",
+    "Ligar para (11) 2026-2027",
     "3f2b1c9e-5d7a-4b60-a1c2-d3e4f5061728"
   ],
   "identificadoresAceitos": [
@@ -36,14 +39,19 @@
     "sessao:42",
     "3f2b1c9e-5d7a-4b60-a1c2-d3e4f5061728",
     "ab123456-1234-4234-8234-123456789012",
-    "ab12345678901234567890123456cdef"
+    "ab12345678901234567890123456cdef",
+    "20261102-095333",
+    "sprint-11-2026-2027"
   ],
   "identificadoresComDado": [
     "12345678909",
     "123.456.789-09",
     "12345678000195",
-    "12.345.678-0001-95",
     "11-91234-5678",
+    "11-3456-7890",
+    "11-2026-2027",
+    "sprint-11-3456-7890",
+    "sprint-11-2027-2026",
     "maquina-12345678909"
   ],
   "codigosComSegredo": [
