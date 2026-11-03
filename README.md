@@ -9,7 +9,7 @@ próprio dev.kit envia (repositório `git.kit`; ligado por padrão, desliga-se e
 |---|---|
 | [`api/`](api) | A API ASP.NET Core (.NET 10): autenticação JWT, registro e ingestão das máquinas, consultas do dashboard e os pedidos de demonstração. Base SQLite embarcada, criada na primeira subida já com o usuário **admin**; scripts do Azure SQL em `api/scripts/sqlserver`. |
 | [`web/`](web) | A web em React + Vite + TypeScript: landing (conteúdo em `src/conteudo`, mídias em `public/midia`, gravador em `midia/`), login (com a troca obrigatória de senha) e dashboard. |
-| [`docs/`](docs) | [Arquitetura](docs/arquitetura.md), a [mensagem e o roteiro das mídias da landing](docs/landing-conteudo.md), o [contrato v1 da telemetria](docs/contrato-telemetria-v1.md) e a [publicação no Azure](docs/publicacao-azure.md). |
+| [`docs/`](docs) | [Arquitetura](docs/arquitetura.md), a [mensagem e o roteiro das mídias da landing](docs/landing-conteudo.md), o [contrato v1 da telemetria](docs/contrato-telemetria-v1.md), o [contrato v1 do controle remoto](docs/contrato-remoto-v1.md) e a [publicação no Azure](docs/publicacao-azure.md). |
 
 ## Executar localmente
 

@@ -93,6 +93,21 @@ public sealed class OpcoesDosRelatos
     public int EnviosPorHora { get; set; } = 20;
 }
 
+/// <summary>O controle remoto (seção <c>Remoto</c>): o limite de envios e a retenção das máquinas e dos retratos.</summary>
+public sealed class OpcoesDoRemoto
+{
+    public const string Secao = "Remoto";
+
+    /// <summary>
+    /// Quantos envios (heartbeat e retrato somados) um mesmo usuário faz por minuto; acima disto, 429. O serviço manda um
+    /// heartbeat por minuto por máquina e o retrato quando o estado muda: a folga cobre algumas máquinas.
+    /// </summary>
+    public int EnviosPorMinuto { get; set; } = 60;
+
+    /// <summary>A máquina sem heartbeat nem retrato há mais que isto sai do banco, com o retrato.</summary>
+    public int RetencaoDias { get; set; } = 30;
+}
+
 /// <summary>
 /// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
 /// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta
