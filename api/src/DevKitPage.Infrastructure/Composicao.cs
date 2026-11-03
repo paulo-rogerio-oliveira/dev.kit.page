@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -90,6 +91,24 @@ public static class Composicao
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();
         servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
+        // A conversa e os comandos remotos (fase 2): o SQL, a fila do usuário e o aviso do SSE. A fila do Azure lê a chave da
+        // conta com a identidade gerenciada da API; a simulada é de desenvolvimento (a API não sobe com ela em Production).
+        servicos.AddScoped<IConversaRemota, ConversaRemota>();
+        servicos.AddScoped<IExpurgoDaConversa, ExpurgoDaConversa>();
+        servicos.AddSingleton<IAvisoDaConversa, AvisoDaConversa>();
+        servicos.AddSingleton<FilaSimulada>();
+        // Sem redirecionamento automático: o token do ARM e a SAS assinada não seguem para outro host.
+        servicos.AddHttpClient(FilaDoAzure.NomeDoCliente, cliente => cliente.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        servicos.TryAddSingleton<IFilaDeComandos>(sp =>
+        {
+            var remoto = sp.GetRequiredService<IOptions<OpcoesDoRemoto>>();
+            if (FilaDeComandos.Simulada(remoto.Value))
+                return sp.GetRequiredService<FilaSimulada>();
+            var producao = sp.GetService<IHostEnvironment>()?.IsProduction() ?? true;
+            return new FilaDoAzure(sp.GetRequiredService<IHttpClientFactory>(), CredencialDoAzure.Criar(remoto.Value.IdentidadeClientId, producao),
+                sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(), sp.GetRequiredService<TimeProvider>(), remoto);
+        });
         // A provisão no Azure: a API grava o pedido (IProvisao) e o worker o executa (IMotorDeProvisao), na mesma base.
         servicos.Configure<OpcoesDaProvisao>(configuracao.GetSection(OpcoesDaProvisao.Secao));
         servicos.AddScoped<IProvisao, Provisao>();

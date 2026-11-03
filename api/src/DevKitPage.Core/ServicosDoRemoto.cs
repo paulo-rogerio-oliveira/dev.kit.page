@@ -189,7 +189,8 @@ public static partial class RegrasDoRemoto
         }
     }
 
-    private static IReadOnlyList<CampoSensivelV1> Sensiveis(IEnumerable<(string Campo, string? Texto)> textos)
+    /// <summary>Os textos com dado sensível, com o campo de cada um (também os da conversa, <see cref="RegrasDaConversa"/>).</summary>
+    internal static IReadOnlyList<CampoSensivelV1> Sensiveis(IEnumerable<(string Campo, string? Texto)> textos)
         => textos.Select(t => DadosSensiveis.Tipo(t.Texto) is { } tipo ? new CampoSensivelV1(t.Campo, tipo) : null)
             .OfType<CampoSensivelV1>().ToArray();
 

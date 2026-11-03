@@ -328,6 +328,37 @@ disponibilidade das regiões não foram conferidos nesta entrega). A conta de ar
 acesso público a blob; a chave compartilhada continua ligada porque a fila não aceita SAS de delegação de usuário, e a SAS
 curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
 
+### Conversa e comandos remotos (controle remoto v2, item 5)
+
+A API põe o comando do site na fila do usuário e entrega ao serviço da máquina a SAS curta de consumo, as duas assinadas com
+a chave da conta de armazenamento do usuário. A chave é lida do Resource Manager (`listKeys`) pela **identidade gerenciada
+da API** e fica só na memória dela — nunca no banco, no log ou na configuração.
+
+1. **Banco.** Rode `api/scripts/sqlserver/Conversa.sql` (idempotente; depois de `Remoto.sql` e `Provisao.sql`) antes de
+   publicar a API desta versão: cria `ComandosRemotos`, `RespostasRemotas` e `EventosDaConversa`. Sem ele, o `/health` fica
+   `Degraded` e aponta o script.
+2. **Identidade da API.** Ligue uma identidade gerenciada à API (a do sistema, ou uma atribuída ao usuário com o client id em
+   `Remoto__IdentidadeClientId`) e dê a ela, na assinatura do dev.kit, SÓ uma função personalizada com
+   `Microsoft.Storage/storageAccounts/listkeys/action` (ex.: `devkit-api-chave-da-fila`). Ela não cria, não remove e não lê
+   mais nada: quem provisiona continua sendo o worker, com a identidade dele. O escopo é a assinatura porque cada usuário tem o
+   seu grupo `rg-devkit-u{id}`; restrinja com uma condição pela tag `devkit=provisao` se a política da assinatura pedir.
+3. **Rede.** A API sai para `management.azure.com` e `*.queue.core.windows.net` (HTTPS); a máquina do usuário só faz chamadas
+   de saída à API e à fila dele.
+4. **SSE.** O `GET /api/remoto/conversa/eventos` é uma conexão longa (até `Remoto:DuracaoDoSseSegundos`, 300 s): o ingress do
+   Container Apps a aceita com o tempo ocioso padrão, porque a API manda um `ping` a cada 15 s sem evento. Com mais de uma
+   réplica, o evento gravado por outra chega na releitura do SQL (`Remoto:IntervaloDoSseSegundos`).
+
+| Variável da API | O que é |
+|---|---|
+| `Remoto__Fila` | `azure` (padrão). O `simulado` é de desenvolvimento: a API se recusa a subir com ele em Production. |
+| `Remoto__IdentidadeClientId` | O client id da identidade atribuída ao usuário (não é segredo). Vazio: a identidade do sistema. |
+| `Remoto__TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` | 900 · 60 · 86400: o TTL do comando; o vencido antes da entrega volta `expirado`. |
+| `Remoto__SasMinutos` | 15 (de 1 a 60): a validade da SAS de consumo do serviço. |
+| `Remoto__ComandosPorHora` · `EnviosDaConversaPorMinuto` | 30 · 60: o limite de comandos por usuário (no SQL, 429 com `Retry-After`) e o de escritas por minuto. |
+| `Remoto__RetencaoDaConversaDias` | 30: comandos, respostas e eventos mais velhos saem no expurgo diário. |
+
+Para testar local sem o Azure: `Remoto__Fila=simulado` na API e `Provisao__Provedor=simulado` no worker, na mesma base.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

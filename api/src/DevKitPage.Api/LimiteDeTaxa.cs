@@ -63,6 +63,14 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDaProvisao = "Provisao";
 
+    /// <summary>
+    /// A política das escritas da conversa remota (o comando do site, a SAS, o recebimento e a resposta do dev.kit): por
+    /// USUÁRIO do token, com <see cref="OpcoesDoRemoto.EnviosDaConversaPorMinuto"/>, separada da do heartbeat — o site
+    /// insistindo não derruba o heartbeat da máquina. O custo (cada comando pode abrir um turno) é o outro limite, por hora e
+    /// no SQL (<see cref="OpcoesDoRemoto.ComandosPorHora"/>).
+    /// </summary>
+    public const string PoliticaDaConversa = "Conversa";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -159,6 +167,17 @@ public static class LimiteDeTaxa
                 {
                     PermitLimit = porHora,
                     Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaConversa, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.EnviosDaConversaPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("conversa:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
                     QueueLimit = 0,
                 });
             });

@@ -50,12 +50,16 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<PermissaoDeUsuario> PermissoesDeUsuario => Set<PermissaoDeUsuario>();
     public DbSet<RecursoProvisionado> RecursosProvisionados => Set<RecursoProvisionado>();
     public DbSet<EventoDaProvisao> EventosDaProvisao => Set<EventoDaProvisao>();
+    public DbSet<ComandoRemoto> ComandosRemotos => Set<ComandoRemoto>();
+    public DbSet<RespostaRemota> RespostasRemotas => Set<RespostaRemota>();
+    public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
         ConfigurarRemoto(modelBuilder);
         ConfigurarProvisao(modelBuilder);
+        ConfigurarConversa(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -596,6 +600,59 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(v => new { v.UsuarioId, v.EmUtc });
             // O UsuarioId é o dono (ou quem recebeu a permissão): sem FK, como nas convenções — a auditoria só acrescenta.
             e.HasOne<RecursoProvisionado>().WithMany().HasForeignKey(v => v.RecursoId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    /// <summary>
+    /// A conversa e os comandos remotos (fase 2 do controle remoto): o comando com o estado, a resposta do dev.kit e o evento
+    /// do SSE. No Azure SQL as tabelas vêm de api/scripts/sqlserver/Conversa.sql. O usuário apagado leva a conversa dele.
+    /// </summary>
+    private static void ConfigurarConversa(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ComandoRemoto>(e =>
+        {
+            e.ToTable("ComandosRemotos");
+            e.Property(c => c.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(c => c.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(c => c.Tipo).HasMaxLength(20);
+            e.Property(c => c.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            e.Property(c => c.Dispositivo).HasMaxLength(20);
+            e.Property(c => c.Estado).HasMaxLength(20);
+            e.Property(c => c.Erro).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            // O id viaja na fila: único por usuário, e o reenvio com ele devolve o mesmo comando.
+            e.HasIndex(c => new { c.UsuarioId, c.ComandoId }).IsUnique();
+            // O histórico por máquina e o limite por hora.
+            e.HasIndex(c => new { c.UsuarioId, c.MaquinaId, c.CriadoEmUtc });
+            e.HasIndex(c => new { c.UsuarioId, c.CriadoEmUtc });
+            // O TTL: os que aguardam a entrega, pelo fim dele.
+            e.HasIndex(c => new { c.Estado, c.ExpiraEmUtc });
+            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RespostaRemota>(e =>
+        {
+            e.ToTable("RespostasRemotas");
+            e.Property(r => r.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.RespostaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.Tipo).HasMaxLength(20);
+            e.Property(r => r.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            // O reenvio do dev.kit não duplica a resposta.
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.RespostaId }).IsUnique();
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.RecebidaEmUtc });
+            e.HasIndex(r => r.RecebidaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventoDaConversa>(e =>
+        {
+            e.ToTable("EventosDaConversa");
+            e.Property(v => v.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(v => v.Tipo).HasMaxLength(20);
+            // O SSE lê os do usuário depois do último id visto.
+            e.HasIndex(v => new { v.UsuarioId, v.Id });
+            e.HasIndex(v => v.EmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(v => v.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

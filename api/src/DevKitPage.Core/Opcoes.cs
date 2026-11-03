@@ -93,7 +93,10 @@ public sealed class OpcoesDosRelatos
     public int EnviosPorHora { get; set; } = 20;
 }
 
-/// <summary>O controle remoto (seção <c>Remoto</c>): o limite de envios e a retenção das máquinas e dos retratos.</summary>
+/// <summary>
+/// O controle remoto (seção <c>Remoto</c>): o limite de envios e a retenção das máquinas e dos retratos; e a conversa — a
+/// fila, o TTL, a SAS, o limite de comandos por usuário, a retenção do histórico e o SSE.
+/// </summary>
 public sealed class OpcoesDoRemoto
 {
     public const string Secao = "Remoto";
@@ -106,6 +109,54 @@ public sealed class OpcoesDoRemoto
 
     /// <summary>A máquina sem heartbeat nem retrato há mais que isto sai do banco, com o retrato.</summary>
     public int RetencaoDias { get; set; } = 30;
+
+    // A conversa e os comandos remotos (fase 2).
+
+    public const string FilaAzure = "azure";
+    public const string FilaSimulada = "simulado";
+
+    /// <summary>
+    /// A fila dos comandos: <see cref="FilaAzure"/> (padrão; a chave da conta lida pela identidade gerenciada da API) ou
+    /// <see cref="FilaSimulada"/> — de desenvolvimento, e a API não sobe com ela em Production.
+    /// </summary>
+    public string Fila { get; set; } = FilaAzure;
+
+    /// <summary>O client id da identidade gerenciada da API atribuída ao usuário (não é segredo); vazio é a do sistema.</summary>
+    public string IdentidadeClientId { get; set; } = string.Empty;
+
+    /// <summary>O Azure Resource Manager, de onde sai a chave da conta da fila (<c>listKeys</c>).</summary>
+    public string UrlDoArm { get; set; } = "https://management.azure.com/";
+
+    /// <summary>A chave da conta fica na memória da API por este tempo (nunca no banco nem no log).</summary>
+    public int ChaveEmCacheMinutos { get; set; } = 10;
+
+    /// <summary>O TTL do comando sem <c>ttlSegundos</c>: sem o recebimento até lá, ele volta como expirado.</summary>
+    public int TtlPadraoSegundos { get; set; } = 900;
+
+    public int TtlMinimoSegundos { get; set; } = 60;
+
+    public int TtlMaximoSegundos { get; set; } = 86400;
+
+    /// <summary>A validade da SAS de consumo que o serviço da máquina pede (de 1 a 60).</summary>
+    public int SasMinutos { get; set; } = 15;
+
+    /// <summary>
+    /// Quantos comandos um mesmo usuário manda por hora, contados no SQL (vale entre instâncias da API); acima, 429. Cada
+    /// mensagem remota pode abrir um turno do agente — é o custo que o limite segura.
+    /// </summary>
+    public int ComandosPorHora { get; set; } = 30;
+
+    /// <summary>Quantas escritas da conversa (comando, SAS, recebimento, resposta) um mesmo usuário faz por minuto; acima, 429.</summary>
+    public int EnviosDaConversaPorMinuto { get; set; } = 60;
+
+    /// <summary>O comando, a resposta e o evento da conversa mais velhos que isto saem do banco no expurgo diário.</summary>
+    public int RetencaoDaConversaDias { get; set; } = 30;
+
+    /// <summary>De quanto em quanto tempo o SSE relê o SQL sem aviso (o aviso desta instância acorda antes).</summary>
+    public int IntervaloDoSseSegundos { get; set; } = 3;
+
+    /// <summary>Quanto tempo um SSE fica aberto; depois ele fecha, e o site reconecta com o <c>Last-Event-ID</c>.</summary>
+    public int DuracaoDoSseSegundos { get; set; } = 300;
 }
 
 /// <summary>
