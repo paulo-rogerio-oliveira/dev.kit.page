@@ -33,3 +33,22 @@ export interface RetratoDaMaquina {
     }> | null;
   };
 }
+
+/** Conversa v1: o estado é confirmado pela API, nunca inferido do heartbeat. */
+export interface ComandoRemoto {
+  id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string;
+  estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
+  criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
+}
+export interface ComandoNovo {
+  id: string; maquinaId: string; tipo: 'mensagem'; texto: string; dispositivo: 'celular' | 'navegador';
+}
+export interface RespostaRemota {
+  id: string; maquinaId: string; comandoId: string | null; tipo: string; texto: string; geradaEm: string; recebidaEm: string;
+}
+export interface ConversaRemota {
+  comandos: ComandoRemoto[]; respostas: RespostaRemota[]; ultimoEvento: number;
+}
+export interface EventoDaConversa {
+  id: number; tipo: string; maquinaId: string; comando: ComandoRemoto | null; resposta: RespostaRemota | null; em: string;
+}

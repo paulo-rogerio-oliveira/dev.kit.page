@@ -5,7 +5,9 @@ import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
 import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
 import { Abas } from '../componentes/Abas';
+import { ChatRemoto } from '../componentes/ChatRemoto';
 import './Board.css';
+import '../componentes/ChatRemoto.css';
 
 const motivo = 'Disponível somente no dev.kit da máquina nesta fase.';
 const atualizacaoMs = 15_000;
@@ -17,26 +19,6 @@ function idade(data: string | null | undefined, agora: number) {
   if (segundos < 60) return `há ${segundos} s`;
   if (segundos < 3600) return `há ${Math.floor(segundos / 60)} min`;
   return `há ${Math.floor(segundos / 3600)} h`;
-}
-
-function ChatIndisponivel() {
-  return <section className="br-chat" aria-label="Orquestrador">
-    <header className="br-chathead"><span className="br-logo">O</span><div><b>Orquestrador</b><small>Chat indisponível nesta fase</small></div></header>
-    <div className="br-mensagens"><div className="br-indisponivel">
-      <div className="br-lock" aria-hidden="true">○</div>
-      <h1>Por enquanto, acompanhe o Board</h1>
-      <p>O painel está disponível somente para leitura.<br />O envio de mensagens ao Orquestrador será liberado na fase 2.</p>
-      <small>Consulte as pendências, os projetos e o Executando no Board.</small>
-    </div></div>
-    <div className="br-composer">
-      <textarea aria-label="Mensagem ao Orquestrador" disabled placeholder="Peça ou pergunte ao Orquestrador" />
-      <div className="br-bottom">
-        <button disabled>Trocar fluxo</button><button disabled># Work item</button><button disabled>@ Repositório</button>
-        <span className="br-spacer" /><button className="br-send" disabled aria-label="Enviar mensagem">➤</button>
-      </div>
-    </div>
-    <p className="br-hint">Chat desabilitado · mensagens disponíveis na fase 2.<br />/ trocar o fluxo · # work item · @ repositório</p>
-  </section>;
 }
 
 function ConteudoDoBoard({ foto, agora }: { foto: RetratoDaMaquina | null; agora: number }) {
@@ -75,7 +57,7 @@ function ConteudoDoBoard({ foto, agora }: { foto: RetratoDaMaquina | null; agora
   </>;
 }
 
-/** Board isolado da administração: somente GET autenticado, sem comandos remotos. */
+/** Board isolado da administração, com conversa remota e decisões somente na máquina. */
 export function Board() {
   useEffect(prepararBoardPwa, []);
   const { sessao, sair } = useSessao();
@@ -158,7 +140,7 @@ export function Board() {
     <div className="br-navegacao"><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
-        <div className="br-readonly"><strong>Somente leitura</strong><span>Fase 1</span></div>
+        <div className="br-readonly"><strong>Somente leitura</strong><span>Fase 2</span></div>
         {carregando && <p role="status" className="br-note">Carregando Board…</p>}
         {erro && <div role="alert" className="br-card br-need"><p>{erro}</p>{foto && <p>Exibindo o último retrato recebido; os dados podem estar desatualizados.</p>}<button className="br-btn" onClick={() => setTentativa(t => t + 1)}>Tentar novamente</button></div>}
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
@@ -166,7 +148,7 @@ export function Board() {
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard foto={foto} agora={agora} />}
       </aside>
-      <ChatIndisponivel />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} />
     </main>
     </Abas></div>
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>

@@ -31,17 +31,19 @@ function responder(lista = [maquina()]) {
   servidor.use(
     http.get(`${API}/api/remoto/maquinas`, () => HttpResponse.json(lista)),
     http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => HttpResponse.json(retrato(maquina(String(params.id))))),
+    http.get(`${API}/api/remoto/maquinas/:id/conversa`, () => HttpResponse.json({ comandos: [], respostas: [], ultimoEvento: 0 })),
+    http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
   );
 }
 
-describe('Board remoto, fase 1', () => {
+describe('Board remoto', () => {
   it('exige login e preserva o destino do desenvolvedor após autenticar', async () => {
     renderizar('/board');
     expect(await screen.findByRole('heading', { name: /Entrar/i })).toBeInTheDocument();
     expect(destinoDa(tokenDoDev(), '/board')).toBe('/board');
   });
 
-  it('mostra o retrato recebido, progresso e execuções sem habilitar nenhuma escrita', async () => {
+  it('mostra o retrato, progresso e execuções; decisões continuam somente na máquina', async () => {
     responder();
     const chamadas: Request[] = [];
     const registrar = ({ request }: { request: Request }) => { chamadas.push(request); };
@@ -53,11 +55,12 @@ describe('Board remoto, fase 1', () => {
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
       expect(screen.getByText('Item 20 · layout do plano')).toBeInTheDocument();
       expect(screen.getByText(/Implementação · codex/)).toBeInTheDocument();
-      for (const nome of ['Decidir', 'Ver detalhes', 'Reiniciar dev.kit', 'Enviar mensagem', 'Trocar fluxo', '# Work item', '@ Repositório']) {
+      for (const nome of ['Decidir', 'Ver detalhes', 'Reiniciar dev.kit', 'Enviar mensagem']) {
         expect(screen.getByRole('button', { name: nome })).toBeDisabled();
       }
-      expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeDisabled();
-      expect(screen.getByText(/será liberado na fase 2/)).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
+      expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toBeEnabled();
+      expect(screen.getByText('Mesma conversa do Board do dev.kit')).toBeInTheDocument();
       expect(chamadas.length).toBeGreaterThan(0);
       expect(chamadas.every(r => r.method === 'GET' && r.headers.has('Authorization'))).toBe(true);
     } finally { servidor.events.removeListener('request:start', registrar); }

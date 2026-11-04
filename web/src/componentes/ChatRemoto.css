@@ -1,0 +1,46 @@
+/* Propostas app-remoto v127–v130: mensagens, estados e compositor da fase 2. */
+.br-chat {overflow:hidden}
+.br-chathead {flex:none}
+.br-chat-aviso {padding:10px 16px; background:var(--warntint); border-bottom:1px solid var(--line); color:var(--warn); display:flex; align-items:center; gap:12px; font-size:12px; flex:none; overflow-wrap:anywhere}
+.br-chat-aviso strong {white-space:nowrap}
+.br-chat-aviso span {font-size:11.5px}
+.br-mensagens.br-conversa {flex-direction:column; align-items:stretch; justify-content:flex-start; padding:20px 24px; gap:12px; overflow:auto}
+.br-dia {text-align:center; color:var(--muted); font-size:11px; margin:0 0 4px; flex:none}
+.br-chat-vazio {margin:auto; color:var(--muted); text-align:center}
+.br-msg {align-self:flex-start; width:fit-content; max-width:min(88%,760px); border:1px solid var(--line); border-radius:11px; background:var(--surface); padding:10px 12px; color:var(--ink); flex:none; overflow-wrap:anywhere}
+.br-msg p {font:13px/1.45 'Segoe UI',system-ui,sans-serif; margin:4px 0 0; color:var(--ink); white-space:pre-wrap}
+.br-voce {align-self:flex-end; background:var(--bluetint)}
+.br-meta {font-size:11px; line-height:1.4; color:var(--muted); display:flex; flex-wrap:wrap; gap:3px 8px}
+.br-entregue {color:var(--ok)}
+.br-espera {color:var(--warn)}
+.br-expirada {border-style:dashed}
+.br-msg-status {color:var(--muted); font-size:11px}
+.br-composer-ativo {border-color:var(--violet); flex:none; position:relative}
+.br-composer-ativo textarea {color:var(--ink); height:28px; max-height:100px; overflow:auto}
+.br-composer-ativo .br-bottom button {color:var(--violet); background:var(--surface)}
+.br-composer-ativo .br-bottom .br-send {color:var(--surface); background:var(--violet)}
+.br-composer-ativo .br-bottom button:disabled {color:var(--soft); background:var(--panel)}
+.br-branch {font-size:10.5px; color:var(--muted); margin-top:5px; overflow-wrap:anywhere}
+.br-hint {flex:none}
+.br-contexto {position:absolute; bottom:calc(100% + 6px); left:0; z-index:1; width:min(360px,100%); box-sizing:border-box; padding:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 4px 20px #0002}
+.br-contexto label {display:block; color:var(--ink); font-size:12px; margin-bottom:8px}
+.br-contexto input {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
+.br-contexto p {color:var(--muted); font-size:11px; margin:6px 0}
+@media(max-width:700px) {
+  .br-chat-aviso {display:block; padding:7px 12px; font-size:11.5px}
+  .br-chat-aviso strong,.br-chat-aviso span {display:block}
+  .br-chat-aviso span {font-size:10.5px; line-height:1.35; margin-top:2px}
+  .br-mensagens.br-conversa {padding:9px 10px; gap:6px}
+  .br-dia {font-size:10px; margin:0 0 1px}
+  .br-msg {max-width:97%; padding:6px 8px; border-radius:9px}
+  .br-meta {font-size:9.5px; gap:1px 7px; line-height:1.25}
+  .br-msg p {font-size:11.5px; line-height:1.35; margin-top:3px}
+  .br-msg-status {font-size:10px}
+  .br-composer-ativo {margin:7px 10px 6px; padding:8px}
+  .br-composer-ativo textarea {height:24px; min-height:24px; font-size:11.5px}
+  .br-bottom {gap:4px}
+  .br-bottom button {font-size:10px; padding:3px 6px}
+  .br-bottom .br-send {height:29px; min-width:29px; font-size:15px}
+  .br-branch {font-size:9px; line-height:1.25; margin-top:4px}
+  .br-hint {font-size:10px; line-height:1.35; margin-bottom:8px}
+}
