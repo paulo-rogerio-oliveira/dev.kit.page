@@ -34,7 +34,10 @@ O serviço do Windows (`GitKit.Scheduler`) envia a cada `IntervaloDoHeartbeatSeg
 - `origem`: `servico` ou `app`. `estadoDoAgente`: `ativo`, `pausado`, `limite` ou `parado` (vazio é `parado`).
 - `turnoEmAndamento`: o site avisa antes de reiniciar o dev.kit, porque reiniciar interrompe o turno (o "reinício seguro"
   da proposta; no plano do projeto, o item 8, "Serviço liga e reinicia o dev.kit").
-- Resposta **200** `{ "maquinaId", "recebidoEm", "intervaloSegundos": 60 }`.
+- Resposta **200** `{ "maquinaId", "recebidoEm", "intervaloSegundos": 60, "recursos": ["falas-do-desktop"] }`.
+- `recursos` é o **sinal de suporte**: o que esta API aceita além da fase 1 (`RemotoV1.RecursosDaApi`; o novo entra no fim). O
+  dev.kit lê a lista ANTES de usar a rota de um recurso e, sem ele — a API antiga não manda `recursos` —, não envia: hoje,
+  `falas-do-desktop` libera `POST /api/remoto/conversa/falas` (seção 4.2).
 - A máquina aparece `conectada` enquanto o último heartbeat tem até `SegundosAteDesconectar` (180 s) pelo relógio da API.
 
 ## 2. Retrato — `PUT /api/remoto/retrato`
@@ -142,7 +145,10 @@ e a fila de outro usuário são **404**.
 | `falhou` | A fila não aceitou (**503** `fila-indisponivel`, com o `comando` no corpo); o reenvio com o mesmo id tenta de novo. |
 
 **`GET /api/remoto/comandos/{id}`** → o comando. **`GET /api/remoto/maquinas/{maquinaId}/conversa`** →
-`{ "comandos": [...], "respostas": [...], "ultimoEvento": 42 }`, os mais antigos primeiro (até 200 de cada).
+`{ "comandos": [...], "respostas": [...], "ultimoEvento": 42, "falas": [...] }`, os mais antigos primeiro (até 200 de cada).
+As `falas` (campo novo; vazias com o dev.kit antigo) são a conversa do chat do dev.kit — `FalaRemotaV1`: `id`, `maquinaId`,
+`autor`, `origem`, `texto`, `comandoId`, `ditaEm`, `recebidaEm` —, na ordem em que foram **ditas** (`ditaEm`): a que chega
+atrasada entra no lugar dela.
 
 **`GET /api/remoto/conversa/eventos[?maquinaId=...]`** → `text/event-stream`. Cada evento:
 
@@ -152,8 +158,9 @@ event: comando
 data: {"id":43,"tipo":"comando","maquinaId":"3f2b...","comando":{"id":"9b1d...","estado":"entregue",...},"resposta":null,"em":"..."}
 ```
 
-- `event` é `comando` (o comando mudou de estado) ou `resposta` (chegou uma resposta); `ping`, sem `id` e com `data: null`,
-  mantém a conexão viva.
+- `event` é `comando` (o comando mudou de estado), `resposta` (chegou uma resposta) ou `fala` (chegou uma fala do chat do
+  dev.kit, no campo novo `fala`, com `comando` e `resposta` nulos); `ping`, sem `id` e com `data: null`, mantém a conexão viva.
+  O site que não conhece um `event` o ignora e só avança o cursor.
 - O site abre o SSE com `Last-Event-ID: <ultimoEvento>` do histórico (ou `?desde=`) e não perde nada entre as duas chamadas;
   a reconexão retoma do último `id` recebido. O fluxo fecha sozinho depois de `Remoto:DuracaoDoSseSegundos` (300).
 - O JWT vai no cabeçalho `Authorization`: o site usa `fetch` com o corpo em fluxo (o `EventSource` do navegador não manda
@@ -194,6 +201,26 @@ data: {"id":43,"tipo":"comando","maquinaId":"3f2b...","comando":{"id":"9b1d...",
 - **201** a nova; **200** com `repetida: true` o reenvio do mesmo `id` (idempotente). O `texto` passa pelas mesmas regras do
   dado sensível (**422**): o dev.kit manda já sanitizado (`TraceSanitizado`).
 
+**`POST /api/remoto/conversa/falas`** — só com `falas-do-desktop` nos `recursos` do heartbeat (seção 1)
+
+```json
+{ "contrato": 1, "maquinaId": "...", "id": "f-0001", "autor": "dev", "origem": "desktop",
+  "texto": "Como está o projeto controle-remoto-v2?", "ditaEm": "2026-11-03T12:00:30Z" }
+```
+
+O espelho do chat do Orquestrador no dev.kit, para o chat do Board mostrar a MESMA conversa.
+
+- `autor`: `orquestrador` ou `dev` — quem falou. `origem`: `desktop` (escrita no dev.kit) ou `remoto` (veio do site por um
+  comando; diz o `comandoId`, para o site juntar a fala ao comando e não mostrá-la duas vezes). Sem diferença de caixa.
+- `texto` obrigatório, até 4000 (o dev.kit corta a fala maior); `ditaEm` é o relógio da máquina e dá a ordem do histórico.
+- **201** a nova; **200** com `repetida: true` o reenvio do mesmo `id` com o mesmo conteúdo (idempotente: o 429 e a queda não
+  perdem a fala, o dev.kit reenvia com o mesmo `id`); o mesmo `id` com outro `autor`, `origem`, `texto` ou `comandoId` é **409**
+  `id-em-uso`. O `id` é único por máquina.
+- A fala não é resposta: não muda o estado de comando nenhum. A resposta a um comando do site continua em `/respostas`.
+- **422** `dado-sensivel` com o mesmo critério da resposta; **404** a máquina sem heartbeat, de outro usuário, ou o `comandoId`
+  que não existe; **409** `outra-maquina` o `comandoId` de outra máquina do usuário.
+- O dev.kit antigo não conhece a rota e não manda nada: o histórico e o SSE seguem como antes, com `falas` vazias.
+
 ### 4.3 Recusas e limites
 
 As da seção "Recusas dos envios" (400, 401, 413 acima de 32 KB, 415, 422) e:
@@ -202,16 +229,17 @@ As da seção "Recusas dos envios" (400, 401, 413 acima de 32 KB, 415, 422) e:
 |---|---|
 | **404** | O comando, a máquina ou a fila não é do usuário (ou não existe). |
 | **409** | `sem-fila`, `turno-em-andamento`, `id-em-uso`, `outra-maquina`. |
-| **429** | `limite-de-envio`: mais de `Remoto:ComandosPorHora` (30) comandos na última hora, contados no SQL (vale entre instâncias), com `Retry-After`. Cada mensagem pode abrir um turno do agente. As escritas da conversa também têm `Remoto:EnviosDaConversaPorMinuto` (60), separado do heartbeat. |
+| **429** | `limite-de-envio`: mais de `Remoto:ComandosPorHora` (30) comandos na última hora, contados no SQL (vale entre instâncias), com `Retry-After`. Cada mensagem pode abrir um turno do agente. As escritas da conversa também têm `Remoto:EnviosDaConversaPorMinuto` (60), separado do heartbeat. As falas têm o seu, `Remoto:FalasPorMinuto` (60), com `Retry-After`: o espelho do chat não tira a vez do comando nem da resposta. |
 | **503** | `fila-indisponivel`: a fila não aceitou, ou a SAS não pôde ser assinada. |
 
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no
-expurgo diário. O retrato guardado é só o último: não há histórico. A conversa (comandos, respostas e eventos) sai depois
-de `Remoto:RetencaoDaConversaDias` (padrão 30), pela data de cada linha.
+expurgo diário. O retrato guardado é só o último: não há histórico. A conversa (comandos, respostas, falas e eventos) sai
+depois de `Remoto:RetencaoDaConversaDias` (padrão 30), pela data de cada linha.
 
 ## No Azure SQL
 
 A tabela `MaquinasRemotas` vem de `api/scripts/sqlserver/Remoto.sql`, e as da conversa (`ComandosRemotos`,
-`RespostasRemotas`, `EventosDaConversa`), de `api/scripts/sqlserver/Conversa.sql` — idempotentes; rode-os antes de publicar a API.
+`RespostasRemotas`, `EventosDaConversa`, `FalasRemotas`), de `api/scripts/sqlserver/Conversa.sql` — idempotentes; rode-os antes
+de publicar a API. Numa base que já tem a conversa do item 5, rodar de novo o `Conversa.sql` só cria `FalasRemotas`.

@@ -67,6 +67,34 @@ public sealed class RespostaRemota
 }
 
 /// <summary>
+/// Uma fala do chat do Orquestrador no dev.kit, com quem falou e onde nasceu. Única por (<see cref="UsuarioId"/>,
+/// <see cref="MaquinaId"/>, <see cref="FalaId"/>): o reenvio do dev.kit não a duplica. Não muda o estado de comando nenhum.
+/// </summary>
+public sealed class FalaRemota
+{
+    public long Id { get; set; }
+    public int UsuarioId { get; set; }
+    public string MaquinaId { get; set; } = string.Empty;
+    public string FalaId { get; set; } = string.Empty;
+
+    /// <summary>Um de <c>ConversaV1.AutoresDaFala</c>.</summary>
+    public string Autor { get; set; } = string.Empty;
+
+    /// <summary>Um de <c>ConversaV1.OrigensDaFala</c>.</summary>
+    public string Origem { get; set; } = string.Empty;
+
+    public string Texto { get; set; } = string.Empty;
+
+    /// <summary>O <see cref="ComandoRemoto.ComandoId"/> que trouxe a fala de origem remota; vazio na do desktop.</summary>
+    public string ComandoId { get; set; } = string.Empty;
+
+    /// <summary>Quando foi dita (o relógio da máquina): a ordem da conversa.</summary>
+    public DateTime DitaEmUtc { get; set; }
+
+    public DateTime RecebidaEmUtc { get; set; }
+}
+
+/// <summary>
 /// Um evento da conversa, só acrescentado: o comando que mudou de estado ou a resposta que chegou, com a foto dela em JSON.
 /// O <see cref="Id"/> é o <c>id:</c> do SSE — o site retoma do último que viu, e nada se perde entre o histórico e o SSE.
 /// </summary>

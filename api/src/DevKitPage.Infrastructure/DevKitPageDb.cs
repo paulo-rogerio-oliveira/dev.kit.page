@@ -52,6 +52,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<EventoDaProvisao> EventosDaProvisao => Set<EventoDaProvisao>();
     public DbSet<ComandoRemoto> ComandosRemotos => Set<ComandoRemoto>();
     public DbSet<RespostaRemota> RespostasRemotas => Set<RespostaRemota>();
+    public DbSet<FalaRemota> FalasRemotas => Set<FalaRemota>();
     public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -604,8 +605,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     }
 
     /// <summary>
-    /// A conversa e os comandos remotos (fase 2 do controle remoto): o comando com o estado, a resposta do dev.kit e o evento
-    /// do SSE. No Azure SQL as tabelas vêm de api/scripts/sqlserver/Conversa.sql. O usuário apagado leva a conversa dele.
+    /// A conversa e os comandos remotos (fase 2 do controle remoto): o comando com o estado, a resposta do dev.kit, a fala do
+    /// chat do dev.kit e o evento do SSE. No Azure SQL as tabelas vêm de api/scripts/sqlserver/Conversa.sql. O usuário apagado leva a conversa dele.
     /// </summary>
     private static void ConfigurarConversa(ModelBuilder modelBuilder)
     {
@@ -642,6 +643,23 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.RecebidaEmUtc });
             e.HasIndex(r => r.RecebidaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FalaRemota>(e =>
+        {
+            e.ToTable("FalasRemotas");
+            e.Property(f => f.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(f => f.FalaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(f => f.Autor).HasMaxLength(20);
+            e.Property(f => f.Origem).HasMaxLength(20);
+            e.Property(f => f.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            e.Property(f => f.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            // O reenvio do dev.kit não duplica a fala.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.FalaId }).IsUnique();
+            // O histórico por máquina, na ordem em que foram ditas.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.DitaEmUtc });
+            e.HasIndex(f => f.RecebidaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(f => f.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<EventoDaConversa>(e =>

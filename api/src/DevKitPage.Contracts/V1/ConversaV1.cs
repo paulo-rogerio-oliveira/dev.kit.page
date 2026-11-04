@@ -76,17 +76,45 @@ public sealed record RespostaRemotaV1(
 public sealed record RespostaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
 
 /// <summary>
-/// O histórico da conversa com uma máquina (<c>GET /api/remoto/maquinas/{id}/conversa</c>), do mais antigo ao mais novo, e o
-/// <see cref="UltimoEvento"/>: o site abre o SSE com ele no <c>Last-Event-ID</c> e não perde nada entre as duas chamadas.
+/// Uma FALA do chat do Orquestrador no dev.kit (<c>POST /api/remoto/conversa/falas</c>), para o chat do Board mostrar a mesma
+/// conversa: quem falou (<see cref="Autor"/>) e onde a fala nasceu (<see cref="Origem"/>). Só o dev.kit que leu
+/// <see cref="RemotoV1.RecursoFalasDoDesktop"/> nos <c>recursos</c> do heartbeat a envia; o antigo não, e nada muda para ele.
+/// Já sanitizada (<c>TraceSanitizado</c>): a API recusa (422) a que traz token ou dado de cliente.
 /// </summary>
-public sealed record ConversaDaMaquinaV1(IReadOnlyList<ComandoRemotoV1> Comandos, IReadOnlyList<RespostaRemotaV1> Respostas, long UltimoEvento);
+/// <param name="Id">O id da fala, do dev.kit: o reenvio com o mesmo id e o mesmo conteúdo não grava outra (idempotente).</param>
+/// <param name="Autor">Um de <see cref="ConversaV1.AutoresDaFala"/>.</param>
+/// <param name="Origem">Um de <see cref="ConversaV1.OrigensDaFala"/>.</param>
+/// <param name="DitaEm">Quando foi dita, pelo relógio da máquina: é a ordem da conversa no histórico.</param>
+/// <param name="ComandoId">
+/// O comando do site que trouxe a fala; obrigatório na de origem <see cref="ConversaV1.OrigemRemoto"/>, para o site juntar a fala
+/// ao comando e não mostrá-la duas vezes.
+/// </param>
+public sealed record FalaDoDevKitV1(
+    int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null);
+
+/// <summary>Uma fala guardada, como o site a lê.</summary>
+public sealed record FalaRemotaV1(
+    string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm);
+
+/// <summary>A resposta do envio da fala: <see cref="Repetida"/> é o reenvio de uma já gravada.</summary>
+public sealed record FalaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
 
 /// <summary>
-/// Um evento do SSE da conversa (<c>GET /api/remoto/conversa/eventos</c>): o comando que mudou de estado ou a resposta que
-/// chegou. O <see cref="Id"/> cresce: é o <c>id:</c> do SSE, e o <c>Last-Event-ID</c> retoma dali.
+/// O histórico da conversa com uma máquina (<c>GET /api/remoto/maquinas/{id}/conversa</c>), do mais antigo ao mais novo, e o
+/// <see cref="UltimoEvento"/>: o site abre o SSE com ele no <c>Last-Event-ID</c> e não perde nada entre as duas chamadas. As
+/// <see cref="Falas"/> (campo novo) são a conversa do chat do dev.kit, pela ordem em que foram ditas.
+/// </summary>
+public sealed record ConversaDaMaquinaV1(
+    IReadOnlyList<ComandoRemotoV1> Comandos, IReadOnlyList<RespostaRemotaV1> Respostas, long UltimoEvento, IReadOnlyList<FalaRemotaV1> Falas);
+
+/// <summary>
+/// Um evento do SSE da conversa (<c>GET /api/remoto/conversa/eventos</c>): o comando que mudou de estado, a resposta que
+/// chegou ou a fala do dev.kit (<see cref="Fala"/>, campo novo). O <see cref="Id"/> cresce: é o <c>id:</c> do SSE, e o
+/// <c>Last-Event-ID</c> retoma dali.
 /// </summary>
 /// <param name="Tipo">Um de <see cref="ConversaV1.TiposDeEvento"/>.</param>
-public sealed record EventoDaConversaV1(long Id, string Tipo, string MaquinaId, ComandoRemotoV1? Comando, RespostaRemotaV1? Resposta, DateTimeOffset Em);
+public sealed record EventoDaConversaV1(
+    long Id, string Tipo, string MaquinaId, ComandoRemotoV1? Comando, RespostaRemotaV1? Resposta, DateTimeOffset Em, FalaRemotaV1? Fala = null);
 
 /// <summary>
 /// A conversa e os comandos remotos (fase 2 do controle remoto), no MESMO contrato v1 do <see cref="RemotoV1"/>
@@ -130,9 +158,22 @@ public static class ConversaV1
 
     public const string EventoComando = "comando";
     public const string EventoResposta = "resposta";
+    public const string EventoFala = "fala";
 
-    /// <summary>Os eventos do SSE.</summary>
-    public static IReadOnlyList<string> TiposDeEvento { get; } = [EventoComando, EventoResposta];
+    /// <summary>Os eventos do SSE; o novo entra no fim (o site que não o conhece o ignora).</summary>
+    public static IReadOnlyList<string> TiposDeEvento { get; } = [EventoComando, EventoResposta, EventoFala];
+
+    public const string AutorOrquestrador = "orquestrador";
+    public const string AutorDev = "dev";
+
+    /// <summary>Quem falou no chat do dev.kit: o Orquestrador ou o desenvolvedor.</summary>
+    public static IReadOnlyList<string> AutoresDaFala { get; } = [AutorOrquestrador, AutorDev];
+
+    /// <summary>A fala escrita no chat do próprio dev.kit, na máquina.</summary>
+    public const string OrigemDesktop = "desktop";
+
+    /// <summary>Onde a fala nasceu: no dev.kit (<see cref="OrigemDesktop"/>) ou no site (<see cref="OrigemRemoto"/>, por um comando).</summary>
+    public static IReadOnlyList<string> OrigensDaFala { get; } = [OrigemDesktop, OrigemRemoto];
 
     public const string DispositivoNavegador = "navegador";
     public const string DispositivoCelular = "celular";
