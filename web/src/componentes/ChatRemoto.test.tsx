@@ -83,7 +83,7 @@ it('recebe SSE fragmentado, não duplica eventos e retoma do cursor na reconexã
     return new HttpResponse(new ReadableStream({ start(controller) {
       const bytes = encoder.encode(frame);
       controller.enqueue(bytes.slice(0, 58)); controller.enqueue(bytes.slice(58));
-      controller.enqueue(encoder.encode(frame + 'event: ping\ndata: null\n\n')); controller.close();
+      controller.enqueue(encoder.encode(frame + 'event: ping\ndata: null\n\nevent: ping\ndata: \n\ndata:\n\n')); controller.close();
     } }), { headers: { 'Content-Type': 'text/event-stream' } });
   }));
   await abrir();
@@ -91,6 +91,7 @@ it('recebe SSE fragmentado, não duplica eventos e retoma do cursor na reconexã
   expect(within(screen.getByRole('log')).getAllByRole('article')).toHaveLength(1);
   await waitFor(() => expect(cursores.length).toBeGreaterThanOrEqual(2), { timeout: 4500 });
   expect(cursores.slice(0, 2)).toEqual(['10', '11']);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
 it('mantém a entrega confirmada pelo SSE quando o POST responde depois com estado anterior', async () => {

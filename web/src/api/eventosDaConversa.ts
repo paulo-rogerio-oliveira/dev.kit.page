@@ -8,14 +8,18 @@ export async function lerEventosDaConversa(resposta: Response, receber: (evento:
   const decoder = new TextDecoder();
   let buffer = '';
   let dados: string[] = [];
+  let tipo = '';
   function linha(texto: string) {
     if (!texto) {
-      if (dados.length) {
-        const evento = JSON.parse(dados.join('\n')) as EventoDaConversa | null;
+      const conteudo = dados.join('\n');
+      // O ServerSentEvents do ASP.NET pode escrever o ping nulo como data: vazio.
+      if (tipo !== 'ping' && conteudo.trim()) {
+        const evento = JSON.parse(conteudo) as EventoDaConversa | null;
         if (evento && Number.isSafeInteger(evento.id)) receber(evento);
       }
-      dados = [];
+      dados = []; tipo = '';
     } else if (texto.startsWith('data:')) dados.push(texto.slice(5).replace(/^ /, ''));
+    else if (texto.startsWith('event:')) tipo = texto.slice(6).trim();
   }
   try {
     while (true) {
