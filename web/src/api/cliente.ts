@@ -11,7 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { Projeto } from './projetos';
-import type { MaquinaRemota, RetratoDaMaquina } from './remoto';
+import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -53,6 +53,7 @@ interface Opcoes {
   corpo?: unknown;
   token?: string;
   aceita?: string;
+  ultimoEvento?: number;
 }
 
 /** A requisição: o 2xx volta como está; o resto vira {@link ErroDaApi} com a mensagem do ProblemDetails. */
@@ -60,6 +61,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   const cabecalhos: Record<string, string> = { Accept: opcoes.aceita ?? 'application/json' };
   if (opcoes.corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
+  if (opcoes.ultimoEvento !== undefined) cabecalhos['Last-Event-ID'] = String(opcoes.ultimoEvento);
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
     signal: opcoes.signal,
@@ -123,6 +125,12 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
+  enviarMensagemRemota: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
+    chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),
+  eventosDaConversa: (token: string, maquina: string, ultimoEvento: number, signal: AbortSignal) =>
+    requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
   maquinasRemotas: (token: string, signal?: AbortSignal) =>
     chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
   retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
