@@ -355,6 +355,174 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(3, api.Fila.Enviadas.Count);
     }
 
+    private static FalaDoDevKitV1 Fala(string id, string autor = ConversaV1.AutorDev, string origem = ConversaV1.OrigemDesktop,
+        string texto = "Como está o item 13?", DateTimeOffset? ditaEm = null, string? comando = null)
+        => new(RemotoV1.Contrato, Maquina, id, autor, origem, texto, ditaEm ?? DateTimeOffset.UtcNow, comando);
+
+    [Fact]
+    public async Task O_heartbeat_publica_o_recurso_das_falas_e_o_envio_do_dev_kit_antigo_segue_aceito()
+    {
+        var (_, ana) = await DevComFilaAsync();
+
+        // O heartbeat do dev.kit antigo, sem campo novo nenhum: 200, e a resposta traz o sinal de suporte.
+        var antigo = await ana.PostAsync("/api/remoto/heartbeat", new StringContent(
+            $$"""{"contrato":1,"maquinaId":"{{Maquina}}","nome":"Notebook","versaoDevKit":"75","origem":"servico","appAberto":true,"estadoDoAgente":"ativo","turnoEmAndamento":false}""",
+            Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, antigo.StatusCode);
+        using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+        }
+
+        // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.
+        (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).EnsureSuccessStatusCode();
+        var resposta = await ana.PostAsync("/api/remoto/respostas", new StringContent(
+            $$"""{"contrato":1,"maquinaId":"{{Maquina}}","id":"r-1","comandoId":"c-1","tipo":"mensagem","texto":"O item 13 está em implementação.","geradaEm":"2026-11-03T12:01:00Z"}""",
+            Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+        Assert.Equal(ConversaV1.EstadoRespondido, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/c-1"))!.Estado);
+
+        // O histórico guarda o formato de antes e só ACRESCENTA as falas (vazias sem o dev.kit novo).
+        using var historico = JsonDocument.Parse(await ana.GetStringAsync($"/api/remoto/maquinas/{Maquina}/conversa"));
+        var raiz = historico.RootElement;
+        Assert.Equal(["comandos", "respostas", "ultimoEvento", "falas"], raiz.EnumerateObject().Select(p => p.Name));
+        Assert.Equal("r-1", raiz.GetProperty("respostas")[0].GetProperty("id").GetString());
+        Assert.Equal(0, raiz.GetProperty("falas").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task As_falas_do_desktop_voltam_no_historico_e_no_sse_com_autor_e_origem_sem_mexer_no_comando()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).EnsureSuccessStatusCode();
+        var antes = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.UltimoEvento;
+        var t0 = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        using var tempo = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var fluxo = await AbrirSseAsync(ana, $"/api/remoto/conversa/eventos?maquinaId={Maquina}", antes, tempo.Token);
+        var leitura = LerSseAsync(fluxo, l => l.Count(e => e.Evento == ConversaV1.EventoFala) >= 3, tempo.Token);
+
+        // O dev no desktop, o Orquestrador respondendo no desktop e a mensagem do site espelhada pelo dev.kit.
+        var dev = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", ditaEm: t0));
+        var orquestrador = await ana.PostAsJsonAsync("/api/remoto/conversa/falas",
+            Fala("f-2", ConversaV1.AutorOrquestrador, texto: "O item 13 está em implementação.", ditaEm: t0.AddSeconds(5)));
+        var remota = await ana.PostAsJsonAsync("/api/remoto/conversa/falas",
+            Fala("f-3", origem: ConversaV1.OrigemRemoto, texto: "Como está o projeto controle-remoto-v2?", ditaEm: t0.AddSeconds(10), comando: "c-1"));
+        Assert.All(new[] { dev, orquestrador, remota }, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        var recebida = (await dev.Content.ReadFromJsonAsync<FalaRecebidaV1>())!;
+        Assert.Equal(("f-1", false), (recebida.Id, recebida.Repetida));
+
+        var eventos = (await leitura).Where(e => e.Evento != "ping").ToList();
+        Assert.All(eventos, e => Assert.Equal(ConversaV1.EventoFala, e.Evento));
+        var lidos = eventos.Select(e => JsonSerializer.Deserialize<EventoDaConversaV1>(e.Dados, Json)!).ToList();
+        Assert.Equal(
+            [("f-1", ConversaV1.AutorDev, ConversaV1.OrigemDesktop), ("f-2", ConversaV1.AutorOrquestrador, ConversaV1.OrigemDesktop), ("f-3", ConversaV1.AutorDev, ConversaV1.OrigemRemoto)],
+            lidos.Select(e => (e.Fala!.Id, e.Fala.Autor, e.Fala.Origem)));
+        Assert.All(lidos, e => Assert.Null(e.Comando));
+        Assert.Equal("c-1", lidos[2].Fala!.ComandoId);
+        // O JSON do SSE leva os campos pelo nome do contrato.
+        Assert.Contains("\"fala\":{\"id\":\"f-1\",\"maquinaId\":", eventos[0].Dados, StringComparison.Ordinal);
+        Assert.Contains("\"autor\":\"dev\",\"origem\":\"desktop\"", eventos[0].Dados, StringComparison.Ordinal);
+
+        var conversa = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!;
+        Assert.Equal(["f-1", "f-2", "f-3"], conversa.Falas.Select(f => f.Id));
+        Assert.Equal((ConversaV1.AutorOrquestrador, ConversaV1.OrigemDesktop, "O item 13 está em implementação.", t0.AddSeconds(5)),
+            (conversa.Falas[1].Autor, conversa.Falas[1].Origem, conversa.Falas[1].Texto, conversa.Falas[1].DitaEm));
+        Assert.Null(conversa.Falas[0].ComandoId);
+        // A fala não é resposta: o comando segue na fila e nenhuma resposta nasce dela.
+        Assert.Empty(conversa.Respostas);
+        Assert.Equal(ConversaV1.EstadoNaFila, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/c-1"))!.Estado);
+        Assert.Equal(lidos.Max(e => e.Id), conversa.UltimoEvento);
+    }
+
+    [Fact]
+    public async Task A_fala_reenviada_com_o_mesmo_id_nao_duplica_e_com_outro_conteudo_e_409()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var ditaEm = DateTimeOffset.UtcNow;
+
+        var primeira = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", ditaEm: ditaEm));
+        var reenviada = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", ditaEm: ditaEm));
+        var outroAutor = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", ConversaV1.AutorOrquestrador, ditaEm: ditaEm));
+        var outroTexto = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", texto: "Outra coisa", ditaEm: ditaEm));
+
+        Assert.Equal(HttpStatusCode.Created, primeira.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, reenviada.StatusCode);
+        var repetida = (await reenviada.Content.ReadFromJsonAsync<FalaRecebidaV1>())!;
+        Assert.Equal(("f-1", true, (await primeira.Content.ReadFromJsonAsync<FalaRecebidaV1>())!.RecebidaEm), (repetida.Id, repetida.Repetida, repetida.RecebidaEm));
+        Assert.Equal((HttpStatusCode.Conflict, ConversaV1.CodigoIdEmUso), (outroAutor.StatusCode, await CodigoAsync(outroAutor)));
+        Assert.Equal((HttpStatusCode.Conflict, ConversaV1.CodigoIdEmUso), (outroTexto.StatusCode, await CodigoAsync(outroTexto)));
+
+        var falas = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.Falas;
+        Assert.Equal((ConversaV1.AutorDev, "Como está o item 13?"), (Assert.Single(falas).Autor, falas[0].Texto));
+    }
+
+    [Fact]
+    public async Task As_recusas_da_fala_forma_dado_sensivel_contrato_e_isolamento()
+    {
+        var (admin, ana) = await DevComFilaAsync();
+        (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).EnsureSuccessStatusCode();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _api.CreateClient().PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1"))).StatusCode);
+        foreach (var (fala, campo) in new[]
+        {
+            (Fala("f-1", autor: "cliente"), "autor"),
+            (Fala("f-1", origem: "email"), "origem"),
+            (Fala("f-1", origem: ConversaV1.OrigemRemoto), "comandoId"),
+            (Fala("f-1", texto: "  "), "Escreva"),
+            (Fala("f-1", texto: new string('a', ConversaV1.TamanhoMaximoDoTexto + 1)), "4000"),
+            (Fala("../f-1"), "id da fala"),
+        })
+        {
+            var recusa = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", fala);
+            Assert.Equal(HttpStatusCode.BadRequest, recusa.StatusCode);
+            Assert.Contains(campo, await recusa.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+
+        var sensivel = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", texto: "O cliente 11.222.333/0001-81 pediu o token ghp_abcdefghijklmnopqrstuvwxyz0123456789"));
+        Assert.Equal((HttpStatusCode.UnprocessableEntity, RemotoV1.CodigoDadoSensivel), (sensivel.StatusCode, await CodigoAsync(sensivel)));
+        var corpo = await sensivel.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("ghp_", corpo, StringComparison.Ordinal);
+        Assert.DoesNotContain("11.222.333", corpo, StringComparison.Ordinal);
+        var contrato = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1") with { Contrato = 2 });
+        Assert.Equal((HttpStatusCode.BadRequest, RemotoV1.CodigoContratoDesconhecido), (contrato.StatusCode, await CodigoAsync(contrato)));
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await ana.PostAsync("/api/remoto/conversa/falas", new StringContent("oi", Encoding.UTF8, "text/plain"))).StatusCode);
+
+        // O comando que não existe é 404; o de outra máquina do mesmo usuário, 409 outra-maquina.
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", origem: ConversaV1.OrigemRemoto, comando: "c-nao-existe"))).StatusCode);
+        (await ana.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat() with { MaquinaId = "9a8b7c6d5e4f" })).EnsureSuccessStatusCode();
+        var outraMaquina = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", origem: ConversaV1.OrigemRemoto, comando: "c-1") with { MaquinaId = "9a8b7c6d5e4f" });
+        Assert.Equal((HttpStatusCode.Conflict, ConversaV1.CodigoOutraMaquina), (outraMaquina.StatusCode, await CodigoAsync(outraMaquina)));
+
+        // A bia não fala pela máquina da ana; com a mesma id anônima, a dela é outra máquina e a conversa não se mistura.
+        var (bia, _) = await _api.UsuarioAsync(admin, "bia", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-bia"))).StatusCode);
+        (await bia.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat())).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-bia", origem: ConversaV1.OrigemRemoto, comando: "c-1"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await bia.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1", texto: "Da bia"))).StatusCode);
+        Assert.Empty((await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.Falas);
+        Assert.Equal("Da bia", Assert.Single((await bia.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.Falas).Texto);
+    }
+
+    [Fact]
+    public async Task O_limite_por_minuto_das_falas_e_429_e_nao_tira_a_vez_da_resposta()
+    {
+        using var teste = new ConversaApiTests(new ApiDeTeste(falasPorMinuto: 2));
+        var (_, ana) = await teste.DevComFilaAsync();
+
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-1"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-2"))).StatusCode);
+        var acima = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-3"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, acima.StatusCode);
+        Assert.True(acima.Headers.Contains("Retry-After"));
+        // A política é só das falas: a resposta do dev.kit e o comando do site seguem.
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/respostas", Resposta("r-1", null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).StatusCode);
+        Assert.Equal(2, (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.Falas.Count);
+    }
+
     [Fact]
     public void A_api_nao_sobe_em_production_com_a_fila_simulada()
     {

@@ -50,8 +50,12 @@ public sealed record PendenciaNoRetratoV1(
     string Id, string Tipo, string Titulo, string? Pergunta = null, IReadOnlyList<string>? Opcoes = null, string? JaTentei = null,
     string? Projeto = null, int? Item = null, string? Fluxo = null, DateTimeOffset? CriadaEm = null);
 
-/// <summary>A resposta do heartbeat: quando a API o recebeu e de quanto em quanto tempo o próximo é esperado.</summary>
-public sealed record HeartbeatRecebidoV1(string MaquinaId, DateTimeOffset RecebidoEm, int IntervaloSegundos);
+/// <summary>
+/// A resposta do heartbeat: quando a API o recebeu, de quanto em quanto tempo o próximo é esperado e os
+/// <see cref="Recursos"/> que esta API aceita (<see cref="RemotoV1.RecursosDaApi"/>, campo novo). O dev.kit confere o recurso
+/// antes de usar a rota dele: a API antiga não manda a lista, e ele não envia.
+/// </summary>
+public sealed record HeartbeatRecebidoV1(string MaquinaId, DateTimeOffset RecebidoEm, int IntervaloSegundos, IReadOnlyList<string>? Recursos = null);
 
 /// <summary>A resposta do retrato. <see cref="Aplicado"/> falso é o retrato mais antigo que o gravado: aceito, mas descartado.</summary>
 public sealed record RetratoRecebidoV1(string MaquinaId, DateTimeOffset RecebidoEm, bool Aplicado);
@@ -130,6 +134,15 @@ public static class RemotoV1
 
     /// <summary>Os tipos de dado que o envio não pode levar.</summary>
     public static IReadOnlyList<string> TiposSensiveis { get; } = [SensivelSegredo, SensivelEmail, SensivelCpf, SensivelCnpj, SensivelTelefone];
+
+    /// <summary>A API grava as falas do chat do dev.kit (<c>POST /api/remoto/conversa/falas</c>, contrato seção 4.2).</summary>
+    public const string RecursoFalasDoDesktop = "falas-do-desktop";
+
+    /// <summary>
+    /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
+    /// o dev.kit só usa a rota do recurso que viu aqui.
+    /// </summary>
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop];
 
     /// <summary>O <c>codigo</c> do 400 de contrato que esta API não conhece (o ProblemDetails leva <c>contratoAceito</c>).</summary>
     public const string CodigoContratoDesconhecido = "contrato-desconhecido";

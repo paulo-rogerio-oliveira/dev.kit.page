@@ -71,6 +71,13 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDaConversa = "Conversa";
 
+    /// <summary>
+    /// A política das falas do chat do dev.kit (<c>POST /api/remoto/conversa/falas</c>): por USUÁRIO do token, com
+    /// <see cref="OpcoesDoRemoto.FalasPorMinuto"/>, separada da <see cref="PoliticaDaConversa"/> — o espelho do chat do desktop
+    /// não tira a vez do comando do site. O 429 não perde a fala: o dev.kit a reenvia com o mesmo id.
+    /// </summary>
+    public const string PoliticaDasFalas = "Falas";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -175,6 +182,17 @@ public static class LimiteDeTaxa
                 var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.EnviosDaConversaPorMinuto);
                 var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
                 return RateLimitPartition.GetFixedWindowLimiter("conversa:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDasFalas, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.FalasPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("falas:" + usuario, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),

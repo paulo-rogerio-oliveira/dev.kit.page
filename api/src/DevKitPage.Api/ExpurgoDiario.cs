@@ -28,7 +28,7 @@ public sealed class ExpurgoDiario(IServiceScopeFactory escopos, ILogger<ExpurgoD
                 await ExpurgarAsync<IExpurgoDeAcessos>("registro(s) da trilha de acesso", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDePedidos>("pedido(s) de demonstração", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDoRemoto>("máquina(s) do controle remoto", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
-                await ExpurgarAsync<IExpurgoDaConversa>("comando(s), resposta(s) e evento(s) da conversa remota", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
+                await ExpurgarAsync<IExpurgoDaConversa>("comando(s), resposta(s), fala(s) e evento(s) da conversa remota", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
             }
             while (await relogio.WaitForNextTickAsync(stoppingToken));
         }

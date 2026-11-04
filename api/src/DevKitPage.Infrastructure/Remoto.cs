@@ -30,7 +30,7 @@ public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
             maquina.UltimoHeartbeatEmUtc = agora;
             return true;
         }, ct);
-        return new HeartbeatRecebidoV1(heartbeat.MaquinaId, DevKitPageDb.Utc(agora), RemotoV1.IntervaloDoHeartbeatSegundos);
+        return new HeartbeatRecebidoV1(heartbeat.MaquinaId, DevKitPageDb.Utc(agora), RemotoV1.IntervaloDoHeartbeatSegundos, RemotoV1.RecursosDaApi);
     }
 
     public async Task<RetratoRecebidoV1> GravarRetratoAsync(int usuarioId, RetratoV1 retrato, CancellationToken ct)

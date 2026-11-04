@@ -47,6 +47,56 @@ public sealed class RegrasDaConversaTests
         Assert.Contains("Envie", RegrasDaConversa.Validar((ComandoNovoV1?)null, Opcoes));
     }
 
+    private static FalaDoDevKitV1 Fala(string autor = ConversaV1.AutorDev, string origem = ConversaV1.OrigemDesktop, string? texto = "Como está o item 13?",
+        string? comando = null, string id = "f-1")
+        => new(RemotoV1.Contrato, "3f2b9c0e5d7a", id, autor, origem, texto, new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero), comando);
+
+    [Fact]
+    public void A_fala_valida_passa_com_cada_autor_e_origem_e_sem_diferenca_de_caixa()
+    {
+        Assert.Empty(RegrasDaConversa.Validar(Fala()));
+        Assert.Empty(RegrasDaConversa.Validar(Fala(ConversaV1.AutorOrquestrador)));
+        Assert.Empty(RegrasDaConversa.Validar(Fala("Orquestrador", " DESKTOP ")));
+        Assert.Empty(RegrasDaConversa.Validar(Fala(origem: ConversaV1.OrigemRemoto, comando: "9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d")));
+        Assert.Empty(RegrasDaConversa.Validar(Fala(comando: "c-1")));
+    }
+
+    [Theory]
+    [InlineData("cliente", ConversaV1.OrigemDesktop, "Oi", null, "autor")]
+    [InlineData("", ConversaV1.OrigemDesktop, "Oi", null, "autor")]
+    [InlineData(ConversaV1.AutorDev, "celular", "Oi", null, "origem")]
+    [InlineData(ConversaV1.AutorDev, ConversaV1.OrigemRemoto, "Oi", null, "comandoId")]
+    [InlineData(ConversaV1.AutorDev, ConversaV1.OrigemDesktop, "Oi", "../c-1", "comandoId")]
+    [InlineData(ConversaV1.AutorDev, ConversaV1.OrigemDesktop, "   ", null, "Escreva")]
+    [InlineData(ConversaV1.AutorDev, ConversaV1.OrigemDesktop, null, null, "Escreva")]
+    public void A_fala_fora_da_forma_diz_o_campo(string autor, string origem, string? texto, string? comando, string campo)
+        => Assert.Contains(campo, RegrasDaConversa.Validar(Fala(autor, origem, texto, comando)));
+
+    [Fact]
+    public void A_fala_segue_a_regra_do_id_tem_teto_data_e_o_texto_sensivel_e_recusado()
+    {
+        Assert.Contains("id da fala", RegrasDaConversa.Validar(Fala(id: "fala 1")));
+        Assert.Contains("maquinaId", RegrasDaConversa.Validar(Fala() with { MaquinaId = "notebook do trabalho" }));
+        Assert.Contains("4000", RegrasDaConversa.Validar(Fala(texto: new string('a', ConversaV1.TamanhoMaximoDoTexto + 1))));
+        Assert.Empty(RegrasDaConversa.Validar(Fala(texto: new string('a', ConversaV1.TamanhoMaximoDoTexto))));
+        Assert.Contains("ditaEm", RegrasDaConversa.Validar(Fala() with { DitaEm = default }));
+        Assert.Contains("Envie", RegrasDaConversa.Validar((FalaDoDevKitV1?)null));
+
+        Assert.Equal([new CampoSensivelV1("texto", RemotoV1.SensivelSegredo)],
+            RegrasDaConversa.CamposSensiveis(Fala(texto: "use o token ghp_abcdefghijklmnopqrstuvwxyz0123456789")));
+        Assert.Empty(RegrasDaConversa.CamposSensiveis(Fala(texto: "O slug sprint-11-2026-2027 do carimbo 20261102-095333 está pronto.")));
+    }
+
+    [Fact]
+    public void O_contrato_publica_o_sinal_das_falas_e_o_evento_novo_no_fim_das_listas()
+    {
+        Assert.Equal("falas-do-desktop", RemotoV1.RecursoFalasDoDesktop);
+        Assert.Contains(RemotoV1.RecursoFalasDoDesktop, RemotoV1.RecursosDaApi);
+        Assert.Equal([ConversaV1.EventoComando, ConversaV1.EventoResposta, ConversaV1.EventoFala], ConversaV1.TiposDeEvento);
+        Assert.Equal(["orquestrador", "dev"], ConversaV1.AutoresDaFala);
+        Assert.Equal(["desktop", "remoto"], ConversaV1.OrigensDaFala);
+    }
+
     [Fact]
     public void A_resposta_valida_passa_e_a_que_conclui_diz_o_comando()
     {

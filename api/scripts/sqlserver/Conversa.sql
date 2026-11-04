@@ -1,5 +1,5 @@
 -- A conversa e os comandos remotos (controle remoto, fase 2), no Azure SQL: o comando do site com o estado e o TTL, a
--- resposta do dev.kit e o evento do SSE.
+-- resposta do dev.kit, a fala do chat do dev.kit e o evento do SSE.
 --
 -- Por que um script: com Banco:Provider=SqlServer a API sobe com EnsureCreated, que cria o esquema só numa base
 -- VAZIA — numa base que já existe ele não cria tabela nova. Este script é idempotente (pode rodar de novo sem efeito)
@@ -103,4 +103,40 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_EventosDaConversa_EmUtc' AND object_id = OBJECT_ID(N'[dbo].[EventosDaConversa]'))
     CREATE INDEX [IX_EventosDaConversa_EmUtc] ON [dbo].[EventosDaConversa] ([EmUtc]);
+GO
+
+-- As falas do chat do dev.kit (item 13 do controle-remoto-v2), com o autor e a origem: espelha a migration FalasDoDesktop.
+-- Rode de novo numa base que já tem as tabelas acima: só esta é criada.
+IF OBJECT_ID(N'[dbo].[FalasRemotas]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[FalasRemotas] (
+        [Id] bigint NOT NULL IDENTITY,
+        [UsuarioId] int NOT NULL,
+        [MaquinaId] nvarchar(64) NOT NULL,
+        [FalaId] nvarchar(64) NOT NULL,
+        [Autor] nvarchar(20) NOT NULL,
+        [Origem] nvarchar(20) NOT NULL,
+        [Texto] nvarchar(4000) NOT NULL,
+        [ComandoId] nvarchar(64) NOT NULL,
+        [DitaEmUtc] datetime2 NOT NULL,
+        [RecebidaEmUtc] datetime2 NOT NULL,
+        CONSTRAINT [PK_FalasRemotas] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_FalasRemotas_Usuarios_UsuarioId] FOREIGN KEY ([UsuarioId]) REFERENCES [dbo].[Usuarios] ([Id]) ON DELETE CASCADE
+    );
+END;
+GO
+
+-- O reenvio do dev.kit não duplica a fala.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FalasRemotas_UsuarioId_MaquinaId_FalaId' AND object_id = OBJECT_ID(N'[dbo].[FalasRemotas]'))
+    CREATE UNIQUE INDEX [IX_FalasRemotas_UsuarioId_MaquinaId_FalaId] ON [dbo].[FalasRemotas] ([UsuarioId], [MaquinaId], [FalaId]);
+GO
+
+-- O histórico por máquina, na ordem em que foram ditas.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FalasRemotas_UsuarioId_MaquinaId_DitaEmUtc' AND object_id = OBJECT_ID(N'[dbo].[FalasRemotas]'))
+    CREATE INDEX [IX_FalasRemotas_UsuarioId_MaquinaId_DitaEmUtc] ON [dbo].[FalasRemotas] ([UsuarioId], [MaquinaId], [DitaEmUtc]);
+GO
+
+-- A retenção (Remoto:RetencaoDaConversaDias) apaga pela data.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FalasRemotas_RecebidaEmUtc' AND object_id = OBJECT_ID(N'[dbo].[FalasRemotas]'))
+    CREATE INDEX [IX_FalasRemotas_RecebidaEmUtc] ON [dbo].[FalasRemotas] ([RecebidaEmUtc]);
 GO

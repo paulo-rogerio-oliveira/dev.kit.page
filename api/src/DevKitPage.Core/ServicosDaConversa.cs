@@ -41,6 +41,12 @@ public interface IConversaRemota
     /// <summary>Grava a resposta do dev.kit (idempotente pelo id dela) e leva o comando respondido ao estado da resposta.</summary>
     Task<ResultadoDaConversa<RespostaRecebidaV1>> ResponderAsync(int usuarioId, RespostaDoDevKitV1 resposta, CancellationToken ct);
 
+    /// <summary>
+    /// Grava a fala do chat do dev.kit com o autor e a origem. IDEMPOTENTE pelo id dela: o mesmo conteúdo devolve a gravada
+    /// (<see cref="FalaRecebidaV1.Repetida"/>), outro é <see cref="FalhaNaConversa.IdEmUso"/>. Não muda o estado de comando nenhum.
+    /// </summary>
+    Task<ResultadoDaConversa<FalaRecebidaV1>> FalarAsync(int usuarioId, FalaDoDevKitV1 fala, CancellationToken ct);
+
     /// <summary>Marca <c>expirado</c> o comando do usuário (ou de todos, sem usuário) cujo TTL venceu antes da entrega.</summary>
     Task<int> ExpirarVencidosAsync(int? usuarioId, CancellationToken ct);
 }
@@ -189,6 +195,34 @@ public static class RegrasDaConversa
         return string.Empty;
     }
 
+    /// <summary>O problema da fala do chat do dev.kit, ou vazio quando ela vale (o contrato é conferido à parte).</summary>
+    public static string Validar(FalaDoDevKitV1? fala)
+    {
+        if (fala is null)
+            return "Envie a fala.";
+        if (!RegrasDoRemoto.MaquinaIdValido(fala.MaquinaId))
+            return $"O maquinaId usa letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
+        if (!IdValido(fala.Id))
+            return $"O id da fala usa letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
+        if (!ConversaV1.AutoresDaFala.Contains(RegrasDoRemoto.Normalizar(fala.Autor)))
+            return $"O autor é um de: {string.Join(", ", ConversaV1.AutoresDaFala)}.";
+        var origem = RegrasDoRemoto.Normalizar(fala.Origem);
+        if (!ConversaV1.OrigensDaFala.Contains(origem))
+            return $"A origem é uma de: {string.Join(", ", ConversaV1.OrigensDaFala)}.";
+        if (!string.IsNullOrEmpty(fala.ComandoId) && !IdValido(fala.ComandoId))
+            return $"O comandoId usa letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
+        if (origem == ConversaV1.OrigemRemoto && string.IsNullOrEmpty(fala.ComandoId))
+            return "A fala de origem remoto diz de qual comando veio (comandoId).";
+        var texto = (fala.Texto ?? string.Empty).Trim();
+        if (texto.Length == 0)
+            return "Escreva a fala.";
+        if (texto.Length > ConversaV1.TamanhoMaximoDoTexto)
+            return $"A fala tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
+        if (fala.DitaEm == default)
+            return "Informe quando a fala foi dita (ditaEm).";
+        return string.Empty;
+    }
+
     /// <summary>Os campos do comando com dado sensível (<see cref="DadosSensiveis"/>): o texto vai para o SQL e para a fila.</summary>
     public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(ComandoNovoV1 comando)
         => RegrasDoRemoto.Sensiveis([("texto", comando.Texto)]);
@@ -196,6 +230,10 @@ public static class RegrasDaConversa
     /// <summary>Os campos da resposta com dado sensível: a conversa sai da máquina do dev só sanitizada.</summary>
     public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(RespostaDoDevKitV1 resposta)
         => RegrasDoRemoto.Sensiveis([("texto", resposta.Texto)]);
+
+    /// <summary>Os campos da fala com dado sensível: a conversa do chat do dev.kit sai da máquina só sanitizada.</summary>
+    public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(FalaDoDevKitV1 fala)
+        => RegrasDoRemoto.Sensiveis([("texto", fala.Texto)]);
 
     public static int TtlMinimo(OpcoesDoRemoto opcoes) => Math.Max(1, opcoes.TtlMinimoSegundos);
 

@@ -16,8 +16,9 @@ namespace DevKitPage.Api;
 /// <c>GET /maquinas/{maquinaId}/conversa</c> (o histórico e o último evento) e <c>GET /conversa/eventos</c> (o SSE, retomado
 /// pelo <c>Last-Event-ID</c>);</item>
 /// <item>Do DEV.KIT: <c>POST /fila/sas</c> (a SAS curta, só da fila do usuário e só de consumo), <c>POST /comandos/{id}/recebido</c>
-/// (o primeiro recebimento dentro do TTL manda executar; o repetido e o vencido, não) e <c>POST /respostas</c> (201 a nova, 200
-/// a reenviada).</item>
+/// (o primeiro recebimento dentro do TTL manda executar; o repetido e o vencido, não), <c>POST /respostas</c> (201 a nova, 200
+/// a reenviada) e <c>POST /conversa/falas</c> (a fala do chat do dev.kit com o autor e a origem: 201 a nova, 200 a reenviada,
+/// 409 <c>id-em-uso</c> o mesmo id com outro conteúdo; limite próprio por minuto).</item>
 /// </list>
 /// As recusas: 400 (forma, contrato), 404, 409 com <c>codigo</c> (sem fila, turno em andamento, outra máquina, id em uso), 413,
 /// 415, 422 (dado sensível), 429 (o limite de comandos por usuário, com <c>Retry-After</c>; e o de envios por minuto) e 503 (a
@@ -111,6 +112,20 @@ public static class EndpointsDaConversa
                     return Falha(http, resultado);
                 return resultado.Valor!.Repetida ? Results.Ok(resultado.Valor) : Results.Created((string?)null, resultado.Valor);
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDaConversa);
+
+        grupo.MapPost("/conversa/falas", (HttpContext http, ClaimsPrincipal quem, IConversaRemota conversa, CancellationToken ct)
+            => EndpointsDoRemoto.ComUsuario(quem, async usuario =>
+            {
+                var (fala, recusa) = await CorpoJson.LerAsync<FalaDoDevKitV1>(http.Request, ConversaV1.TamanhoMaximoDoEnvio, ct);
+                if (recusa is not null)
+                    return recusa;
+                if (EndpointsDoRemoto.Recusar(fala!.Contrato, RegrasDaConversa.Validar(fala), () => RegrasDaConversa.CamposSensiveis(fala)) is { } problema)
+                    return problema;
+                var resultado = await conversa.FalarAsync(usuario, fala, ct);
+                if (resultado.Falha != FalhaNaConversa.Nenhuma)
+                    return Falha(http, resultado);
+                return resultado.Valor!.Repetida ? Results.Ok(resultado.Valor) : Results.Created((string?)null, resultado.Valor);
+            })).RequireRateLimiting(LimiteDeTaxa.PoliticaDasFalas);
     }
 
     /// <summary>
