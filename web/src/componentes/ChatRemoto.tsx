@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComandoRemoto, MaquinaRemota } from '../api/remoto';
 import { useConversaRemota } from './useConversaRemota';
 import { ContextoDoChatRemoto, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function dataCompleta(data: string) { return new Date(data).toLocaleString('pt-BR'); }
+function dia(data: string, agora: number) {
+  const mensagem = new Date(data);
+  return mensagem.toDateString() === new Date(agora).toDateString() ? 'Hoje' : mensagem.toLocaleDateString('pt-BR');
+}
 function estadoDo(comando: ComandoRemoto, agora: number) {
   switch (comando.estado) {
     case 'pendente': return ['Registrado', 'Entrando na fila; envio ainda não confirmado.', false] as const;
@@ -60,18 +64,22 @@ export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemo
     {erro && <div className="br-chat-aviso" role="alert"><span>{erro} O histórico exibido pode estar desatualizado.</span><button className="br-btn" onClick={recarregar}>Reconectar conversa</button></div>}
     <div className="br-mensagens br-conversa" ref={mensagens} role="log" aria-label="Conversa com o Orquestrador" aria-live="polite" aria-relevant="additions text"
       onScroll={() => { const e = mensagens.current!; pertoDoFim.current = e.scrollHeight - e.scrollTop - e.clientHeight < 60; }}>
-      <p className="br-dia">Mesma conversa do dev.kit</p>
+      {!linhas.length && <p className="br-dia">Hoje · mesma conversa do dev.kit</p>}
       {carregando && <p className="br-note" role="status">Carregando conversa…</p>}
       {!carregando && !linhas.length && <p className="br-chat-vazio">{maquina ? 'Nenhuma mensagem recebida. Peça ou pergunte ao Orquestrador.' : 'Selecione uma máquina para conversar com o Orquestrador.'}</p>}
-      {linhas.map(linha => {
+      {linhas.map((linha, indice) => {
         const comando = linha.comando;
         const estado = comando ? estadoDo(comando, agora) : null;
-        return <article key={linha.id} className={`br-msg${comando ? ' br-voce' : ''}${comando?.estado === 'expirado' ? ' br-expirada' : ''}`}>
+        const novoDia = indice === 0 || new Date(linha.data).toDateString() !== new Date(linhas[indice - 1].data).toDateString();
+        return <Fragment key={linha.id}>
+          {novoDia && <p className="br-dia">{dia(linha.data, agora)} · mesma conversa do dev.kit</p>}
+          <article className={`br-msg${comando ? ' br-voce' : ''}`}>
           <div className="br-meta"><span>{comando ? `Você · remoto · ${comando.dispositivo}` : 'Orquestrador · dev.kit'} · <time dateTime={linha.data} title={dataCompleta(linha.data)}>{hora(linha.data)}</time></span>
             {estado && <strong className={estado[2] ? 'br-entregue' : 'br-espera'}>{estado[0]}</strong>}</div>
           <p>{comando?.texto ?? linha.resposta?.texto} {estado?.[1] && <span className="br-msg-status">{estado[1]}</span>}</p>
           {comando?.estado === 'falhou' && <button className="br-btn" disabled={enviando} onClick={() => void reenviar(comando)}>Tentar envio novamente</button>}
-        </article>;
+          </article>
+        </Fragment>;
       })}
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}

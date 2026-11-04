@@ -13,7 +13,6 @@
 .br-meta {font-size:11px; line-height:1.4; color:var(--muted); display:flex; flex-wrap:wrap; gap:3px 8px}
 .br-entregue {color:var(--ok)}
 .br-espera {color:var(--warn)}
-.br-expirada {border-style:dashed}
 .br-msg-status {color:var(--muted); font-size:11px}
 .br-composer-ativo {border-color:var(--violet); flex:none; position:relative}
 .br-composer-ativo textarea {color:var(--ink); height:28px; max-height:100px; overflow:auto}

@@ -46,6 +46,18 @@ it('exibe origem e estados da API sem usar o heartbeat como confirmação de ent
   expect(screen.getByText('○ dev.kit fora do ar')).toBeInTheDocument();
 });
 
+it('separa mensagens pelo dia real e usa Hoje somente nas mensagens de hoje', async () => {
+  const hoje = comando('entregue');
+  const anterior = new Date(); anterior.setDate(anterior.getDate() - 2);
+  const antiga = { ...comando('expirado'), criadoEm: anterior.toISOString() };
+  preparar({ comandos: [hoje, antiga], respostas: [], ultimoEvento: 10 });
+  await abrir();
+  const log = within(screen.getByRole('log'));
+  expect(log.getByText(`${anterior.toLocaleDateString('pt-BR')} · mesma conversa do dev.kit`)).toBeInTheDocument();
+  expect(log.getAllByText('Hoje · mesma conversa do dev.kit')).toHaveLength(1);
+  expect(log.getAllByRole('article')).toHaveLength(2);
+});
+
 it('preserva ID e rascunho após falha de rede e não envia duas vezes por toque duplo', async () => {
   preparar();
   const pedidos: ComandoNovo[] = [];
