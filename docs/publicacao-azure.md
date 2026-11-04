@@ -335,8 +335,8 @@ a chave da conta de armazenamento do usuário. A chave é lida do Resource Manag
 da API** e fica só na memória dela — nunca no banco, no log ou na configuração.
 
 1. **Banco.** Rode `api/scripts/sqlserver/Conversa.sql` (idempotente; depois de `Remoto.sql` e `Provisao.sql`) antes de
-   publicar a API desta versão: cria `ComandosRemotos`, `RespostasRemotas` e `EventosDaConversa`. Sem ele, o `/health` fica
-   `Degraded` e aponta o script.
+   publicar a API desta versão: cria `ComandosRemotos`, `RespostasRemotas`, `EventosDaConversa` e `FalasRemotas` (item 13 —
+   numa base que já tem as outras, rodar de novo só cria esta). Sem ele, o `/health` fica `Degraded` e aponta o script.
 2. **Identidade da API.** Ligue uma identidade gerenciada à API (a do sistema, ou uma atribuída ao usuário com o client id em
    `Remoto__IdentidadeClientId`) e dê a ela, na assinatura do dev.kit, SÓ uma função personalizada com
    `Microsoft.Storage/storageAccounts/listkeys/action` (ex.: `devkit-api-chave-da-fila`). Ela não cria, não remove e não lê
@@ -355,7 +355,8 @@ da API** e fica só na memória dela — nunca no banco, no log ou na configura�
 | `Remoto__TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` | 900 · 60 · 86400: o TTL do comando; o vencido antes da entrega volta `expirado`. |
 | `Remoto__SasMinutos` | 15 (de 1 a 60): a validade da SAS de consumo do serviço. |
 | `Remoto__ComandosPorHora` · `EnviosDaConversaPorMinuto` | 30 · 60: o limite de comandos por usuário (no SQL, 429 com `Retry-After`) e o de escritas por minuto. |
-| `Remoto__RetencaoDaConversaDias` | 30: comandos, respostas e eventos mais velhos saem no expurgo diário. |
+| `Remoto__FalasPorMinuto` | 60: as falas do chat do dev.kit por usuário por minuto (item 13), separado das escritas da conversa. |
+| `Remoto__RetencaoDaConversaDias` | 30: comandos, respostas, falas e eventos mais velhos saem no expurgo diário. |
 
 Para testar local sem o Azure: `Remoto__Fila=simulado` na API e `Provisao__Provedor=simulado` no worker, na mesma base.
 

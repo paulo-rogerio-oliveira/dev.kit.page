@@ -148,10 +148,14 @@ public sealed class ConversaRemota(
             .OrderByDescending(c => c.CriadoEmUtc).ThenByDescending(c => c.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         var respostas = await db.RespostasRemotas.AsNoTracking().Where(r => r.UsuarioId == usuarioId && r.MaquinaId == maquinaId)
             .OrderByDescending(r => r.RecebidaEmUtc).ThenByDescending(r => r.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
+        // As falas na ordem em que foram ditas: a que chega atrasada (o reenvio do dev.kit) entra no lugar dela.
+        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId)
+            .OrderByDescending(f => f.DitaEmUtc).ThenByDescending(f => f.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         return new ConversaDaMaquinaV1(
             comandos.AsEnumerable().Reverse().Select(Leitura).ToArray(),
             respostas.AsEnumerable().Reverse().Select(Leitura).ToArray(),
-            ultimo);
+            ultimo,
+            falas.AsEnumerable().Reverse().Select(Leitura).ToArray());
     }
 
     public async Task<IReadOnlyList<EventoDaConversaV1>> EventosAsync(int usuarioId, string? maquinaId, long depoisDe, int maximo, CancellationToken ct)
@@ -269,6 +273,67 @@ public sealed class ConversaRemota(
         return new(new RespostaRecebidaV1(resposta.Id, Repetida: false, DevKitPageDb.Utc(agora)));
     }
 
+    public async Task<ResultadoDaConversa<FalaRecebidaV1>> FalarAsync(int usuarioId, FalaDoDevKitV1 fala, CancellationToken ct)
+    {
+        var maquinaId = fala.MaquinaId;
+        if (!await db.MaquinasRemotas.AsNoTracking().AnyAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == maquinaId, ct))
+            return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.NaoEncontrado, "Máquina não encontrada.");
+
+        var linha = new FalaRemota
+        {
+            UsuarioId = usuarioId,
+            MaquinaId = maquinaId,
+            FalaId = fala.Id,
+            Autor = RegrasDoRemoto.Normalizar(fala.Autor),
+            Origem = RegrasDoRemoto.Normalizar(fala.Origem),
+            Texto = (fala.Texto ?? string.Empty).Trim(),
+            ComandoId = fala.ComandoId ?? string.Empty,
+            DitaEmUtc = fala.DitaEm.UtcDateTime,
+        };
+        if (await FalaGravadaAsync(linha, ct) is { } gravada)
+            return gravada;
+
+        if (linha.ComandoId.Length > 0)
+        {
+            var comando = await db.ComandosRemotos.AsNoTracking().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.ComandoId == linha.ComandoId, ct);
+            if (comando is null)
+                return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.NaoEncontrado, "Comando não encontrado.");
+            if (comando.MaquinaId != maquinaId)
+                return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.OutraMaquina, "Este comando é de outra máquina sua.");
+        }
+
+        var agora = relogio.GetUtcNow().UtcDateTime;
+        linha.RecebidaEmUtc = agora;
+        db.FalasRemotas.Add(linha);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // O mesmo reenvio do dev.kit em duas chamadas ao mesmo tempo: o índice único deixa uma.
+            db.ChangeTracker.Clear();
+            return (await FalaGravadaAsync(linha, ct))!;
+        }
+        await RegistrarAsync(usuarioId, maquinaId, ConversaV1.EventoFala, null, null, agora, ct, Leitura(linha));
+        return new(new FalaRecebidaV1(fala.Id, Repetida: false, DevKitPageDb.Utc(agora)));
+    }
+
+    /// <summary>
+    /// A fala que já tem o id da <paramref name="nova"/>: a mesma é o reenvio (<see cref="FalaRecebidaV1.Repetida"/>), outra é
+    /// <see cref="FalhaNaConversa.IdEmUso"/>; nula quando o id é novo.
+    /// </summary>
+    private async Task<ResultadoDaConversa<FalaRecebidaV1>?> FalaGravadaAsync(FalaRemota nova, CancellationToken ct)
+    {
+        var gravada = await db.FalasRemotas.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.UsuarioId == nova.UsuarioId && f.MaquinaId == nova.MaquinaId && f.FalaId == nova.FalaId, ct);
+        if (gravada is null)
+            return null;
+        if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId)
+            return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outra fala desta máquina. Mande a fala nova com outro id.");
+        return new(new FalaRecebidaV1(gravada.FalaId, Repetida: true, DevKitPageDb.Utc(gravada.RecebidaEmUtc)));
+    }
+
     public async Task<int> ExpirarVencidosAsync(int? usuarioId, CancellationToken ct)
     {
         var agora = relogio.GetUtcNow().UtcDateTime;
@@ -315,14 +380,15 @@ public sealed class ConversaRemota(
         => RegistrarAsync(comando.UsuarioId, comando.MaquinaId, ConversaV1.EventoComando, Leitura(comando), null, agora, ct);
 
     /// <summary>Acrescenta o evento do SSE e acorda quem o espera nesta instância.</summary>
-    private async Task RegistrarAsync(int usuarioId, string maquinaId, string tipo, ComandoRemotoV1? comando, RespostaRemotaV1? resposta, DateTime agora, CancellationToken ct)
+    private async Task RegistrarAsync(int usuarioId, string maquinaId, string tipo, ComandoRemotoV1? comando, RespostaRemotaV1? resposta, DateTime agora,
+        CancellationToken ct, FalaRemotaV1? fala = null)
     {
         db.EventosDaConversa.Add(new EventoDaConversa
         {
             UsuarioId = usuarioId,
             MaquinaId = maquinaId,
             Tipo = tipo,
-            Conteudo = JsonSerializer.Serialize(new EventoDaConversaV1(0, tipo, maquinaId, comando, resposta, DevKitPageDb.Utc(agora)), Json),
+            Conteudo = JsonSerializer.Serialize(new EventoDaConversaV1(0, tipo, maquinaId, comando, resposta, DevKitPageDb.Utc(agora), fala), Json),
             EmUtc = agora,
         });
         await db.SaveChangesAsync(ct);
@@ -338,9 +404,13 @@ public sealed class ConversaRemota(
 
     internal static RespostaRemotaV1 Leitura(RespostaRemota r)
         => new(r.RespostaId, r.MaquinaId, r.ComandoId.Length == 0 ? null : r.ComandoId, r.Tipo, r.Texto, DevKitPageDb.Utc(r.GeradaEmUtc), DevKitPageDb.Utc(r.RecebidaEmUtc));
+
+    internal static FalaRemotaV1 Leitura(FalaRemota f)
+        => new(f.FalaId, f.MaquinaId, f.Autor, f.Origem, f.Texto, f.ComandoId.Length == 0 ? null : f.ComandoId, DevKitPageDb.Utc(f.DitaEmUtc),
+            DevKitPageDb.Utc(f.RecebidaEmUtc));
 }
 
-/// <summary>A retenção da conversa (<see cref="OpcoesDoRemoto.RetencaoDaConversaDias"/>): o comando, a resposta e o evento, pela data deles.</summary>
+/// <summary>A retenção da conversa (<see cref="OpcoesDoRemoto.RetencaoDaConversaDias"/>): o comando, a resposta, a fala e o evento, pela data deles.</summary>
 public sealed class ExpurgoDaConversa(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDoRemoto> opcoes) : IExpurgoDaConversa
 {
     public async Task<int> ExpurgarAsync(CancellationToken ct)
@@ -348,8 +418,9 @@ public sealed class ExpurgoDaConversa(DevKitPageDb db, TimeProvider relogio, IOp
         var corte = relogio.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, opcoes.Value.RetencaoDaConversaDias));
         var eventos = await db.EventosDaConversa.Where(e => e.EmUtc < corte).ExecuteDeleteAsync(ct);
         var respostas = await db.RespostasRemotas.Where(r => r.RecebidaEmUtc < corte).ExecuteDeleteAsync(ct);
+        var falas = await db.FalasRemotas.Where(f => f.RecebidaEmUtc < corte).ExecuteDeleteAsync(ct);
         var comandos = await db.ComandosRemotos.Where(c => c.CriadoEmUtc < corte).ExecuteDeleteAsync(ct);
-        return eventos + respostas + comandos;
+        return eventos + respostas + falas + comandos;
     }
 }
 

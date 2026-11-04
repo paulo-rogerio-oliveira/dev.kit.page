@@ -116,7 +116,7 @@ public sealed class ConversaTests
     {
         var script = BaseDeTeste.ScriptDoAzureSql("Conversa.sql");
 
-        foreach (var tabela in new[] { "ComandosRemotos", "RespostasRemotas", "EventosDaConversa" })
+        foreach (var tabela in new[] { "ComandosRemotos", "RespostasRemotas", "EventosDaConversa", "FalasRemotas" })
         {
             Assert.Contains($"OBJECT_ID(N'[dbo].[{tabela}]', N'U') IS NULL", script);
             foreach (var coluna in BaseDeTeste.ColunasNoSqlServer(tabela))
@@ -125,6 +125,8 @@ public sealed class ConversaTests
         }
         Assert.Contains("CREATE UNIQUE INDEX [IX_ComandosRemotos_UsuarioId_ComandoId]", script);
         Assert.Contains("CREATE UNIQUE INDEX [IX_RespostasRemotas_UsuarioId_MaquinaId_RespostaId]", script);
+        Assert.Contains("CREATE UNIQUE INDEX [IX_FalasRemotas_UsuarioId_MaquinaId_FalaId]", script);
+        Assert.Contains("CREATE INDEX [IX_FalasRemotas_UsuarioId_MaquinaId_DitaEmUtc]", script);
     }
 
     [Fact]
@@ -140,7 +142,114 @@ public sealed class ConversaTests
         });
 
         Assert.Contains(aplicadas, m => m.EndsWith("_ConversaRemota", StringComparison.Ordinal));
+        Assert.Contains(aplicadas, m => m.EndsWith("_FalasDoDesktop", StringComparison.Ordinal));
         Assert.False(pendente);
+    }
+
+    private static Task<ResultadoDaConversa<FalaRecebidaV1>> FalarAsync(BaseDeTeste b, int usuario, string id, string autor = ConversaV1.AutorDev,
+        string origem = ConversaV1.OrigemDesktop, string texto = "Como está o item 13?", DateTimeOffset? ditaEm = null, string? comando = null,
+        string maquina = Maquina)
+        => b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().FalarAsync(usuario,
+            new FalaDoDevKitV1(RemotoV1.Contrato, maquina, id, autor, origem, texto, ditaEm ?? b.Relogio.Agora, comando), default));
+
+    private static Task<ConversaDaMaquinaV1?> ConversaAsync(BaseDeTeste b, int usuario, string maquina = Maquina)
+        => b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().ConversaAsync(usuario, maquina, default));
+
+    [Fact]
+    public async Task A_fala_guarda_o_autor_e_a_origem_vira_evento_e_volta_no_historico_na_ordem_em_que_foi_dita()
+    {
+        var (b, fila, ana, _) = await BaseAsync();
+        await using var _ = b;
+        await EnviarAsync(b, ana, Mensagem("c-1"));
+        var t0 = b.Relogio.Agora;
+
+        // A fala mais antiga chega por último (o dev.kit reenviou depois de cair): no histórico ela volta para o lugar dela.
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await FalarAsync(b, ana, "f-2", ConversaV1.AutorOrquestrador, texto: "Está em implementação.", ditaEm: t0.AddSeconds(5))).Falha);
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await FalarAsync(b, ana, "f-3", origem: ConversaV1.OrigemRemoto, texto: "Como está o projeto controle-remoto-v2?", ditaEm: t0.AddSeconds(9), comando: "c-1")).Falha);
+        var primeira = await FalarAsync(b, ana, "f-1", origem: "Desktop", autor: "DEV", ditaEm: t0);
+
+        Assert.Equal(("f-1", false, t0), (primeira.Valor!.Id, primeira.Valor.Repetida, primeira.Valor.RecebidaEm));
+        var conversa = (await ConversaAsync(b, ana))!;
+        Assert.Equal(
+            [("f-1", ConversaV1.AutorDev, ConversaV1.OrigemDesktop, (string?)null), ("f-2", ConversaV1.AutorOrquestrador, ConversaV1.OrigemDesktop, null),
+             ("f-3", ConversaV1.AutorDev, ConversaV1.OrigemRemoto, "c-1")],
+            conversa.Falas.Select(f => (f.Id, f.Autor, f.Origem, f.ComandoId)));
+        Assert.Equal((t0.AddSeconds(5), "Está em implementação."), (conversa.Falas[1].DitaEm, conversa.Falas[1].Texto));
+
+        // Cada fala é um evento "fala" (sem comando nem resposta), e o comando não mudou de estado por ela.
+        var falas = (await EventosAsync(b, ana)).Where(e => e.Tipo == ConversaV1.EventoFala).ToList();
+        Assert.Equal(["f-2", "f-3", "f-1"], falas.Select(e => e.Fala!.Id));
+        Assert.All(falas, e => Assert.True(e.Comando is null && e.Resposta is null && e.MaquinaId == Maquina));
+        Assert.Equal(ConversaV1.EstadoNaFila, (await ComandoAsync(b, ana, "c-1"))!.Estado);
+        Assert.Empty(conversa.Respostas);
+        Assert.Single(fila.Enviadas);
+    }
+
+    [Fact]
+    public async Task A_fala_reenviada_nao_duplica_mesmo_ao_mesmo_tempo_e_o_id_com_outro_conteudo_e_recusado()
+    {
+        var (b, _, ana, _) = await BaseAsync();
+        await using var _ = b;
+        var ditaEm = b.Relogio.Agora;
+
+        var simultaneas = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => FalarAsync(b, ana, "f-1", ditaEm: ditaEm)));
+        b.Relogio.Agora = b.Relogio.Agora.AddMinutes(1);
+        var depois = await FalarAsync(b, ana, "f-1", ditaEm: ditaEm);
+
+        Assert.All(simultaneas, r => Assert.Equal(FalhaNaConversa.Nenhuma, r.Falha));
+        Assert.Single(simultaneas, r => !r.Valor!.Repetida);
+        // O reenvio devolve a data em que a API a recebeu da primeira vez.
+        Assert.Equal((true, ditaEm), (depois.Valor!.Repetida, depois.Valor.RecebidaEm));
+        Assert.Equal(1, await b.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().FalasRemotas.CountAsync()));
+        Assert.Single(await EventosAsync(b, ana), e => e.Tipo == ConversaV1.EventoFala);
+
+        Assert.Equal(FalhaNaConversa.IdEmUso, (await FalarAsync(b, ana, "f-1", ConversaV1.AutorOrquestrador, ditaEm: ditaEm)).Falha);
+        Assert.Equal(FalhaNaConversa.IdEmUso, (await FalarAsync(b, ana, "f-1", texto: "Outra coisa", ditaEm: ditaEm)).Falha);
+        // O mesmo id em OUTRA máquina é outra fala.
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await FalarAsync(b, ana, "f-1", maquina: OutraMaquina)).Falha);
+        Assert.Equal(2, await b.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().FalasRemotas.CountAsync()));
+    }
+
+    [Fact]
+    public async Task A_fala_e_so_da_maquina_do_usuario_e_a_remota_aponta_um_comando_dela()
+    {
+        var (b, _, ana, bia) = await BaseAsync();
+        await using var _ = b;
+        await EnviarAsync(b, ana, Mensagem("c-1"));
+
+        Assert.Equal(FalhaNaConversa.NaoEncontrado, (await FalarAsync(b, bia, "f-bia")).Falha);
+        Assert.Equal(FalhaNaConversa.NaoEncontrado, (await FalarAsync(b, ana, "f-1", origem: ConversaV1.OrigemRemoto, comando: "c-outro")).Falha);
+        Assert.Equal(FalhaNaConversa.OutraMaquina, (await FalarAsync(b, ana, "f-1", origem: ConversaV1.OrigemRemoto, comando: "c-1", maquina: OutraMaquina)).Falha);
+
+        await HeartbeatAsync(b, bia, Maquina);
+        Assert.Equal(FalhaNaConversa.NaoEncontrado, (await FalarAsync(b, bia, "f-1", origem: ConversaV1.OrigemRemoto, comando: "c-1")).Falha);
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await FalarAsync(b, bia, "f-1", texto: "Da bia")).Falha);
+        Assert.Empty((await ConversaAsync(b, ana))!.Falas);
+        Assert.Equal("Da bia", Assert.Single((await ConversaAsync(b, bia))!.Falas).Texto);
+        Assert.DoesNotContain(await EventosAsync(b, ana), e => e.Tipo == ConversaV1.EventoFala);
+    }
+
+    [Fact]
+    public async Task O_evento_gravado_antes_das_falas_continua_legivel()
+    {
+        var (b, _, ana, _) = await BaseAsync();
+        await using var _ = b;
+        // O conteúdo de um evento gravado pela API do item 5, sem o campo fala.
+        await b.ComAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<DevKitPageDb>();
+            db.EventosDaConversa.Add(new EventoDaConversa
+            {
+                UsuarioId = ana, MaquinaId = Maquina, Tipo = ConversaV1.EventoResposta, EmUtc = b.Relogio.Agora.UtcDateTime,
+                Conteudo = $$"""{"id":0,"tipo":"resposta","maquinaId":"{{Maquina}}","comando":null,"resposta":{"id":"r-0","maquinaId":"{{Maquina}}","comandoId":null,"tipo":"mensagem","texto":"Antiga.","geradaEm":"2026-11-03T12:00:00+00:00","recebidaEm":"2026-11-03T12:00:00+00:00"},"em":"2026-11-03T12:00:00+00:00"}""",
+            });
+            return await db.SaveChangesAsync();
+        });
+
+        var evento = Assert.Single(await EventosAsync(b, ana));
+
+        Assert.Equal(("r-0", "Antiga."), (evento.Resposta!.Id, evento.Resposta.Texto));
+        Assert.Null(evento.Fala);
     }
 
     [Fact]
@@ -392,16 +501,19 @@ public sealed class ConversaTests
         await using var _ = b;
         await EnviarAsync(b, ana, Mensagem("velho"));
         await ResponderAsync(b, ana, "r-velha", "velho");
+        await FalarAsync(b, ana, "f-velha");
         b.Relogio.Agora = b.Relogio.Agora.AddDays(31);
         await HeartbeatAsync(b, ana, Maquina);
         await EnviarAsync(b, ana, Mensagem("novo"));
+        await FalarAsync(b, ana, "f-nova");
 
         var apagados = await b.ComAsync(sp => sp.GetRequiredService<IExpurgoDaConversa>().ExpurgarAsync(default));
 
-        Assert.True(apagados >= 3);
+        Assert.True(apagados >= 4);
         var conversa = (await b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().ConversaAsync(ana, Maquina, default)))!;
         Assert.Equal(["novo"], conversa.Comandos.Select(c => c.Id));
         Assert.Empty(conversa.Respostas);
-        Assert.All(await EventosAsync(b, ana), e => Assert.Equal("novo", e.Comando?.Id));
+        Assert.Equal(["f-nova"], conversa.Falas.Select(f => f.Id));
+        Assert.All(await EventosAsync(b, ana), e => Assert.Contains(e.Comando?.Id ?? e.Fala?.Id, new[] { "novo", "f-nova" }));
     }
 }

@@ -613,6 +613,63 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("EventosDeUso", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.FalaRemota", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ComandoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DitaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FalaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecebidaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecebidaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "DitaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "FalaId")
+                        .IsUnique();
+
+                    b.ToTable("FalasRemotas", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.FotoDeEstado", b =>
                 {
                     b.Property<long>("Id")
@@ -2282,6 +2339,15 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Maquina");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.FalaRemota", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DevKitPage.Core.FotoDeEstado", b =>

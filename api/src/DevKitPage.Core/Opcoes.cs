@@ -149,7 +149,13 @@ public sealed class OpcoesDoRemoto
     /// <summary>Quantas escritas da conversa (comando, SAS, recebimento, resposta) um mesmo usuário faz por minuto; acima, 429.</summary>
     public int EnviosDaConversaPorMinuto { get; set; } = 60;
 
-    /// <summary>O comando, a resposta e o evento da conversa mais velhos que isto saem do banco no expurgo diário.</summary>
+    /// <summary>
+    /// Quantas falas do chat do dev.kit um mesmo usuário envia por minuto; acima, 429. Separado das escritas da conversa: o
+    /// espelho do chat do desktop não come o limite do comando do site nem o da resposta.
+    /// </summary>
+    public int FalasPorMinuto { get; set; } = 60;
+
+    /// <summary>O comando, a resposta, a fala e o evento da conversa mais velhos que isto saem do banco no expurgo diário.</summary>
     public int RetencaoDaConversaDias { get; set; } = 30;
 
     /// <summary>De quanto em quanto tempo o SSE relê o SQL sem aviso (o aviso desta instância acorda antes).</summary>
