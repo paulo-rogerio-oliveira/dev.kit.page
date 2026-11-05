@@ -28,7 +28,7 @@ public sealed class ConversaRemota(
 
         var existente = await db.ComandosRemotos.AsNoTracking().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
         if (existente is not null)
-            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, ct);
+            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
 
         var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == pedido.MaquinaId, ct);
         if (maquina is null)
@@ -76,17 +76,19 @@ public sealed class ConversaRemota(
             // Dois envios com o mesmo id ao mesmo tempo: o índice único deixa um; o outro devolve o que ficou.
             db.ChangeTracker.Clear();
             var vencedor = await db.ComandosRemotos.AsNoTracking().FirstAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
-            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, ct);
+            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
         }
 
-        return await EnfileirarAsync(comando, filaDoUsuario, novo: true, ct);
+        return await EnfileirarAsync(comando, filaDoUsuario, novo: true, pedido.ConfirmarReinicio, ct);
     }
 
     /// <summary>
     /// O reenvio com um id que já existe: o mesmo conteúdo devolve o comando (o que falhou na fila tenta de novo, sem contar no
-    /// limite); outro conteúdo é <see cref="FalhaNaConversa.IdEmUso"/>.
+    /// limite); outro conteúdo é <see cref="FalhaNaConversa.IdEmUso"/>. A confirmação do reinício vem do reenvio, como no envio:
+    /// ela não é gravada, só levada na mensagem da fila.
     /// </summary>
-    private async Task<ResultadoDaConversa<ComandoAceito>> ReenviarAsync(ComandoRemoto existente, string maquinaId, string tipo, string texto, CancellationToken ct)
+    private async Task<ResultadoDaConversa<ComandoAceito>> ReenviarAsync(
+        ComandoRemoto existente, string maquinaId, string tipo, string texto, bool confirmarReinicio, CancellationToken ct)
     {
         if (existente.MaquinaId != maquinaId || existente.Tipo != tipo || existente.Texto != texto)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outro comando seu. Mande o comando novo com outro id.");
@@ -96,15 +98,20 @@ public sealed class ConversaRemota(
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.SemFila,
                 "Você não tem mais a fila do controle remoto pronta. Peça-a na sua conta (Fila do controle remoto).");
         existente.RecursoId = filaDoUsuario.RecursoId;
-        return await EnfileirarAsync(existente, filaDoUsuario, novo: false, ct);
+        return await EnfileirarAsync(existente, filaDoUsuario, novo: false, confirmarReinicio, ct);
     }
 
-    /// <summary>Põe o comando na fila com o TTL que falta; a fila fora do ar o deixa <c>falhou</c>, com a mensagem.</summary>
-    private async Task<ResultadoDaConversa<ComandoAceito>> EnfileirarAsync(ComandoRemoto comando, FilaDoUsuario filaDoUsuario, bool novo, CancellationToken ct)
+    /// <summary>
+    /// Põe o comando na fila com o TTL que falta; a fila fora do ar o deixa <c>falhou</c>, com a mensagem. O reinício leva a
+    /// confirmação do usuário (<paramref name="confirmarReinicio"/>), que o serviço confere de novo contra o turno na hora.
+    /// </summary>
+    private async Task<ResultadoDaConversa<ComandoAceito>> EnfileirarAsync(
+        ComandoRemoto comando, FilaDoUsuario filaDoUsuario, bool novo, bool confirmarReinicio, CancellationToken ct)
     {
         var agora = relogio.GetUtcNow().UtcDateTime;
         var mensagem = JsonSerializer.Serialize(new MensagemDaFilaV1(RemotoV1.Contrato, comando.ComandoId, comando.MaquinaId, comando.Tipo, comando.Texto,
-            ConversaV1.OrigemRemoto, comando.Dispositivo, DevKitPageDb.Utc(comando.CriadoEmUtc), DevKitPageDb.Utc(comando.ExpiraEmUtc)), Json);
+            ConversaV1.OrigemRemoto, comando.Dispositivo, DevKitPageDb.Utc(comando.CriadoEmUtc), DevKitPageDb.Utc(comando.ExpiraEmUtc),
+            comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio), Json);
         string? erro = null;
         try
         {

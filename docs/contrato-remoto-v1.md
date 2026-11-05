@@ -177,8 +177,15 @@ data: {"id":43,"tipo":"comando","maquinaId":"3f2b...","comando":{"id":"9b1d...",
   Vale `Remoto:SasMinutos` (15): o serviço pede outra antes de `expiraEm`.
 - A máquina precisa ter mandado o heartbeat (**404** sem ele); sem a fila pronta, **409** `sem-fila`.
 - A mensagem da fila (`MessageText`) é o JSON do `MensagemDaFilaV1` em **Base64** (UTF-8):
-  `{ "contrato": 1, "id", "maquinaId", "tipo", "texto", "origem": "remoto", "dispositivo", "criadoEm", "expiraEm" }`. A fila
-  descarta a mensagem no fim do TTL, lida ou não.
+  `{ "contrato": 1, "id", "maquinaId", "tipo", "texto", "origem": "remoto", "dispositivo", "criadoEm", "expiraEm", "confirmarReinicio" }`.
+  A fila descarta a mensagem no fim do TTL, lida ou não.
+- `confirmarReinicio` (campo novo, item 8): `true` só no `reiniciar` que o usuário confirmou com o turno em andamento. O
+  serviço confere o turno DE NOVO na hora de executar — o heartbeat que o site leu pode ser de antes do turno — e, sem a
+  confirmação, recusa (`recusado`, com o motivo) em vez de interromper. O dev.kit antigo o ignora.
+- `ligar` e `reiniciar` quem executa é o SERVIÇO da máquina (o `GitKit.Scheduler`, item 8): ele abre o dev.kit SEM JANELA (o
+  serviço não abre janela na área de trabalho), que hospeda o Orquestrador e restaura as sessões. A resposta é `concluido`
+  (ligado ou reiniciado; o ligar com o dev.kit já aberto também) ou `recusado` com o motivo (o caminho do dev.kit ausente, a
+  licença vencida, o dev.kit que não fechou nem à força, o turno sem confirmação).
 
 **`POST /api/remoto/comandos/{id}/recebido`** `{ "contrato": 1, "maquinaId": "..." }` → **200**
 `{ "id", "estado", "executar", "repetido" }`.

@@ -40,8 +40,11 @@ export interface ComandoRemoto {
   estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
   criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
 }
+/** O envio: a mensagem ao Orquestrador, ou o Ligar/Reiniciar que o serviço da máquina executa (item 8). */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem'; texto: string; dispositivo: 'celular' | 'navegador';
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar'; texto: string; dispositivo: 'celular' | 'navegador';
+  /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
+  confirmarReinicio?: boolean;
 }
 export interface RespostaRemota {
   id: string; maquinaId: string; comandoId: string | null; tipo: string; texto: string; geradaEm: string; recebidaEm: string;

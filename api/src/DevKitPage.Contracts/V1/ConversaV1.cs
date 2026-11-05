@@ -33,9 +33,14 @@ public sealed record ComandoRemotoV1(
 /// o recebimento (<c>POST /api/remoto/comandos/{id}/recebido</c>) ANTES de executar.
 /// </summary>
 /// <param name="Origem">Sempre <see cref="ConversaV1.OrigemRemoto"/>: a linha do tempo do dev.kit mostra de onde veio a ordem.</param>
+/// <param name="ConfirmarReinicio">
+/// (campo novo, item 8) O usuário confirmou o reinício com o turno em andamento: o serviço confere o turno de novo na hora de
+/// executar e, sem a confirmação, não interrompe o turno que começou depois do heartbeat que o site leu. O dev.kit antigo o
+/// ignora.
+/// </param>
 public sealed record MensagemDaFilaV1(
     int Contrato, string Id, string MaquinaId, string Tipo, string Texto, string Origem, string Dispositivo, DateTimeOffset CriadoEm,
-    DateTimeOffset ExpiraEm);
+    DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false);
 
 /// <summary>O pedido da SAS da fila pelo serviço da máquina (<c>POST /api/remoto/fila/sas</c>).</summary>
 public sealed record PedidoDeSasV1(int Contrato, string MaquinaId);

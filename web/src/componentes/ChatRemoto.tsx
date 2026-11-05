@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComandoRemoto, MaquinaRemota } from '../api/remoto';
-import { useConversaRemota } from './useConversaRemota';
+import type { ConversaDaMaquina } from './useConversaRemota';
 import { ContextoDoChatRemoto, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
+import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function dataCompleta(data: string) { return new Date(data).toLocaleString('pt-BR'); }
@@ -19,13 +20,19 @@ function estadoDo(comando: ComandoRemoto, agora: number) {
     case 'falhou': return ['Falhou', comando.erro || 'A fila não aceitou a mensagem.', false] as const;
     case 'recusado': return ['Recusado', comando.erro || 'O dev.kit recusou o pedido.', false] as const;
     case 'respondido': return ['✓ Entregue', 'Respondido pelo dev.kit.', true] as const;
-    case 'concluido': return ['✓ Entregue', 'Concluído pelo dev.kit.', true] as const;
+    case 'concluido': return ['✓ Entregue', comandosDoServico.includes(comando.tipo) ? 'Concluído pelo serviço da máquina.' : 'Concluído pelo dev.kit.', true] as const;
     default: return ['✓ Entregue', '', true] as const;
   }
 }
 
-export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemota | undefined; conectada: boolean; agora: number }) {
-  const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = useConversaRemota(maquina?.maquinaId ?? '');
+/**
+ * O chat do Orquestrador, sobre a conversa que o Board abre (a mesma do controle do dev.kit, item 8): as mensagens, as
+ * respostas e o Ligar/Reiniciar pedido ao serviço da máquina, com o desfecho que ele mandou.
+ */
+export function ChatRemoto({ maquina, conectada, agora, conversaRemota }: {
+  maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; conversaRemota: ConversaDaMaquina;
+}) {
+  const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
   const [contexto, setContexto] = useState(contextoVazio);
   const [atalho, setAtalho] = useState<'/' | '#' | '@' | null>(null);
@@ -35,8 +42,9 @@ export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemo
   const textoFinal = textoComContexto(texto, contexto);
   const excedeu = textoFinal.length > 4000;
   const desabilitado = !maquina || carregando || enviando;
+  const doServico = new Set(conversa.comandos.filter(c => comandosDoServico.includes(c.tipo)).map(c => c.id));
   const linhas = [
-    ...conversa.comandos.filter(c => c.tipo === 'mensagem').map(c => ({ id: `c-${c.id}`, data: c.criadoEm, comando: c, resposta: null })),
+    ...conversa.comandos.filter(c => c.tipo === 'mensagem' || doServico.has(c.id)).map(c => ({ id: `c-${c.id}`, data: c.criadoEm, comando: c, resposta: null })),
     ...conversa.respostas.map(r => ({ id: `r-${r.id}`, data: r.geradaEm, comando: null, resposta: r })),
   ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id));
   const ultima = linhas.at(-1)?.id;
@@ -74,10 +82,10 @@ export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemo
         return <Fragment key={linha.id}>
           {novoDia && <p className="br-dia">{dia(linha.data, agora)} · mesma conversa do dev.kit</p>}
           <article className={`br-msg${comando ? ' br-voce' : ''}`}>
-          <div className="br-meta"><span>{comando ? `Você · remoto · ${comando.dispositivo}` : 'Orquestrador · dev.kit'} · <time dateTime={linha.data} title={dataCompleta(linha.data)}>{hora(linha.data)}</time></span>
+          <div className="br-meta"><span>{comando ? `Você · remoto · ${comando.dispositivo}` : doServico.has(linha.resposta?.comandoId ?? '') ? 'Serviço da máquina · dev.kit' : 'Orquestrador · dev.kit'} · <time dateTime={linha.data} title={dataCompleta(linha.data)}>{hora(linha.data)}</time></span>
             {estado && <strong className={estado[2] ? 'br-entregue' : 'br-espera'}>{estado[0]}</strong>}</div>
-          <p>{comando?.texto ?? linha.resposta?.texto} {estado?.[1] && <span className="br-msg-status">{estado[1]}</span>}</p>
-          {comando?.estado === 'falhou' && <button className="br-btn" disabled={enviando} onClick={() => void reenviar(comando)}>Tentar envio novamente</button>}
+          <p>{comando ? (doServico.has(comando.id) ? rotuloDoComando(comando.tipo) : comando.texto) : linha.resposta?.texto} {estado?.[1] && <span className="br-msg-status">{estado[1]}</span>}</p>
+          {comando?.estado === 'falhou' && comando.tipo === 'mensagem' && <button className="br-btn" disabled={enviando} onClick={() => void reenviar(comando)}>Tentar envio novamente</button>}
           </article>
         </Fragment>;
       })}

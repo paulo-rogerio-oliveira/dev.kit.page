@@ -6,6 +6,8 @@ import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
 import { Abas } from '../componentes/Abas';
 import { ChatRemoto } from '../componentes/ChatRemoto';
+import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
+import { useConversaRemota } from '../componentes/useConversaRemota';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
@@ -57,7 +59,10 @@ function ConteudoDoBoard({ foto, agora }: { foto: RetratoDaMaquina | null; agora
   </>;
 }
 
-/** Board isolado da administração, com conversa remota e decisões somente na máquina. */
+/**
+ * Board isolado da administração, com conversa remota e decisões somente na máquina. O Ligar e o Reiniciar do dev.kit (item 8)
+ * vão ao serviço da máquina pela mesma conversa do chat.
+ */
 export function Board() {
   useEffect(prepararBoardPwa, []);
   const { sessao, sair } = useSessao();
@@ -122,6 +127,9 @@ export function Board() {
   const conectada = !!maquina?.conectada && !!maquina.ultimoHeartbeatEm && agora - Date.parse(maquina.ultimoHeartbeatEm) <= 180_000;
   const estado = maquina ? `${conectada ? (maquina.origem === 'servico' ? 'Serviço ativo' : 'dev.kit conectado') : 'Máquina desconectada'} · dev.kit ${maquina.appAberto ? 'aberto' : 'fechado'}` : 'Nenhuma máquina conectada';
   const agente = maquina?.estadoDoAgente === 'limite' ? 'Agente em limite' : maquina?.estadoDoAgente === 'pausado' ? 'Agente pausado' : '';
+  // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
+  const conversa = useConversaRemota(selecionada);
+  const controle = useControleDoDevKit({ maquina, conectada, conversa: conversa.conversa, acionar: conversa.acionar, agora });
 
   return <div className="board-remoto" data-aba={aba}>
     <header className="br-top">
@@ -135,8 +143,9 @@ export function Board() {
         </div>
         <small title="Idade do último heartbeat recebido"><span className="br-mobile-state">{estado} · </span><span className="br-desktop-state">Última atualização </span>{idade(maquina?.ultimoHeartbeatEm, agora)}{agente && ` · ${agente}`}{maquina?.turnoEmAndamento && ' · turno em andamento'}</small>
       </div>
-      <button className="br-btn br-restart" disabled title={motivo}>Reiniciar dev.kit</button>
+      <BotaoDoDevKit controle={controle} />
     </header>
+    <FaixaDoAcionamento controle={controle} />
     <div className="br-navegacao"><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
@@ -148,10 +157,10 @@ export function Board() {
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard foto={foto} agora={agora} />}
       </aside>
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} />
     </main>
     </Abas></div>
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
-    <footer className="br-footer"><span className="br-desktop-state">Reinicie o dev.kit pela máquina nesta fase.</span><span className="br-mobile-state">Somente leitura · decisões no dev.kit</span></footer>
+    <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Somente leitura · decisões no dev.kit</span></footer>
   </div>;
 }
