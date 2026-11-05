@@ -30,7 +30,26 @@
 .br-host.br-offline {color:var(--muted)}
 .br-host>.br-desktop-state {flex:none; white-space:nowrap}
 .br-host select {min-width:0; max-width:190px; height:30px; min-height:30px; padding:4px 8px; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
-.br-restart {flex:none}
+/* Item 8: Ligar/Reiniciar pelo serviço da máquina, a faixa do desfecho e a confirmação do reinício (propostas app-remoto v227–v235). */
+.br-acao {flex:none; border-color:var(--accent); color:var(--accent)}
+.br-acao.br-ligar {background:var(--accent); color:#fff}
+.br-acionamento {flex:none; display:flex; align-items:center; gap:8px; padding:7px 16px; border-bottom:1px solid var(--line); font-size:12px; background:var(--panel); color:var(--muted)}
+.br-acionamento strong {color:var(--ink); flex:none}
+.br-acionamento.br-ok {background:#eaf5ee; color:var(--ok)}
+.br-acionamento.br-ok strong {color:var(--ok)}
+.br-acionamento.br-recusa {background:var(--tint); color:var(--accent)}
+.br-acionamento.br-recusa strong {color:var(--accent)}
+.br-dialogo-fundo {position:fixed; inset:0; z-index:20; background:rgba(15,18,24,.45); display:grid; place-items:center; padding:16px}
+.br-dialogo {width:min(440px,100%); background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:12px; padding:18px; box-shadow:0 12px 32px rgba(0,0,0,.22)}
+.br-dialogo h2 {font-size:15px; margin:0 0 8px; line-height:1.35}
+.br-dialogo p {margin:0 0 10px; color:var(--muted); font-size:12.5px; line-height:1.5}
+.br-dialogo .br-row {justify-content:flex-end; margin-top:14px}
+.br-dialogo .br-row .br-btn {flex:none}
+.br-perigo {background:var(--accent)!important; border-color:var(--accent)!important; color:#fff!important}
+@media (prefers-color-scheme:dark) {
+  .br-acionamento.br-ok {background:#1f3326}
+  .br-acao.br-ligar,.br-perigo {color:#1b1e24!important}
+}
 .br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
 .br-mobile-state {display:none}
 .br-navegacao {display:flex; flex-direction:column; flex:1; min-height:0; min-width:0}
@@ -84,8 +103,12 @@
   .br-machine small {flex-basis:100%; text-align:left; font-size:11.5px; margin-top:2px; overflow-wrap:anywhere}
   .br-host {max-width:calc(100% - 80px)}
   .br-host select {max-width:170px}
-  .br-desktop-state,.br-restart {display:none}
+  .br-desktop-state {display:none}
   .br-mobile-state {display:inline}
+  .br-acao {min-height:30px; padding:4px 10px; margin-left:auto}
+  .br-acionamento {padding:6px 12px; font-size:11.5px; flex-wrap:wrap; gap:2px 8px}
+  .br-dialogo-fundo {place-items:end center; padding:0}
+  .br-dialogo {border-radius:14px 14px 0 0; width:100%; padding:16px 16px 20px}
   .board-remoto .br-navegacao>.abas {display:flex; border:0; border-bottom:1px solid var(--line); background:var(--surface); flex:none; margin:0; padding:0; gap:0}
   .board-remoto .br-navegacao .aba {flex:1; text-align:center; padding:10px 0; color:var(--muted); border:0; border-radius:0; margin:0; background:transparent; font:inherit; font-weight:400}
   .board-remoto .br-navegacao .aba[aria-selected='true'] {color:var(--accent); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent)}

@@ -57,10 +57,10 @@ describe('Board remoto', () => {
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
       expect(screen.getByText('Item 20 · layout do plano')).toBeInTheDocument();
       expect(screen.getByText(/Implementação · codex/)).toBeInTheDocument();
-      for (const nome of ['Reiniciar dev.kit', 'Enviar mensagem']) {
-        expect(screen.getByRole('button', { name: nome })).toBeDisabled();
-      }
+      expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
       await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
+      // (item 8) Com o dev.kit aberto e a máquina conectada, o Reiniciar vai ao serviço — sem clique, nada é escrito.
+      expect(screen.getByRole('button', { name: 'Reiniciar dev.kit' })).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toBeEnabled();
       expect(screen.getByText('Mesma conversa do Board do dev.kit')).toBeInTheDocument();
       expect(chamadas.length).toBeGreaterThan(0);

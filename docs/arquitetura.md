@@ -650,8 +650,20 @@ responde por HTTPS ([contrato](contrato-remoto-v1.md#4-conversa-e-comandos-remot
   `Remoto:RetencaoDaConversaDias`, no expurgo diário. Tabelas pela migration `ConversaRemota` e, no Azure SQL, por
   `api/scripts/sqlserver/Conversa.sql`.
 - **Fora deste item**: a ponte no dev.kit que lê a fila e entrega ao Orquestrador (item 6), o chat no Board web (item 7), o
-  ligar e o reiniciar executados pelo serviço (item 8) e as decisões com segundo fator (item 9). O texto do chat nunca aprova:
-  a resposta `recusado` é o caminho do dev.kit para dizer isso.
+  ligar e o reiniciar executados pelo serviço (item 8, abaixo) e as decisões com segundo fator (item 9). O texto do chat nunca
+  aprova: a resposta `recusado` é o caminho do dev.kit para dizer isso.
+
+**Ligar e Reiniciar o dev.kit pelo Board (controle remoto v2, item 8).** O cabeçalho do Board (também no celular) oferece
+**Ligar dev.kit** com o dev.kit fechado e **Reiniciar dev.kit** com ele aberto (`web/src/componentes/ControleDoDevKit.tsx`), só
+com a máquina conectada — quem executa é o serviço da máquina, e sem heartbeat não há quem execute. Três decisões:
+- **O reinício seguro em dois lugares**: com `turnoEmAndamento` no heartbeat, o site avisa e pede confirmação (o diálogo diz
+  que o turno é interrompido e que as sessões voltam pelo restaurador); o 409 `turno-em-andamento` da API (o heartbeat que o
+  site leu era de antes do turno) abre a mesma confirmação. A confirmação viaja na mensagem da fila (`confirmarReinicio`), e o
+  serviço confere o turno de novo ao executar (`ConversaRemota.EnfileirarAsync` a põe só no `reiniciar`).
+- **Uma conversa por máquina**: o `useConversaRemota` sobe para o Board e é repartido entre o chat e o controle — o mesmo
+  histórico e o mesmo SSE. O desfecho do serviço (a resposta `concluido`/`recusado` ligada ao comando) aparece numa faixa abaixo
+  do cabeçalho e na conversa, como "Serviço da máquina"; nunca é inferido do heartbeat.
+- **Um pedido por vez**: o botão espera o comando anterior sair de `pendente`/`na-fila`/`entregue` (ou o TTL vencer).
 
 **As falas do chat do dev.kit (controle remoto v2, item 13).** Para o chat do Board mostrar a MESMA conversa do dev.kit, o
 dev.kit espelha cada fala do chat do Orquestrador em `POST /api/remoto/conversa/falas`

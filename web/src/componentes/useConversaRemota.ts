@@ -17,6 +17,8 @@ export function useConversaRemota(maquina: string) {
   const [carregando, setCarregando] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [tentativa, setTentativa] = useState(0);
+  // De qual máquina é o estado acima: no render da troca (antes do efeito), o da anterior não pode aparecer como desta.
+  const [carregadaPara, setCarregadaPara] = useState<string | null>(null);
   const ciclo = useRef<AbortController | null>(null);
   const ocupado = useRef(false);
   const revisoes = useRef(new Map<string, number>());
@@ -29,7 +31,7 @@ export function useConversaRemota(maquina: string) {
     let timer: number;
     let cursor = 0;
     let inicializada = false;
-    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio('');
+    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio(''); setCarregadaPara(maquina);
     revisoes.current.clear(); ocupado.current = false; setEnviando(false);
     if (!sessao || !maquina) { setCarregando(false); return () => controller.abort(); }
     async function atualizar() {
@@ -80,7 +82,7 @@ export function useConversaRemota(maquina: string) {
     ocupado.current = true; setEnviando(true); setFalhaNoEnvio('');
     const revisao = revisoes.current.get(pedido.id);
     try {
-      const comando = await api.enviarMensagemRemota(sessao.token, pedido, controller.signal);
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
       if (controller.signal.aborted) return false;
       // Um SSE pode confirmar entrega antes de o POST responder com o estado anterior.
       if (revisao === revisoes.current.get(pedido.id))
@@ -100,5 +102,40 @@ export function useConversaRemota(maquina: string) {
     }
   }, [sessao, maquina, sair]);
 
-  return { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar: () => setTentativa(x => x + 1) };
+  /**
+   * (item 8) LIGAR ou REINICIAR o dev.kit: o comando vai ao serviço da máquina pela mesma fila, e o desfecho chega pela
+   * conversa (o SSE). O 409 `turno-em-andamento` volta como tal: o heartbeat que o site leu pode ser de antes do turno, e
+   * quem chama mostra a confirmação.
+   */
+  const acionar = useCallback(async (tipo: 'ligar' | 'reiniciar', confirmarReinicio = false): Promise<DesfechoDoAcionamento> => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, turnoEmAndamento: false, mensagem: 'Nenhuma máquina selecionada.' };
+    const pedido: ComandoNovo = {
+      id: crypto.randomUUID(), maquinaId: maquina, tipo, texto: '',
+      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      ...(tipo === 'reiniciar' && confirmarReinicio ? { confirmarReinicio: true } : {}),
+    };
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
+      if (!controller.signal.aborted) setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+      return { ok: true };
+    } catch (falha) {
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return { ok: false, turnoEmAndamento: false, mensagem: '' }; }
+      const corpo = falha instanceof ErroDaApi ? falha.corpo as { codigo?: string; comando?: ComandoRemoto } | null : null;
+      if (corpo?.comando && !controller.signal.aborted) setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, corpo.comando!) }));
+      return { ok: false, turnoEmAndamento: corpo?.codigo === 'turno-em-andamento', mensagem: mensagemDaFalha(falha) };
+    }
+  }, [sessao, maquina, sair]);
+
+  const atual = carregadaPara === maquina;
+  return {
+    conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
+    carregando: carregando || !atual, enviando, enviar, acionar, recarregar: () => setTentativa(x => x + 1),
+  };
 }
+
+/** O envio do Ligar/Reiniciar: aceito pela API (o desfecho vem do serviço depois), ou recusado com o motivo. */
+export type DesfechoDoAcionamento = { ok: true } | { ok: false; turnoEmAndamento: boolean; mensagem: string };
+
+/** A conversa remota de uma máquina, como o Board a reparte entre o chat e o controle do dev.kit. */
+export type ConversaDaMaquina = ReturnType<typeof useConversaRemota>;

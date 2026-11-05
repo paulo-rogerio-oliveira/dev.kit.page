@@ -458,7 +458,7 @@ public sealed class ConversaTests
     [Fact]
     public async Task Reiniciar_com_turno_em_andamento_pede_confirmacao_e_sem_fila_pronta_nada_sai()
     {
-        var (b, _, ana, bia) = await BaseAsync();
+        var (b, fila, ana, bia) = await BaseAsync();
         await using var _ = b;
         await HeartbeatAsync(b, ana, Maquina, turno: true);
 
@@ -467,6 +467,16 @@ public sealed class ConversaTests
 
         Assert.Equal(FalhaNaConversa.TurnoEmAndamento, semConfirmar.Falha);
         Assert.Equal(ConversaV1.EstadoNaFila, confirmado.Valor!.Comando.Estado);
+        // (item 8) A confirmação vai na mensagem: o serviço confere o turno de novo na hora de reiniciar.
+        var (_, texto, _) = Assert.Single(fila.Enviadas);
+        var mensagem = JsonSerializer.Deserialize<MensagemDaFilaV1>(texto, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal(("c-2", ConversaV1.ComandoReiniciar, true), (mensagem.Id, mensagem.Tipo, mensagem.ConfirmarReinicio));
+
+        // Sem turno, o reinício não pede confirmação — e a mensagem não finge que houve uma.
+        await HeartbeatAsync(b, ana, Maquina, turno: false);
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await EnviarAsync(b, ana, new ComandoNovoV1("c-3", Maquina, ConversaV1.ComandoReiniciar))).Falha);
+        var semTurno = JsonSerializer.Deserialize<MensagemDaFilaV1>(fila.Enviadas.Last().Mensagem, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.False(semTurno.ConfirmarReinicio);
 
         // A fila da bia ainda em provisão não serve.
         await HeartbeatAsync(b, bia, OutraMaquina);

@@ -8,10 +8,11 @@ import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
 import { Abas } from '../componentes/Abas';
 import { ChatRemoto } from '../componentes/ChatRemoto';
+import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
+import { useConversaRemota } from '../componentes/useConversaRemota';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
-const motivo = 'Disponível somente no dev.kit da máquina nesta fase.';
 const atualizacaoMs = 15_000;
 
 function idade(data: string | null | undefined, agora: number) {
@@ -57,7 +58,10 @@ function ConteudoDoBoard({ foto, agora, decisoes, desabilitado, decidir, revisar
   </>;
 }
 
-/** Board isolado da administração, com decisões auditadas e aprovação vinculada ao snapshot. */
+/**
+ * Board isolado da administração, com decisões auditadas e aprovação vinculada ao snapshot.
+ * O Ligar e o Reiniciar vão ao serviço da máquina pela mesma conversa do chat.
+ */
 export function Board() {
   useEffect(prepararBoardPwa, []);
   const { sessao, sair } = useSessao();
@@ -140,6 +144,9 @@ export function Board() {
     }
   }
   const mudou = !!revisao && !decisoes.some(d => d.pendencia.id === revisao.pendencia.id && d.snapshotId === revisao.snapshotId);
+  // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
+  const conversa = useConversaRemota(selecionada);
+  const controle = useControleDoDevKit({ maquina, conectada, conversa: conversa.conversa, acionar: conversa.acionar, agora });
 
   return <div className="board-remoto" data-aba={aba}>
     <header className="br-top">
@@ -153,8 +160,9 @@ export function Board() {
         </div>
         <small title="Idade do último heartbeat recebido"><span className="br-mobile-state">{estado} · </span><span className="br-desktop-state">Última atualização </span>{idade(maquina?.ultimoHeartbeatEm, agora)}{agente && ` · ${agente}`}{maquina?.turnoEmAndamento && ' · turno em andamento'}</small>
       </div>
-      <button className="br-btn br-restart" disabled title={motivo}>Reiniciar dev.kit</button>
+      <BotaoDoDevKit controle={controle} />
     </header>
+    <FaixaDoAcionamento controle={controle} />
     {revisao && <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} />}
     <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
@@ -167,10 +175,10 @@ export function Board() {
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} decisoes={decisoes} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
       </aside>
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
     </main>
     </Abas></div>
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
-    <footer className="br-footer"><span className="br-desktop-state">Reinicie o dev.kit pela máquina nesta fase.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>
+    <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>
   </div>;
 }
