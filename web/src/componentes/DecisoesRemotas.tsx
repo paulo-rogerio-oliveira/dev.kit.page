@@ -7,7 +7,7 @@ import './DecisoesRemotas.css';
 export type AoDecidir = (decisao: DecisaoPendente, pedido: ResponderDecisao) => Promise<RespostaDaDecisao>;
 
 export function RegistroDaDecisao({ resposta }: { resposta: RespostaDaDecisao }) {
-  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.sha && `SHA ${resposta.sha}`}</p>;
+  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
 }
 
 export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, decidir, revisar }: {
@@ -25,13 +25,23 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
     finally { setEnviando(false); }
   }
   const registro = d.resposta ?? resposta;
+  const snapshot = p.snapshot;
+  const resumo = p.tipo === 'aprovacao' && snapshot
+    ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
+    : p.jaTentei;
   return <section className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
     <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
     {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
-    {p.jaTentei && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{p.jaTentei}</p>}
+    {resumo && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
     {registro ? <RegistroDaDecisao resposta={registro} /> : <>
       {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
-      {p.tipo === 'aprovacao' && <div className="br-row"><button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>{compacta ? 'Decidir' : 'Revisar e aprovar'}</button><button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>{compacta ? 'Ver detalhes' : 'Pedir ajuste'}</button></div>}
+      {p.tipo === 'aprovacao' && <div className="br-row">{compacta ? <>
+        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Ver detalhes</button>
+        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>
+      </> : <>
+        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Revisar e aprovar</button>
+        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Pedir ajuste</button>
+      </>}</div>}
       <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
       {d.bloqueio && <p role="status">{d.bloqueio}</p>}
     </>}
@@ -96,7 +106,7 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
       <div className="br-card br-review-info"><strong>Confira as evidências antes de aprovar</strong><p>A aprovação fica vinculada à origem, ao destino e ao SHA apresentados. Mensagens enviadas pelo chat não autorizam este ato.</p></div>
     </div><aside className="br-review-actions">
       {resposta ? <div className="br-card"><RegistroDaDecisao resposta={resposta} /></div> : <>
-        <section className="br-card"><h2>{confirmar ? 'Confirme com segundo fator' : 'Aprovar este snapshot'}</h2>
+        <div className="br-review-controls"><section className="br-card br-confirm-panel"><h2>{confirmar ? 'Confirme com segundo fator' : 'Aprovar este snapshot'}</h2>
           {!confirmar && <><p>O próximo passo pede o segundo fator. Nenhum ato será autorizado pelo texto da conversa.</p><p className="br-etapas">1. Revisar evidências → 2. Confirmar identidade</p></>}
           {confirmar && ativo === null && <p role="status">Conferindo autenticador…</p>}
           {confirmar && ativo === false && <form onSubmit={e => { e.preventDefault(); void executar(async () => {
@@ -109,17 +119,18 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
             <button className="br-btn" disabled={ocupado || (chave ? codigo.length !== 6 : !senha)}>{chave ? 'Ativar autenticador' : 'Configurar autenticador'}</button>
           </form>}
           {confirmar && ativo && <><p>Use o código do seu aplicativo autenticador para autorizar este SHA.</p><label>Código de 6 dígitos<input ref={caixa} className="br-codigo" aria-label="Código de 6 dígitos" placeholder="○○○○○○" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ''))} /></label><p>Aprovação registrada com data, origem e snapshot.</p></>}
-          {d.bloqueio && <p role="alert">{d.bloqueio}</p>}
-          {erro && <p role="alert">{erro}</p>}
+        </section>
+          {confirmar && <p className="br-confirmar-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>}
+          {d.bloqueio && <p className="br-decisao-bloqueio" role="alert">{d.bloqueio}</p>}
+          {erro && <p className="br-decisao-erro" role="alert">{erro}</p>}
           <div className="br-review-buttons"><button className="br-btn br-primary" disabled={bloqueado || (confirmar && (!ativo || codigo.length !== 6))} onClick={() => {
             if (!confirmar) setConfirmar(true);
             else void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'aprovar', codigo })));
           }}>{confirmar ? 'Confirmar e aprovar este SHA' : 'Aprovar com segundo fator'}</button>
           <button className="br-btn" disabled={desabilitado || ocupado} onClick={() => void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'ajuste' })))}>Pedir ajuste</button></div>
-        </section>
+        </div>
         <section className="br-card br-review-info"><strong>Quando a decisão não pode seguir</strong><p>Nota insuficiente, regressão com falhas ou snapshot alterado bloqueiam a aprovação e pedem nova revisão.</p></section>
         <p>Decisões comuns usam os botões da pergunta, com login e auditoria. Este ato exige confirmação adicional.</p>
-        <p className="br-confirmar-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>
       </>}
     </aside></div>
   </main>;

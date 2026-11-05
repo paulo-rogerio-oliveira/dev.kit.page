@@ -93,10 +93,17 @@ describe('Board remoto', () => {
       http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 1, acao: 'aprovar', sha: snapshot.sha, em: new Date().toISOString(), segundoFator: true, estado: 'registrada' }); }),
     );
     renderizar('/board', tokenDoDev());
-    await userEvent.click(await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' }));
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await board.findByRole('button', { name: 'Decidir' });
+    const cartao = within(board.getByRole('region', { name: 'Integrar?' }));
+    expect(cartao.getAllByRole('button').map(b => b.textContent)).toEqual(['Ver detalhes', 'Decidir']);
+    expect(cartao.getByText('Nota 96 · regressão sem falhas')).toBeInTheDocument();
+    await userEvent.click(cartao.getByRole('button', { name: 'Decidir' }));
     expect(await screen.findByText(snapshot.origem)).toBeInTheDocument();
     expect(screen.getByText(snapshot.destino)).toBeInTheDocument();
     expect(screen.getByText(snapshot.sha)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Ver alterações' }));
+    expect(screen.getByText('+ decisão').closest('details')).toHaveAttribute('open');
     await userEvent.click(screen.getByRole('button', { name: 'Aprovar com segundo fator' }));
     const confirmar = screen.getByRole('button', { name: 'Confirmar e aprovar este SHA' });
     expect(confirmar).toBeDisabled();
@@ -106,6 +113,24 @@ describe('Board remoto', () => {
     await userEvent.click(confirmar);
     expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', codigo: '123456' });
     expect(await screen.findByRole('status')).toHaveTextContent('segundo fator confirmado');
+  });
+
+  it('registra pedido de ajuste sem solicitar código de segundo fator nem autorizar aprovação', async () => {
+    responder();
+    let recebido: unknown;
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Revisar entrega?' }, snapshotId: 'c'.repeat(64), bloqueio: 'Regressão pendente ou com falhas: a aprovação está bloqueada.', resposta: null }])),
+      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: false })),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 2, acao: 'ajuste', em: new Date().toISOString(), segundoFator: false, estado: 'registrada' }); }),
+    );
+    renderizar('/board', tokenDoDev());
+    await userEvent.click(await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' }));
+    expect(screen.getByRole('button', { name: 'Aprovar com segundo fator' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Pedir ajuste' }));
+    expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'ajuste' });
+    expect(await screen.findByRole('status')).toHaveTextContent('Pedido de ajuste registrada');
+    expect(screen.getByRole('status')).toHaveTextContent('Nenhum ato foi autorizado.');
+    expect(screen.queryByLabelText('Código de 6 dígitos')).not.toBeInTheDocument();
   });
 
   it('navega entre Chat e Board mantendo somente essas duas abas', async () => {
