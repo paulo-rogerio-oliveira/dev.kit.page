@@ -616,6 +616,81 @@ branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina d
   recusa ao salvar e ao publicar, e o dev.kit a ignora na sincronia.
 - Tabelas e colunas novas pela migration `Us687AdminDeUtilidade` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us687.sql`.
 
+**Motor de provisão e a fila do usuário (controle remoto v2, item 4).** O usuário cria recursos no Azure pelo site; o
+primeiro é a FILA de comandos do controle remoto (Storage Queue), num grupo de recursos só dele, na assinatura do dev.kit.
+- **Dois processos.** A API pública (`EndpointsDaProvisao.cs`, `IProvisao`) só GRAVA o pedido e a auditoria — não tem
+  credencial do Azure. Quem executa é o WORKER `DevKitPage.Provisao` (`ExecutorDaProvisao`), outro processo sobre a MESMA base,
+  com a identidade gerenciada própria (`ComposicaoDoWorker.Credencial`: a atribuída ao usuário pelo client id, ou a do sistema;
+  fora de produção, o `az login`). Nenhum segredo no código nem na configuração do worker.
+- **Assíncrono e repetível.** O recurso é também o pedido (`RecursoProvisionado`): `pedido` → `em-provisao` → `pronto` ou
+  `falhou`; a remoção percorre os mesmos estados com a operação `remover` e termina em `removido` (a linha nunca é apagada: é o
+  rastro do que custou). O worker reserva o pedido pelo token de concorrência (`Versao`) — dois workers nunca executam o mesmo —
+  com validade (`Provisao:ReservaMinutos`): o que caiu no meio é retomado por outro, e o que cai em todas as tentativas desiste
+  (`falhou`). A falha da nuvem chega CLASSIFICADA (`FalhaNaNuvem`): a transitória (408, 429, 5xx, rede) volta a `pedido` com o
+  recuo exponencial (`RegrasDaProvisao.Espera`) até `Provisao:MaximoDeTentativas`; a definitiva (401/403, o nome tomado, 400)
+  fica `falhou` com a mensagem — já mascarada (`RegrasDosRelatos.Mascarar`: o id da assinatura não vai para a tela). A exceção
+  inesperada vira falha com um código que acha o erro no log. O usuário repete o que falhou (do começo das tentativas).
+- **Idempotente na nuvem.** `ProvedorDoAzure` fala com o Resource Manager pela REST, sem SDK de gestão: três PUT (o grupo, a
+  conta `Standard_LRS`/`StorageV2` com HTTPS, TLS 1.2 e sem blob público, e a fila `comandos`) e um DELETE da conta (o 404 também é
+  sucesso; o grupo fica, vazio). Os NOMES são sorteados no pedido (`RegrasDaProvisao.NomeDaConta`: `dkq` + o usuário em base 36 +
+  8 aleatórios; o índice único da base barra o sorteio repetido) e o repetido usa os mesmos. A operação longa (202) é consultada
+  no `Location` só se ele for do host do ARM — o token não vai a outro. Tags `devkit`, `devkit-usuario` e `devkit-recurso` em tudo.
+- **No site e na API, a mesma liberação.** A ação "Fila do controle remoto" da `/conta` (`componentes/FilaDoControleRemoto.tsx`,
+  proposta `conta` v12) só aparece com `GET /api/provisao/permissao` liberada; sem ela, TODA rota de recurso é 403 com
+  `codigo=provisao-nao-liberada`, conferida a cada pedido (a retirada vale sem esperar o token vencer). A liberação é por usuário
+  (`PermissoesDeUsuario`, `PUT /api/usuarios/{id}/recursos/provisao`, só o admin, no painel da licença de `/usuarios` — proposta
+  `admin-usuarios` v8) e já está preparada para o tier de assinatura: `RegrasDaProvisao.Origem` aceita também o PLANO da empresa
+  listado em `Provisao:PlanosQueLiberam` (vazio hoje). A cota é `Provisao:MaximoDeFilasPorUsuario` (1): com ela cheia, o pedido
+  devolve a fila que já existe (200), sem criar outra — o duplo clique não duplica recurso pago. O site relê a lista a cada 5 s
+  enquanto há pedido em curso, e mostra o histórico da auditoria (`EventosDaProvisao`: o pedido, cada execução, a falha, a
+  repetição, a remoção e a liberação do admin).
+- **Fora deste item**: a SAS curta da fila para o serviço do dev.kit (fase 2), o segundo fator para remover (fase 3, como os
+  outros atos que não voltam atrás), o App Service e o Static Web App (fase 4). Tabelas novas pela migration `ProvisaoNoAzure` e,
+  no Azure SQL, pelo script `api/scripts/sqlserver/Provisao.sql`; a publicação do worker está em
+  [publicacao-azure.md](publicacao-azure.md#provisão-no-azure-e-o-worker-controle-remoto-v2-item-4).
+
+**A conversa e os comandos remotos (controle remoto v2, item 5).** O site manda o comando a UMA máquina, e o dev.kit
+responde por HTTPS ([contrato](contrato-remoto-v1.md#4-conversa-e-comandos-remotos-fase-2), seção 4).
+- **SQL primeiro, fila depois.** `ConversaRemota` grava o `ComandoRemoto` (`pendente`) e põe a `MensagemDaFilaV1` na fila do
+  usuário — a Storage Queue PRONTA da provisão —, com o TTL que falta; vira `na-fila`, ou `falhou` com a mensagem mascarada
+  (503). O histórico é do SQL: a fila é só transporte. O id do comando é do site e único por usuário: o reenvio devolve o
+  mesmo comando (o que falhou tenta de novo), e outro conteúdo com o mesmo id é 409.
+- **Toda mudança de estado é uma gravação condicional** (`ExecuteUpdate ... WHERE Estado = o lido`): o recebimento que a fila
+  entrega duas vezes ao mesmo tempo tem UM vencedor (`executar: true`), e o TTL que vence no mesmo instante não deixa o comando
+  ser entregue depois de expirar. O TTL é preguiçoso — a leitura do histórico, do comando, do SSE, o envio e o recebimento
+  marcam `expirado` o que venceu antes da entrega, com o evento. A resposta do dev.kit é idempotente pelo id dela.
+- **A fila do Azure pela REST, sem SDK** (`FilaDoAzure`): a chave da conta vem do `listKeys` do ARM com o token da
+  IDENTIDADE GERENCIADA da API (`CredencialDoAzure`, a mesma regra do worker) e fica só na memória (`Remoto:ChaveEmCacheMinutos`);
+  a chave trocada no portal (403) é relida uma vez. Com ela a API assina duas SAS de serviço da fila (`RegrasDaConversa.Sas`): a
+  de ESCRITA (`a`, 5 min), que ela mesma usa para pôr a mensagem, e a de CONSUMO (`p`, `Remoto:SasMinutos`), que entrega ao
+  serviço da máquina. O endereço é montado da conta e da fila (nunca de um texto do banco): a SAS só vai ao host do Storage. A
+  fila não aceita SAS de delegação de usuário — por isso a chave. `FilaSimulada` é de desenvolvimento, e a API não sobe com ela
+  em Production (`FilaDeComandos.Validar`).
+- **O SSE** (`TypedResults.ServerSentEvents`) lê o `EventoDaConversa` — só acrescentado, o `id:` do SSE — depois do
+  `Last-Event-ID`; acorda pelo aviso desta instância (`AvisoDaConversa`, pedido ANTES da leitura) ou relê o SQL a cada
+  `Remoto:IntervaloDoSseSegundos`, o que vale entre instâncias sem backplane.
+- **Os limites**: `Remoto:ComandosPorHora` contado no SQL (429 com `Retry-After`, o custo de turno) e a política `Conversa` por
+  minuto, separada da do heartbeat. O texto do comando e o da resposta passam pelo `DadosSensiveis` (422). A retenção é
+  `Remoto:RetencaoDaConversaDias`, no expurgo diário. Tabelas pela migration `ConversaRemota` e, no Azure SQL, por
+  `api/scripts/sqlserver/Conversa.sql`.
+- **Fora deste item**: a ponte no dev.kit que lê a fila e entrega ao Orquestrador (item 6), o chat no Board web (item 7), o
+  ligar e o reiniciar executados pelo serviço (item 8) e as decisões com segundo fator (item 9). O texto do chat nunca aprova:
+  a resposta `recusado` é o caminho do dev.kit para dizer isso.
+
+**As falas do chat do dev.kit (controle remoto v2, item 13).** Para o chat do Board mostrar a MESMA conversa do dev.kit, o
+dev.kit espelha cada fala do chat do Orquestrador em `POST /api/remoto/conversa/falas`
+([contrato](contrato-remoto-v1.md#42-do-devkit), seção 4.2), com o `autor` (`orquestrador` ou `dev`) e a `origem` (`desktop` ou
+`remoto`, esta com o `comandoId`).
+- **Rota própria, e não um campo em `RespostaDoDevKitV1`**: a resposta muda o estado do comando, e a fala não muda nada — só é
+  gravada em `FalaRemota` e vira o evento `fala` do SSE. Assim o dev.kit antigo segue com `/respostas` sem mudar, e a fala do
+  dev no desktop nunca é lida como resposta a um comando.
+- **Idempotente pelo id** (único por usuário e máquina): o mesmo conteúdo devolve a gravada (`repetida`), outro é 409
+  `id-em-uso`; o índice único decide o reenvio simultâneo. O histórico devolve as falas pela ordem em que foram ditas.
+- **Sinal de suporte**: a resposta do heartbeat leva `recursos` (`RemotoV1.RecursosDaApi`); o dev.kit só envia com
+  `falas-do-desktop` na lista. O campo novo é opcional nos dois sentidos — o dev.kit antigo o ignora, e a API antiga não o manda.
+- **Limite próprio** (`Remoto:FalasPorMinuto`, política `Falas`), separado da `Conversa`; o texto passa pelo `DadosSensiveis`
+  (422); a retenção é a da conversa. Tabela pela migration `FalasDoDesktop` e, no Azure SQL, pelo mesmo `Conversa.sql`.
+
 **Base embarcada, provider trocável.** SQLite agora, com as migrations versionadas
 (`Infrastructure/Migrations`) aplicadas na subida — as novas são ADITIVAS (a dos pedidos de
 demonstração só cria a tabela). `Banco:Provider=SqlServer` troca para o Azure SQL sem mudar código;
@@ -661,4 +736,7 @@ Windows. A máquina é um GUID anônimo; o "apelido" é derivado dele.
 | US #602 | Core: `RegrasDosRelatosTests` (categoria e texto, a captura PNG/JPEG no teto, os segredos mascarados antes do caminho e do e-mail, estado e resposta validados, o resumo da lista); Infrastructure: `Us602Tests` (gravação nova, mascarada e ligada ao usuário e à empresa, a chave do cliente idempotente, filtros e paginação com o gestor só na empresa dele, responder um novo o leva a em análise, `/meus` só do autor, script `Us602.sql`); Api: `RelatosApiTests` (401 sem login e o dev fora da gestão, o gestor só na empresa dele, o admin vê todos, filtra, muda o estado e responde, o usuário e a empresa do token, o reenvio sem duplicar, o segredo mascarado no servidor, a captura acima do teto recusada, o 429 com `Retry-After`); web: `Relatos.test.tsx` (a lista com os selos e os indicadores, a query dos filtros, o filtro de empresa só do admin, o detalhe com o contexto em `<pre>` e a captura, trocar o estado e responder atualizando lista e detalhe, a mensagem do 403); e2e: `us602.spec.ts` (dois devs de duas empresas, por adesão, relatam pela API; o admin vê, filtra, leva a em análise e a resolvido e responde; o gestor vê só o da empresa dele; o dev lê a resposta em `/api/relatos/meus`; capturas `80`–`84`) |
 | US #669 | Core: `RegrasDoDesignTests` (a URL normalizada em https/ssh/.git/maiúsculas/pasta, o nível usuário de quem não tem empresa, o escopo das claims, a visibilidade da regra do contexto, quem apaga, o teto do plano e a validação do envio); Infrastructure: `Us669Tests` (script `Us669.sql` contra o modelo, o armazém em disco preso à pasta, o envio cuja imagem falha sem deixar versão); Api: `DesignApiTests` (o envio com o branch como atributo e o mesmo repositório escrito de dois jeitos num projeto, o link estável devolvendo o PNG, a visibilidade usuário × equipe × empresa × outra empresa, quem não tem empresa no nível usuário, o reenvio idempotente e o 409, apagar autor/gestor/terceiro, a sincronização com `?desde=`, o 413 do teto); web: `componentes/DesignCompartilhado.test.tsx` (a comparação, a aba com o uso do teto e as colunas, o link copiado, o Apagar só de quem pode, o filtro de branch e o modo Uma, o escopo Minhas e o vazio, `/design` sem empresa, a página do link estável e a versão que não existe mais); e2e: `us669.spec.ts` (o envio multipart com o PNG gerado no teste, a comparação lado a lado, o branch, o Sobrepor e o link estável; capturas `90`–`92`) |
 | US #693 | Core: `RegrasDosProjetosTests` (o slug, as listas uma por linha, o envio completo, o que falta no envio inválido, o repositório e a situação, o ciclo recusado com o item que o fecha, a dependência de si mesmo, de fora do plano e o número repetido); Infrastructure: `Us693Tests` (script `Us693.sql` contra o modelo, a migration aplicada sem mudança de modelo pendente, regravar com a versão lida substituindo o plano e a velha em conflito, apagar levando os itens); Api: `ProjetosApiTests` (criar 201 com o plano, regravar com a versão lida 200 e a velha 409, a visibilidade usuário × equipe × empresa × outra empresa e o 404 pelo id, o time obrigatório no nível time e quem não tem empresa no nível usuário, apagar autor/gestor/terceiro, o ciclo e o slug inválido 400, o 401 sem login) |
+| Provisão (controle remoto v2, item 4) | Core: `RegrasDaProvisaoTests` (a permissão vence e o plano só libera configurado, o nome da conta válido no Azure e sorteado, o grupo por usuário, a região, o recuo exponencial, as transições da remoção e da repetição, o erro mascarado e cortado); Infrastructure: `ProvisaoTests` (script `Provisao.sql` contra o modelo, a migration sem mudança pendente, o pedido idempotente na cota, o isolamento, a reserva disputada por quatro workers com um vencedor, a falha transitória com a espera e a repetição até pronto, a definitiva e a esgotada, a reserva vencida retomada e a que desiste, repetir e remover, a liberação do admin com a auditoria e o plano que libera); Api: `ProvisaoApiTests` (401, o 403 com o código em toda rota sem a liberação, 202 e o repetido 200, a região 400, o recurso alheio 404, o 409 da remoção em criação, a retirada que vale no pedido seguinte, só o admin libera); Worker: `DevKitPage.Provisao.Tests` (o executor sobre a base real e uma nuvem falsa — pronto, transitória e repetição, definitiva, a inesperada sem o texto dela, a remoção — e o `ProvedorDoAzure` contra um ARM falso: os três PUT com o token e as tags, o 202 acompanhado, o `Location` de outro host recusado, a classificação 429/503/408/403/400/409, o DELETE com 404, e a composição sem segredo e sem subir mal configurada); web: `Conta.test.tsx` (a seção some sem a liberação, o pedido na região, a cota, o histórico, remover, repetir, o acompanhamento até pronto, o 403) e `Usuarios.test.tsx` (liberar e retirar no painel, o selo) |
+| Conversa (controle remoto v2, item 5) | Core: `RegrasDaConversaTests` (a forma do comando e da resposta, o dado sensível sem falso positivo, o TTL na faixa, quem o TTL vence, o estado depois da resposta, o limite e a espera, a SAS da fila no formato do Azure — o texto assinado, só HTTPS, só a permissão pedida, sem a chave); Infrastructure: `ConversaTests` (script `Conversa.sql` contra o modelo, a migration sem mudança pendente, o comando no SQL e na fila com id, destino e TTL, o TTL que vence em `expirado` e não executa, o reenvio do site sem duplicar e o 409 do outro conteúdo, quatro recebimentos simultâneos com um só `executar`, a resposta reenviada sem duplicar, o isolamento entre usuários com a mesma id de máquina, a outra máquina do mesmo usuário, o limite por hora com a espera, a fila fora do ar e o reenvio que entrega, o reinício seguro, a fila em provisão, a SAS e o expurgo) e `FilaDoAzureTests` (contra um ARM e um Storage falsos: o `listKeys` com o token e a chave só na memória, a mensagem com a SAS `a` e o `messagettl`, a SAS `p` que confere com a chave, a chave trocada relida, cada falha sem a SAS, a simulada recusada em Production); Api: `ConversaApiTests` (401/403, a ida e volta inteira com a fila pronta pelo motor da provisão, o SSE empurrando na hora e retomando pelo `Last-Event-ID`, o vencido pelo SSE, o isolamento — inclusive no SSE —, 400/415/422/409 e o contrato, o 503 com o comando e o reenvio, o 429 com `Retry-After` por usuário, a API que não sobe em Production com a fila simulada) |
+| Falas do chat do dev.kit (controle remoto v2, item 13) | Core: `RegrasDaConversaTests` (a forma da fala — cada autor e origem, sem diferença de caixa, a remota com o `comandoId`, o teto, a data —, o dado sensível sem falso positivo e o sinal `falas-do-desktop` com o evento novo no fim das listas); Infrastructure: `ConversaTests` (o `Conversa.sql` e a migration `FalasDoDesktop`, o autor e a origem gravados, o evento `fala` sem mexer no comando, o histórico pela ordem em que foram ditas, quatro reenvios simultâneos com uma fala só, o 409 do outro conteúdo, o mesmo id em outra máquina, o isolamento e o `comandoId` de outro usuário ou máquina, o evento gravado antes do item ainda legível e o expurgo); Api: `ConversaApiTests` (o heartbeat e a resposta do dev.kit ANTIGO pelo JSON cru, com `recursos` na resposta e o histórico só acrescentando `falas`; as falas no histórico e no SSE com autor e origem; o reenvio 200 e o 409; 400/401/404/409/415/422 e o contrato; a máquina de outro usuário; o 429 da política `Falas` que não pega a resposta nem o comando) |
 | `web/e2e` | Playwright: base nova → login do admin → troca → registro da máquina → lote (e reenvio) → números no dashboard → a exceção não classificada aparece com o trace sem caminhos e é resolvida; landing → seções e recursos da proposta (abas, moldura, legenda) → comparativo e empresas pelo menu → pedido de demonstração → o admin vê e exclui no dashboard; a home em desktop e celular, claro e escuro (US #467) |

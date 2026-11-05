@@ -6,6 +6,7 @@ import type {
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
   AcessosDoDesign, PapelDeAcessoAoDesign, ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
   AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
+  EventoDaProvisao, PermissaoDeProvisao, RecursoProvisionado,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -451,6 +452,40 @@ const resumoDoRelato = (r: RelatoDetalhe): RelatoResumo => ({
   criadoEm: r.criadoEm, atualizadoEm: r.atualizadoEm, temCaptura: r.captura !== null, respondido: r.resposta !== '',
 });
 
+// ----- A provisão no Azure (controle remoto v2, item 4) -----
+
+/** A permissão de quem TEM a provisão liberada (o padrão do servidor é a de quem não tem). */
+export const permissaoLiberada: PermissaoDeProvisao = {
+  liberada: true, origem: 'permissao', regioes: ['brazilsouth', 'eastus2'], regiaoPadrao: 'brazilsouth', maximoDeFilas: 1,
+};
+
+/** A fila pronta da Ana, depois de uma falha transitória e da repetição do worker. */
+export const filaPronta = (): RecursoProvisionado => ({
+  id: 11, tipo: 'fila', nome: 'dkq2x7k4m9pa', fila: 'comandos', regiao: 'brazilsouth', grupoDeRecursos: 'rg-devkit-u2', operacao: 'criar',
+  estado: 'pronto', tentativas: 2, erro: '', endpoint: 'https://dkq2x7k4m9pa.queue.core.windows.net/comandos',
+  criadoEm: '2026-11-03T14:40:00Z', atualizadoEm: '2026-11-03T14:42:00Z', prontoEm: '2026-11-03T14:42:00Z', proximaTentativaEm: null,
+});
+
+export const eventosDaFila: EventoDaProvisao[] = [
+  { em: '2026-11-03T14:40:00Z', evento: 'pedido', autor: 'ana.dev', detalhe: 'brazilsouth · conta dkq2x7k4m9pa · grupo rg-devkit-u2' },
+  { em: '2026-11-03T14:40:05Z', evento: 'inicio', autor: 'worker', detalhe: 'criação · tentativa 1' },
+  { em: '2026-11-03T14:41:00Z', evento: 'falha-transitoria', autor: 'worker', detalhe: 'O Azure limitou os pedidos (TooManyRequests). — nova tentativa em 30 s' },
+  { em: '2026-11-03T14:41:31Z', evento: 'inicio', autor: 'worker', detalhe: 'criação · tentativa 2' },
+  { em: '2026-11-03T14:42:00Z', evento: 'pronto', autor: 'worker', detalhe: 'grupo, conta e fila comandos prontos' },
+];
+
+/** O estado da provisão no servidor de mentira: a permissão e os recursos (o setup os reinicia a cada teste). */
+export const provisao: { permissao: PermissaoDeProvisao; recursos: RecursoProvisionado[] } = {
+  permissao: { ...permissaoLiberada, liberada: false, origem: 'nenhuma' }, recursos: [],
+};
+
+export function reiniciarProvisao() {
+  provisao.permissao = { ...permissaoLiberada, liberada: false, origem: 'nenhuma' };
+  provisao.recursos = [];
+}
+
+const naoLiberada = () => HttpResponse.json({ detail: 'A provisão no Azure não está liberada para o seu usuário.', codigo: 'provisao-nao-liberada' }, { status: 403 });
+
 /** As reações (PUT de estado) que chegaram ao servidor de mentira. */
 export const reacoes: { id: string; estado: string; versao: string | null }[] = [];
 
@@ -838,6 +873,43 @@ export const handlersPadrao = [
     const corpo = (await request.json()) as { bloqueado: boolean };
     gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/bloqueio`, corpo });
     return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, bloqueado: corpo.bloqueado });
+  }),
+  http.put(`${API}/api/usuarios/:id/recursos/:recurso`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { liberado: boolean };
+    gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/recursos/${params.recurso}`, corpo });
+    return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, recursosLiberados: corpo.liberado ? ['provisao'] : [] });
+  }),
+  // A provisão no Azure (controle remoto v2, item 4): sem a liberação, a permissão diz não e as rotas de recurso recusam.
+  http.get(`${API}/api/provisao/permissao`, () => HttpResponse.json(provisao.permissao)),
+  http.get(`${API}/api/provisao/recursos`, () => (provisao.permissao.liberada ? HttpResponse.json(provisao.recursos) : naoLiberada())),
+  http.get(`${API}/api/provisao/recursos/:id`, ({ params }) => {
+    const recurso = provisao.recursos.find((r) => String(r.id) === params.id);
+    return recurso ? HttpResponse.json({ recurso, eventos: eventosDaFila }) : HttpResponse.json({ detail: 'Recurso não encontrado.' }, { status: 404 });
+  }),
+  http.post(`${API}/api/provisao/filas`, async ({ request }) => {
+    if (!provisao.permissao.liberada) return naoLiberada();
+    const corpo = (await request.json()) as { regiao: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/provisao/filas', corpo });
+    const ativa = provisao.recursos.find((r) => r.estado !== 'removido');
+    if (ativa) return HttpResponse.json(ativa);
+    const novo: RecursoProvisionado = {
+      ...filaPronta(), id: 12, nome: 'dkq2novafila1', regiao: corpo.regiao, estado: 'pedido', tentativas: 0, endpoint: '', prontoEm: null,
+      criadoEm: '2026-11-03T15:00:00Z', atualizadoEm: '2026-11-03T15:00:00Z',
+    };
+    provisao.recursos = [novo, ...provisao.recursos];
+    return HttpResponse.json(novo, { status: 202 });
+  }),
+  http.post(`${API}/api/provisao/recursos/:id/repetir`, ({ params }) => {
+    escritas.push({ metodo: 'POST', caminho: `/api/provisao/recursos/${params.id}/repetir`, corpo: null });
+    const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
+    Object.assign(recurso, { estado: 'pedido', tentativas: 0, erro: '' });
+    return HttpResponse.json(recurso, { status: 202 });
+  }),
+  http.delete(`${API}/api/provisao/recursos/:id`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/provisao/recursos/${params.id}`, corpo: null });
+    const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
+    Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
+    return HttpResponse.json(recurso, { status: 202 });
   }),
   http.post(`${API}/api/usuarios/:id/senha`, ({ params }) => {
     gestaoDeUsuarios.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/senha`, corpo: null });

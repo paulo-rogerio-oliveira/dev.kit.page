@@ -17,6 +17,48 @@ namespace DevKitPage.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ConcedidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConcedidoPorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Papel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ProjetoEmOndasId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ProjetoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("ProjetoEmOndasId", "UsuarioId")
+                        .IsUnique();
+
+                    b.HasIndex("ProjetoId", "UsuarioId")
+                        .IsUnique();
+
+                    b.ToTable("AcessosAosProjetos", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AcessosAosProjetos_Recurso", "(ProjetoId IS NOT NULL AND ProjetoEmOndasId IS NULL) OR (ProjetoId IS NULL AND ProjetoEmOndasId IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AcessoAosDados", b =>
                 {
                     b.Property<long>("Id")
@@ -184,12 +226,6 @@ namespace DevKitPage.Infrastructure.Migrations
 
             modelBuilder.Entity("DevKitPage.Core.Catalogo", b =>
                 {
-                    b.Property<int?>("MinDevKitDaOrigem")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Origem")
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
@@ -205,9 +241,15 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("MinDevKitDaOrigem")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Slug")
@@ -221,6 +263,82 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Catalogos", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ComandoRemoto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ComandoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ConcluidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Dispositivo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EntregueEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Erro")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ExpiraEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RecursoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado", "ExpiraEmUtc");
+
+                    b.HasIndex("UsuarioId", "ComandoId")
+                        .IsUnique();
+
+                    b.HasIndex("UsuarioId", "CriadoEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "CriadoEmUtc");
+
+                    b.ToTable("ComandosRemotos", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ConvencaoDaEmpresa", b =>
@@ -380,6 +498,80 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("Empresas", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.EventoDaConversa", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Conteudo")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmUtc");
+
+                    b.HasIndex("UsuarioId", "Id");
+
+                    b.ToTable("EventosDaConversa", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.EventoDaProvisao", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detalhe")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Evento")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RecursoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecursoId", "EmUtc");
+
+                    b.HasIndex("UsuarioId", "EmUtc");
+
+                    b.ToTable("EventosDaProvisao", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.EventoDePagamento", b =>
                 {
                     b.Property<long>("Id")
@@ -461,6 +653,63 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("MaquinaId", "EmUtc");
 
                     b.ToTable("EventosDeUso", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.FalaRemota", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Autor")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ComandoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("DitaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FalaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecebidaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecebidaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "DitaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "FalaId")
+                        .IsUnique();
+
+                    b.ToTable("FalasRemotas", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.FotoDeEstado", b =>
@@ -945,6 +1194,77 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("Maquinas", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.MaquinaRemota", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AppAberto")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AtualizadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EstadoDoAgente")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origem")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Retrato")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<DateTime?>("RetratoGeradoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RetratoRecebidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TurnoEmAndamento")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UltimoHeartbeatEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("VersaoDevKit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AtualizadaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId")
+                        .IsUnique();
+
+                    b.ToTable("MaquinasRemotas", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.OcorrenciaDeErro", b =>
                 {
                     b.Property<long>("Id")
@@ -1039,6 +1359,36 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("PedidosDeDemonstracao", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.PermissaoDeUsuario", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ConcedidaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ConcedidaPor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Recurso")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Recurso")
+                        .IsUnique();
+
+                    b.ToTable("PermissoesDeUsuario", (string)null);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
                 {
                     b.Property<long>("Id")
@@ -1061,9 +1411,6 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<int>("AutorId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("DonoId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Branch")
                         .IsRequired()
                         .HasMaxLength(250)
@@ -1080,6 +1427,16 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(250)
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("Documento")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<int>("DonoId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
 
@@ -1125,12 +1482,6 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<int>("UsuarioId")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("Documento")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("");
 
                     b.Property<int>("Versao")
                         .IsConcurrencyToken()
@@ -1206,43 +1557,105 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("ProjetosDeDesign", (string)null);
                 });
 
-            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+            modelBuilder.Entity("DevKitPage.Core.RecursoProvisionado", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("ConcedidoEmUtc")
+                    b.Property<DateTime>("AtualizadoEmUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("ConcedidoPorId")
-                        .HasColumnType("INTEGER");
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
 
-                    b.Property<string>("Papel")
+                    b.Property<string>("Endpoint")
                         .IsRequired()
-                        .HasMaxLength(10)
+                        .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
-                    b.Property<long?>("ProjetoId")
+                    b.Property<string>("Erro")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fila")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("GrupoDeRecursos")
+                        .IsRequired()
+                        .HasMaxLength(90)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdNoAzure")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Operacao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProntoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ProximaTentativaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Regiao")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RemovidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReservadoAteUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReservadoPor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Tentativas")
                         .HasColumnType("INTEGER");
 
-                    b.Property<long?>("ProjetoEmOndasId")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("UsuarioId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Versao")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("UsuarioId");
-
-                    b.HasIndex("ProjetoId", "UsuarioId")
+                    b.HasIndex("Nome")
                         .IsUnique();
 
-                    b.HasIndex("ProjetoEmOndasId", "UsuarioId").IsUnique();
+                    b.HasIndex("Estado", "ProximaTentativaEmUtc");
 
-                    b.ToTable("AcessosAosProjetos", (string)null, t => t.HasCheckConstraint("CK_AcessosAosProjetos_Recurso",
-                        "(ProjetoId IS NOT NULL AND ProjetoEmOndasId IS NULL) OR (ProjetoId IS NULL AND ProjetoEmOndasId IS NOT NULL)"));
+                    b.HasIndex("UsuarioId", "Estado");
+
+                    b.ToTable("RecursosProvisionados", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.Relato", b =>
@@ -1363,6 +1776,58 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("RepositoriosDaEmpresa", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.RespostaRemota", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ComandoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("GeradaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MaquinaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecebidaEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RespostaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecebidaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "RecebidaEmUtc");
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "RespostaId")
+                        .IsUnique();
+
+                    b.ToTable("RespostasRemotas", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.RoiDeWorkItem", b =>
@@ -1829,6 +2294,31 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("VinculosDeCatalogo", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "ProjetoEmOndas")
+                        .WithMany("Acessos")
+                        .HasForeignKey("ProjetoEmOndasId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DevKitPage.Core.ProjetoDeDesign", "Projeto")
+                        .WithMany("Acessos")
+                        .HasForeignKey("ProjetoId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Projeto");
+
+                    b.Navigation("ProjetoEmOndas");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AnexoDeItemDoCatalogo", b =>
                 {
                     b.HasOne("DevKitPage.Core.ItemDoCatalogoEditavel", "Item")
@@ -1868,6 +2358,15 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Maquina");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ComandoRemoto", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ConvencaoDaEmpresa", b =>
                 {
                     b.HasOne("DevKitPage.Core.Usuario", "Autor")
@@ -1887,6 +2386,23 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.EventoDaConversa", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.EventoDaProvisao", b =>
+                {
+                    b.HasOne("DevKitPage.Core.RecursoProvisionado", null)
+                        .WithMany()
+                        .HasForeignKey("RecursoId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("DevKitPage.Core.EventoDeUso", b =>
                 {
                     b.HasOne("DevKitPage.Core.Maquina", "Maquina")
@@ -1896,6 +2412,15 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Maquina");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.FalaRemota", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DevKitPage.Core.FotoDeEstado", b =>
@@ -2004,6 +2529,15 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.MaquinaRemota", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DevKitPage.Core.OcorrenciaDeErro", b =>
                 {
                     b.HasOne("DevKitPage.Core.GrupoDeErro", "Grupo")
@@ -2028,6 +2562,15 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasOne("DevKitPage.Core.VersaoDoCatalogo", null)
                         .WithOne()
                         .HasForeignKey("DevKitPage.Core.PacoteDoCatalogo", "VersaoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.PermissaoDeUsuario", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -2060,29 +2603,13 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
-            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+            modelBuilder.Entity("DevKitPage.Core.RecursoProvisionado", b =>
                 {
-                    b.HasOne("DevKitPage.Core.ProjetoDeDesign", "Projeto")
-                        .WithMany("Acessos")
-                        .HasForeignKey("ProjetoId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "ProjetoEmOndas")
-                        .WithMany("Acessos")
-                        .HasForeignKey("ProjetoEmOndasId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                    b.HasOne("DevKitPage.Core.Usuario", null)
                         .WithMany()
                         .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("Projeto");
-
-                    b.Navigation("ProjetoEmOndas");
-
-                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.Relato", b =>
@@ -2127,6 +2654,15 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Autor");
 
                     b.Navigation("Empresa");
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.RespostaRemota", b =>
+                {
+                    b.HasOne("DevKitPage.Core.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DevKitPage.Core.RoiDeWorkItem", b =>

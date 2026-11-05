@@ -4,7 +4,9 @@ namespace DevKitPage.Api;
 
 /// <summary>
 /// O expurgo diário do que passou da retenção: os eventos brutos e as ocorrências de exceção, com o
-/// trace delas (<c>Telemetria:RetencaoDias</c> — o grupo e o estado da reação ficam), e os pedidos de demonstração (<c>Demonstracoes:RetencaoDias</c>, LGPD). Os totais diários já foram
+/// trace delas (<c>Telemetria:RetencaoDias</c> — o grupo e o estado da reação ficam), os pedidos de demonstração (<c>Demonstracoes:RetencaoDias</c>, LGPD)
+/// e as máquinas do controle remoto sem contato (<c>Remoto:RetencaoDias</c>), com o retrato, e a conversa remota
+/// (<c>Remoto:RetencaoDaConversaDias</c>). Os totais diários já foram
 /// consolidados na ingestão, então o histórico do dashboard não muda. Cada expurgo tem o seu
 /// tratamento: uma falha vai para o log, não impede o outro, e a próxima volta tenta de novo.
 /// </summary>
@@ -25,6 +27,8 @@ public sealed class ExpurgoDiario(IServiceScopeFactory escopos, ILogger<ExpurgoD
                 await ExpurgarAsync<IExpurgoDeOcorrencias>("ocorrência(s) de exceção", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDeAcessos>("registro(s) da trilha de acesso", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
                 await ExpurgarAsync<IExpurgoDePedidos>("pedido(s) de demonstração", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
+                await ExpurgarAsync<IExpurgoDoRemoto>("máquina(s) do controle remoto", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
+                await ExpurgarAsync<IExpurgoDaConversa>("comando(s), resposta(s), fala(s) e evento(s) da conversa remota", (e, ct) => e.ExpurgarAsync(ct), stoppingToken);
             }
             while (await relogio.WaitForNextTickAsync(stoppingToken));
         }

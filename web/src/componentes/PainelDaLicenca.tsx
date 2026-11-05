@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../api/cliente';
 import type { DefinicaoDeLicenca, DetalheDaLicenca, LicencaDoUsuario, ModoDaValidade, Papel, PreviaDeLicenca, TipoDaLicenca } from '../api/tipos';
 import { formatar } from '../formatar';
@@ -68,14 +68,16 @@ export function BarraDaLicenca({ licenca, rotulo }: { licenca: LicencaDoUsuario 
  * O painel "Licença de &lt;usuário&gt;" (US #687, proposta admin-usuarios v005): a validade atual, a DEFINIÇÃO da validade
  * que o admin quiser — somar dias à atual (os atalhos ou outro número), até uma data ou sem prazo —, o tipo, o motivo
  * (que vai para o histórico), a prévia da nova data, o Revogar e o Aplicar, e o histórico. A renovação do dev.kit
- * respeita o que for aplicado aqui, no próximo login.
+ * respeita o que for aplicado aqui, no próximo login. Os `recursos` (controle remoto v2, item 4) entram logo depois da
+ * validade: o que o usuário tem liberado — o que o plano da assinatura vai decidir no futuro.
  */
-export function PainelDaLicenca({ token, usuarioId, aoMudar, aoFechar, tratar }: {
+export function PainelDaLicenca({ token, usuarioId, aoMudar, aoFechar, tratar, recursos }: {
   token: string;
   usuarioId: number;
   aoMudar: (mensagem: string) => void;
   aoFechar: () => void;
   tratar: (falha: unknown) => void;
+  recursos?: ReactNode;
 }) {
   const [detalhe, setDetalhe] = useState<DetalheDaLicenca | null>(null);
   const [modo, setModo] = useState<ModoDaValidade>('somar');
@@ -186,6 +188,8 @@ export function PainelDaLicenca({ token, usuarioId, aoMudar, aoFechar, tratar }:
               <span>último uso: {l.ultimoUso ? formatar.dataHora(l.ultimoUso) : 'nenhum ainda'}</span>
             </div>
           </div>
+
+          {recursos}
 
           {l.tipo === 'admin' ? (
             <p className="nota-informativa">A conta de administração não tem prazo de licença para definir.</p>

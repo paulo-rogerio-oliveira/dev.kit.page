@@ -79,6 +79,33 @@ export function resumoDasLicencas(usuarios: UsuarioResumo[]): { vencendo: number
   };
 }
 
+/** O usuário tem a provisão no Azure liberada pelo admin (controle remoto v2, item 4). */
+export const temProvisao = (u: UsuarioResumo) => (u.recursosLiberados ?? []).includes('provisao');
+
+/**
+ * Os recursos liberados do usuário, no painel dele (proposta admin-usuarios v8): a provisão no Azure, com Liberar ou
+ * Retirar. Retirar não apaga o que o usuário já criou — só impede pedidos novos (a API confere a cada pedido).
+ */
+function RecursosLiberados({ usuario, aoAlternar }: { usuario: UsuarioResumo; aoAlternar: (liberado: boolean) => void }) {
+  const liberada = temProvisao(usuario);
+  return (
+    <div className="recursos-liberados">
+      <h3 className="subtitulo-do-painel">Recursos liberados</h3>
+      <div className="recurso-liberado">
+        <div>
+          <strong>Provisão no Azure</strong>
+          <small className="texto-mudo">A fila do controle remoto na conta. Hoje por permissão; depois, pelo plano.</small>
+        </div>
+        {liberada ? <Selo variante="info">Liberada</Selo> : <Selo>Não liberada</Selo>}
+        <button className="botao botao-fantasma botao-pequeno" type="button"
+          aria-label={`${liberada ? 'Retirar' : 'Liberar'} a provisão de ${usuario.login}`} onClick={() => aoAlternar(!liberada)}>
+          {liberada ? 'Retirar' : 'Liberar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** A busca ignora maiúsculas e acentos ("jose" acha "José"). */
 const normalizar = (texto: string) => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -208,6 +235,20 @@ export function Usuarios() {
     }
   }
 
+  async function liberarProvisao(u: UsuarioResumo, liberado: boolean) {
+    limpar();
+    if (!liberado && !window.confirm(`Retirar a provisão no Azure de ${u.login}? O que já foi criado continua lá; só os pedidos novos param.`)) return;
+    try {
+      await api.liberarRecurso(token, u.id, 'provisao', liberado);
+      setAviso(liberado
+        ? `Provisão liberada para ${u.login}: a ação "Fila do controle remoto" aparece na conta, e a API aceita o pedido.`
+        : `Provisão retirada de ${u.login}: a ação some da conta, e a API recusa os pedidos novos.`);
+      await carregar();
+    } catch (falha) {
+      tratar(falha);
+    }
+  }
+
   async function redefinir(u: UsuarioResumo) {
     limpar();
     if (!window.confirm(`Gerar uma senha temporária nova para ${u.login}? A atual deixa de valer.`)) return;
@@ -235,6 +276,8 @@ export function Usuarios() {
     && passaNoFiltroDeLicenca(u, filtroDeLicenca));
 
   const licencas = usuarios ? resumoDasLicencas(usuarios) : { vencendo: 0, vencidas: 0 };
+  // O usuário do painel lateral (a licença e os recursos liberados), da lista já carregada.
+  const doPainel = lateral?.tipo === 'licenca' ? usuarios?.find((u) => u.id === lateral.id) : undefined;
   const subtitulo = usuarios && (
     <>
       {resumoDosUsuarios(usuarios)}
@@ -331,7 +374,10 @@ export function Usuarios() {
                       ) : (
                         <tr key={u.id} className={lateral?.tipo === 'licenca' && lateral.id === u.id ? 'linha-selecionada' : undefined}>
                           <td>{identidade}</td>
-                          <td><Selo variante={COR_DO_PAPEL[u.papel] ?? 'neutro'}>{NOME_DO_PAPEL[u.papel] ?? u.papel}</Selo></td>
+                          <td>
+                            <Selo variante={COR_DO_PAPEL[u.papel] ?? 'neutro'}>{NOME_DO_PAPEL[u.papel] ?? u.papel}</Selo>
+                            {temProvisao(u) && <> <Selo variante="info">Provisão</Selo></>}
+                          </td>
                           <td>{u.empresa ?? '—'}</td>
                           <td>
                             <button className="celula-da-licenca" type="button" aria-label={`Licença de ${u.nome || u.login}`}
@@ -374,6 +420,7 @@ export function Usuarios() {
               aoMudar={(mensagem) => { setAviso(mensagem); void carregar(); }}
               aoFechar={() => setLateral(null)}
               tratar={tratar}
+              recursos={doPainel && <RecursosLiberados usuario={doPainel} aoAlternar={(liberado) => void liberarProvisao(doPainel, liberado)} />}
             />
           )}
 

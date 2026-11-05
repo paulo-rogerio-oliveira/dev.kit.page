@@ -26,6 +26,8 @@
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <!-- O design compartilhado (US #669): as imagens no Azure Blob Storage (em disco fora de produção). -->
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.26.0" />
+    <!-- O worker da provisão: a identidade gerenciada (ou o az login no desenvolvimento) para o Azure Resource Manager. -->
+    <PackageVersion Include="Azure.Identity" Version="1.17.1" />
     <!-- Autenticação: nada feito à mão — o JWT Bearer (o PasswordHasher do Identity vem com o framework do ASP.NET Core). -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftPatch)" />
     <!-- O documento OpenAPI, de onde o cliente tipado da web pode ser gerado. -->

@@ -94,6 +94,119 @@ public sealed class OpcoesDosRelatos
 }
 
 /// <summary>
+/// O controle remoto (seção <c>Remoto</c>): o limite de envios e a retenção das máquinas e dos retratos; e a conversa — a
+/// fila, o TTL, a SAS, o limite de comandos por usuário, a retenção do histórico e o SSE.
+/// </summary>
+public sealed class OpcoesDoRemoto
+{
+    public const string Secao = "Remoto";
+
+    /// <summary>
+    /// Quantos envios (heartbeat e retrato somados) um mesmo usuário faz por minuto; acima disto, 429. O serviço manda um
+    /// heartbeat por minuto por máquina e o retrato quando o estado muda: a folga cobre algumas máquinas.
+    /// </summary>
+    public int EnviosPorMinuto { get; set; } = 60;
+
+    /// <summary>A máquina sem heartbeat nem retrato há mais que isto sai do banco, com o retrato.</summary>
+    public int RetencaoDias { get; set; } = 30;
+
+    // A conversa e os comandos remotos (fase 2).
+
+    public const string FilaAzure = "azure";
+    public const string FilaSimulada = "simulado";
+
+    /// <summary>
+    /// A fila dos comandos: <see cref="FilaAzure"/> (padrão; a chave da conta lida pela identidade gerenciada da API) ou
+    /// <see cref="FilaSimulada"/> — de desenvolvimento, e a API não sobe com ela em Production.
+    /// </summary>
+    public string Fila { get; set; } = FilaAzure;
+
+    /// <summary>O client id da identidade gerenciada da API atribuída ao usuário (não é segredo); vazio é a do sistema.</summary>
+    public string IdentidadeClientId { get; set; } = string.Empty;
+
+    /// <summary>O Azure Resource Manager, de onde sai a chave da conta da fila (<c>listKeys</c>).</summary>
+    public string UrlDoArm { get; set; } = "https://management.azure.com/";
+
+    /// <summary>A chave da conta fica na memória da API por este tempo (nunca no banco nem no log).</summary>
+    public int ChaveEmCacheMinutos { get; set; } = 10;
+
+    /// <summary>O TTL do comando sem <c>ttlSegundos</c>: sem o recebimento até lá, ele volta como expirado.</summary>
+    public int TtlPadraoSegundos { get; set; } = 900;
+
+    public int TtlMinimoSegundos { get; set; } = 60;
+
+    public int TtlMaximoSegundos { get; set; } = 86400;
+
+    /// <summary>A validade da SAS de consumo que o serviço da máquina pede (de 1 a 60).</summary>
+    public int SasMinutos { get; set; } = 15;
+
+    /// <summary>
+    /// Quantos comandos um mesmo usuário manda por hora, contados no SQL (vale entre instâncias da API); acima, 429. Cada
+    /// mensagem remota pode abrir um turno do agente — é o custo que o limite segura.
+    /// </summary>
+    public int ComandosPorHora { get; set; } = 30;
+
+    /// <summary>Quantas escritas da conversa (comando, SAS, recebimento, resposta) um mesmo usuário faz por minuto; acima, 429.</summary>
+    public int EnviosDaConversaPorMinuto { get; set; } = 60;
+
+    /// <summary>
+    /// Quantas falas do chat do dev.kit um mesmo usuário envia por minuto; acima, 429. Separado das escritas da conversa: o
+    /// espelho do chat do desktop não come o limite do comando do site nem o da resposta.
+    /// </summary>
+    public int FalasPorMinuto { get; set; } = 60;
+
+    /// <summary>O comando, a resposta, a fala e o evento da conversa mais velhos que isto saem do banco no expurgo diário.</summary>
+    public int RetencaoDaConversaDias { get; set; } = 30;
+
+    /// <summary>De quanto em quanto tempo o SSE relê o SQL sem aviso (o aviso desta instância acorda antes).</summary>
+    public int IntervaloDoSseSegundos { get; set; } = 3;
+
+    /// <summary>Quanto tempo um SSE fica aberto; depois ele fecha, e o site reconecta com o <c>Last-Event-ID</c>.</summary>
+    public int DuracaoDoSseSegundos { get; set; } = 300;
+}
+
+/// <summary>
+/// A provisão no Azure (seção <c>Provisao</c>): o que a API aceita no pedido e o que o worker segue ao executar. A API só
+/// grava o pedido; quem tem a permissão no Azure é o worker (<c>DevKitPage.Provisao</c>), com a identidade gerenciada dele.
+/// </summary>
+public sealed class OpcoesDaProvisao
+{
+    public const string Secao = "Provisao";
+
+    /// <summary>As regiões aceitas; vazia é <see cref="RegrasDaProvisao.RegioesPadrao"/> (o binder ACRESCENTA a uma lista com valor inicial).</summary>
+    public string[] Regioes { get; set; } = [];
+
+    /// <summary>A região sugerida; fora de <see cref="Regioes"/>, vale a primeira delas.</summary>
+    public string RegiaoPadrao { get; set; } = "brazilsouth";
+
+    /// <summary>A cota de filas ATIVAS (não removidas) por usuário.</summary>
+    public int MaximoDeFilasPorUsuario { get; set; } = 1;
+
+    /// <summary>
+    /// Os planos da empresa (<c>Empresa.Plano</c>) que liberam a provisão sem a permissão do admin — o tier de assinatura,
+    /// quando existir. Vazio: só a permissão libera.
+    /// </summary>
+    public string[] PlanosQueLiberam { get; set; } = [];
+
+    /// <summary>Quantos pedidos (criar, repetir, remover) um mesmo usuário faz por hora; acima disto, 429.</summary>
+    public int PedidosPorHora { get; set; } = 20;
+
+    /// <summary>Quantas execuções o worker faz da mesma operação antes de dar a falha transitória como definitiva.</summary>
+    public int MaximoDeTentativas { get; set; } = 5;
+
+    /// <summary>A espera depois da primeira falha transitória; dobra a cada tentativa, até <see cref="EsperaMaximaSegundos"/>.</summary>
+    public int EsperaInicialSegundos { get; set; } = 30;
+
+    public int EsperaMaximaSegundos { get; set; } = 900;
+
+    /// <summary>Por quanto tempo uma execução fica reservada a um worker: passou disto, outro a retoma (o worker caiu).</summary>
+    public int ReservaMinutos { get; set; } = 10;
+
+    /// <summary>O prefixo do grupo de recursos do usuário: <c>rg-devkit-u{id}</c>.</summary>
+    public string PrefixoDoGrupo { get; set; } = "rg-devkit-u";
+}
+
+/// <summary>
 /// O design compartilhado (seção <c>Design</c>, US #669): onde as imagens ficam e o teto de cada plano. As imagens vão
 /// para o Azure Blob Storage em produção (<see cref="Armazem"/> <c>blob</c>, com a conexão do Key Vault) e para uma pasta
 /// em desenvolvimento e nos testes.
