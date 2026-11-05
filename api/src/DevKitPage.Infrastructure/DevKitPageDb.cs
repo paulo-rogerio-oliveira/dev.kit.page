@@ -40,6 +40,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ProjetoDeDesign> ProjetosDeDesign => Set<ProjetoDeDesign>();
     public DbSet<TelaDeDesign> TelasDeDesign => Set<TelaDeDesign>();
     public DbSet<VersaoDeDesign> VersoesDeDesign => Set<VersaoDeDesign>();
+    public DbSet<AcessoAoProjeto> AcessosAosProjetos => Set<AcessoAoProjeto>();
     public DbSet<HistoricoDeLicenca> HistoricosDeLicenca => Set<HistoricoDeLicenca>();
     public DbSet<FotoDeEstado> FotosDeEstado => Set<FotoDeEstado>();
     public DbSet<HistoricoDeItemDoCatalogo> HistoricosDeItemDoCatalogo => Set<HistoricoDeItemDoCatalogo>();
@@ -181,6 +182,20 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(p => new { p.UsuarioId, p.AtualizadoEmUtc });
             e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(p => p.Telas).WithOne(t => t.Projeto).HasForeignKey(t => t.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Acessos).WithOne(a => a.Projeto).HasForeignKey(a => a.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Os acessos ao projeto de design: o dono (ProjetosDeDesign.DonoId) concede leitor ou editor. No Azure SQL, a
+        // tabela e a coluna do dono vêm de api/scripts/sqlserver/DesignAcesso.sql.
+        modelBuilder.Entity<AcessoAoProjeto>(e =>
+        {
+            e.ToTable("AcessosAosProjetos", t => t.HasCheckConstraint("CK_AcessosAosProjetos_Recurso",
+                "(ProjetoId IS NOT NULL AND ProjetoEmOndasId IS NULL) OR (ProjetoId IS NULL AND ProjetoEmOndasId IS NOT NULL)"));
+            e.Property(a => a.Papel).HasMaxLength(10);
+            e.HasIndex(a => new { a.ProjetoId, a.UsuarioId }).IsUnique();
+            e.HasIndex(a => new { a.ProjetoEmOndasId, a.UsuarioId }).IsUnique();
+            e.HasIndex(a => a.UsuarioId);
+            e.HasOne(a => a.Usuario).WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<TelaDeDesign>(e =>
@@ -233,6 +248,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(p => p.Empresa).WithMany().HasForeignKey(p => p.EmpresaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(p => p.Autor).WithMany().HasForeignKey(p => p.AutorId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(p => p.Itens).WithOne(i => i.Projeto).HasForeignKey(i => i.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(p => p.Acessos).WithOne(a => a.ProjetoEmOndas).HasForeignKey(a => a.ProjetoEmOndasId).OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<ItemDeProjetoCompartilhado>(e =>

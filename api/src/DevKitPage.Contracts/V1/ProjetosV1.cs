@@ -21,7 +21,7 @@ public sealed record ProjetoV1(
     string DestinoDaPr, string Situacao, int Versao, string Autor, DateTimeOffset AtualizadoEm,
     IReadOnlyList<ItemDoProjetoV1> Itens, bool PodeApagar,
     int FeatureId = 0, int EpicId = 0, string Iteracao = "", string Board = "",
-    IReadOnlyList<string>? BranchesDasTasks = null, DateTimeOffset? AlteradoEm = null);
+    IReadOnlyList<string>? BranchesDasTasks = null, DateTimeOffset? AlteradoEm = null, string Papel = "");
 
 public static class ProjetosV1
 {

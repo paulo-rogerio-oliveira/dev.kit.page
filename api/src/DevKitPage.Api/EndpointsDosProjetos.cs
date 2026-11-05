@@ -9,6 +9,7 @@ public static class EndpointsDosProjetos
     public static void MapearProjetos(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
+        grupo.MapearAcessosDosProjetos();
         grupo.MapGet("", (string? time, DateTimeOffset? desde, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => ComEscopo(quem, async e => Results.Ok(await projetos.ListarAsync(e, time, desde, ct))));
         grupo.MapGet("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)

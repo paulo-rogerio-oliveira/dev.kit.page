@@ -20,6 +20,7 @@ BEGIN
         [Chave] nvarchar(400) NOT NULL,
         [CriadoEmUtc] datetime2 NOT NULL,
         [AtualizadoEmUtc] datetime2 NOT NULL,
+        [DonoId] int NOT NULL DEFAULT 0,
         CONSTRAINT [PK_ProjetosDeDesign] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_ProjetosDeDesign_Empresas_EmpresaId] FOREIGN KEY ([EmpresaId]) REFERENCES [dbo].[Empresas] ([Id]) ON DELETE CASCADE
     );

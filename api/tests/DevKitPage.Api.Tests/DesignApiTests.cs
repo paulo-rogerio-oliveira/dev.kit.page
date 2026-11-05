@@ -71,6 +71,21 @@ public sealed class DesignApiTests : IDisposable
     private static async Task<ProjetoDeDesignV1[]> ProjetosAsync(HttpClient cliente, string consulta = "")
         => (await cliente.GetFromJsonAsync<ProjetoDeDesignV1[]>("/api/design/projetos" + consulta))!;
 
+    /// <summary>O dono concede o acesso (o usuário pelo login/e-mail) e devolve a resposta.</summary>
+    private static Task<HttpResponseMessage> ConcederAsync(HttpClient dono, long projeto, string usuario, string papel)
+        => dono.PostAsJsonAsync($"/api/design/projetos/{projeto}/acessos", new ConcessaoDeAcessoV1(usuario, papel));
+
+    private static async Task<AcessosDoDesignV1> AcessosAsync(HttpClient cliente, long projeto)
+        => (await cliente.GetFromJsonAsync<AcessosDoDesignV1>($"/api/design/projetos/{projeto}/acessos"))!;
+
+    /// <summary>A Ana envia a primeira versão do repositório (fica dona do projeto) e devolve o número do projeto.</summary>
+    private static async Task<long> ProjetoDaAnaAsync(HttpClient ana, string tela = "home", string? nivel = null)
+    {
+        var resposta = await ana.PostAsync("/api/design/versoes", Envio(tela, Png(semente: 41), nivel: nivel));
+        Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+        return (await resposta.Content.ReadFromJsonAsync<VersaoEnviadaV1>())!.Projeto;
+    }
+
     [Fact]
     public async Task A_versao_enviada_fica_no_projeto_do_repositorio_com_o_branch_como_atributo_e_o_link_estavel()
     {
@@ -89,12 +104,14 @@ public sealed class DesignApiTests : IDisposable
         var outroBranch = await ana.PostAsync("/api/design/versoes", Envio("checkout", Png(semente: 2), tipo: "proposta", basis: 1,
             repositorio: "git@github.com:Acme/Portal.git", branch: "feature/dev/semana4"));
         Assert.Equal(HttpStatusCode.Created, outroBranch.StatusCode);
-        var projeto = Assert.Single(await ProjetosAsync(bia));
-        Assert.Equal(("github.com/acme/portal", "empresa"), (projeto.Chave, projeto.Nivel));
+        var projeto = Assert.Single(await ProjetosAsync(ana));
+        Assert.Equal(("github.com/acme/portal", "empresa", "dono", "Nome de ana@a.com"), (projeto.Chave, projeto.Nivel, projeto.Papel, projeto.Dono));
         Assert.Equal(new[] { ("feature/dev/semana5", 1), ("feature/dev/semana4", 2) },
             Assert.Single(projeto.Telas).Versoes.Select(v => (v.Branch, v.Numero)));
 
-        // O link estável devolve o PNG para quem vê o projeto.
+        // O link estável devolve o PNG para quem tem acesso ao projeto — a colega, só depois que a dona lhe dá acesso.
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync(enviada.Versao.Link)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ConcederAsync(ana, enviada.Projeto, "bia@a.com", "leitor")).StatusCode);
         var imagem = await bia.GetAsync(enviada.Versao.Link);
         Assert.Equal(HttpStatusCode.OK, imagem.StatusCode);
         Assert.Equal("image/png", imagem.Content.Headers.ContentType!.MediaType);
@@ -102,7 +119,7 @@ public sealed class DesignApiTests : IDisposable
     }
 
     [Fact]
-    public async Task A_visibilidade_segue_o_escopo_do_contexto_usuario_equipe_empresa_e_outra_empresa()
+    public async Task A_visibilidade_e_o_acesso_o_dono_e_quem_ele_autorizou_e_o_nivel_so_filtra_o_time()
     {
         var (ana, bia, gestor, caio) = await EmpresasAsync();
         await ana.PostAsync("/api/design/versoes", Envio("empresa", Png(semente: 1), nivel: "empresa"));
@@ -111,17 +128,31 @@ public sealed class DesignApiTests : IDisposable
 
         static string[] Niveis(ProjetoDeDesignV1[] projetos) => projetos.Select(p => p.Nivel).Order().ToArray();
 
-        Assert.Equal(new[] { "empresa", "time", "usuario" }, Niveis(await ProjetosAsync(ana)));
-        // A colega vê o da empresa e o do time (sem time declarado, todos — o site); o da Ana, não.
-        Assert.Equal(new[] { "empresa", "time" }, Niveis(await ProjetosAsync(bia)));
-        Assert.Equal(new[] { "empresa", "time" }, Niveis(await ProjetosAsync(bia, "?time=vendas")));
-        Assert.Equal(new[] { "empresa" }, Niveis(await ProjetosAsync(bia, "?time=suporte")));
-        Assert.Equal(new[] { "empresa", "time" }, Niveis(await ProjetosAsync(gestor)));
-        // A outra empresa não vê nada — nem pelo link.
+        var daAna = await ProjetosAsync(ana);
+        Assert.Equal(new[] { "empresa", "time", "usuario" }, Niveis(daAna));
+        Assert.All(daAna, p => Assert.Equal("dono", p.Papel));
+        // Sem acesso, a colega e o gestor da mesma empresa não veem nada — nem pelo link, nem pelo número.
+        Assert.Empty(await ProjetosAsync(bia));
+        Assert.Empty(await ProjetosAsync(gestor));
+        var daEmpresa = daAna.Single(p => p.Nivel == "empresa");
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync(daEmpresa.Telas[0].Versoes[0].Link)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync($"/api/design/projetos/{daEmpresa.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync($"/api/design/projetos/{daEmpresa.Id}/acessos")).StatusCode);
+
+        // Com o acesso, ela vê o que a dona liberou, com o papel; o time declarado ainda filtra o nível time.
+        foreach (var p in daAna)
+            Assert.Equal(HttpStatusCode.OK, (await ConcederAsync(ana, p.Id, "bia@a.com", "leitor")).StatusCode);
+        Assert.Equal(new[] { "empresa", "time", "usuario" }, Niveis(await ProjetosAsync(bia)));
+        Assert.All(await ProjetosAsync(bia), p => Assert.Equal(("leitor", "Nome de ana@a.com"), (p.Papel, p.Dono)));
+        Assert.Equal(new[] { "empresa", "time", "usuario" }, Niveis(await ProjetosAsync(bia, "?time=vendas")));
+        Assert.Equal(new[] { "empresa", "usuario" }, Niveis(await ProjetosAsync(bia, "?time=suporte")));
+        Assert.Empty(await ProjetosAsync(gestor));
+
+        // A outra empresa não ganha acesso nem vê nada — nem pelo link.
+        Assert.Equal(HttpStatusCode.NotFound, (await ConcederAsync(ana, daEmpresa.Id, "caio@b.com", "leitor")).StatusCode);
         Assert.Empty(await ProjetosAsync(caio));
-        var daAna = (await ProjetosAsync(ana)).Single(p => p.Nivel == "empresa");
-        Assert.Equal(HttpStatusCode.NotFound, (await caio.GetAsync(daAna.Telas[0].Versoes[0].Link)).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await caio.GetAsync($"/api/design/projetos/{daAna.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await caio.GetAsync(daEmpresa.Telas[0].Versoes[0].Link)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await caio.GetAsync($"/api/design/projetos/{daEmpresa.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _api.CreateClient().GetAsync("/api/design/projetos")).StatusCode);
         // O time sem nome é recusado.
         Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsync("/api/design/versoes", Envio("x", Png(semente: 4), nivel: "time"))).StatusCode);
@@ -172,11 +203,18 @@ public sealed class DesignApiTests : IDisposable
         var (ana, bia, gestor, _) = await EmpresasAsync();
         var v1 = (await (await ana.PostAsync("/api/design/versoes", Envio("perfil", Png(semente: 1)))).Content.ReadFromJsonAsync<VersaoEnviadaV1>())!;
         var v2 = (await (await ana.PostAsync("/api/design/versoes", Envio("perfil", Png(semente: 2)))).Content.ReadFromJsonAsync<VersaoEnviadaV1>())!;
+        await ConcederAsync(ana, v1.Projeto, "bia@a.com", "editor");
+        await ConcederAsync(ana, v1.Projeto, "gestor.a", "leitor");
 
         var daBia = Assert.Single(await ProjetosAsync(bia)).Telas[0].Versoes;
         Assert.All(daBia, v => Assert.False(v.PodeApagar));
         Assert.Equal(HttpStatusCode.Forbidden, (await bia.DeleteAsync(v1.Versao.Link)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ana.DeleteAsync(v1.Versao.Link)).StatusCode);
+        Assert.False(Assert.Single(Assert.Single(await ProjetosAsync(gestor)).Telas[0].Versoes).PodeApagar);
+        Assert.Equal(HttpStatusCode.Forbidden, (await gestor.DeleteAsync(v2.Versao.Link)).StatusCode);
+        var acessoDoGestor = (await AcessosAsync(ana, v2.Projeto)).Acessos.Single(a => a.Usuario.Login == "gestor.a");
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync($"/api/design/projetos/{v2.Projeto}/acessos/{acessoDoGestor.Usuario.Id}",
+            new ConcessaoDeAcessoV1(null, "editor"))).StatusCode);
         Assert.True(Assert.Single(Assert.Single(await ProjetosAsync(gestor)).Telas[0].Versoes).PodeApagar);
         Assert.Equal(HttpStatusCode.OK, (await gestor.DeleteAsync(v2.Versao.Link)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await gestor.DeleteAsync(v2.Versao.Link)).StatusCode);
@@ -190,11 +228,17 @@ public sealed class DesignApiTests : IDisposable
     public async Task A_sincronizacao_incremental_traz_so_os_projetos_alterados_desde_a_ultima()
     {
         var (ana, bia, _, _) = await EmpresasAsync();
-        await ana.PostAsync("/api/design/versoes", Envio("a", Png(semente: 1), repositorio: "https://github.com/acme/um"));
+        var um = (await (await ana.PostAsync("/api/design/versoes", Envio("a", Png(semente: 1), repositorio: "https://github.com/acme/um")))
+            .Content.ReadFromJsonAsync<VersaoEnviadaV1>())!.Projeto;
+        await ConcederAsync(ana, um, "bia@a.com", "leitor");
         var marco = Assert.Single(await ProjetosAsync(bia)).AtualizadoEm;
 
         Assert.Empty(await ProjetosAsync(bia, $"?desde={Uri.EscapeDataString(marco.ToString("O"))}"));
-        await ana.PostAsync("/api/design/versoes", Envio("b", Png(semente: 2), repositorio: "https://github.com/acme/dois"));
+        var dois = (await (await ana.PostAsync("/api/design/versoes", Envio("b", Png(semente: 2), repositorio: "https://github.com/acme/dois")))
+            .Content.ReadFromJsonAsync<VersaoEnviadaV1>())!.Projeto;
+        // O projeto novo só chega à colega com o acesso: a concessão conta como alteração para a sincronização dela.
+        Assert.Empty(await ProjetosAsync(bia, $"?desde={Uri.EscapeDataString(marco.ToString("O"))}"));
+        await ConcederAsync(ana, dois, "bia@a.com", "leitor");
         var novos = await ProjetosAsync(bia, $"?desde={Uri.EscapeDataString(marco.ToString("O"))}");
         Assert.Equal("github.com/acme/dois", Assert.Single(novos).Chave);
     }
@@ -215,5 +259,101 @@ public sealed class DesignApiTests : IDisposable
 
         var uso = (await ana.GetFromJsonAsync<UsoDoDesignV1>("/api/design/uso"))!;
         Assert.Equal((2, 2, "Empresarial"), (uso.Versoes, uso.TetoDeVersoes, uso.Plano));
+    }
+
+    [Fact]
+    public async Task O_dono_concede_altera_e_remove_o_acesso_e_so_ele_gere()
+    {
+        var (ana, bia, gestor, _) = await EmpresasAsync();
+        var projeto = await ProjetoDaAnaAsync(ana);
+
+        // O dono vê os candidatos da empresa (os outros, sem ele); ninguém tem acesso ainda.
+        var inicio = await AcessosAsync(ana, projeto);
+        Assert.Equal(("ana@a.com", "dono"), (inicio.Dono!.Login, inicio.Papel));
+        Assert.Empty(inicio.Acessos);
+        Assert.Equal(new[] { "bia@a.com", "gestor.a" }, inicio.Candidatos.Select(c => c.Login));
+
+        var concedido = await ConcederAsync(ana, projeto, "BIA@a.com", "leitor");
+        Assert.Equal(HttpStatusCode.OK, concedido.StatusCode);
+        var daBia = Assert.Single((await concedido.Content.ReadFromJsonAsync<AcessosDoDesignV1>())!.Acessos);
+        Assert.Equal(("bia@a.com", "leitor"), (daBia.Usuario.Login, daBia.Papel));
+        // De novo é conflito; papel torto e o próprio dono, recusa.
+        Assert.Equal(HttpStatusCode.Conflict, (await ConcederAsync(ana, projeto, "bia@a.com", "editor")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ConcederAsync(ana, projeto, "gestor.a", "dono")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ConcederAsync(ana, projeto, "ana@a.com", "editor")).StatusCode);
+
+        // A leitora vê a lista, mas não a gere — e a recusa diz quem é o dono; os candidatos só o dono vê.
+        var vistoPelaBia = await AcessosAsync(bia, projeto);
+        Assert.Equal(("leitor", 0), (vistoPelaBia.Papel, vistoPelaBia.Candidatos.Count));
+        var proibido = await ConcederAsync(bia, projeto, "gestor.a", "leitor");
+        Assert.Equal(HttpStatusCode.Forbidden, proibido.StatusCode);
+        Assert.Contains("Só o dono do projeto (Nome de ana@a.com)", await proibido.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.Forbidden, (await bia.DeleteAsync($"/api/design/projetos/{projeto}/acessos/{daBia.Usuario.Id}")).StatusCode);
+
+        // O dono muda o papel e remove; quem saiu volta a não ver o projeto.
+        var alterado = await ana.PutAsJsonAsync($"/api/design/projetos/{projeto}/acessos/{daBia.Usuario.Id}", new ConcessaoDeAcessoV1(null, "editor"));
+        Assert.Equal("editor", Assert.Single((await alterado.Content.ReadFromJsonAsync<AcessosDoDesignV1>())!.Acessos).Papel);
+        Assert.Equal("editor", Assert.Single(await ProjetosAsync(bia)).Papel);
+        Assert.Equal(HttpStatusCode.OK, (await ana.DeleteAsync($"/api/design/projetos/{projeto}/acessos/{daBia.Usuario.Id}")).StatusCode);
+        Assert.Empty(await ProjetosAsync(bia));
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.DeleteAsync($"/api/design/projetos/{projeto}/acessos/{daBia.Usuario.Id}")).StatusCode);
+        Assert.Empty(await ProjetosAsync(gestor));
+    }
+
+    [Fact]
+    public async Task O_leitor_e_quem_nao_tem_acesso_nao_enviam_e_a_recusa_diz_o_usuario_o_projeto_e_o_papel()
+    {
+        var (ana, bia, gestor, _) = await EmpresasAsync();
+        var projeto = await ProjetoDaAnaAsync(ana);
+
+        // Sem acesso: 403 com o motivo, no lugar do conflito sem causa — e nada é gravado.
+        var semAcesso = await bia.PostAsync("/api/design/versoes", Envio("home", Png(semente: 50)));
+        Assert.Equal(HttpStatusCode.Forbidden, semAcesso.StatusCode);
+        var motivo = await semAcesso.Content.ReadAsStringAsync();
+        Assert.Contains("O usuário bia@a.com não pode enviar versões ao projeto de design https://github.com/acme/portal", motivo);
+        Assert.Contains("exige o papel editor", motivo);
+        Assert.Contains("não tem acesso ao projeto", motivo);
+        Assert.Contains("Peça ao dono (Nome de ana@a.com)", motivo);
+
+        // Leitora: vê e baixa, mas não envia.
+        await ConcederAsync(ana, projeto, "bia@a.com", "leitor");
+        var leitora = await bia.PostAsync("/api/design/versoes", Envio("home", Png(semente: 51)));
+        Assert.Equal(HttpStatusCode.Forbidden, leitora.StatusCode);
+        Assert.Contains("tem o papel leitor", await leitora.Content.ReadAsStringAsync());
+        Assert.Single(Assert.Single(await ProjetosAsync(bia)).Telas[0].Versoes);
+
+        // Editora: envia, e a versão fica no projeto da dona.
+        var daBia = Assert.Single((await AcessosAsync(ana, projeto)).Acessos).Usuario.Id;
+        await ana.PutAsJsonAsync($"/api/design/projetos/{projeto}/acessos/{daBia}", new ConcessaoDeAcessoV1(null, "editor"));
+        var editora = await bia.PostAsync("/api/design/versoes", Envio("home", Png(semente: 52)));
+        Assert.Equal(HttpStatusCode.Created, editora.StatusCode);
+        Assert.Equal(projeto, (await editora.Content.ReadFromJsonAsync<VersaoEnviadaV1>())!.Projeto);
+
+        // O gestor também precisa do acesso para enviar.
+        Assert.Equal(HttpStatusCode.Forbidden, (await gestor.PostAsync("/api/design/versoes", Envio("home", Png(semente: 53)))).StatusCode);
+    }
+
+    [Fact]
+    public async Task O_dono_nao_se_remove_e_a_transferencia_exige_a_confirmacao_e_o_deixa_editor()
+    {
+        var (ana, bia, _, _) = await EmpresasAsync();
+        var projeto = await ProjetoDaAnaAsync(ana);
+        var dona = (await AcessosAsync(ana, projeto)).Dono!;
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.DeleteAsync($"/api/design/projetos/{projeto}/acessos/{dona.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync($"/api/design/projetos/{projeto}/acessos/{dona.Id}", new ConcessaoDeAcessoV1(null, "leitor"))).StatusCode);
+
+        var semConfirmar = await ana.PostAsJsonAsync($"/api/design/projetos/{projeto}/dono", new TransferenciaDeDonoV1("bia@a.com", false));
+        Assert.Equal(HttpStatusCode.BadRequest, semConfirmar.StatusCode);
+        Assert.Contains("confirmação explícita", await semConfirmar.Content.ReadAsStringAsync());
+        Assert.Equal("dono", (await AcessosAsync(ana, projeto)).Papel);
+
+        var transferido = await ana.PostAsJsonAsync($"/api/design/projetos/{projeto}/dono", new TransferenciaDeDonoV1("bia@a.com", true));
+        Assert.Equal(HttpStatusCode.OK, transferido.StatusCode);
+        var depois = await AcessosAsync(bia, projeto);
+        Assert.Equal(("bia@a.com", "dono"), (depois.Dono!.Login, depois.Papel));
+        Assert.Equal(new[] { ("ana@a.com", "editor") }, depois.Acessos.Select(a => (a.Usuario.Login, a.Papel)));
+        // A antiga dona não gere mais.
+        Assert.Equal(HttpStatusCode.Forbidden, (await ConcederAsync(ana, projeto, "gestor.a", "leitor")).StatusCode);
     }
 }

@@ -86,7 +86,8 @@ public sealed class Us693Tests
             db.ProjetosCompartilhados.Add(new ProjetoCompartilhado
             {
                 Slug = "anterior", Nome = "Projeto anterior", Nivel = "usuario", Espaco = $"usuario:{usuario.Id}",
-                UsuarioId = usuario.Id, AutorId = usuario.Id, Versao = 3, Documento = "",
+                // A migration de acesso já preencheu o dono neste cenário de snapshot relacional.
+                UsuarioId = usuario.Id, AutorId = usuario.Id, DonoId = usuario.Id, Versao = 3, Documento = "",
                 Branch = "feature/dev/projeto-anterior", Repositorios = "https://github.com/acme/portal",
                 Paralelismo = 2, Situacao = "aprovado",
                 Itens = [new() { Numero = 1, Titulo = "Item existente", Situacao = "integrado" }]
