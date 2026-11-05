@@ -4,7 +4,7 @@ import type {
   ItemDaEmpresa, ItemEditado, ItemEditavel, LoginResponse, MaquinaResumo, Mensagem, Pagina, PedidoDeDemonstracao, PedidoDeDemonstracaoCriado,
   NivelDeConvencao, PublicacaoDoCatalogo, QualidadeResposta, QuantidadeResposta, RecorteDoLog, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa,
   EstadoDoRelato, FiltroDeRelatos, MeuRelato, RelatoDetalhe, RelatoNovo, RelatoRecebido, RelatoResumo,
-  ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
+  AcessosDoDesign, AcessosDoProjeto, PapelDeAcessoAoDesign, ProjetoDeDesign, RoiResposta, UsoDoDesign, UsuarioComSenha,
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta, AssinanteDoItem,
@@ -123,6 +123,9 @@ function consulta(filtro: Filtro, extra: Record<string, string> = {}): string {
 function preenchidos(valores: Record<string, string | null | undefined>): Record<string, string> {
   return Object.fromEntries(Object.entries(valores).filter((par): par is [string, string] => !!par[1]?.trim()));
 }
+
+const rotaDosAcessos = (recurso: 'design' | 'projeto', projeto: number) =>
+  `${recurso === 'design' ? '/api/design/projetos' : '/api/projetos'}/${projeto}/acessos`;
 
 export const api = {
   conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
@@ -391,6 +394,27 @@ export const api = {
   imagemDeDesign: async (token: string, link: string) => (await requisitar(link, { token, aceita: 'image/png' })).blob(),
 
   apagarVersaoDeDesign: (token: string, link: string) => chamar<unknown>(link, { metodo: 'DELETE', token }),
+
+  acessosDoRecurso: (token: string, recurso: 'design' | 'projeto', projeto: number) =>
+    chamar<AcessosDoDesign | AcessosDoProjeto>(rotaDosAcessos(recurso, projeto), { token }),
+  concederAcessoAoRecurso: (token: string, recurso: 'design' | 'projeto', projeto: number, usuario: string, papel: PapelDeAcessoAoDesign) =>
+    chamar<AcessosDoDesign | AcessosDoProjeto>(rotaDosAcessos(recurso, projeto), { metodo: 'POST', corpo: { usuario, papel }, token }),
+  alterarPapelNoRecurso: (token: string, recurso: 'design' | 'projeto', projeto: number, usuario: number, papel: PapelDeAcessoAoDesign) =>
+    chamar<AcessosDoDesign | AcessosDoProjeto>(`${rotaDosAcessos(recurso, projeto)}/${usuario}`, { metodo: 'PUT', corpo: { papel }, token }),
+  removerAcessoAoRecurso: (token: string, recurso: 'design' | 'projeto', projeto: number, usuario: number) =>
+    chamar<AcessosDoDesign | AcessosDoProjeto>(`${rotaDosAcessos(recurso, projeto)}/${usuario}`, { metodo: 'DELETE', token }),
+
+  // O acesso ao projeto de design: quem tem acesso lê; só o dono concede (leitor ou editor), muda o papel e remove.
+  acessosDoDesign: (token: string, projeto: number) => chamar<AcessosDoDesign>(`/api/design/projetos/${projeto}/acessos`, { token }),
+
+  concederAcessoAoDesign: (token: string, projeto: number, usuario: string, papel: PapelDeAcessoAoDesign) =>
+    chamar<AcessosDoDesign>(`/api/design/projetos/${projeto}/acessos`, { metodo: 'POST', corpo: { usuario, papel }, token }),
+
+  alterarPapelNoDesign: (token: string, projeto: number, usuario: number, papel: PapelDeAcessoAoDesign) =>
+    chamar<AcessosDoDesign>(`/api/design/projetos/${projeto}/acessos/${usuario}`, { metodo: 'PUT', corpo: { papel }, token }),
+
+  removerAcessoAoDesign: (token: string, projeto: number, usuario: number) =>
+    chamar<AcessosDoDesign>(`/api/design/projetos/${projeto}/acessos/${usuario}`, { metodo: 'DELETE', token }),
 
   // A gestão de usuários (US #405) — só o admin.
   usuarios: (token: string) => chamar<UsuarioResumo[]>('/api/usuarios', { token }),

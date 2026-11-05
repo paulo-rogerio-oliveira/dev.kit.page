@@ -4,7 +4,7 @@ import type {
   CatalogoNomeado, ColaboradorResumo, Conta, ConvencaoDaEmpresa, DemonstracaoResumo, EmpresaDoGestor, EmpresaResumo, GrupoDeErroDetalhe, GrupoDeErroResumo,
   ItemDaEmpresa, ItemEditavel, LoginResponse, MaquinaResumo, Pagina, EventoDoLog, PedidoDeDemonstracao, QualidadeResposta, QuantidadeResposta,
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
-  ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
+  AcessosDoDesign, PapelDeAcessoAoDesign, ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
   AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
   EventoDaProvisao, PermissaoDeProvisao, RecursoProvisionado,
 } from '../api/tipos';
@@ -380,7 +380,7 @@ const versaoDeDesign = (numero: number, tipo: 'captura' | 'proposta', extra: Par
  */
 export const projetosDeDesign: ProjetoDeDesign[] = [
   {
-    id: 7, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'empresa', time: '', dono: '', atualizadoEm: '2026-10-23T16:40:00Z',
+    id: 7, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'empresa', time: '', dono: 'Gestor A', papel: 'dono', atualizadoEm: '2026-10-23T16:40:00Z',
     telas: [
       {
         id: 'checkout', nome: 'Checkout', estado: '', versoes: [
@@ -397,10 +397,26 @@ export const projetosDeDesign: ProjetoDeDesign[] = [
     ],
   },
   {
-    id: 9, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'usuario', time: '', dono: 'Ana Souza', atualizadoEm: '2026-10-22T10:00:00Z',
+    id: 9, repositorio: 'https://github.com/acme/portal', chave: 'github.com/acme/portal', nivel: 'usuario', time: '', dono: 'Ana Souza', papel: 'leitor', atualizadoEm: '2026-10-22T10:00:00Z',
     telas: [{ id: 'rascunho', nome: 'Rascunho', estado: '', versoes: [versaoDeDesign(1, 'proposta', { link: '/api/design/9/rascunho/v1', podeApagar: true })] }],
   },
 ];
+
+/**
+ * Os acessos dos projetos de design, como o gestor da Empresa A os vê: no 7 ele é o DONO (a Ana editora, a Bia
+ * candidata); no 9, do nível usuário da Ana, ele é leitor — sem candidatos nem controles.
+ */
+export const acessosDoDesign = (projeto: number): AcessosDoDesign => projeto === 7
+  ? {
+    projeto: 7, repositorio: 'https://github.com/acme/portal', dono: { id: 5, login: 'gestor.a', nome: 'Gestor A' }, papel: 'dono',
+    acessos: [{ usuario: { id: 2, login: 'ana@empresa.com', nome: 'Ana Souza' }, papel: 'editor', concedidoEm: '2026-11-05T09:00:00Z' }],
+    candidatos: [{ id: 3, login: 'bia@empresa.com', nome: '' }],
+  }
+  : {
+    projeto, repositorio: 'https://github.com/acme/portal', dono: { id: 2, login: 'ana@empresa.com', nome: 'Ana Souza' }, papel: 'leitor',
+    acessos: [{ usuario: { id: 5, login: 'gestor.a', nome: 'Gestor A' }, papel: 'leitor', concedidoEm: '2026-11-05T09:00:00Z' }],
+    candidatos: [],
+  };
 
 export const usoDoDesign: UsoDoDesign = { versoes: 37, tetoDeVersoes: 500, bytes: 48 * 1_048_576, tetoDeBytes: 2048 * 1_048_576, plano: 'Empresarial' };
 
@@ -809,6 +825,29 @@ export const handlersPadrao = [
   http.get(`${API}/api/design/projetos/:id`, ({ params }) => {
     const projeto = projetosDeDesign.find((p) => String(p.id) === params.id);
     return projeto ? HttpResponse.json(projeto) : HttpResponse.json({ detail: 'Projeto de design não encontrado.' }, { status: 404 });
+  }),
+  // O acesso ao projeto de design: o GET do estado de cada projeto, e as escritas do dono devolvem o estado depois delas.
+  http.get(`${API}/api/design/projetos/:id/acessos`, ({ params }) => HttpResponse.json(acessosDoDesign(Number(params.id)))),
+  http.post(`${API}/api/design/projetos/:id/acessos`, async ({ request, params }) => {
+    const corpo = await request.json() as { usuario: string; papel: PapelDeAcessoAoDesign };
+    escritas.push({ metodo: 'POST', caminho: `/api/design/projetos/${params.id}/acessos`, corpo });
+    const antes = acessosDoDesign(Number(params.id));
+    const alvo = antes.candidatos.find((c) => c.login === corpo.usuario)!;
+    return HttpResponse.json({
+      ...antes, acessos: [...antes.acessos, { usuario: alvo, papel: corpo.papel, concedidoEm: '2026-11-05T10:00:00Z' }],
+      candidatos: antes.candidatos.filter((c) => c.id !== alvo.id),
+    } satisfies AcessosDoDesign);
+  }),
+  http.put(`${API}/api/design/projetos/:id/acessos/:usuario`, async ({ request, params }) => {
+    const corpo = await request.json() as { papel: PapelDeAcessoAoDesign };
+    escritas.push({ metodo: 'PUT', caminho: `/api/design/projetos/${params.id}/acessos/${params.usuario}`, corpo });
+    const antes = acessosDoDesign(Number(params.id));
+    return HttpResponse.json({ ...antes, acessos: antes.acessos.map((a) => String(a.usuario.id) === params.usuario ? { ...a, papel: corpo.papel } : a) });
+  }),
+  http.delete(`${API}/api/design/projetos/:id/acessos/:usuario`, ({ params }) => {
+    escritas.push({ metodo: 'DELETE', caminho: `/api/design/projetos/${params.id}/acessos/${params.usuario}`, corpo: null });
+    const antes = acessosDoDesign(Number(params.id));
+    return HttpResponse.json({ ...antes, acessos: antes.acessos.filter((a) => String(a.usuario.id) !== params.usuario) });
   }),
   http.get(`${API}/api/design/uso`, () => HttpResponse.json(usoDoDesign)),
   http.get(`${API}/api/design/:projeto/:tela/:versao`, () =>

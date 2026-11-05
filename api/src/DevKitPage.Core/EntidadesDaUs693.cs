@@ -6,9 +6,12 @@ namespace DevKitPage.Core;
 /// <see cref="UsuarioId"/>, <see cref="Slug"/>). As listas (repositórios, anexos) vão uma por linha: são lidas e gravadas
 /// inteiras, e uma tabela para cada uma só multiplicaria o esquema.
 /// </summary>
-public sealed class ProjetoCompartilhado
+public sealed class ProjetoCompartilhado : IProjetoComAcessos
 {
     public long Id { get; set; }
+    public int DonoId { get; set; }
+    public List<AcessoAoProjeto> Acessos { get; set; } = [];
+    string IProjetoComAcessos.NomeDoAcesso => Nome;
 
     /// <summary>A empresa do projeto; nula para quem não tem empresa (o projeto fica no nível usuário).</summary>
     public int? EmpresaId { get; set; }

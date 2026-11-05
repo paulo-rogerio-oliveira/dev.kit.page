@@ -30,6 +30,7 @@ BEGIN
         [Situacao] nvarchar(20) NOT NULL,
         [Versao] int NOT NULL,
         [AutorId] int NOT NULL,
+        [DonoId] int NOT NULL CONSTRAINT [DF_ProjetosCompartilhados_DonoId] DEFAULT 0,
         [AtualizadoPorId] int NOT NULL,
         [CriadoEmUtc] datetime2 NOT NULL,
         [AtualizadoEmUtc] datetime2 NOT NULL,

@@ -14,7 +14,8 @@ namespace DevKitPage.Api;
 /// <item><c>GET /projetos?time=&amp;desde=</c>: os visíveis, com telas e versões — o <c>desde</c> é a sincronização
 /// incremental da abertura do dev.kit;</item>
 /// <item><c>POST /versoes</c> (multipart: os metadados e o PNG em <c>imagem</c>): 201 nova, 200 o reenvio do mesmo PNG,
-/// 409 o mesmo número com outro PNG, 413 o teto do plano;</item>
+/// 409 o mesmo número com outro PNG, 413 o teto do plano, 403 quem não é dono nem editor do projeto (com o motivo);</item>
+/// <item><c>/projetos/{id}/acessos</c> e <c>/projetos/{id}/dono</c>: o acesso ao projeto (<see cref="EndpointsDoAcessoAoDesign"/>);</item>
 /// <item><c>GET /{projeto}/{tela}/v{n}</c>: o PNG pelo LINK ESTÁVEL (o da PR da semana); <c>DELETE</c> no mesmo caminho,
 /// só o autor ou o gestor;</item>
 /// <item><c>GET /uso</c>: o uso do teto do plano.</item>
@@ -59,6 +60,7 @@ public static class EndpointsDaUs669
                     SituacaoDoEnvio.Repetida => Results.Ok(feito.Versao),
                     SituacaoDoEnvio.Conflito => Results.Problem(feito.Mensagem, statusCode: StatusCodes.Status409Conflict),
                     SituacaoDoEnvio.Teto => Results.Problem(feito.Mensagem, statusCode: StatusCodes.Status413PayloadTooLarge),
+                    SituacaoDoEnvio.Proibida => Results.Problem(feito.Mensagem, statusCode: StatusCodes.Status403Forbidden),
                     _ => Results.Problem(feito.Mensagem, statusCode: StatusCodes.Status400BadRequest),
                 };
             })).RequireRateLimiting(LimiteDeTaxa.PoliticaDoDesign);
@@ -78,10 +80,12 @@ public static class EndpointsDaUs669
         grupo.MapDelete("/{projeto:long}/{tela}/v{numero:int}", (long projeto, string tela, int numero, ClaimsPrincipal quem,
                 IDesignDaEmpresa design, CancellationToken ct)
             => ComEscopo(quem, async escopo => EndpointsDaUs425.Resultado(await design.ApagarAsync(escopo, projeto, tela, numero, ct))));
+
+        grupo.MapearAcessosDoDesign();
     }
 
     /// <summary>A ação com o escopo do design (qualquer usuário autenticado, com ou sem empresa); token torto, 403.</summary>
-    private static Task<IResult> ComEscopo(ClaimsPrincipal quem, Func<EscopoDoDesign, Task<IResult>> acao)
+    internal static Task<IResult> ComEscopo(ClaimsPrincipal quem, Func<EscopoDoDesign, Task<IResult>> acao)
         => Seguranca.EscopoDoDesign(quem) is { } escopo ? acao(escopo) : Task.FromResult(Results.Forbid());
 
     /// <summary>Os metadados do formulário; o erro de um número ou data ilegível vem à parte.</summary>

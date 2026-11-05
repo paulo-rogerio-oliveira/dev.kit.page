@@ -17,6 +17,48 @@ namespace DevKitPage.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ConcedidoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ConcedidoPorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Papel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ProjetoEmOndasId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ProjetoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("ProjetoEmOndasId", "UsuarioId")
+                        .IsUnique();
+
+                    b.HasIndex("ProjetoId", "UsuarioId")
+                        .IsUnique();
+
+                    b.ToTable("AcessosAosProjetos", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AcessosAosProjetos_Recurso", "(ProjetoId IS NOT NULL AND ProjetoEmOndasId IS NULL) OR (ProjetoId IS NULL AND ProjetoEmOndasId IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AcessoAosDados", b =>
                 {
                     b.Property<long>("Id")
@@ -1392,6 +1434,9 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("");
 
+                    b.Property<int>("DonoId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
 
@@ -1470,6 +1515,9 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("DonoId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("EmpresaId")
                         .HasColumnType("INTEGER");
@@ -2246,6 +2294,31 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("VinculosDeCatalogo", (string)null);
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.AcessoAoProjeto", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "ProjetoEmOndas")
+                        .WithMany("Acessos")
+                        .HasForeignKey("ProjetoEmOndasId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("DevKitPage.Core.ProjetoDeDesign", "Projeto")
+                        .WithMany("Acessos")
+                        .HasForeignKey("ProjetoId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Projeto");
+
+                    b.Navigation("ProjetoEmOndas");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AnexoDeItemDoCatalogo", b =>
                 {
                     b.HasOne("DevKitPage.Core.ItemDoCatalogoEditavel", "Item")
@@ -2695,11 +2768,15 @@ namespace DevKitPage.Infrastructure.Migrations
 
             modelBuilder.Entity("DevKitPage.Core.ProjetoCompartilhado", b =>
                 {
+                    b.Navigation("Acessos");
+
                     b.Navigation("Itens");
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ProjetoDeDesign", b =>
                 {
+                    b.Navigation("Acessos");
+
                     b.Navigation("Telas");
                 });
 

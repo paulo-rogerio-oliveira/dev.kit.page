@@ -548,6 +548,22 @@ da máquina do dev e passa a morar aqui — e os PNG nunca entram no git: a PR d
   Lado a lado ou Sobrepor, com Copiar link e Apagar (só de quem pode) e a faixa do link estável. A imagem vem por fetch
   com o token e um `blob:` (a rota é autenticada). O link estável é a página `/design/{projeto}/{tela}/v{n}`.
 - Tabelas novas pela migration `Us669DesignCompartilhado` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us669.sql`.
+- **Acesso: dono, leitor e editor (05/11).** O "design no login de outra pessoa" de 04/11 (104 recusas sem causa no
+  `devcli design --sincronizar`) pediu dono e acesso. O projeto tem DONO (`ProjetoDeDesign.DonoId`): quem o criou no
+  primeiro envio — o vínculo é do projeto, não da máquina nem do login da vez. O dono concede `leitor` (vê e baixa) ou
+  `editor` (também envia) a usuários da MESMA empresa (`AcessoAoProjeto`, único por recurso, projeto e usuário). A visibilidade
+  passou a ser o acesso (`RegrasDoDesign.PapelNoProjeto`): o dono e quem ele autorizou — nem a colega nem o gestor veem
+  sem acesso (404) —, e o nível ficou como espaço, unicidade e o filtro `?time=`. O envio de quem não é dono nem editor
+  é 403 com o motivo (`RegrasDoDesign.MotivoDaRecusaDoEnvio`: o usuário, o projeto, o papel que tem e o exigido, e como
+  pedir), no lugar do conflito sem causa. Rotas: `GET|POST /api/design/projetos/{id}/acessos` (a lista, com os candidatos
+  só para o dono; conceder pelo login, e-mail ou id), `PUT|DELETE /api/design/projetos/{id}/acessos/{usuario}` (o papel;
+  remover — o dono não se remove) e `POST /api/design/projetos/{id}/dono` (a transferência, só com `confirmar: true`, e o
+  dono antigo fica editor). Conceder e mudar o papel contam como alteração do projeto (o `?desde=` de quem ganhou o
+  acesso o traz). Migração `DesignAcesso` (e `api/scripts/sqlserver/DesignAcesso.sql`): o dono reconhecido é o do nível
+  usuário, ou quem enviou a primeira versão; quem já tinha enviado vira editor. Projeto que ficou sem versão e sem dono é
+  assumido pelo próximo envio. No site, o painel **Acesso** (`componentes/AcessoAoDesign.tsx`) da aba Design mostra o
+  dono, o papel de quem vê e os acessos; para o dono, o Dar acesso (usuário da empresa + papel), a troca do papel e o
+  Remover com confirmação.
 
 **Projetos compartilhados (US #693).** O PROJETO do dev.kit — o trabalho que o Orquestrador quebra em itens e ondas, num
 branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina do dev para a equipe ver o mesmo plano.
@@ -555,14 +571,22 @@ branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina d
   definição, autonomia, paralelismo de 1 a 8, destino da PR, situação, VERSÃO e autor) e `ItemDeProjetoCompartilhado`
   (número, título, fluxo, repositórios, componentes, dependências por número, onda, work item e situação), em cascata.
   Único por (espaço, nível, time, dono, slug).
-- **Escopo:** o MESMO do design (`EscopoDoDesign`, `RegrasDoDesign.Visivel`/`PodeApagar`/`NivelEfetivo`): sem empresa, o
-  nível `usuario`; com empresa, `empresa` de todos, `time` de quem o declara, `usuario` do dono. Não visível é 404.
+- **Acesso:** o mesmo modelo do design, com dono e concessões explícitas na tabela `AcessosAosProjetos`.
+  `IAcessosAosProjetos`/`AcessosAosProjetos` centralizam concessão, troca de papel, remoção e transferência nos dois
+  recursos. Leitor vê projeto, itens e andamento; editor também altera, aprova e dispara. Apenas o dono gere acessos
+  e apaga o projeto. Sem acesso, 404 nas leituras; uma gravação exige editor ou dono (403 com o motivo).
+  O nível mantém a identidade e o filtro de time; pertencer à empresa não concede acesso automaticamente.
 - **Concorrência:** cada gravação soma a versão; o `PUT` com outra versão (ou criar um slug que já existe) é 409, e o
   dev.kit relê. O plano é uma coisa só: os itens vêm inteiros e substituem os gravados.
 - **Regras puras** em `RegrasDosProjetos` (Core): o slug, a validação do envio e o plano — números únicos, dependências
   que existem, sem dependência de si mesmo e SEM CICLO (`ItemEmCiclo`), que o Orquestrador não teria como pôr em onda.
 - **Rotas:** `GET /api/projetos?time=&desde=`, `GET /api/projetos/{id}`, `PUT /api/projetos` (201 criado, 200
-  substituído, 409 versão, 400 inválido) e `DELETE /api/projetos/{id}` (o autor ou o gestor).
+  substituído, 409 versão, 400 inválido, 403 sem papel de edição) e `DELETE /api/projetos/{id}` (o dono).
+  `GET|POST /api/projetos/{id}/acessos`, `PUT|DELETE /api/projetos/{id}/acessos/{usuario}` e
+  `POST /api/projetos/{id}/dono` reutilizam a gestão do design. A transferência exige `confirmar: true`.
+- **Migração de acesso:** `AcessoAosProjetos` e `api/scripts/sqlserver/AcessoAosProjetos.sql`, depois de
+  `DesignAcesso`, preservam o dono atual dos projetos em ondas e copiam as concessões de design para a tabela comum.
+  O painel React `AcessoAoProjeto` atende às duas telas; `AcessoAoDesign` mantém a entrada do design.
 - Tabelas novas pela migration `Us693ProjetosCompartilhados` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us693.sql`
   — publicados ANTES do pacote do dev.kit que chama a rota (o cliente trata o 404 da API antiga).
 
