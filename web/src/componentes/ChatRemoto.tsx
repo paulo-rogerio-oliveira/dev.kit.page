@@ -2,6 +2,8 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComandoRemoto, MaquinaRemota } from '../api/remoto';
 import { useConversaRemota } from './useConversaRemota';
 import { ContextoDoChatRemoto, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
+import { CartaoDaDecisao, type AoDecidir } from './DecisoesRemotas';
+import type { DecisaoPendente } from '../api/remoto';
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function dataCompleta(data: string) { return new Date(data).toLocaleString('pt-BR'); }
@@ -24,7 +26,7 @@ function estadoDo(comando: ComandoRemoto, agora: number) {
   }
 }
 
-export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemota | undefined; conectada: boolean; agora: number }) {
+export function ChatRemoto({ maquina, conectada, agora, decisoes = [], desabilitarDecisoes = true, decidir, revisar }: { maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; decisoes?: DecisaoPendente[]; desabilitarDecisoes?: boolean; decidir?: AoDecidir; revisar?: (d: DecisaoPendente) => void }) {
   const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = useConversaRemota(maquina?.maquinaId ?? '');
   const [texto, setTexto] = useState('');
   const [contexto, setContexto] = useState(contextoVazio);
@@ -55,6 +57,7 @@ export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemo
   }
   return <section className="br-chat" aria-label="Orquestrador">
     <header className="br-chathead"><span className="br-logo">O</span><div><b>Orquestrador</b><small>Mesma conversa do Board do dev.kit</small></div></header>
+    <div className="br-chat-aviso br-chat-seguranca">Conversa e consulta com login. Texto do chat nunca aprova.</div>
     {maquina && (!conectada || !maquina.appAberto) && <div className="br-chat-aviso" role="status">
       <strong>○ dev.kit fora do ar</strong><span>Enviado não significa entregue. Aguarda a conexão até o prazo vencer.</span>
     </div>}
@@ -81,6 +84,7 @@ export function ChatRemoto({ maquina, conectada, agora }: { maquina: MaquinaRemo
           </article>
         </Fragment>;
       })}
+    {decidir && revisar && <div className="br-chat-decisoes">{decisoes.map(d => <CartaoDaDecisao key={`${d.pendencia.id}-${d.snapshotId}`} decisao={d} desabilitado={desabilitarDecisoes} decidir={decidir} revisar={revisar} />)}</div>}
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>

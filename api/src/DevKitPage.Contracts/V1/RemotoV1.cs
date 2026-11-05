@@ -48,7 +48,8 @@ public sealed record FluxoNoRetratoV1(
 /// </summary>
 public sealed record PendenciaNoRetratoV1(
     string Id, string Tipo, string Titulo, string? Pergunta = null, IReadOnlyList<string>? Opcoes = null, string? JaTentei = null,
-    string? Projeto = null, int? Item = null, string? Fluxo = null, DateTimeOffset? CriadaEm = null);
+    string? Projeto = null, int? Item = null, string? Fluxo = null, DateTimeOffset? CriadaEm = null,
+    SnapshotDaDecisaoV1? Snapshot = null);
 
 /// <summary>
 /// A resposta do heartbeat: quando a API o recebeu, de quanto em quanto tempo o próximo é esperado e os
@@ -142,7 +143,7 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop];
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot"];
 
     /// <summary>O <c>codigo</c> do 400 de contrato que esta API não conhece (o ProblemDetails leva <c>contratoAceito</c>).</summary>
     public const string CodigoContratoDesconhecido = "contrato-desconhecido";

@@ -27,12 +27,27 @@ export interface RetratoDaMaquina {
       id: string; nome: string; etapa: string; situacao: string;
       projeto?: string | null; item?: number | null; agente?: string | null; desdeEm?: string | null;
     }> | null;
-    pendencias: Array<{
-      id: string; tipo: string; titulo: string; pergunta?: string | null; opcoes?: string[] | null;
-      jaTentei?: string | null; projeto?: string | null; item?: number | null; fluxo?: string | null;
-    }> | null;
+    pendencias: PendenciaRemota[] | null;
   };
 }
+
+export interface PendenciaRemota {
+  id: string; tipo: string; titulo: string; pergunta?: string | null; opcoes?: string[] | null;
+  jaTentei?: string | null; projeto?: string | null; item?: number | null; fluxo?: string | null;
+  snapshot?: SnapshotDaDecisao | null;
+}
+export interface SnapshotDaDecisao {
+  origem: string; destino: string; sha: string;
+  notas: Array<{ avaliador: string; nota: number; minima: number }>;
+  testesAprovados: number; testesFalhos: number; regressaoConcluida: boolean;
+  arquivos: number; commits: number; alteracoes: string; capturas: Array<{ titulo: string; url: string }>;
+}
+export interface RespostaDaDecisao {
+  id: number; maquinaId: string; pendenciaId: string; snapshotId: string; acao: string; opcao: string | null;
+  origem: string | null; destino: string | null; sha: string | null; em: string; segundoFator: boolean; estado: string;
+}
+export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null }
+export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste'; opcao?: string; codigo?: string }
 
 /** Conversa v1: o estado é confirmado pela API, nunca inferido do heartbeat. */
 export interface ComandoRemoto {

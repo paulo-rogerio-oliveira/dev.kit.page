@@ -69,6 +69,7 @@ app.MapearEdicaoDeEmpresas();
 app.MapearPagamentos();
 app.MapearRemoto();
 app.MapearConversa();
+app.MapearDecisoes();
 app.MapearProvisao();
 
 await app.RunAsync();

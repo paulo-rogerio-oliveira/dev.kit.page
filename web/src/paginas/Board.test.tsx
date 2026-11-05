@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { transferableAbortController } from 'node:util';
@@ -31,6 +31,7 @@ function responder(lista = [maquina()]) {
   servidor.use(
     http.get(`${API}/api/remoto/maquinas`, () => HttpResponse.json(lista)),
     http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => HttpResponse.json(retrato(maquina(String(params.id))))),
+    http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ params }) => HttpResponse.json(retrato(maquina(String(params.id))).retrato.pendencias!.map(p => ({ pendencia: p, snapshotId: 'a'.repeat(64), bloqueio: null, resposta: null })))),
     http.get(`${API}/api/remoto/maquinas/:id/conversa`, () => HttpResponse.json({ comandos: [], respostas: [], ultimoEvento: 0 })),
     http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
   );
@@ -43,19 +44,20 @@ describe('Board remoto', () => {
     expect(destinoDa(tokenDoDev(), '/board')).toBe('/board');
   });
 
-  it('mostra o retrato, progresso e execuções; decisões continuam somente na máquina', async () => {
+  it('mostra o retrato, progresso, execuções e opções auditadas no Board e no Chat', async () => {
     responder();
     const chamadas: Request[] = [];
     const registrar = ({ request }: { request: Request }) => { chamadas.push(request); };
     servidor.events.on('request:start', registrar);
     try {
       renderizar('/board', tokenDoDev());
-      expect(await screen.findByText('Integrar o item 20 no projeto?')).toBeInTheDocument();
-      expect(screen.getByText('Opções: Integrar · Aguardar')).toBeInTheDocument();
+      expect(await screen.findAllByText('Integrar o item 20 no projeto?')).toHaveLength(2);
+      expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(2);
+      expect(screen.getByText('Decisão comum')).toBeInTheDocument();
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
       expect(screen.getByText('Item 20 · layout do plano')).toBeInTheDocument();
       expect(screen.getByText(/Implementação · codex/)).toBeInTheDocument();
-      for (const nome of ['Decidir', 'Ver detalhes', 'Reiniciar dev.kit', 'Enviar mensagem']) {
+      for (const nome of ['Reiniciar dev.kit', 'Enviar mensagem']) {
         expect(screen.getByRole('button', { name: nome })).toBeDisabled();
       }
       await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
@@ -64,6 +66,46 @@ describe('Board remoto', () => {
       expect(chamadas.length).toBeGreaterThan(0);
       expect(chamadas.every(r => r.method === 'GET' && r.headers.has('Authorization'))).toBe(true);
     } finally { servidor.events.removeListener('request:start', registrar); }
+  });
+
+  it('responde com o botão do snapshot e mostra o registro comum sem segundo fator', async () => {
+    responder();
+    let recebido: unknown;
+    servidor.use(http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => {
+      recebido = await request.json();
+      return HttpResponse.json({ id: 1, maquinaId: 'notebook', pendenciaId: 'p1', snapshotId: 'a'.repeat(64), acao: 'responder', opcao: 'Aguardar', em: new Date().toISOString(), segundoFator: false, estado: 'registrada' });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Aguardar' }));
+    expect(recebido).toEqual({ snapshotId: 'a'.repeat(64), acao: 'responder', opcao: 'Aguardar' });
+    expect(await board.findByRole('status')).toHaveTextContent('Resposta: Aguardar registrada');
+    expect(board.queryByRole('button', { name: 'Aguardar' })).not.toBeInTheDocument();
+  });
+
+  it('revisa evidências e exige seis dígitos antes de confirmar o SHA', async () => {
+    responder();
+    const snapshot = { origem: 'feature/item-9', destino: 'feature/projeto', sha: 'a'.repeat(40), notas: [{ avaliador: 'Código', nota: 96, minima: 90 }], testesAprovados: 128, testesFalhos: 0, regressaoConcluida: true, arquivos: 4, commits: 2, alteracoes: '+ decisão', capturas: [] };
+    let recebido: unknown;
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Integrar?', snapshot }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null }])),
+      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 1, acao: 'aprovar', sha: snapshot.sha, em: new Date().toISOString(), segundoFator: true, estado: 'registrada' }); }),
+    );
+    renderizar('/board', tokenDoDev());
+    await userEvent.click(await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' }));
+    expect(await screen.findByText(snapshot.origem)).toBeInTheDocument();
+    expect(screen.getByText(snapshot.destino)).toBeInTheDocument();
+    expect(screen.getByText(snapshot.sha)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Aprovar com segundo fator' }));
+    const confirmar = screen.getByRole('button', { name: 'Confirmar e aprovar este SHA' });
+    expect(confirmar).toBeDisabled();
+    expect(recebido).toBeUndefined();
+    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
+    expect(confirmar).toBeEnabled();
+    await userEvent.click(confirmar);
+    expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', codigo: '123456' });
+    expect(await screen.findByRole('status')).toHaveTextContent('segundo fator confirmado');
   });
 
   it('navega entre Chat e Board mantendo somente essas duas abas', async () => {

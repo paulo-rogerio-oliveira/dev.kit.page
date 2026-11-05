@@ -1,0 +1,126 @@
+import { useEffect, useRef, useState } from 'react';
+import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
+import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from '../api/remoto';
+import { useSessao } from '../sessao';
+import './DecisoesRemotas.css';
+
+export type AoDecidir = (decisao: DecisaoPendente, pedido: ResponderDecisao) => Promise<RespostaDaDecisao>;
+
+export function RegistroDaDecisao({ resposta }: { resposta: RespostaDaDecisao }) {
+  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.sha && `SHA ${resposta.sha}`}</p>;
+}
+
+export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, decidir, revisar }: {
+  decisao: DecisaoPendente; compacta?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+}) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+  const [resposta, setResposta] = useState<RespostaDaDecisao | null>(null);
+  const p = d.pendencia;
+  async function responder(opcao: string) {
+    if (enviando) return;
+    setEnviando(true); setErro('');
+    try { setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'responder', opcao })); }
+    catch (e) { setErro(mensagemDaFalha(e)); }
+    finally { setEnviando(false); }
+  }
+  const registro = d.resposta ?? resposta;
+  return <section className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
+    {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
+    {p.jaTentei && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{p.jaTentei}</p>}
+    {registro ? <RegistroDaDecisao resposta={registro} /> : <>
+      {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
+      {p.tipo === 'aprovacao' && <div className="br-row"><button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>{compacta ? 'Decidir' : 'Revisar e aprovar'}</button><button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>{compacta ? 'Ver detalhes' : 'Pedir ajuste'}</button></div>}
+      <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
+      {d.bloqueio && <p role="status">{d.bloqueio}</p>}
+    </>}
+    {erro && <p role="alert">{erro}</p>}
+  </section>;
+}
+
+function Captura({ titulo, url }: { titulo: string; url: string }) {
+  const { sessao } = useSessao();
+  const [imagem, setImagem] = useState('');
+  const [erro, setErro] = useState(false);
+  useEffect(() => {
+    const ctrl = new AbortController(); let blob = '';
+    setImagem(''); setErro(false);
+    if (url.startsWith('/api/design/') && !url.includes('..') && !url.includes('\\') && sessao) {
+      void api.capturaDaDecisao(sessao.token, url, ctrl.signal).then(b => { if (!ctrl.signal.aborted) { blob = URL.createObjectURL(b); setImagem(blob); } }).catch(() => { if (!ctrl.signal.aborted) setErro(true); });
+    } else {
+      try { const u = new URL(url); if (u.protocol === 'https:' && !u.username && !u.password) setImagem(url); else setErro(true); } catch { setErro(true); }
+    }
+    return () => { ctrl.abort(); if (blob) URL.revokeObjectURL(blob); };
+  }, [url, sessao]);
+  return <figure>{imagem && !erro ? <a href={imagem} target="_blank" rel="noreferrer"><img src={imagem} alt={titulo} onError={() => setErro(true)} /></a> : <p>{erro ? 'Captura indisponível. Consulte a entrega antes de aprovar.' : 'Carregando captura…'}</p>}<figcaption>{titulo} · ampliar</figcaption></figure>;
+}
+
+export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: { decisao: DecisaoPendente; decidir: AoDecidir; voltar: () => void; desabilitado: boolean }) {
+  const { sessao, sair } = useSessao();
+  const [confirmar, setConfirmar] = useState(false);
+  const [ativo, setAtivo] = useState<boolean | null>(null);
+  const [senha, setSenha] = useState('');
+  const [chave, setChave] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [erro, setErro] = useState('');
+  const [ocupado, setOcupado] = useState(false);
+  const [resposta, setResposta] = useState(d.resposta);
+  const caixa = useRef<HTMLInputElement>(null);
+  const p = d.pendencia, s = p.snapshot;
+  useEffect(() => {
+    const ctrl = new AbortController();
+    if (sessao) void api.estadoDoSegundoFator(sessao.token, ctrl.signal).then(r => { if (!ctrl.signal.aborted) setAtivo(r.ativo); }).catch(e => { if (!ctrl.signal.aborted) setErro(mensagemDaFalha(e)); });
+    return () => ctrl.abort();
+  }, [sessao]);
+  useEffect(() => { if (confirmar && ativo) caixa.current?.focus(); }, [confirmar, ativo]);
+  async function executar(acao: () => Promise<void>) {
+    if (ocupado) return;
+    setOcupado(true); setErro('');
+    try { await acao(); } catch (e) { if (e instanceof ErroDaApi && e.status === 401) sair('expirou'); else setErro(mensagemDaFalha(e)); }
+    finally { setCodigo(''); setOcupado(false); }
+  }
+  const bloqueado = desabilitado || ocupado || !!d.bloqueio || !!resposta;
+  return <main className="br-review" aria-label="Revisão da decisão" data-confirmar={confirmar}>
+    <button className="br-voltar" onClick={voltar}>‹ Voltar ao Board</button>
+    <header className="br-review-head"><h1>{p.titulo}</h1><p>Decisões no site e segundo fator</p><span className="br-chip">Login confirmado</span> <span className="br-chip">Ato irreversível · segundo fator</span></header>
+    <div className="br-review-grid"><div>
+      {s ? <><dl className="br-card br-snapshot">
+        <dt>Nota</dt><dd>{s.notas.length ? s.notas.map(n => <div key={n.avaliador}><mark>{n.nota} de 100</mark> · mínima {n.minima} · {n.avaliador}</div>) : 'Aguardando avaliadores'}</dd>
+        <dt>Regressão</dt><dd>{s.regressaoConcluida ? `${s.testesAprovados} aprovados, ${s.testesFalhos} falhas` : 'Pendente'}</dd>
+        <dt>Alterações</dt><dd>{s.arquivos} arquivos em {s.commits} commits · <a href="#alteracoes-decisao" onClick={e => { const detalhes = e.currentTarget.closest('main')?.querySelector('details'); if (detalhes) detalhes.open = true; }}>Ver alterações</a></dd>
+        <dt>Origem</dt><dd><code>{s.origem}</code></dd><dt>Destino</dt><dd><code>{s.destino}</code></dd><dt>SHA</dt><dd><code>{s.sha}</code></dd>
+      </dl><h2>Capturas</h2><div className="br-capturas">{s.capturas.map(c => <Captura key={c.url} {...c} />)}</div>{!s.capturas.length && <p className="br-note">Nenhuma captura recebida neste snapshot.</p>}
+      <p className="br-review-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>
+      <details id="alteracoes-decisao" className="br-card"><summary>Alterações do snapshot</summary><pre>{s.alteracoes}</pre></details></> : <p className="br-card">A máquina ainda não enviou as evidências deste snapshot.</p>}
+      <div className="br-card br-review-info"><strong>Confira as evidências antes de aprovar</strong><p>A aprovação fica vinculada à origem, ao destino e ao SHA apresentados. Mensagens enviadas pelo chat não autorizam este ato.</p></div>
+    </div><aside className="br-review-actions">
+      {resposta ? <div className="br-card"><RegistroDaDecisao resposta={resposta} /></div> : <>
+        <section className="br-card"><h2>{confirmar ? 'Confirme com segundo fator' : 'Aprovar este snapshot'}</h2>
+          {!confirmar && <><p>O próximo passo pede o segundo fator. Nenhum ato será autorizado pelo texto da conversa.</p><p className="br-etapas">1. Revisar evidências → 2. Confirmar identidade</p></>}
+          {confirmar && ativo === null && <p role="status">Conferindo autenticador…</p>}
+          {confirmar && ativo === false && <form onSubmit={e => { e.preventDefault(); void executar(async () => {
+            if (!sessao) return;
+            if (!chave) { const r = await api.prepararSegundoFator(sessao.token, senha); setChave(r.chave); setSenha(''); }
+            else { await api.confirmarSegundoFator(sessao.token, codigo); setChave(''); setAtivo(true); }
+          }); }}>
+            <p>Configure seu aplicativo autenticador para confirmar decisões.</p>
+            {!chave ? <label>Senha atual<input type="password" autoComplete="current-password" value={senha} onChange={e => setSenha(e.target.value)} /></label> : <><p>Adicione esta chave ao autenticador (TOTP, seis dígitos, 30 segundos). Ela expira para configuração em dez minutos.</p><code className="br-chave">{chave}</code><label>Código de 6 dígitos<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ''))} /></label></>}
+            <button className="br-btn" disabled={ocupado || (chave ? codigo.length !== 6 : !senha)}>{chave ? 'Ativar autenticador' : 'Configurar autenticador'}</button>
+          </form>}
+          {confirmar && ativo && <><p>Use o código do seu aplicativo autenticador para autorizar este SHA.</p><label>Código de 6 dígitos<input ref={caixa} className="br-codigo" aria-label="Código de 6 dígitos" placeholder="○○○○○○" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ''))} /></label><p>Aprovação registrada com data, origem e snapshot.</p></>}
+          {d.bloqueio && <p role="alert">{d.bloqueio}</p>}
+          {erro && <p role="alert">{erro}</p>}
+          <div className="br-review-buttons"><button className="br-btn br-primary" disabled={bloqueado || (confirmar && (!ativo || codigo.length !== 6))} onClick={() => {
+            if (!confirmar) setConfirmar(true);
+            else void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'aprovar', codigo })));
+          }}>{confirmar ? 'Confirmar e aprovar este SHA' : 'Aprovar com segundo fator'}</button>
+          <button className="br-btn" disabled={desabilitado || ocupado} onClick={() => void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'ajuste' })))}>Pedir ajuste</button></div>
+        </section>
+        <section className="br-card br-review-info"><strong>Quando a decisão não pode seguir</strong><p>Nota insuficiente, regressão com falhas ou snapshot alterado bloqueiam a aprovação e pedem nova revisão.</p></section>
+        <p>Decisões comuns usam os botões da pergunta, com login e auditoria. Este ato exige confirmação adicional.</p>
+        <p className="br-confirmar-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>
+      </>}
+    </aside></div>
+  </main>;
+}

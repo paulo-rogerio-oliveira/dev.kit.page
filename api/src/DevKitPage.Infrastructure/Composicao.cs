@@ -94,6 +94,9 @@ public static class Composicao
         // A conversa e os comandos remotos (fase 2): o SQL, a fila do usuário e o aviso do SSE. A fila do Azure lê a chave da
         // conta com a identidade gerenciada da API; a simulada é de desenvolvimento (a API não sobe com ela em Production).
         servicos.AddScoped<IConversaRemota, ConversaRemota>();
+        servicos.AddDataProtection();
+        servicos.AddScoped<ISegundoFator, SegundoFator>();
+        servicos.AddScoped<IDecisoesRemotas, DecisoesRemotas>();
         servicos.AddScoped<IExpurgoDaConversa, ExpurgoDaConversa>();
         servicos.AddSingleton<IAvisoDaConversa, AvisoDaConversa>();
         servicos.AddSingleton<FilaSimulada>();
