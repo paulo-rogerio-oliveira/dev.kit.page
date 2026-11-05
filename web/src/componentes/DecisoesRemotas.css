@@ -68,3 +68,4 @@
   .br-review-buttons {margin-top:auto; padding-top:16px}
   .br-decisao-card .br-decisao-titulo {font-size:12px}
 }
+.board-remoto > .br-navegacao[hidden] { display: none; }

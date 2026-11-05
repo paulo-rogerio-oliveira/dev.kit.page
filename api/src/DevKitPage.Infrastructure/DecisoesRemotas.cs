@@ -11,7 +11,7 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
     {
         var foto = await remoto.RetratoAsync(usuario, maquina, ct);
         if (foto is null) return null;
-        var respostas = await db.RespostasDasDecisoes.AsNoTracking().Where(r => r.UsuarioId == usuario && r.MaquinaId == maquina).ToListAsync(ct);
+        var respostas = await db.RespostasDasDecisoes.AsNoTracking().Where(r => r.UsuarioId == usuario && r.MaquinaId == maquina).OrderByDescending(r => r.Id).ToListAsync(ct);
         return (foto.Retrato.Pendencias ?? []).Select(p =>
         {
             var hash = RegrasDaDecisao.SnapshotId(p);
@@ -30,8 +30,15 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
         var hash = RegrasDaDecisao.SnapshotId(p);
         if (pedido.SnapshotId != hash) return new(null, "O snapshot mudou. Volte ao Board e revise as novas evidências.");
         if (!foto!.Maquina.Conectada) return new(null, "Máquina desconectada. Atualize o retrato antes de decidir.");
-        if (await db.RespostasDasDecisoes.AnyAsync(r => r.UsuarioId == usuario && r.MaquinaId == maquina && r.PendenciaId == pendencia && r.SnapshotId == hash, ct))
-            return new(null, "Este snapshot já recebeu uma resposta. Consulte o registro no Board.");
+        var anterior = await db.RespostasDasDecisoes.SingleOrDefaultAsync(r => r.UsuarioId == usuario && r.MaquinaId == maquina && r.PendenciaId == pendencia && r.SnapshotId == hash && r.Estado != "vencida", ct);
+        if (anterior is not null)
+        {
+            if (anterior.Estado != "registrada" || !Expirou(anterior))
+                return new(null, "Este snapshot já recebeu uma resposta. Consulte o registro no Board.");
+            // Mantém a tentativa antiga na auditoria e libera apenas uma nova resposta ativa.
+            anterior.Estado = "vencida";
+            await db.SaveChangesAsync(ct);
+        }
         var aprovar = pedido.Acao == "aprovar";
         if (p.Tipo == RemotoV1.PendenciaPergunta)
         {
@@ -64,8 +71,11 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
     }
 
     public async Task<IReadOnlyList<RespostaDaDecisaoV1>> RespostasAsync(int usuario, string maquina, CancellationToken ct)
-        => (await db.RespostasDasDecisoes.AsNoTracking().Where(r => r.UsuarioId == usuario && r.MaquinaId == maquina && r.Estado == "registrada")
+    {
+        var limite = relogio.GetUtcNow().UtcDateTime.AddMinutes(-5);
+        return (await db.RespostasDasDecisoes.AsNoTracking().Where(r => r.UsuarioId == usuario && r.MaquinaId == maquina && r.Estado == "registrada" && r.EmUtc > limite)
             .OrderBy(r => r.Id).Take(100).ToListAsync(ct)).Select(Ler).ToArray();
+    }
 
     public async Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ReceberAsync(int usuario, string maquina, long id, CancellationToken ct)
     {
@@ -81,6 +91,8 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
         await db.SaveChangesAsync(ct); await transacao.CommitAsync(ct);
         return valida ? new(Ler(r)) : new(null, "A autorização venceu ou o snapshot mudou. Revise novamente no site.");
     }
-    private static RespostaDaDecisaoV1 Ler(RespostaDaDecisao r)
-        => new(r.Id, r.MaquinaId, r.PendenciaId, r.SnapshotId, r.Acao, r.Opcao, r.Origem, r.Destino, r.Sha, DevKitPageDb.Utc(r.EmUtc), r.SegundoFator, r.Estado);
+    private bool Expirou(RespostaDaDecisao r) => r.EmUtc <= relogio.GetUtcNow().UtcDateTime.AddMinutes(-5);
+    private RespostaDaDecisaoV1 Ler(RespostaDaDecisao r)
+        => new(r.Id, r.MaquinaId, r.PendenciaId, r.SnapshotId, r.Acao, r.Opcao, r.Origem, r.Destino, r.Sha, DevKitPageDb.Utc(r.EmUtc), r.SegundoFator,
+            r.Estado == "registrada" && Expirou(r) ? "vencida" : r.Estado);
 }

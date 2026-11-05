@@ -128,9 +128,11 @@ export function Board() {
   const agente = maquina?.estadoDoAgente === 'limite' ? 'Agente em limite' : maquina?.estadoDoAgente === 'pausado' ? 'Agente pausado' : '';
   const desabilitado = carregando || !!erro || !conectada;
   async function decidir(d: DecisaoPendente, pedido: ResponderDecisao) {
+    const atual = geracao.current;
     try {
       const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, pedido);
-      setDecisoes(lista => lista.map(atual => atual.snapshotId === d.snapshotId ? { ...atual, resposta } : atual));
+      if (atual === geracao.current)
+        setDecisoes(lista => lista.map(item => item.pendencia.id === d.pendencia.id && item.snapshotId === d.snapshotId ? { ...item, resposta } : item));
       return resposta;
     } catch (e) {
       if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
@@ -144,7 +146,7 @@ export function Board() {
       <b>dev.kit</b><span className="br-spacer" />
       <div className="br-machine">
         <div className={`br-host${conectada ? '' : ' br-offline'}`}><i aria-hidden="true" />
-          {maquinas.length > 1 ? <select aria-label="Máquina" value={selecionada} onChange={e => { setFoto(null); setDecisoes([]); setRevisao(null); setErro(''); setCarregando(true); setSelecionada(e.target.value); }}>
+          {maquinas.length > 1 ? <select aria-label="Máquina" value={selecionada} onChange={e => { ++geracao.current; setFoto(null); setDecisoes([]); setRevisao(null); setErro(''); setCarregando(true); setSelecionada(e.target.value); }}>
             {maquinas.map(m => <option key={m.maquinaId} value={m.maquinaId}>{m.nome || 'Máquina'}</option>)}
           </select> : <span className="br-name" title={maquina?.nome || 'Máquina'}>{maquina?.nome || 'Máquina'}</span>}
           <span className="br-desktop-state"> · {estado.toLowerCase()}</span>
@@ -153,7 +155,8 @@ export function Board() {
       </div>
       <button className="br-btn br-restart" disabled title={motivo}>Reiniciar dev.kit</button>
     </header>
-    {revisao ? <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} /> : <div className="br-navegacao"><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
+    {revisao && <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} />}
+    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
@@ -162,11 +165,11 @@ export function Board() {
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
-        {(!carregando || foto) && <ConteudoDoBoard foto={foto} agora={agora} decisoes={decisoes} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
+        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} decisoes={decisoes} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
       </aside>
       <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
     </main>
-    </Abas></div>}
+    </Abas></div>
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
     <footer className="br-footer"><span className="br-desktop-state">Reinicie o dev.kit pela máquina nesta fase.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>
   </div>;

@@ -24,7 +24,7 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
     catch (e) { setErro(mensagemDaFalha(e)); }
     finally { setEnviando(false); }
   }
-  const registro = d.resposta ?? resposta;
+  const registro = resposta && (!d.resposta || resposta.id > d.resposta.id) ? resposta : d.resposta;
   const snapshot = p.snapshot;
   const resumo = p.tipo === 'aprovacao' && snapshot
     ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
@@ -33,7 +33,9 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
     <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
     {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
     {resumo && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
-    {registro ? <RegistroDaDecisao resposta={registro} /> : <>
+    {registro && <RegistroDaDecisao resposta={registro} />}
+    {(!registro || registro.estado === 'vencida') && <>
+      {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
       {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
       {p.tipo === 'aprovacao' && <div className="br-row">{compacta ? <>
         <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Ver detalhes</button>
@@ -75,7 +77,7 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
   const [codigo, setCodigo] = useState('');
   const [erro, setErro] = useState('');
   const [ocupado, setOcupado] = useState(false);
-  const [resposta, setResposta] = useState(d.resposta);
+  const [resposta, setResposta] = useState(d.resposta?.estado === 'vencida' ? null : d.resposta);
   const caixa = useRef<HTMLInputElement>(null);
   const p = d.pendencia, s = p.snapshot;
   useEffect(() => {
@@ -122,6 +124,7 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
         </section>
           {confirmar && <p className="br-confirmar-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>}
           {d.bloqueio && <p className="br-decisao-bloqueio" role="alert">{d.bloqueio}</p>}
+          {!resposta && d.resposta?.estado === 'vencida' && <p className="br-decisao-bloqueio" role="status">A autorização anterior venceu. Confira as evidências e confirme uma nova decisão com um código novo.</p>}
           {erro && <p className="br-decisao-erro" role="alert">{erro}</p>}
           <div className="br-review-buttons"><button className="br-btn br-primary" disabled={bloqueado || (confirmar && (!ativo || codigo.length !== 6))} onClick={() => {
             if (!confirmar) setConfirmar(true);

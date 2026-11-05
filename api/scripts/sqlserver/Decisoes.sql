@@ -33,8 +33,11 @@ BEGIN
     );
 END;
 GO
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RespostasDasDecisoes_UsuarioId_MaquinaId_PendenciaId_SnapshotId' AND object_id = OBJECT_ID(N'[dbo].[RespostasDasDecisoes]') AND has_filter = 0)
+    DROP INDEX [IX_RespostasDasDecisoes_UsuarioId_MaquinaId_PendenciaId_SnapshotId] ON [dbo].[RespostasDasDecisoes];
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RespostasDasDecisoes_UsuarioId_MaquinaId_PendenciaId_SnapshotId' AND object_id = OBJECT_ID(N'[dbo].[RespostasDasDecisoes]'))
-    CREATE UNIQUE INDEX [IX_RespostasDasDecisoes_UsuarioId_MaquinaId_PendenciaId_SnapshotId] ON [dbo].[RespostasDasDecisoes] ([UsuarioId], [MaquinaId], [PendenciaId], [SnapshotId]);
+    CREATE UNIQUE INDEX [IX_RespostasDasDecisoes_UsuarioId_MaquinaId_PendenciaId_SnapshotId] ON [dbo].[RespostasDasDecisoes] ([UsuarioId], [MaquinaId], [PendenciaId], [SnapshotId]) WHERE [Estado] <> N'vencida';
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RespostasDasDecisoes_UsuarioId_MaquinaId_Estado' AND object_id = OBJECT_ID(N'[dbo].[RespostasDasDecisoes]'))
     CREATE INDEX [IX_RespostasDasDecisoes_UsuarioId_MaquinaId_Estado] ON [dbo].[RespostasDasDecisoes] ([UsuarioId], [MaquinaId], [Estado]);

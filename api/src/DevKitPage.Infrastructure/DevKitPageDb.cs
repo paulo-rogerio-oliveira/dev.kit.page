@@ -693,7 +693,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(r => r.Opcao).HasMaxLength(200); e.Property(r => r.Origem).HasMaxLength(300);
             e.Property(r => r.Destino).HasMaxLength(300); e.Property(r => r.Sha).HasMaxLength(40);
             e.Property(r => r.Estado).HasMaxLength(20);
-            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique();
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique().HasFilter("[Estado] <> 'vencida'");
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.Estado });
             e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });

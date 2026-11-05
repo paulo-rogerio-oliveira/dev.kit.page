@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
+using DevKitPage.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace DevKitPage.Api.Tests;
 
@@ -107,6 +109,44 @@ public sealed class DecisoesApiTests
         var outra = await Ler(c, "outra");
         Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/outra", new ResponderDecisaoV1(outra.SnapshotId, "aprovar", Codigo: codigo))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Tentativa_vencida_pode_ser_revisada_sem_repetir_consumo_e_preserva_auditoria(bool aprovar, bool retirarVencida)
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var login = await original.AdminAsync();
+        var c = api.CreateClient(); c.DefaultRequestHeaders.Authorization = login.DefaultRequestHeaders.Authorization;
+        await PrepararMaquina(c); await Retrato(c, aprovar ? Aprovacao : Pergunta);
+        var chave = aprovar ? await Ativar(c, relogio) : null;
+        var d = await Ler(c, aprovar ? "aprovacao" : "pergunta");
+        ResponderDecisaoV1 Pedido() => new(d.SnapshotId, aprovar ? "aprovar" : "responder", aprovar ? null : "Manter", chave is null ? null : Totp.Codigo(chave, relogio.Passo));
+        var primeira = await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido()); primeira.EnsureSuccessStatusCode();
+        var anterior = (await primeira.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido())).StatusCode);
+        relogio.Avancar(301); await PrepararMaquina(c);
+        Assert.Equal("vencida", (await Ler(c, d.Pendencia.Id)).Resposta!.Estado);
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+        if (retirarVencida) Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{anterior.Id}/recebida", null)).StatusCode);
+        var nova = await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido()); nova.EnsureSuccessStatusCode();
+        var atual = (await nova.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.NotEqual(anterior.Id, atual.Id); Assert.Equal(anterior.SnapshotId, atual.SnapshotId);
+        Assert.Equal(relogio.GetUtcNow(), atual.Em);
+        Assert.Equal(atual.Id, (await Ler(c, d.Pendencia.Id)).Resposta!.Id);
+        Assert.Equal(atual.Id, Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!).Id);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{anterior.Id}/recebida", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"{Rota}/respostas/{atual.Id}/recebida", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{atual.Id}/recebida", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido())).StatusCode);
+        using var escopo = api.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
+        var historico = await db.RespostasDasDecisoes.AsNoTracking().OrderBy(r => r.Id).ToArrayAsync();
+        Assert.Equal(new[] { "vencida", "recebida" }, historico.Select(r => r.Estado));
     }
 
     [Fact]
