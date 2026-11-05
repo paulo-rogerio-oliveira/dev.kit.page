@@ -71,6 +71,38 @@ public sealed class RegrasDoDesignTests
     }
 
     [Fact]
+    public void O_papel_no_projeto_e_o_dono_ou_o_concedido_na_mesma_empresa_e_so_o_dono_e_o_editor_enviam()
+    {
+        Assert.Equal("dono", RegrasDoDesign.PapelNoProjeto(Dev, dono: 10, empresaDoProjeto: 1, concedido: null));
+        Assert.Equal("dono", RegrasDoDesign.PapelNoProjeto(Solo, dono: 30, empresaDoProjeto: null, concedido: null));
+        Assert.Equal("editor", RegrasDoDesign.PapelNoProjeto(Dev, dono: 11, empresaDoProjeto: 1, concedido: "editor"));
+        Assert.Equal("leitor", RegrasDoDesign.PapelNoProjeto(Dev, dono: 11, empresaDoProjeto: 1, concedido: "leitor"));
+        // Sem acesso, nem o gestor vê; o acesso de outra empresa (ou de quem saiu dela) não vale; o projeto sem dono é de ninguém.
+        Assert.Equal("", RegrasDoDesign.PapelNoProjeto(Gestor, dono: 11, empresaDoProjeto: 1, concedido: null));
+        Assert.Equal("", RegrasDoDesign.PapelNoProjeto(Dev, dono: 11, empresaDoProjeto: 2, concedido: "editor"));
+        Assert.Equal("", RegrasDoDesign.PapelNoProjeto(Solo, dono: 0, empresaDoProjeto: null, concedido: "editor"));
+        Assert.Equal("", RegrasDoDesign.PapelNoProjeto(Dev, dono: 11, empresaDoProjeto: 1, concedido: "admin"));
+
+        Assert.True(RegrasDoDesign.PodeEnviar("dono"));
+        Assert.True(RegrasDoDesign.PodeEnviar("editor"));
+        Assert.False(RegrasDoDesign.PodeEnviar("leitor"));
+        Assert.False(RegrasDoDesign.PodeEnviar(""));
+        Assert.Equal(("editor", "leitor", ""), (RegrasDoDesign.PapelDeAcesso(" Editor "), RegrasDoDesign.PapelDeAcesso("leitor"), RegrasDoDesign.PapelDeAcesso("dono")));
+    }
+
+    [Fact]
+    public void A_recusa_do_envio_diz_o_usuario_o_projeto_o_papel_e_como_pedir_o_acesso()
+    {
+        var leitor = RegrasDoDesign.MotivoDaRecusaDoEnvio("bia", "https://github.com/acme/portal", "leitor", "Ana Souza");
+        Assert.Contains("O usuário bia não pode enviar versões ao projeto de design https://github.com/acme/portal", leitor);
+        Assert.Contains("exige o papel editor", leitor);
+        Assert.Contains("tem o papel leitor", leitor);
+        Assert.Contains("Peça ao dono (Ana Souza)", leitor);
+        Assert.Contains("devcli design --conceder bia --papel editor --aplicar", leitor);
+        Assert.Contains("não tem acesso ao projeto", RegrasDoDesign.MotivoDaRecusaDoEnvio("caio", "x", "", ""));
+    }
+
+    [Fact]
     public void O_teto_e_o_do_plano_e_o_padrao_fora_da_lista()
     {
         var opcoes = new OpcoesDoDesign();
