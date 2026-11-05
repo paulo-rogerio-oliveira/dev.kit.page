@@ -127,7 +127,8 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 export const api = {
   conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
-  enviarMensagemRemota: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
+  /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
+  enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
     chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),
   eventosDaConversa: (token: string, maquina: string, ultimoEvento: number, signal: AbortSignal) =>
     requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
