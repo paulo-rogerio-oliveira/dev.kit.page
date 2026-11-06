@@ -6,7 +6,7 @@ import type {
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
   ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
   AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
-  EventoDaProvisao, PermissaoDeProvisao, RecursoProvisionado,
+  EventoDaProvisao, PermissaoDeProvisao, RecursoProvisionado, CotaDaProvisao, TipoDoAplicativo,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -458,14 +458,59 @@ export const eventosDaFila: EventoDaProvisao[] = [
   { em: '2026-11-03T14:42:00Z', evento: 'pronto', autor: 'worker', detalhe: 'grupo, conta e fila comandos prontos' },
 ];
 
+/** A permissão com os sites e APIs (item 12): a cota de cada tipo, as regiões e os planos, e o teto do custo. */
+export const permissaoComAplicativos: PermissaoDeProvisao = {
+  ...permissaoLiberada,
+  aplicativos: [
+    { tipo: 'app-service', maximo: 2, regioes: ['brazilsouth', 'eastus2'], regiaoPadrao: 'brazilsouth',
+      planos: [{ id: 'F1', rotulo: 'F1 · Linux gratuito', custoMensal: 0 }, { id: 'B1', rotulo: 'B1 · Linux', custoMensal: 61.7 }] },
+    { tipo: 'static-web-app', maximo: 3, regioes: ['eastus2', 'westeurope'], regiaoPadrao: 'eastus2',
+      planos: [{ id: 'Free', rotulo: 'Free', custoMensal: 0 }, { id: 'Standard', rotulo: 'Standard', custoMensal: 48 }] },
+  ],
+  limiteDeCusto: 150, alertaDeCustoPercentual: 80,
+};
+
+/** O App Service pronto da Ana (B1, com o endereço). */
+export const appServicePronto = (): RecursoProvisionado => ({
+  ...filaPronta(), id: 21, tipo: 'app-service', nome: 'app-u2-api-pedidos-7f3k', fila: '', rotulo: 'api-pedidos', plano: 'B1',
+  nomeDoPlano: 'asp-u2-api-pedidos-7f3k', custoMensal: 61.7, passos: ['plano'], parcial: false, tentativas: 1,
+  endpoint: 'https://app-u2-api-pedidos-7f3k.azurewebsites.net',
+});
+
+/** O App Service que falhou DEPOIS do plano criado: a falha parcial. */
+export const appServiceParcial = (): RecursoProvisionado => ({
+  ...appServicePronto(), id: 22, nome: 'app-u2-api-relatorios-q8m2', rotulo: 'api-relatorios', nomeDoPlano: 'asp-u2-api-relatorios-q8m2',
+  estado: 'falhou', prontoEm: null, endpoint: '', parcial: true, erro: 'o Azure respondeu 409, nome em uso.',
+});
+
+/** O Static Web App ainda com o worker. */
+export const siteEmProvisao = (): RecursoProvisionado => ({
+  ...filaPronta(), id: 23, tipo: 'static-web-app', nome: 'swa-u2-site-docs-2m9q', fila: '', rotulo: 'site-docs', plano: 'Free', regiao: 'eastus2',
+  nomeDoPlano: '', custoMensal: 0, passos: [], parcial: false, estado: 'em-provisao', prontoEm: null, endpoint: '',
+});
+
 /** O estado da provisão no servidor de mentira: a permissão e os recursos (o setup os reinicia a cada teste). */
-export const provisao: { permissao: PermissaoDeProvisao; recursos: RecursoProvisionado[] } = {
-  permissao: { ...permissaoLiberada, liberada: false, origem: 'nenhuma' }, recursos: [],
+export const provisao: { permissao: PermissaoDeProvisao; recursos: RecursoProvisionado[]; segundoFatorAtivo: boolean } = {
+  permissao: { ...permissaoLiberada, liberada: false, origem: 'nenhuma' }, recursos: [], segundoFatorAtivo: true,
 };
 
 export function reiniciarProvisao() {
   provisao.permissao = { ...permissaoLiberada, liberada: false, origem: 'nenhuma' };
   provisao.recursos = [];
+  provisao.segundoFatorAtivo = true;
+}
+
+/** A cota como a API a conta: os aplicativos não removidos, por tipo, e o custo deles contra o teto. */
+function cotaDaProvisao(): CotaDaProvisao {
+  const ativos = provisao.recursos.filter((r) => r.tipo !== 'fila' && r.estado !== 'removido');
+  const custoDoMes = Math.round(ativos.reduce((soma, r) => soma + (r.custoMensal ?? 0), 0) * 100) / 100;
+  const limite = provisao.permissao.limiteDeCusto ?? 0;
+  const alerta = provisao.permissao.alertaDeCustoPercentual ?? 80;
+  return {
+    tipos: (provisao.permissao.aplicativos ?? []).map((t) => ({ tipo: t.tipo, ativos: ativos.filter((r) => r.tipo === t.tipo).length, maximo: t.maximo })),
+    custoDoMes, limiteDeCusto: limite, alertaDeCustoPercentual: alerta,
+    alerta: limite > 0 && custoDoMes >= (limite * alerta) / 100, bloqueado: limite > 0 && custoDoMes >= limite,
+  };
 }
 
 const naoLiberada = () => HttpResponse.json({ detail: 'A provisão no Azure não está liberada para o seu usuário.', codigo: 'provisao-nao-liberada' }, { status: 403 });
@@ -871,6 +916,42 @@ export const handlersPadrao = [
     const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
     Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
     return HttpResponse.json(recurso, { status: 202 });
+  }),
+  // Os sites e APIs (item 12): a cota, o pedido (409 com a cota cheia) e a remoção que pede o código do segundo fator.
+  http.get(`${API}/api/provisao/cota`, () => (provisao.permissao.liberada ? HttpResponse.json(cotaDaProvisao()) : naoLiberada())),
+  http.post(`${API}/api/provisao/aplicativos`, async ({ request }) => {
+    if (!provisao.permissao.liberada) return naoLiberada();
+    const corpo = (await request.json()) as { tipo: TipoDoAplicativo; nome: string; regiao: string; plano: string };
+    escritas.push({ metodo: 'POST', caminho: '/api/provisao/aplicativos', corpo });
+    const uso = cotaDaProvisao().tipos.find((t) => t.tipo === corpo.tipo)!;
+    if (uso.ativos >= uso.maximo)
+      return HttpResponse.json({ detail: `A cota de ${corpo.tipo} está cheia (${uso.ativos} de ${uso.maximo}). Remova um para criar outro.`, codigo: 'cota-cheia' }, { status: 409 });
+    const plano = provisao.permissao.aplicativos!.find((t) => t.tipo === corpo.tipo)!.planos.find((p) => p.id === corpo.plano)!;
+    const novo: RecursoProvisionado = {
+      ...siteEmProvisao(), id: 30, tipo: corpo.tipo, rotulo: corpo.nome, nome: `${corpo.tipo === 'app-service' ? 'app' : 'swa'}-u2-${corpo.nome}-n3w0`,
+      regiao: corpo.regiao, plano: plano.id, custoMensal: plano.custoMensal, estado: 'pedido',
+    };
+    provisao.recursos = [novo, ...provisao.recursos];
+    return HttpResponse.json(novo, { status: 202 });
+  }),
+  http.post(`${API}/api/provisao/recursos/:id/remover`, async ({ params, request }) => {
+    const corpo = (await request.json()) as { codigo: string };
+    escritas.push({ metodo: 'POST', caminho: `/api/provisao/recursos/${params.id}/remover`, corpo });
+    if (corpo.codigo !== '123456')
+      return HttpResponse.json({ detail: 'Código incorreto, expirado ou já utilizado. Tente novamente com um código válido.', codigo: 'segundo-fator' }, { status: 403 });
+    const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
+    Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
+    return HttpResponse.json(recurso, { status: 202 });
+  }),
+  http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: provisao.segundoFatorAtivo })),
+  http.post(`${API}/api/remoto/segundo-fator/preparar`, async ({ request }) => {
+    escritas.push({ metodo: 'POST', caminho: '/api/remoto/segundo-fator/preparar', corpo: await request.json() });
+    return HttpResponse.json({ chave: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/dev.kit:2?secret=JBSWY3DPEHPK3PXP', expiraEm: '2026-11-05T18:10:00Z' });
+  }),
+  http.post(`${API}/api/remoto/segundo-fator/confirmar`, async ({ request }) => {
+    escritas.push({ metodo: 'POST', caminho: '/api/remoto/segundo-fator/confirmar', corpo: await request.json() });
+    provisao.segundoFatorAtivo = true;
+    return HttpResponse.json({ ativo: true });
   }),
   http.post(`${API}/api/usuarios/:id/senha`, ({ params }) => {
     gestaoDeUsuarios.push({ metodo: 'POST', caminho: `/api/usuarios/${params.id}/senha`, corpo: null });

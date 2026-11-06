@@ -33,8 +33,30 @@ public sealed class RecursoProvisionado
     /// <summary>Um de <c>ProvisaoV1.Tipos</c>.</summary>
     public string Tipo { get; set; } = string.Empty;
 
-    /// <summary>O nome no Azure (a conta de armazenamento): ÚNICO aqui, e escolhido para ser único no Azure.</summary>
+    /// <summary>
+    /// A VAGA da cota que o recurso ocupa (1 até o máximo do tipo). O índice único filtrado (usuário, tipo, vaga) dos recursos
+    /// não removidos é o que torna a cota atômica no banco: dois pedidos simultâneos não ocupam a mesma vaga, e o removido a
+    /// devolve.
+    /// </summary>
+    public int Vaga { get; set; }
+
+    /// <summary>O nome no Azure (a conta de armazenamento, o App Service, o Static Web App): ÚNICO aqui, e escolhido para ser único no Azure.</summary>
     public string Nome { get; set; } = string.Empty;
+
+    /// <summary>O nome que o usuário deu ao aplicativo (<c>api-pedidos</c>); vazio na fila.</summary>
+    public string Rotulo { get; set; } = string.Empty;
+
+    /// <summary>O plano (o SKU) do aplicativo; vazio na fila.</summary>
+    public string Plano { get; set; } = string.Empty;
+
+    /// <summary>O plano do App Service no Azure (<c>asp-...</c>), criado antes do aplicativo; vazio nos outros tipos.</summary>
+    public string NomeDoPlano { get; set; } = string.Empty;
+
+    /// <summary>O custo estimado do mês do plano no momento do pedido, em reais: é o que soma no alerta e no teto de custo.</summary>
+    public decimal CustoMensal { get; set; }
+
+    /// <summary>Os passos da criação já feitos no Azure, separados por vírgula (<c>plano</c>): a repetição retoma do seguinte.</summary>
+    public string Passos { get; set; } = string.Empty;
 
     public string Fila { get; set; } = string.Empty;
     public string Regiao { get; set; } = string.Empty;

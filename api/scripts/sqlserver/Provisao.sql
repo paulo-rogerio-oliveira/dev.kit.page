@@ -30,7 +30,13 @@ BEGIN
         [Id] bigint NOT NULL IDENTITY,
         [UsuarioId] int NOT NULL,
         [Tipo] nvarchar(20) NOT NULL,
-        [Nome] nvarchar(24) NOT NULL,
+        [Vaga] int NOT NULL,
+        [Nome] nvarchar(60) NOT NULL,
+        [Rotulo] nvarchar(20) NOT NULL,
+        [Plano] nvarchar(20) NOT NULL,
+        [NomeDoPlano] nvarchar(60) NOT NULL,
+        [CustoMensal] decimal(10,2) NOT NULL,
+        [Passos] nvarchar(100) NOT NULL,
         [Fila] nvarchar(63) NOT NULL,
         [Regiao] nvarchar(40) NOT NULL,
         [GrupoDeRecursos] nvarchar(90) NOT NULL,
@@ -62,6 +68,45 @@ GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RecursosProvisionados_UsuarioId_Estado' AND object_id = OBJECT_ID(N'[dbo].[RecursosProvisionados]'))
     CREATE INDEX [IX_RecursosProvisionados_UsuarioId_Estado] ON [dbo].[RecursosProvisionados] ([UsuarioId], [Estado]);
+GO
+
+-- Item 12 (App Service e Static Web App): as colunas novas na base que já tinha a tabela do item 4. A migration
+-- AplicativosNoAzure é o espelho delas no SQLite.
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'Vaga') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [Vaga] int NOT NULL CONSTRAINT [DF_RecursosProvisionados_Vaga] DEFAULT 0;
+GO
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'Rotulo') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [Rotulo] nvarchar(20) NOT NULL CONSTRAINT [DF_RecursosProvisionados_Rotulo] DEFAULT N'';
+GO
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'Plano') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [Plano] nvarchar(20) NOT NULL CONSTRAINT [DF_RecursosProvisionados_Plano] DEFAULT N'';
+GO
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'NomeDoPlano') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [NomeDoPlano] nvarchar(60) NOT NULL CONSTRAINT [DF_RecursosProvisionados_NomeDoPlano] DEFAULT N'';
+GO
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'CustoMensal') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [CustoMensal] decimal(10,2) NOT NULL CONSTRAINT [DF_RecursosProvisionados_CustoMensal] DEFAULT 0;
+GO
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'Passos') IS NULL
+    ALTER TABLE [dbo].[RecursosProvisionados] ADD [Passos] nvarchar(100) NOT NULL CONSTRAINT [DF_RecursosProvisionados_Passos] DEFAULT N'';
+GO
+
+-- O nome do App Service vai a 60 caracteres (a conta de armazenamento tinha 24). Aumentar um nvarchar indexado é permitido.
+IF COL_LENGTH(N'dbo.RecursosProvisionados', N'Nome') < 120
+    ALTER TABLE [dbo].[RecursosProvisionados] ALTER COLUMN [Nome] nvarchar(60) NOT NULL;
+GO
+
+-- A vaga dos recursos ativos que já existiam (as filas do item 4): 1, 2, ... por usuário e tipo, na ordem do pedido.
+UPDATE r SET [Vaga] = n.[Vaga]
+FROM [dbo].[RecursosProvisionados] r
+JOIN (SELECT [Id], ROW_NUMBER() OVER (PARTITION BY [UsuarioId], [Tipo] ORDER BY [Id]) AS [Vaga]
+      FROM [dbo].[RecursosProvisionados] WHERE [Estado] <> N'removido') n ON n.[Id] = r.[Id]
+WHERE r.[Vaga] = 0;
+GO
+
+-- A COTA atômica: uma vaga por (usuário, tipo) entre os não removidos. Dois pedidos simultâneos não ocupam a mesma.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_RecursosProvisionados_UsuarioId_Tipo_Vaga' AND object_id = OBJECT_ID(N'[dbo].[RecursosProvisionados]'))
+    CREATE UNIQUE INDEX [IX_RecursosProvisionados_UsuarioId_Tipo_Vaga] ON [dbo].[RecursosProvisionados] ([UsuarioId], [Tipo], [Vaga]) WHERE [Estado] <> N'removido';
 GO
 
 -- A fila do worker: os pedidos por estado e pela próxima tentativa.

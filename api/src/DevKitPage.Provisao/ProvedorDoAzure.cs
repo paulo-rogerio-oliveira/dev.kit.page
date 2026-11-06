@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Azure.Core;
 using Azure.Identity;
+using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.Extensions.Options;
 
@@ -11,7 +12,8 @@ namespace DevKitPage.Provisao;
 
 /// <summary>
 /// A fila do usuário no Azure Resource Manager, pela REST — sem SDK de gestão: três PUT idempotentes (o grupo, a conta de
-/// armazenamento e a fila) e um DELETE. O token vem da <see cref="TokenCredential"/> (a identidade gerenciada do worker);
+/// armazenamento e a fila) e um DELETE. O App Service é o plano e o site (dois passos), e o Static Web App, um recurso só
+/// (item 12) — PUT idempotentes, e o DELETE do que não existe é sucesso. O token vem da <see cref="TokenCredential"/> (a identidade gerenciada do worker);
 /// nenhuma chave passa por aqui nem é guardada. Cada falha sai CLASSIFICADA (<see cref="FalhaNaNuvem"/>): 408, 429, 5xx e a
 /// rede são transitórias; 401/403 (a identidade sem papel), 409 do nome tomado e 400 são definitivas.
 /// </summary>
@@ -25,17 +27,13 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
 
     private static readonly string[] Escopo = ["https://management.azure.com/.default"];
 
+    /// <summary>A versão da API do <c>Microsoft.Web</c> (o plano, o site e o Static Web App).</summary>
+    public const string VersaoDaWeb = "2023-12-01";
+
     public async Task<RecursoNaNuvem> CriarFilaAsync(FilaNaNuvem fila, CancellationToken ct)
     {
-        var tags = new Dictionary<string, string>
-        {
-            ["devkit"] = "provisao",
-            ["devkit-usuario"] = fila.UsuarioId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["devkit-recurso"] = fila.RecursoId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
-        await EnviarAsync(HttpMethod.Put, $"{Assinatura()}/resourcegroups/{fila.GrupoDeRecursos}?api-version={VersaoDosGrupos}",
-            new { location = fila.Regiao, tags }, "o grupo de recursos", ct);
+        var tags = Tags(fila.UsuarioId, fila.RecursoId);
+        await GrupoAsync(fila.GrupoDeRecursos, fila.Regiao, tags, ct);
 
         // A conta: HTTPS, TLS 1.2 e sem acesso público a blob. A chave compartilhada continua permitida: a fila não aceita SAS de
         // delegação do usuário, e a SAS curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
@@ -56,6 +54,98 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
 
     public Task RemoverFilaAsync(FilaNaNuvem fila, CancellationToken ct)
         => EnviarAsync(HttpMethod.Delete, $"{Conta(fila)}?api-version={VersaoDoStorage}", null, "a remoção da conta de armazenamento", ct);
+
+    /// <summary>O plano Linux do App Service (o <c>serverfarm</c>, com <c>reserved</c>), no SKU pedido.</summary>
+    public async Task CriarPlanoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
+    {
+        var tags = Tags(aplicativo.UsuarioId, aplicativo.RecursoId);
+        await GrupoAsync(aplicativo.GrupoDeRecursos, aplicativo.Regiao, tags, ct);
+        await EnviarAsync(HttpMethod.Put, $"{Plano(aplicativo)}?api-version={VersaoDaWeb}", new
+        {
+            location = aplicativo.Regiao,
+            kind = "linux",
+            sku = new { name = aplicativo.Plano },
+            tags,
+            properties = new { reserved = true },
+        }, "o plano do App Service", ct);
+    }
+
+    /// <summary>
+    /// O site Linux no plano (só HTTPS, TLS 1.2, sem FTP) ou o Static Web App no SKU pedido. O endereço vem do próprio recurso
+    /// (o <c>defaultHostName</c>): o do Static Web App é sorteado pelo Azure.
+    /// </summary>
+    public async Task<RecursoNaNuvem> CriarAplicativoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
+    {
+        var tags = Tags(aplicativo.UsuarioId, aplicativo.RecursoId);
+        await GrupoAsync(aplicativo.GrupoDeRecursos, aplicativo.Regiao, tags, ct);
+        object corpo = Estatico(aplicativo)
+            ? new { location = aplicativo.Regiao, sku = new { name = aplicativo.Plano, tier = aplicativo.Plano }, tags, properties = new { } }
+            : new
+            {
+                location = aplicativo.Regiao,
+                kind = "app,linux",
+                tags,
+                properties = new
+                {
+                    serverFarmId = Plano(aplicativo),
+                    httpsOnly = true,
+                    siteConfig = new { minTlsVersion = "1.2", ftpsState = "Disabled" },
+                },
+            };
+        await EnviarAsync(HttpMethod.Put, $"{Aplicativo(aplicativo)}?api-version={VersaoDaWeb}", corpo, OQue(aplicativo), ct);
+
+        var host = await EnderecoAsync(aplicativo, ct) ?? (Estatico(aplicativo) ? null : $"{aplicativo.Nome}.azurewebsites.net");
+        return new RecursoNaNuvem(Aplicativo(aplicativo), host is null ? string.Empty : $"https://{host}");
+    }
+
+    public Task RemoverAplicativoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
+        => EnviarAsync(HttpMethod.Delete, $"{Aplicativo(aplicativo)}?api-version={VersaoDaWeb}", null, $"a remoção d{OQue(aplicativo)}", ct);
+
+    public Task RemoverPlanoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
+        => aplicativo.NomeDoPlano.Length == 0
+            ? Task.CompletedTask
+            : EnviarAsync(HttpMethod.Delete, $"{Plano(aplicativo)}?api-version={VersaoDaWeb}", null, "a remoção do plano do App Service", ct);
+
+    private static Dictionary<string, string> Tags(int usuarioId, long recursoId) => new()
+    {
+        ["devkit"] = "provisao",
+        ["devkit-usuario"] = usuarioId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ["devkit-recurso"] = recursoId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
+
+    /// <summary>O grupo do usuário (PUT idempotente: cria ou confirma).</summary>
+    private Task GrupoAsync(string grupo, string regiao, Dictionary<string, string> tags, CancellationToken ct)
+        => EnviarAsync(HttpMethod.Put, $"{Assinatura()}/resourcegroups/{grupo}?api-version={VersaoDosGrupos}", new { location = regiao, tags }, "o grupo de recursos", ct);
+
+    private static bool Estatico(AplicativoNaNuvem aplicativo) => aplicativo.Tipo == ProvisaoV1.TipoStaticWebApp;
+
+    private static string OQue(AplicativoNaNuvem aplicativo) => Estatico(aplicativo) ? "o Static Web App" : "o App Service";
+
+    private string Plano(AplicativoNaNuvem aplicativo)
+        => $"/{Assinatura()}/resourceGroups/{aplicativo.GrupoDeRecursos}/providers/Microsoft.Web/serverfarms/{aplicativo.NomeDoPlano}";
+
+    private string Aplicativo(AplicativoNaNuvem aplicativo)
+        => $"/{Assinatura()}/resourceGroups/{aplicativo.GrupoDeRecursos}/providers/Microsoft.Web/{(Estatico(aplicativo) ? "staticSites" : "sites")}/{aplicativo.Nome}";
+
+    /// <summary>O endereço público do aplicativo (<c>properties.defaultHostName</c>; no Static Web App, <c>defaultHostname</c>); nulo sem ele.</summary>
+    private async Task<string?> EnderecoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
+    {
+        using var resposta = await ChamarAsync(HttpMethod.Get, $"{Aplicativo(aplicativo)}?api-version={VersaoDaWeb}".TrimStart('/'), null, OQue(aplicativo), ct);
+        if (!resposta.IsSuccessStatusCode)
+            throw await ClassificarAsync(resposta, OQue(aplicativo), ct);
+        try
+        {
+            using var json = JsonDocument.Parse(await resposta.Content.ReadAsStringAsync(ct));
+            if (json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("properties", out var propriedades)
+                && propriedades.ValueKind == JsonValueKind.Object)
+                return Texto(propriedades, "defaultHostName") ?? Texto(propriedades, "defaultHostname");
+        }
+        catch (JsonException)
+        {
+            // Sem corpo legível: fica o endereço padrão (o do App Service) ou nenhum.
+        }
+        return null;
+    }
 
     private string Assinatura()
     {
@@ -166,6 +256,7 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
         var texto = (status, codigo) switch
         {
             (409, "StorageAccountAlreadyTaken") => "O nome da conta já é usado por outra no Azure. Remova este pedido e peça a fila de novo (outro nome é sorteado).",
+            (409, "WebsiteAlreadyExists") => $"O nome d{oQue} já é usado no Azure (409). Remova este pedido e peça de novo (outro sufixo é sorteado).",
             (401 or 403, _) => $"A identidade do worker não tem permissão para {oQue} ({codigo}). Confira o papel dela na assinatura.",
             (429, _) => $"O Azure limitou os pedidos ({codigo}) ao criar {oQue}.",
             _ => $"O Azure recusou {oQue} ({status} {codigo}): {mensagem}",
