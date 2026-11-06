@@ -143,6 +143,106 @@ export interface UsuarioResumo {
   licenca?: LicencaDoUsuario | null;
   /** O último login com a senha certa, pelo site ou pelo dev.kit; nulo em quem nunca entrou. */
   ultimoLogin?: string | null;
+  /** Os recursos que o admin liberou a este usuário (a provisão no Azure); ausente numa API anterior a eles. */
+  recursosLiberados?: RecursoLiberavel[] | null;
+}
+
+// ----- A provisão no Azure (controle remoto v2, item 4) -----
+
+/** O que o admin libera por usuário: a provisão, hoje. */
+export type RecursoLiberavel = 'provisao';
+
+/** De onde vem a liberação: a permissão do admin, o plano da assinatura (o tier) ou nenhuma. */
+export type OrigemDaLiberacao = 'permissao' | 'plano' | 'nenhuma';
+
+/** Se a ação aparece na conta, e o que o pedido aceita. */
+export interface PermissaoDeProvisao {
+  liberada: boolean;
+  origem: OrigemDaLiberacao;
+  regioes: string[];
+  regiaoPadrao: string;
+  maximoDeFilas: number;
+  /** Os sites e APIs que o usuário pode pedir (item 12); ausente numa API anterior a eles. */
+  aplicativos?: TipoDeAplicativo[] | null;
+  /** O teto do custo estimado do mês, em reais. */
+  limiteDeCusto?: number;
+  /** A partir de quantos por cento do teto o site avisa. */
+  alertaDeCustoPercentual?: number;
+}
+
+export type TipoDoAplicativo = 'app-service' | 'static-web-app';
+
+/** Um plano (o SKU do Azure) com o custo estimado do mês, em reais. */
+export interface PlanoDeAplicativo {
+  id: string;
+  rotulo: string;
+  custoMensal: number;
+}
+
+/** Um tipo de aplicativo: a cota por usuário, as regiões e os planos. */
+export interface TipoDeAplicativo {
+  tipo: TipoDoAplicativo;
+  maximo: number;
+  regioes: string[];
+  regiaoPadrao: string;
+  planos: PlanoDeAplicativo[];
+}
+
+/** O uso da cota de cada tipo e o custo estimado do mês, com o alerta e o bloqueio. */
+export interface CotaDaProvisao {
+  tipos: { tipo: TipoDoAplicativo; ativos: number; maximo: number }[];
+  custoDoMes: number;
+  limiteDeCusto: number;
+  alertaDeCustoPercentual: number;
+  alerta: boolean;
+  bloqueado: boolean;
+}
+
+export type EstadoDaProvisao = 'pedido' | 'em-provisao' | 'pronto' | 'falhou' | 'removido';
+export type OperacaoDaProvisao = 'criar' | 'remover';
+
+/** Um recurso do usuário no Azure — o pedido assíncrono e repetível que o worker executa. */
+export interface RecursoProvisionado {
+  id: number;
+  tipo: 'fila' | TipoDoAplicativo;
+  nome: string;
+  fila: string;
+  regiao: string;
+  grupoDeRecursos: string;
+  operacao: OperacaoDaProvisao;
+  estado: EstadoDaProvisao;
+  tentativas: number;
+  erro: string;
+  endpoint: string;
+  criadoEm: string;
+  atualizadoEm: string;
+  prontoEm: string | null;
+  proximaTentativaEm: string | null;
+  /** O nome que o usuário deu ao aplicativo; vazio na fila. */
+  rotulo?: string;
+  /** O plano do aplicativo (o SKU); vazio na fila. */
+  plano?: string;
+  /** O plano do App Service no Azure, criado antes do site. */
+  nomeDoPlano?: string;
+  /** O custo estimado do mês, em reais. */
+  custoMensal?: number;
+  /** Os passos da criação já feitos no Azure (o plano). */
+  passos?: string[] | null;
+  /** A criação falhou depois de um passo feito: algo ficou no Azure. */
+  parcial?: boolean;
+}
+
+/** Uma linha da auditoria do recurso. */
+export interface EventoDaProvisao {
+  em: string;
+  evento: string;
+  autor: string;
+  detalhe: string;
+}
+
+export interface DetalheDoRecurso {
+  recurso: RecursoProvisionado;
+  eventos: EventoDaProvisao[];
 }
 
 // ----- US #687: a licença por usuário que o admin define -----

@@ -287,6 +287,86 @@ Rode `api/scripts/sqlserver/UltimoLogin.sql` (idempotente) **antes de publicar a
 `Usuarios.UltimoLoginEmUtc`, que o login grava. Sem a coluna, todo login falha. Os usuários que já existem aparecem como
 "nunca" nas listas de `/usuarios` e `/empresa/usuarios` até entrarem de novo. SQLite aplica a migration automaticamente.
 
+### Provisão no Azure e o worker (controle remoto v2, item 4)
+
+A API pública só GRAVA o pedido; quem cria e remove no Azure é o **worker** `DevKitPage.Provisao`, outro processo, com a
+identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
+
+1. **Banco.** Rode `api/scripts/sqlserver/Provisao.sql` (idempotente) antes de publicar a API desta versão: cria
+   `PermissoesDeUsuario`, `RecursosProvisionados` e `EventosDaProvisao`. Sem ele, o `/health` fica `Degraded` e aponta o script.
+2. **Identidade do worker.** Crie uma identidade gerenciada atribuída ao usuário (ex.: `id-devkit-provisao`) e dê a ela, na
+   assinatura do dev.kit, só o que a provisão usa — uma função personalizada com `Microsoft.Resources/subscriptions/resourceGroups/read`
+   e `/write`, `Microsoft.Storage/storageAccounts/read`, `/write` e `/delete` e
+   `Microsoft.Storage/storageAccounts/queueServices/queues/read` e `/write` (o `Contributor` da assinatura também serve, mas
+   dá mais do que precisa). A identidade da API continua sem papel na assinatura.
+3. **Banco para o worker, sem senha.** No Azure SQL, crie o usuário da identidade (`CREATE USER [id-devkit-provisao] FROM
+   EXTERNAL PROVIDER`) com leitura e escrita, e use na connection string do worker
+   `Authentication=Active Directory Managed Identity;User Id=<client id da identidade>`.
+4. **Publicar.** `dotnet publish api/src/DevKitPage.Provisao -c Release` num segundo Container App (ou App Service), **sem
+   ingress** — o worker não recebe chamada nenhuma —, com a identidade do passo 2 atribuída e uma réplica (mais de uma
+   também funciona: a reserva do pedido é concorrente-segura).
+
+| Variável do worker | O que é |
+|---|---|
+| `ConnectionStrings__DevKitPage` · `Banco__Provider` | A MESMA base da API (`SqlServer`), com a autenticação da identidade (passo 3). |
+| `Provisao__Provedor` | `azure` (padrão). O `simulado` é de desenvolvimento: o worker se recusa a subir com ele em Production. |
+| `Provisao__AssinaturaId` | A assinatura do dev.kit onde ficam os grupos `rg-devkit-u{id}` (obrigatória). |
+| `Provisao__IdentidadeClientId` | O client id da identidade do passo 2 (não é segredo). Vazio: a identidade do sistema. |
+| `Provisao__MaximoDeTentativas` · `EsperaInicialSegundos` · `EsperaMaximaSegundos` · `ReservaMinutos` | 5 · 30 · 900 · 10: a repetição da falha transitória (recuo exponencial) e a validade da reserva de um pedido. |
+
+| Variável da API | O que é |
+|---|---|
+| `Provisao__Regioes__0`, `__1`… · `Provisao__RegiaoPadrao` | As regiões aceitas (padrão `brazilsouth` e `eastus2`) e a sugerida. |
+| `Provisao__MaximoDeFilasPorUsuario` | A cota de filas ativas por usuário (1). |
+| `Provisao__PlanosQueLiberam__0`… | Os planos da empresa que liberam a provisão sem a permissão do admin — o tier de assinatura; vazio hoje. |
+| `Provisao__PedidosPorHora` | Pedidos (criar, repetir, remover) por usuário por hora (20); acima, 429. |
+| `Provisao__MaximoDeAppServicesPorUsuario` · `Provisao__MaximoDeStaticWebAppsPorUsuario` | A cota de App Services (2) e de Static Web Apps (3) ativos por usuário (item 12). |
+| `Provisao__LimiteDeCustoMensal` · `Provisao__AlertaDeCustoPercentual` | O teto do custo estimado do mês dos aplicativos, em reais (150; 0 desliga), e o alerta (80%). |
+| `Provisao__PlanosDoAppService__0__Id`, `__Rotulo`, `__CustoMensal`… · `Provisao__PlanosDoStaticWebApp__…` · `Provisao__RegioesDoStaticWebApp__0`… | Os planos com o custo estimado (padrão F1/B1 e Free/Standard, sem os preços conferidos) e as regiões do Static Web App. |
+
+**App Service e Static Web App (item 12).** Rode de novo o `Provisao.sql` (as colunas novas e o índice da vaga) antes de
+publicar a API desta versão. A identidade do worker passa a precisar também de `Microsoft.Web/serverfarms/read`, `/write` e
+`/delete`, `Microsoft.Web/sites/read`, `/write` e `/delete` e `Microsoft.Web/staticSites/read`, `/write` e `/delete`.
+
+**Liberar a um usuário**: `/usuarios` → a licença do usuário → **Recursos liberados** → Liberar. Retirar não apaga o que ele
+criou (só impede pedidos novos). **Custo**: um grupo por usuário com as tags `devkit=provisao`, `devkit-usuario` e
+`devkit-recurso`; crie o orçamento com alerta da assinatura filtrado pela tag `devkit=provisao` (os preços e a
+disponibilidade das regiões não foram conferidos nesta entrega). A conta de armazenamento aceita só HTTPS e TLS 1.2, sem
+acesso público a blob; a chave compartilhada continua ligada porque a fila não aceita SAS de delegação de usuário, e a SAS
+curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
+
+### Conversa e comandos remotos (controle remoto v2, item 5)
+
+A API põe o comando do site na fila do usuário e entrega ao serviço da máquina a SAS curta de consumo, as duas assinadas com
+a chave da conta de armazenamento do usuário. A chave é lida do Resource Manager (`listKeys`) pela **identidade gerenciada
+da API** e fica só na memória dela — nunca no banco, no log ou na configuração.
+
+1. **Banco.** Rode `api/scripts/sqlserver/Conversa.sql` (idempotente; depois de `Remoto.sql` e `Provisao.sql`) antes de
+   publicar a API desta versão: cria `ComandosRemotos`, `RespostasRemotas`, `EventosDaConversa` e `FalasRemotas` (item 13 —
+   numa base que já tem as outras, rodar de novo só cria esta). Sem ele, o `/health` fica `Degraded` e aponta o script.
+2. **Identidade da API.** Ligue uma identidade gerenciada à API (a do sistema, ou uma atribuída ao usuário com o client id em
+   `Remoto__IdentidadeClientId`) e dê a ela, na assinatura do dev.kit, SÓ uma função personalizada com
+   `Microsoft.Storage/storageAccounts/listkeys/action` (ex.: `devkit-api-chave-da-fila`). Ela não cria, não remove e não lê
+   mais nada: quem provisiona continua sendo o worker, com a identidade dele. O escopo é a assinatura porque cada usuário tem o
+   seu grupo `rg-devkit-u{id}`; restrinja com uma condição pela tag `devkit=provisao` se a política da assinatura pedir.
+3. **Rede.** A API sai para `management.azure.com` e `*.queue.core.windows.net` (HTTPS); a máquina do usuário só faz chamadas
+   de saída à API e à fila dele.
+4. **SSE.** O `GET /api/remoto/conversa/eventos` é uma conexão longa (até `Remoto:DuracaoDoSseSegundos`, 300 s): o ingress do
+   Container Apps a aceita com o tempo ocioso padrão, porque a API manda um `ping` a cada 15 s sem evento. Com mais de uma
+   réplica, o evento gravado por outra chega na releitura do SQL (`Remoto:IntervaloDoSseSegundos`).
+
+| Variável da API | O que é |
+|---|---|
+| `Remoto__Fila` | `azure` (padrão). O `simulado` é de desenvolvimento: a API se recusa a subir com ele em Production. |
+| `Remoto__IdentidadeClientId` | O client id da identidade atribuída ao usuário (não é segredo). Vazio: a identidade do sistema. |
+| `Remoto__TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` | 900 · 60 · 86400: o TTL do comando; o vencido antes da entrega volta `expirado`. |
+| `Remoto__SasMinutos` | 15 (de 1 a 60): a validade da SAS de consumo do serviço. |
+| `Remoto__ComandosPorHora` · `EnviosDaConversaPorMinuto` | 30 · 60: o limite de comandos por usuário (no SQL, 429 com `Retry-After`) e o de escritas por minuto. |
+| `Remoto__FalasPorMinuto` | 60: as falas do chat do dev.kit por usuário por minuto (item 13), separado das escritas da conversa. |
+| `Remoto__RetencaoDaConversaDias` | 30: comandos, respostas, falas e eventos mais velhos saem no expurgo diário. |
+
+Para testar local sem o Azure: `Remoto__Fila=simulado` na API e `Provisao__Provedor=simulado` no worker, na mesma base.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

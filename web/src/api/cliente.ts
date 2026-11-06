@@ -8,8 +8,11 @@ import type {
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta, AssinanteDoItem,
+  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado, CotaDaProvisao, TipoDoAplicativo,
 } from './tipos';
 import type { Projeto } from './projetos';
+import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
+import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -46,10 +49,12 @@ export function falhaDoServidor(caminho: string, status: number, codigo?: string
 }
 
 interface Opcoes {
+  signal?: AbortSignal;
   metodo?: string;
   corpo?: unknown;
   token?: string;
   aceita?: string;
+  ultimoEvento?: number;
 }
 
 /** A requisição: o 2xx volta como está; o resto vira {@link ErroDaApi} com a mensagem do ProblemDetails. */
@@ -57,8 +62,10 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   const cabecalhos: Record<string, string> = { Accept: opcoes.aceita ?? 'application/json' };
   if (opcoes.corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
+  if (opcoes.ultimoEvento !== undefined) cabecalhos['Last-Event-ID'] = String(opcoes.ultimoEvento);
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
+    signal: opcoes.signal,
     method: opcoes.metodo ?? 'GET',
     headers: cabecalhos,
     body: opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo),
@@ -119,6 +126,36 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  configuracaoDoPush: (token: string, signal?: AbortSignal) =>
+    chamar<{ disponivel: boolean; chavePublica: string | null }>('/api/remoto/push', { token, signal }),
+  assinarPush: (token: string, corpo: PushSubscriptionJSON) =>
+    chamar<{ id: string }>('/api/remoto/push/assinaturas', { token, metodo: 'POST', corpo }),
+  assinaturaDoPush: (token: string, id: string, signal?: AbortSignal) =>
+    chamar<{ id: string }>(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, signal }),
+  cancelarPush: (token: string, id: string) =>
+    requisitar(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, metodo: 'DELETE' }),
+  destinoDoPush: (token: string, id: string, signal?: AbortSignal) =>
+    chamar<{ maquinaId: string; pendenciaId: string; snapshotId: string }>(`/api/remoto/push/entregas/${encodeURIComponent(id)}`, { token, signal }),
+  decisoesRemotas: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes`, { token, signal }),
+  responderDecisao: (token: string, maquina: string, pendencia: string, corpo: ResponderDecisao) =>
+    chamar<RespostaDaDecisao>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`, { token, metodo: 'POST', corpo }),
+  estadoDoSegundoFator: (token: string, signal?: AbortSignal) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator', { token, signal }),
+  prepararSegundoFator: (token: string, senha: string) => chamar<{ chave: string; uri: string; expiraEm: string }>('/api/remoto/segundo-fator/preparar', { token, metodo: 'POST', corpo: { senha } }),
+  confirmarSegundoFator: (token: string, codigo: string) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator/confirmar', { token, metodo: 'POST', corpo: { codigo } }),
+  capturaDaDecisao: async (token: string, caminho: string, signal: AbortSignal) =>
+    (await requisitar(caminho, { token, signal, aceita: 'image/png' })).blob(),
+  conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
+  /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
+  enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
+    chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),
+  eventosDaConversa: (token: string, maquina: string, ultimoEvento: number, signal: AbortSignal) =>
+    requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
+  maquinasRemotas: (token: string, signal?: AbortSignal) =>
+    chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
+  retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<RetratoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/retrato`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>
@@ -390,6 +427,34 @@ export const api = {
 
   redefinirSenha: (token: string, id: number) =>
     chamar<UsuarioComSenha>(`/api/usuarios/${id}/senha`, { metodo: 'POST', token }),
+
+  liberarRecurso: (token: string, id: number, recurso: RecursoLiberavel, liberado: boolean) =>
+    chamar<UsuarioResumo>(`/api/usuarios/${id}/recursos/${recurso}`, { metodo: 'PUT', corpo: { liberado }, token }),
+
+  // A provisão no Azure (controle remoto v2, item 4): a permissão decide se a ação aparece; o resto, sem ela, é 403.
+  permissaoDeProvisao: (token: string) => chamar<PermissaoDeProvisao>('/api/provisao/permissao', { token }),
+
+  recursosProvisionados: (token: string) => chamar<RecursoProvisionado[]>('/api/provisao/recursos', { token }),
+
+  detalheDoRecurso: (token: string, id: number) => chamar<DetalheDoRecurso>(`/api/provisao/recursos/${id}`, { token }),
+
+  pedirFila: (token: string, regiao: string) =>
+    chamar<RecursoProvisionado>('/api/provisao/filas', { metodo: 'POST', corpo: { regiao }, token }),
+
+  repetirProvisao: (token: string, id: number) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/repetir`, { metodo: 'POST', token }),
+
+  removerRecurso: (token: string, id: number) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}`, { metodo: 'DELETE', token }),
+
+  // O App Service e o Static Web App (item 12): a cota e o custo, o pedido e a remoção com o segundo fator.
+  cotaDaProvisao: (token: string) => chamar<CotaDaProvisao>('/api/provisao/cota', { token }),
+
+  pedirAplicativo: (token: string, pedido: { tipo: TipoDoAplicativo; nome: string; regiao: string; plano: string }) =>
+    chamar<RecursoProvisionado>('/api/provisao/aplicativos', { metodo: 'POST', corpo: pedido, token }),
+
+  removerComSegundoFator: (token: string, id: number, codigo: string) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/remover`, { metodo: 'POST', corpo: { codigo }, token }),
 
   // ----- US #687 -----
 

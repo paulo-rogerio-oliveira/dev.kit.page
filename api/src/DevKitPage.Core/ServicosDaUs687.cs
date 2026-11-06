@@ -223,24 +223,32 @@ public static partial class RegrasDaEmpresa
     /// <summary>O CNPJ como o banco o guarda: só os dígitos.</summary>
     public static string Cnpj(string? texto) => NaoDigito().Replace(texto ?? string.Empty, string.Empty);
 
-    /// <summary>O CNPJ (só os dígitos) tem 14 dígitos, não é uma sequência repetida e os dois verificadores conferem.</summary>
-    public static bool CnpjValido(string digitos)
+    /// <summary>
+    /// O CNPJ sem a máscara tem 14 caracteres, não é uma sequência repetida e os dois verificadores conferem. Vale também o
+    /// ALFANUMÉRICO da Receita (desde 2026): os 12 primeiros são dígitos ou letras maiúsculas, e os verificadores, dígitos.
+    /// É a regra única do CNPJ — a da empresa e a do detector de dado de cliente do controle remoto (<see cref="DadosSensiveis"/>).
+    /// </summary>
+    public static bool CnpjValido(string cnpj)
     {
-        if (digitos.Length != 14 || !digitos.All(char.IsAsciiDigit) || digitos.Distinct().Count() == 1)
+        if (cnpj.Length != 14 || !cnpj[..12].All(c => char.IsAsciiDigit(c) || char.IsAsciiLetterUpper(c))
+            || !char.IsAsciiDigit(cnpj[12]) || !char.IsAsciiDigit(cnpj[13]) || cnpj.Distinct().Count() == 1)
             return false;
-        return digitos[12] - '0' == Verificador(digitos, 12) && digitos[13] - '0' == Verificador(digitos, 13);
+        return cnpj[12] - '0' == Verificador(cnpj, 12) && cnpj[13] - '0' == Verificador(cnpj, 13);
     }
 
     /// <summary>O CNPJ formatado para a tela: 12.345.678/0001-90 (o que não tem 14 dígitos volta como está).</summary>
     public static string FormatarCnpj(string digitos)
         => digitos.Length == 14 ? $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..12]}-{digitos[12..]}" : digitos;
 
-    /// <summary>O dígito verificador da posição <paramref name="posicao"/> (12 ou 13), pelos pesos 2–9 da direita para a esquerda.</summary>
-    private static int Verificador(string digitos, int posicao)
+    /// <summary>
+    /// O dígito verificador da posição <paramref name="posicao"/> (12 ou 13), pelos pesos 2–9 da direita para a esquerda. O
+    /// valor de cada caractere é o ASCII menos 48: o dígito vale ele mesmo, e a letra do alfanumérico, 17 (A) a 42 (Z).
+    /// </summary>
+    private static int Verificador(string cnpj, int posicao)
     {
         var soma = 0;
         for (var i = 0; i < posicao; i++)
-            soma += (digitos[i] - '0') * (2 + (posicao - 1 - i) % 8);
+            soma += (cnpj[i] - '0') * (2 + (posicao - 1 - i) % 8);
         var resto = soma % 11;
         return resto < 2 ? 0 : 11 - resto;
     }

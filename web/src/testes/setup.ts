@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { instalarNavegador, observadores, restaurarNavegador } from './navegador';
-import { cadastros, downloads, escritas, gestaoDeUsuarios, pedidosRecebidos, reacoes, reiniciarRelatos, requisicoes, servidor } from './servidor';
+import { cadastros, downloads, escritas, gestaoDeUsuarios, pedidosRecebidos, reacoes, reiniciarProvisao, reiniciarRelatos, requisicoes, servidor } from './servidor';
 
 // Com a suíte inteira em paralelo no jsdom, o findBy* passava do 1 s padrão em máquina carregada (o Dashboard e a
 // Compra, com o topo e o painel da marca): 5 s de espera, e o teste segue falhando de verdade quando o elemento não vem.
@@ -42,6 +42,7 @@ afterEach(async () => {
   escritas.length = 0;
   observadores.length = 0;
   reiniciarRelatos();
+  reiniciarProvisao();
   restaurarNavegador();
 });
 afterAll(() => servidor.close());

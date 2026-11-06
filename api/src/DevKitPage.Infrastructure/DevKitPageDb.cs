@@ -46,10 +46,27 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AnexoDeItemDoCatalogo> AnexosDeItemDoCatalogo => Set<AnexoDeItemDoCatalogo>();
     public DbSet<ProjetoCompartilhado> ProjetosCompartilhados => Set<ProjetoCompartilhado>();
     public DbSet<ItemDeProjetoCompartilhado> ItensDeProjetoCompartilhado => Set<ItemDeProjetoCompartilhado>();
+    public DbSet<MaquinaRemota> MaquinasRemotas => Set<MaquinaRemota>();
+    public DbSet<PermissaoDeUsuario> PermissoesDeUsuario => Set<PermissaoDeUsuario>();
+    public DbSet<RecursoProvisionado> RecursosProvisionados => Set<RecursoProvisionado>();
+    public DbSet<EventoDaProvisao> EventosDaProvisao => Set<EventoDaProvisao>();
+    public DbSet<ComandoRemoto> ComandosRemotos => Set<ComandoRemoto>();
+    public DbSet<RespostaRemota> RespostasRemotas => Set<RespostaRemota>();
+    public DbSet<FalaRemota> FalasRemotas => Set<FalaRemota>();
+    public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
+    public DbSet<AutenticadorDoUsuario> Autenticadores => Set<AutenticadorDoUsuario>();
+    public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
+    public DbSet<AssinaturaDoPush> AssinaturasDoPush => Set<AssinaturaDoPush>();
+    public DbSet<EntregaDoPush> EntregasDoPush => Set<EntregaDoPush>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
+        ConfigurarRemoto(modelBuilder);
+        ConfigurarProvisao(modelBuilder);
+        ConfigurarConversa(modelBuilder);
+        ConfigurarDecisoes(modelBuilder);
+        ConfigurarPush(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -518,6 +535,207 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(a => a.Autor).HasMaxLength(100);
             e.HasIndex(a => a.ItemId);
             e.HasOne(a => a.Item).WithMany().HasForeignKey(a => a.ItemId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    /// <summary>
+    /// O controle remoto, fase 1: o heartbeat e o retrato de cada máquina, por usuário. No Azure SQL a tabela vem de
+    /// api/scripts/sqlserver/Remoto.sql. O retrato é nvarchar(max), com o teto do contrato conferido antes.
+    /// </summary>
+    private static void ConfigurarRemoto(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<MaquinaRemota>(e =>
+        {
+            e.ToTable("MaquinasRemotas");
+            e.Property(m => m.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(m => m.Nome).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoNome);
+            e.Property(m => m.VersaoDevKit).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDaVersao);
+            e.Property(m => m.Origem).HasMaxLength(20);
+            e.Property(m => m.EstadoDoAgente).HasMaxLength(20);
+            e.Property(m => m.Retrato).HasDefaultValue("");
+            // O isolamento: o mesmo id anônimo de dois usuários são duas máquinas, e nenhum grava na do outro.
+            e.HasIndex(m => new { m.UsuarioId, m.MaquinaId }).IsUnique();
+            e.HasIndex(m => m.AtualizadaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+    /// <summary>
+    /// A provisão no Azure: a permissão por usuário, o recurso (que é também o pedido repetível) e a auditoria. No Azure SQL as
+    /// tabelas vêm de api/scripts/sqlserver/Provisao.sql.
+    /// </summary>
+    private static void ConfigurarProvisao(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<PermissaoDeUsuario>(e =>
+        {
+            e.ToTable("PermissoesDeUsuario");
+            e.Property(p => p.Recurso).HasMaxLength(40);
+            e.Property(p => p.ConcedidaPor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.HasIndex(p => new { p.UsuarioId, p.Recurso }).IsUnique();
+            e.HasOne<Usuario>().WithMany().HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RecursoProvisionado>(e =>
+        {
+            e.ToTable("RecursosProvisionados");
+            e.Property(r => r.Tipo).HasMaxLength(20);
+            e.Property(r => r.Nome).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoNome);
+            e.Property(r => r.Rotulo).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoRotulo);
+            e.Property(r => r.Plano).HasMaxLength(20);
+            e.Property(r => r.NomeDoPlano).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoNome);
+            e.Property(r => r.CustoMensal).HasPrecision(10, 2);
+            e.Property(r => r.Passos).HasMaxLength(100);
+            e.Property(r => r.Fila).HasMaxLength(63);
+            e.Property(r => r.Regiao).HasMaxLength(40);
+            e.Property(r => r.GrupoDeRecursos).HasMaxLength(90);
+            e.Property(r => r.Operacao).HasMaxLength(20);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.Property(r => r.Erro).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            e.Property(r => r.IdNoAzure).HasMaxLength(400);
+            e.Property(r => r.Endpoint).HasMaxLength(300);
+            e.Property(r => r.ReservadoPor).HasMaxLength(100);
+            e.Property(r => r.Versao).IsConcurrencyToken();
+            // O nome é global no Azure: o índice único barra aqui o sorteio repetido antes de o worker o pedir.
+            e.HasIndex(r => r.Nome).IsUnique();
+            e.HasIndex(r => new { r.UsuarioId, r.Estado });
+            // A COTA atômica: uma vaga por (usuário, tipo) entre os não removidos — o pedido simultâneo que pegaria a mesma
+            // vaga é barrado aqui, e a remoção concluída a devolve.
+            e.HasIndex(r => new { r.UsuarioId, r.Tipo, r.Vaga }).IsUnique().HasFilter("[Estado] <> 'removido'");
+            // A fila do worker: os pedidos por estado e pela próxima tentativa.
+            e.HasIndex(r => new { r.Estado, r.ProximaTentativaEmUtc });
+            // O recurso pago não some com o usuário: Restrict.
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventoDaProvisao>(e =>
+        {
+            e.ToTable("EventosDaProvisao");
+            e.Property(v => v.Evento).HasMaxLength(30);
+            e.Property(v => v.Autor).HasMaxLength(ValidadorDeEmpresa.TamanhoMaximoDoLogin);
+            e.Property(v => v.Detalhe).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            e.HasIndex(v => new { v.RecursoId, v.EmUtc });
+            e.HasIndex(v => new { v.UsuarioId, v.EmUtc });
+            // O UsuarioId é o dono (ou quem recebeu a permissão): sem FK, como nas convenções — a auditoria só acrescenta.
+            e.HasOne<RecursoProvisionado>().WithMany().HasForeignKey(v => v.RecursoId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    /// <summary>
+    /// A conversa e os comandos remotos (fase 2 do controle remoto): o comando com o estado, a resposta do dev.kit, a fala do
+    /// chat do dev.kit e o evento do SSE. No Azure SQL as tabelas vêm de api/scripts/sqlserver/Conversa.sql. O usuário apagado leva a conversa dele.
+    /// </summary>
+    private static void ConfigurarConversa(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ComandoRemoto>(e =>
+        {
+            e.ToTable("ComandosRemotos");
+            e.Property(c => c.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(c => c.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(c => c.Tipo).HasMaxLength(20);
+            e.Property(c => c.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            e.Property(c => c.Dispositivo).HasMaxLength(20);
+            e.Property(c => c.Estado).HasMaxLength(20);
+            e.Property(c => c.Erro).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            // O id viaja na fila: único por usuário, e o reenvio com ele devolve o mesmo comando.
+            e.HasIndex(c => new { c.UsuarioId, c.ComandoId }).IsUnique();
+            // O histórico por máquina e o limite por hora.
+            e.HasIndex(c => new { c.UsuarioId, c.MaquinaId, c.CriadoEmUtc });
+            e.HasIndex(c => new { c.UsuarioId, c.CriadoEmUtc });
+            // O TTL: os que aguardam a entrega, pelo fim dele.
+            e.HasIndex(c => new { c.Estado, c.ExpiraEmUtc });
+            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RespostaRemota>(e =>
+        {
+            e.ToTable("RespostasRemotas");
+            e.Property(r => r.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.RespostaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(r => r.Tipo).HasMaxLength(20);
+            e.Property(r => r.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            // O reenvio do dev.kit não duplica a resposta.
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.RespostaId }).IsUnique();
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.RecebidaEmUtc });
+            e.HasIndex(r => r.RecebidaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FalaRemota>(e =>
+        {
+            e.ToTable("FalasRemotas");
+            e.Property(f => f.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(f => f.FalaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(f => f.Autor).HasMaxLength(20);
+            e.Property(f => f.Origem).HasMaxLength(20);
+            e.Property(f => f.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
+            e.Property(f => f.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            // O reenvio do dev.kit não duplica a fala.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.FalaId }).IsUnique();
+            // O histórico por máquina, na ordem em que foram ditas.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.DitaEmUtc });
+            e.HasIndex(f => f.RecebidaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(f => f.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EventoDaConversa>(e =>
+        {
+            e.ToTable("EventosDaConversa");
+            e.Property(v => v.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.Property(v => v.Tipo).HasMaxLength(20);
+            // O SSE lê os do usuário depois do último id visto.
+            e.HasIndex(v => new { v.UsuarioId, v.Id });
+            e.HasIndex(v => v.EmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(v => v.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigurarDecisoes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AutenticadorDoUsuario>(e =>
+        {
+            e.ToTable("Autenticadores"); e.HasKey(a => a.UsuarioId);
+            e.Property(a => a.SegredoProtegido).HasMaxLength(1000);
+            e.HasOne<Usuario>().WithOne().HasForeignKey<AutenticadorDoUsuario>(a => a.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<RespostaDaDecisao>(e =>
+        {
+            e.ToTable("RespostasDasDecisoes");
+            e.Property(r => r.MaquinaId).HasMaxLength(64); e.Property(r => r.PendenciaId).HasMaxLength(64);
+            e.Property(r => r.SnapshotId).HasMaxLength(64); e.Property(r => r.Acao).HasMaxLength(20);
+            e.Property(r => r.Opcao).HasMaxLength(200); e.Property(r => r.Origem).HasMaxLength(300);
+            e.Property(r => r.Destino).HasMaxLength(300); e.Property(r => r.Sha).HasMaxLength(40);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique().HasFilter("[Estado] <> 'vencida'");
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.Estado });
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigurarPush(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AssinaturaDoPush>(e =>
+        {
+            e.ToTable("AssinaturasDoPush");
+            e.Property(a => a.Id).HasMaxLength(32);
+            e.Property(a => a.EndpointHash).HasMaxLength(64);
+            e.Property(a => a.DadosProtegidos).HasMaxLength(5000);
+            e.Property(a => a.ChavePublicaServidor).HasMaxLength(87);
+            e.HasIndex(a => a.EndpointHash).IsUnique();
+            e.HasIndex(a => a.UsuarioId);
+            e.HasIndex(a => a.VerificadaEmUtc);
+            e.HasIndex(a => a.AtualizadaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<EntregaDoPush>(e =>
+        {
+            e.ToTable("EntregasDoPush");
+            e.Property(x => x.Id).HasMaxLength(32); e.Property(x => x.AssinaturaId).HasMaxLength(32);
+            e.Property(x => x.MaquinaId).HasMaxLength(64); e.Property(x => x.PendenciaId).HasMaxLength(64);
+            e.Property(x => x.SnapshotId).HasMaxLength(64); e.Property(x => x.Estado).HasMaxLength(20);
+            e.Property(x => x.Reserva).HasMaxLength(32);
+            e.HasIndex(x => new { x.AssinaturaId, x.MaquinaId, x.PendenciaId, x.SnapshotId }).IsUnique();
+            e.HasIndex(x => new { x.Estado, x.ProximaTentativaUtc });
+            e.HasIndex(x => x.CriadaEmUtc);
+            e.HasOne<AssinaturaDoPush>().WithMany().HasForeignKey(x => x.AssinaturaId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

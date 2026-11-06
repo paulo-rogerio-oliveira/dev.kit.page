@@ -21,7 +21,7 @@ export function Login() {
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  if (sessao) return <Navigate to={destinoDa(sessao, de)} replace />;
+  if (sessao) return <Navigate to={destinoDa(sessao, de)} replace state={{ de }} />;
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
@@ -30,7 +30,7 @@ export function Login() {
     try {
       const resposta = await api.login(login.trim(), senha);
       entrar(resposta);
-      navegar(destinoDa(resposta, de), { replace: true });
+      navegar(destinoDa(resposta, de), { replace: true, state: { de } });
     } catch (falha) {
       setErro(falha instanceof ErroDaApi ? falha.message : 'Não foi possível falar com a API. Tente de novo.');
     } finally {

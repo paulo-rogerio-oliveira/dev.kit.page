@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DevKitPage.Provisao\DevKitPage.Provisao.csproj" />
+  </ItemGroup>
+
+  <!-- A base SQLite de verdade dos testes de infraestrutura, a MESMA classe (sem cópia). -->
+  <ItemGroup>
+    <Compile Include="..\DevKitPage.Infrastructure.Tests\BaseDeTeste.cs" Link="BaseDeTeste.cs" />
+    <!-- O autenticador ativado pelo caminho de verdade: a remoção do aplicativo pede o segundo fator (item 12). -->
+    <Compile Include="..\DevKitPage.Infrastructure.Tests\SegundoFatorDeTeste.cs" Link="SegundoFatorDeTeste.cs" />
+  </ItemGroup>
+
+</Project>
