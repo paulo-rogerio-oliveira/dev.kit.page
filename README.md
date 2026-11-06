@@ -96,6 +96,9 @@ publica os resultados.
 | `Remoto:TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` · `SasMinutos` | 900 · 60 · 86400 · 15 | O TTL do comando (vencido antes da entrega, volta `expirado`) e a validade da SAS de consumo do serviço. |
 | `Remoto:ComandosPorHora` · `EnviosDaConversaPorMinuto` · `RetencaoDaConversaDias` | 30 · 60 · 30 | O limite de comandos por usuário (no SQL, 429 com `Retry-After`), o de escritas por minuto e a retenção do histórico da conversa. |
 | `Remoto:FalasPorMinuto` | 60 | O limite das falas do chat do dev.kit (`POST /api/remoto/conversa/falas`) por usuário, separado das escritas da conversa. |
+| `ProtecaoDeDados:Blob` · `ChaveDoCofre` · `Pasta` · `IdentidadeClientId` | — | O key ring do DataProtection (push e segundo fator): o blob com a identidade da API, protegido pela chave do Key Vault quando houver, ou uma pasta compartilhada. **Obrigatório em Production** (a API não sobe sem o `Blob` ou a `Pasta`). |
+| `Push:ChavePublica` · `ChavePrivada` · `Assunto` | — | O par VAPID do push do board (`dotnet run --project api/src/DevKitPage.Api -- --gerar-chaves-vapid`) e o contato; a privada é **segredo**. |
+| `Jwt:RenovacaoDaMaquinaDias` | 30 | A validade da renovação do login pela máquina (o serviço do dev.kit renova sem o app aberto). |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |
 
 ## Como verificar cada critério da US #270

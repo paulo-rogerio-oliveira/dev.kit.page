@@ -3,6 +3,13 @@ using DevKitPage.Core;
 using DevKitPage.Infrastructure;
 using Microsoft.Extensions.Options;
 
+// O par VAPID do push (docs/publicacao-azure.md): imprime as app settings e sai, sem banco nem configuração.
+if (args.Contains(ChavesVapid.Argumento, StringComparer.Ordinal))
+{
+    Console.WriteLine(ChavesVapid.Instrucoes(ChavesVapid.Gerar()));
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AdicionarInfraestrutura(builder.Configuration);
@@ -30,6 +37,8 @@ var app = builder.Build();
 Seguranca.ValidarSegredo(app.Services, app.Environment);
 // A fila do controle remoto: a simulada não sobe em Production (o site fingiria que entregou).
 FilaDeComandos.Validar(app.Services.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value, app.Environment);
+// O key ring do DataProtection: em Production, persistido e compartilhado (o push e o segundo fator dependem dele).
+KeyRing.Validar(app.Services.GetRequiredService<IOptions<OpcoesDaProtecaoDeDados>>().Value, app.Environment);
 using (var escopo = app.Services.CreateScope())
     await escopo.ServiceProvider.GetRequiredService<InicializadorDaBase>().InicializarAsync();
 

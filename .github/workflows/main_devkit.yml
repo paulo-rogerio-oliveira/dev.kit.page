@@ -8,6 +8,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      aplicar_sql:
+        # Desligado por padrão: os scripts são idempotentes, mas mexem na base de produção (docs/publicacao-azure.md).
+        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push) antes do deploy'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -33,9 +39,91 @@ jobs:
           name: .net-app
           path: ${{env.DOTNET_ROOT}}/myapp
 
+  # O worker da provisão como WebJob CONTÍNUO do mesmo App Service: publicado à parte e posto em
+  # App_Data/jobs/continuous/provisao no deploy. A identidade dele é a atribuída ao usuário do Provisao__IdentidadeClientId.
+  worker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: api/global.json
+
+      - name: dotnet publish (worker da provisão)
+        run: dotnet publish api/src/DevKitPage.Provisao/DevKitPage.Provisao.csproj -c Release -o ${{ runner.temp }}/provisao
+
+      # O run.cmd (Windows), o run.sh (Linux) e o settings.job (uma instância só) do WebJob.
+      - name: Arquivos do WebJob
+        run: |
+          cp api/src/DevKitPage.Provisao/webjob/run.cmd api/src/DevKitPage.Provisao/webjob/run.sh api/src/DevKitPage.Provisao/webjob/settings.job ${{ runner.temp }}/provisao/
+          test -f ${{ runner.temp }}/provisao/DevKitPage.Provisao.dll
+
+      - name: Upload do WebJob
+        uses: actions/upload-artifact@v4
+        with:
+          name: webjob-provisao
+          path: ${{ runner.temp }}/provisao
+
+  # Opcional e DESLIGADO por padrão: só no disparo manual com aplicar_sql. Os scripts são idempotentes e vão na ordem
+  # das dependências (Conversa depois de Remoto e Provisao). A conexão é o segredo AZURE_SQL_CONNECTION_STRING, com
+  # Authentication=Active Directory Default (a identidade do azure/login precisa de um usuário na base).
+  sql:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.aplicar_sql }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2353AAB0026B48099F57BC4D492309A9 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6D616D976EEB4CE39B766CB97FD48CFF }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CA745059D6B646EDA77935884FD64538 }}
+
+      - name: Remoto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Remoto.sql
+
+      - name: Provisao.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Provisao.sql
+
+      - name: Conversa.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Conversa.sql
+
+      - name: Decisoes.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Decisoes.sql
+
+      - name: Push.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Push.sql
+
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, worker, sql]
+    # O sql pulado (o padrão) não segura o deploy; o sql que falhou, sim.
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.worker.result == 'success' && needs.sql.result != 'failure' }}
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
@@ -45,7 +133,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: .net-app
-      
+
+      - name: Download do WebJob do worker
+        uses: actions/download-artifact@v4
+        with:
+          name: webjob-provisao
+          path: App_Data/jobs/continuous/provisao
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -60,4 +154,3 @@ jobs:
           app-name: 'devkit'
           slot-name: 'Production'
           package: .
-          

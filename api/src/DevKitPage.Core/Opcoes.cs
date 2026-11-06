@@ -16,6 +16,12 @@ public sealed class OpcoesDeAutenticacao
     public string Audiencia { get; set; } = "dev.kit.page";
     public int ExpiracaoMinutos { get; set; } = 60;
 
+    /// <summary>
+    /// A validade da renovação da MÁQUINA (o serviço do dev.kit renova o login sem o app aberto): cada uso devolve uma nova, e
+    /// a máquina parada mais que isto volta a pedir o login no app.
+    /// </summary>
+    public int RenovacaoDaMaquinaDias { get; set; } = 30;
+
     /// <summary>Falhas de login seguidas antes do bloqueio.</summary>
     public int MaxFalhas { get; set; } = 5;
 
@@ -163,6 +169,37 @@ public sealed class OpcoesDoRemoto
 
     /// <summary>Quanto tempo um SSE fica aberto; depois ele fecha, e o site reconecta com o <c>Last-Event-ID</c>.</summary>
     public int DuracaoDoSseSegundos { get; set; } = 300;
+}
+
+/// <summary>
+/// O key ring do DataProtection da API (seção <c>ProtecaoDeDados</c>): o que protege o push do board e o segundo fator. Em
+/// Production ele tem de ser PERSISTIDO e COMPARTILHADO entre as instâncias — sem isso, cada reinício (ou cada instância) gera
+/// uma chave nova e o que foi protegido antes deixa de abrir. O <see cref="Blob"/> é o caminho do Azure, com a identidade da API
+/// e, quando houver cofre, a chave do Key Vault (<see cref="ChaveDoCofre"/>) protegendo o key ring; a <see cref="Pasta"/> serve a
+/// um disco compartilhado (o <c>/home</c> do App Service). Fora de Production, sem nada, vale o padrão do ASP.NET (a pasta do
+/// usuário que roda).
+/// </summary>
+public sealed class OpcoesDaProtecaoDeDados
+{
+    public const string Secao = "ProtecaoDeDados";
+
+    /// <summary>
+    /// O nome da aplicação no DataProtection: fixo, para todas as instâncias (e o slot) abrirem o que a outra protegeu. Trocar
+    /// invalida o que já está protegido.
+    /// </summary>
+    public const string NomeDaAplicacao = "DevKitPage.Api";
+
+    /// <summary>O blob do key ring (<c>https://&lt;conta&gt;.blob.core.windows.net/&lt;contêiner&gt;/keys.xml</c>); o contêiner já existe.</summary>
+    public string Blob { get; set; } = string.Empty;
+
+    /// <summary>A chave RSA do Key Vault que protege o key ring (<c>https://&lt;cofre&gt;.vault.azure.net/keys/&lt;nome&gt;</c>). Vazio: sem cofre.</summary>
+    public string ChaveDoCofre { get; set; } = string.Empty;
+
+    /// <summary>A pasta do key ring num disco compartilhado (alternativa ao <see cref="Blob"/>).</summary>
+    public string Pasta { get; set; } = string.Empty;
+
+    /// <summary>O client id da identidade atribuída ao usuário que lê o blob e o cofre (não é segredo); vazio é a do sistema.</summary>
+    public string IdentidadeClientId { get; set; } = string.Empty;
 }
 
 /// <summary>

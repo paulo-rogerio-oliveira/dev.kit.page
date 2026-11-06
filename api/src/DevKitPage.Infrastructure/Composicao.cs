@@ -1,4 +1,8 @@
+using Azure.Core.Cryptography;
+using Azure.Security.KeyVault.Keys.Cryptography;
 using DevKitPage.Core;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -95,7 +99,12 @@ public static class Composicao
         // A conversa e os comandos remotos (fase 2): o SQL, a fila do usuário e o aviso do SSE. A fila do Azure lê a chave da
         // conta com a identidade gerenciada da API; a simulada é de desenvolvimento (a API não sobe com ela em Production).
         servicos.AddScoped<IConversaRemota, ConversaRemota>();
-        servicos.AddDataProtection();
+        // O key ring persistido e compartilhado (o blob com a identidade da API, protegido pelo Key Vault quando houver): a
+        // escolha sai das opções na criação, e o KeyRing.Validar recusa Production sem ele.
+        servicos.Configure<OpcoesDaProtecaoDeDados>(configuracao.GetSection(OpcoesDaProtecaoDeDados.Secao));
+        servicos.AddDataProtection().SetApplicationName(OpcoesDaProtecaoDeDados.NomeDaAplicacao);
+        servicos.AddSingleton<IConfigureOptions<KeyManagementOptions>, ConfiguracaoDoKeyRing>();
+        servicos.TryAddSingleton<IKeyEncryptionKeyResolver>(sp => new KeyResolver(KeyRing.Credencial(sp)));
         servicos.AddScoped<ISegundoFator, SegundoFator>();
         servicos.AddScoped<IDecisoesRemotas, DecisoesRemotas>();
         servicos.Configure<OpcoesDoPush>(configuracao.GetSection(OpcoesDoPush.Secao));
