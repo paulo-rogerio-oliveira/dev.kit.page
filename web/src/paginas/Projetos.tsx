@@ -4,6 +4,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { Projeto } from '../api/projetos';
 import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
+import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
 import './Projetos.css';
@@ -86,6 +87,13 @@ export function Projetos() {
 }
 
 function Detalhe({ projeto: p }: { projeto: Projeto }) {
+  const { sessao, sair } = useSessao();
+  const [erro, setErro] = useState('');
+  const tratar = useCallback((falha: unknown) => {
+    if (falha instanceof ErroDaApi && falha.status === 401) sair('expirou');
+    else setErro(mensagemDaFalha(falha));
+  }, [sair]);
+  useEffect(() => setErro(''), [p.id]);
   const ondas = [...new Set(p.itens.map(i => i.onda))].sort((a, b) => a - b);
   const atual = ondaAtual(p);
   return <article className="cartao projeto-detalhe" aria-label="Detalhe do projeto">
@@ -103,5 +111,7 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
       </div>)}
     </section>)}</div>
     <p className="projetos-nota">Última sincronização: {formatar.dataHora(p.atualizadoEm)}. No dev.kit de outra máquina, use Sincronizar para recuperar o projeto e continuar.</p>
+    {erro && <p role="alert" className="erro">{erro}</p>}
+    <AcessoAoProjeto key={p.id} token={sessao!.token} recurso="projeto" projeto={{ id: p.id, chave: p.nome }} tratar={tratar} />
   </article>;
 }

@@ -955,9 +955,48 @@ export interface ProjetoDeDesign {
   chave: string;
   nivel: NivelDeConvencao;
   time: string;
+  /** Quem criou o projeto (o nome, ou o login): só ele dá e tira acesso. */
   dono: string;
   atualizadoEm: string;
   telas: TelaDeDesign[];
+  /** O papel de quem consulta: dono, editor (também envia) ou leitor (vê e baixa). */
+  papel?: PapelNoDesign | '';
+}
+
+/** O papel de alguém num projeto de design: o dono, quem o criou; o editor, que também envia; o leitor, que vê e baixa. */
+export type PapelNoDesign = 'dono' | 'editor' | 'leitor';
+
+/** Os papéis que o dono concede. */
+export type PapelDeAcessoAoDesign = Exclude<PapelNoDesign, 'dono'>;
+
+/** Um usuário no acesso ao projeto de design: o id, o login e o nome (vazio sem nome). */
+export interface UsuarioDoDesign {
+  id: number;
+  login: string;
+  nome: string;
+}
+
+/** Um acesso concedido pelo dono. */
+export interface AcessoAoDesign {
+  usuario: UsuarioDoDesign;
+  papel: PapelDeAcessoAoDesign;
+  concedidoEm: string;
+}
+
+/** Os acessos do projeto (o contrato AcessosDoDesignV1): os candidatos só vêm para o dono. */
+export interface AcessosDoDesign {
+  projeto: number;
+  repositorio: string;
+  dono: UsuarioDoDesign | null;
+  papel: PapelNoDesign | '';
+  acessos: AcessoAoDesign[];
+  candidatos: UsuarioDoDesign[];
+}
+
+/** O mesmo modelo de acesso nos projetos em ondas, identificado pelo nome. */
+export interface AcessosDoProjeto extends Omit<AcessosDoDesign, 'repositorio'> {
+  recurso: 'projeto';
+  nome: string;
 }
 
 /** O uso do teto do plano: a empresa de quem consulta, ou ele mesmo sem empresa. */

@@ -3,6 +3,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { NivelDeConvencao, ProjetoDeDesign, TelaDeDesign, UsoDoDesign, VersaoDeDesign } from '../api/tipos';
 import { copiarTexto } from '../areaDeTransferencia';
 import { formatar } from '../formatar';
+import { AcessoAoDesign } from './AcessoAoDesign';
 
 /** O escopo do filtro: o nível dos projetos (a mesma regra do contexto — empresa, equipe, os meus). */
 type Escopo = NivelDeConvencao;
@@ -161,9 +162,11 @@ export function DesignCompartilhado({ token, comEmpresa, tratar }: {
         {uso && <UsoDoTeto uso={uso} />}
       </div>
 
+      {projeto && <AcessoAoDesign token={token} projeto={projeto} tratar={tratar} />}
+
       {doEscopo.length === 0 ? (
         <p className="vazio cartao">
-          Nenhuma tela neste escopo ainda — o dev.kit envia cada captura e proposta do <code className="codigo">devcli design</code> e da aba Design.
+          Nenhuma tela neste escopo ainda — o dev.kit envia cada captura e proposta do <code className="codigo">devcli design</code> e da aba Design. Só aparecem os projetos que você criou ou a que o dono lhe deu acesso.
         </p>
       ) : (
         <div className="design-corpo">

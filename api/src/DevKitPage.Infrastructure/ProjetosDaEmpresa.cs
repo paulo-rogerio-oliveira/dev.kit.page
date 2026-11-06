@@ -41,7 +41,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         var espaco = RegrasDoDesign.EspacoDe(escopo);
         var dono = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
         var agora = relogio.GetUtcNow().UtcDateTime;
-        var projeto = await db.ProjetosCompartilhados.Include(p => p.Itens)
+        var projeto = await db.ProjetosCompartilhados.Include(p => p.Itens).Include(p => p.Acessos)
             .FirstOrDefaultAsync(p => p.Espaco == espaco && p.Nivel == nivel && p.Time == time && p.UsuarioId == dono && p.Slug == envio.Slug, ct);
 
         var novo = projeto is null;
@@ -52,9 +52,16 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             projeto = new ProjetoCompartilhado
             {
                 EmpresaId = escopo.EmpresaId, Espaco = espaco, Nivel = nivel, Time = time, UsuarioId = dono, Slug = envio.Slug!,
-                AutorId = escopo.UsuarioId, CriadoEmUtc = agora,
+                AutorId = escopo.UsuarioId, DonoId = escopo.UsuarioId, CriadoEmUtc = agora,
             };
             db.ProjetosCompartilhados.Add(projeto);
+        }
+        else if (!RegrasDeAcesso.PodeEditar(RegrasDeAcesso.Papel(escopo, projeto)))
+        {
+            var quem = await db.Usuarios.AsNoTracking().Where(u => u.Id == escopo.UsuarioId).Select(u => u.Login).FirstOrDefaultAsync(ct);
+            var papel = RegrasDeAcesso.Papel(escopo, projeto);
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Proibida,
+                $"O usuário {quem ?? $"#{escopo.UsuarioId}"} não pode alterar, aprovar ou disparar o projeto {projeto.Nome}: papel atual {(papel.Length == 0 ? "sem acesso" : papel)}; é exigido editor ou dono.");
         }
         else if (envio.Versao != projeto.Versao)
         {
@@ -116,10 +123,11 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         var projeto = await Visiveis(escopo, null).FirstOrDefaultAsync(p => p.Id == id, ct);
         if (projeto is null)
             return ResultadoDaGestao<ProjetoV1>.Falhou(FalhaNaGestao.NaoEncontrado, "Projeto não encontrado.");
-        if (!RegrasDoDesign.PodeApagar(escopo, projeto.AutorId, projeto.EmpresaId))
-            return ResultadoDaGestao<ProjetoV1>.Falhou(FalhaNaGestao.Proibida, "Só quem criou o projeto, ou o gestor da empresa, o apaga.");
+        if (RegrasDeAcesso.Papel(escopo, projeto) != AcessoV1.PapelDono)
+            return ResultadoDaGestao<ProjetoV1>.Falhou(FalhaNaGestao.Proibida, "Só o dono do projeto o apaga.");
 
         var leitura = Leitura(escopo, projeto);
+        await db.AcessosAosProjetos.Where(a => a.ProjetoEmOndasId == id).ExecuteDeleteAsync(ct);
         await db.ItensDeProjetoCompartilhado.Where(i => i.ProjetoId == id).ExecuteDeleteAsync(ct);
         await db.ProjetosCompartilhados.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
         return new(leitura);
@@ -130,10 +138,10 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
     {
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
         var empresa = escopo.EmpresaId;
-        return db.ProjetosCompartilhados.AsNoTracking().Include(p => p.Itens).Include(p => p.Autor)
-            .Where(p => (p.Nivel == NiveisDeConvencao.Usuario && p.UsuarioId == escopo.UsuarioId)
-                || (empresa != null && p.EmpresaId == empresa
-                    && (p.Nivel == NiveisDeConvencao.Empresa || (p.Nivel == NiveisDeConvencao.Time && (doTime == string.Empty || p.Time == doTime)))));
+        var eu = escopo.UsuarioId;
+        return db.ProjetosCompartilhados.AsNoTracking().Include(p => p.Itens).Include(p => p.Autor).Include(p => p.Acessos)
+            .Where(p => p.DonoId == eu || (empresa != null && p.EmpresaId == empresa && p.Acessos.Any(a => a.UsuarioId == eu)))
+            .Where(p => p.Nivel != NiveisDeConvencao.Time || doTime == string.Empty || p.Time == doTime);
     }
 
     private static ProjetoV1 Leitura(EscopoDoDesign escopo, ProjetoCompartilhado p)
@@ -146,9 +154,9 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
             i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios), RegrasDosProjetos.Lista(i.Componentes),
             RegrasDosProjetos.Dependencias(i.Dependencias), i.Onda, i.WorkItemId, i.Situacao)).ToArray(),
-        RegrasDoDesign.PodeApagar(escopo, p.AutorId, p.EmpresaId),
+        RegrasDeAcesso.Papel(escopo, p) == AcessoV1.PapelDono,
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
-        documento?.BranchesDasTasks, documento?.AtualizadoEm) with
+        documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p)) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),

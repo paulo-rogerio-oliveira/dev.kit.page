@@ -1,9 +1,23 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import { vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenDoDev } from '../testes/servidor';
 import type { Projeto } from '../api/projetos';
+import type { AcessosDoProjeto } from '../api/tipos';
+
+const acessoInicial: AcessosDoProjeto = {
+  recurso: 'projeto', projeto: 7, nome: 'Portal', papel: 'dono',
+  dono: { id: 1, login: 'ana', nome: 'Ana' }, acessos: [],
+  candidatos: [{ id: 2, login: 'bia', nome: 'Bia' }],
+};
+
+beforeEach(() => {
+  servidor.use(http.get(`${API}/api/projetos/:id/acessos`, ({ params }) =>
+    HttpResponse.json({ ...acessoInicial, projeto: Number(params.id) })));
+});
+afterEach(() => vi.restoreAllMocks());
 
 const projeto: Projeto = {
   id: 7, slug: 'portal', nome: 'Portal', nivel: 'usuario', time: '', repositorios: ['https://github.com/acme/portal'],
@@ -45,5 +59,73 @@ describe('Projetos sincronizados', () => {
   it('exige login para consultar os projetos', async () => {
     renderizar('/projetos');
     expect(await screen.findByRole('heading', { name: /Entrar/i })).toBeInTheDocument();
+  });
+
+  it('o dono concede, altera o papel e remove com confirmação pelo painel Acesso', async () => {
+    let acesso = structuredClone(acessoInicial);
+    const concedidos: unknown[] = [];
+    const alterados: unknown[] = [];
+    let removidos = 0;
+    servidor.use(
+      http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])),
+      http.get(`${API}/api/projetos/7/acessos`, () => HttpResponse.json(acesso)),
+      http.post(`${API}/api/projetos/7/acessos`, async ({ request }) => {
+        concedidos.push(await request.json());
+        acesso = { ...acesso, candidatos: [], acessos: [{ usuario: acessoInicial.candidatos[0], papel: 'leitor', concedidoEm: '2026-11-05T12:00:00Z' }] };
+        return HttpResponse.json(acesso);
+      }),
+      http.put(`${API}/api/projetos/7/acessos/2`, async ({ request }) => {
+        alterados.push(await request.json());
+        acesso = { ...acesso, acessos: [{ ...acesso.acessos[0], papel: 'editor' }] };
+        return HttpResponse.json(acesso);
+      }),
+      http.delete(`${API}/api/projetos/7/acessos/2`, () => {
+        removidos++;
+        acesso = structuredClone(acessoInicial);
+        return HttpResponse.json(acesso);
+      }),
+    );
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    renderizar('/projetos', tokenDoDev());
+    const painel = within(await screen.findByRole('region', { name: 'Acesso' }));
+    expect(await painel.findByText(/Seu papel:/)).toHaveTextContent('Dono');
+    expect(painel.getByText('Ana (ana)')).toBeInTheDocument();
+    await userEvent.selectOptions(painel.getByLabelText('Usuário da empresa'), 'bia');
+    await userEvent.click(painel.getByRole('button', { name: 'Dar acesso' }));
+    await waitFor(() => expect(concedidos).toEqual([{ usuario: 'bia', papel: 'leitor' }]));
+    await userEvent.selectOptions(await painel.findByLabelText('Papel de bia'), 'editor');
+    await waitFor(() => expect(alterados).toEqual([{ papel: 'editor' }]));
+    await userEvent.click(painel.getByRole('button', { name: 'Remover bia' }));
+    expect(removidos).toBe(0);
+    expect(confirmar).toHaveBeenLastCalledWith(expect.stringContaining('ao projeto Portal?'));
+    await userEvent.click(painel.getByRole('button', { name: 'Remover bia' }));
+    await waitFor(() => expect(removidos).toBe(1));
+    expect(await painel.findByText('Ninguém além do dono tem acesso a este projeto.')).toBeInTheDocument();
+  });
+
+  it.each(['leitor', 'editor'] as const)('%s vê dono e papel, sem controles de gestão', async papel => {
+    servidor.use(
+      http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])),
+      http.get(`${API}/api/projetos/7/acessos`, () => HttpResponse.json({ ...acessoInicial, papel, candidatos: [] })),
+    );
+    renderizar('/projetos', tokenDoDev());
+    const painel = within(await screen.findByRole('region', { name: 'Acesso' }));
+    expect(await painel.findByText(/Seu papel:/)).toHaveTextContent(papel === 'leitor'
+      ? 'Leitor — vê o projeto, os itens e o andamento' : 'Editor — vê o projeto, altera, aprova e dispara');
+    expect(painel.queryByRole('form', { name: 'Dar acesso' })).not.toBeInTheDocument();
+    expect(painel.queryByRole('button', { name: /Remover/ })).not.toBeInTheDocument();
+  });
+
+  it('a recusa da API aparece sem esconder o projeto', async () => {
+    servidor.use(
+      http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])),
+      http.post(`${API}/api/projetos/7/acessos`, () => HttpResponse.json({ detail: 'Só o dono concede acesso.' }, { status: 403 })),
+    );
+    renderizar('/projetos', tokenDoDev());
+    const painel = within(await screen.findByRole('region', { name: 'Acesso' }));
+    await userEvent.selectOptions(await painel.findByLabelText('Usuário da empresa'), 'bia');
+    await userEvent.click(painel.getByRole('button', { name: 'Dar acesso' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Só o dono concede acesso.');
+    expect(screen.getByRole('article', { name: 'Detalhe do projeto' })).toBeInTheDocument();
   });
 });

@@ -35,6 +35,7 @@ public sealed class ProjetosCompartilhados(IProjetosDaEmpresa projetos) : IProje
                 : (await projetos.ListarAsync(escopo, null, null, ct)).FirstOrDefault(p => p.Slug == envio.Slug);
             return new(409, atual, "O projeto mudou em outra máquina. Mescle antes de reenviar.");
         }
-        return new(resultado.Falha == FalhaNaGestao.NaoEncontrado ? 404 : 400, null, "Projeto inválido.");
+        return new(resultado.Falha switch { FalhaNaGestao.NaoEncontrado => 404, FalhaNaGestao.Proibida => 403, _ => 400 },
+            null, resultado.Mensagem);
     }
 }

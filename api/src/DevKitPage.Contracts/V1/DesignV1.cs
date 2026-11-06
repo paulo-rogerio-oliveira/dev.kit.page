@@ -10,11 +10,26 @@ namespace DevKitPage.Contracts.V1;
 /// <param name="Chave">O caminho normalizado (a unicidade no nível).</param>
 /// <param name="Nivel">Um de <see cref="NiveisDeConvencao"/>.</param>
 /// <param name="Time">O time do nível <c>time</c>; vazio nos outros.</param>
-/// <param name="Dono">O dono do nível <c>usuario</c> (o nome, ou o login); vazio nos outros.</param>
+/// <param name="Dono">O DONO do projeto — quem o criou (o nome, ou o login); vazio no projeto anterior ao acesso que ficou sem versão.</param>
 /// <param name="AtualizadoEm">A última versão enviada ou apagada — o <c>?desde=</c> da sincronização compara com ela.</param>
+/// <param name="Papel">O papel de quem consulta: <c>dono</c>, <c>editor</c> ou <c>leitor</c> (<see cref="DesignV1.PapelDono"/>).</param>
 public sealed record ProjetoDeDesignV1(
     long Id, string Repositorio, string Chave, string Nivel, string Time, string Dono, DateTimeOffset AtualizadoEm,
-    IReadOnlyList<TelaDeDesignV1> Telas);
+    IReadOnlyList<TelaDeDesignV1> Telas, string Papel = "");
+
+/// <summary>Um usuário no acesso a um projeto de design: o id, o login e o nome (vazio no usuário sem nome).</summary>
+public sealed record UsuarioDoDesignV1(int Id, string Login, string Nome);
+
+/// <summary>Um acesso concedido pelo dono: o usuário, o papel (<c>leitor</c> ou <c>editor</c>) e quando.</summary>
+public sealed record AcessoAoDesignV1(UsuarioDoDesignV1 Usuario, string Papel, DateTimeOffset ConcedidoEm);
+
+/// <summary>
+/// Os ACESSOS de um projeto de design: o dono, quem mais tem acesso e com que papel, o papel de quem consulta e — só para
+/// o dono — os usuários da empresa a quem ele ainda pode dar acesso (o seletor do Dar acesso).
+/// </summary>
+public sealed record AcessosDoDesignV1(
+    long Projeto, string Repositorio, UsuarioDoDesignV1? Dono, string Papel, IReadOnlyList<AcessoAoDesignV1> Acessos,
+    IReadOnlyList<UsuarioDoDesignV1> Candidatos);
 
 /// <summary>Uma tela do projeto: o identificador (o do dev.kit), o nome, o estado e as versões em ordem.</summary>
 public sealed record TelaDeDesignV1(string Id, string Nome, string Estado, IReadOnlyList<VersaoDeDesignV1> Versoes);
@@ -71,6 +86,18 @@ public static class DesignV1
     public static IReadOnlyList<string> Temas { get; } = ["light", "dark"];
     public static IReadOnlyList<string> Origens { get; } = ["web", "desktop", Proposta];
     public static IReadOnlyList<string> Autores { get; } = [AutorUsuario, AutorAgente];
+
+    /// <summary>Quem criou o projeto: concede e remove acesso, e envia.</summary>
+    public const string PapelDono = AcessoV1.PapelDono;
+
+    /// <summary>Vê, baixa e envia versões.</summary>
+    public const string PapelEditor = AcessoV1.PapelEditor;
+
+    /// <summary>Vê e baixa as versões; não envia.</summary>
+    public const string PapelLeitor = AcessoV1.PapelLeitor;
+
+    /// <summary>Os papéis que o dono concede (o dono não se concede: ele se transfere).</summary>
+    public static IReadOnlyList<string> PapeisDeAcesso => AcessoV1.PapeisConcedidos;
 
     /// <summary>
     /// O caminho estável da imagem de uma versão na API. A página do site que a mostra é o mesmo caminho sem o
