@@ -15,6 +15,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<DevKitPageDb>("banco").AddCheck<EsquemaDoBancoCheck>("esquema")
     .AddCheck<LicencasCheck>("licencas");
 builder.Services.AddHostedService<ExpurgoDiario>();
+builder.Services.AddHostedService<WorkerDePush>();
 
 // CORS por configuração: em Development, o Vite; no Azure, a origem do Static Web App.
 builder.Services.AddCors(opcoes => opcoes.AddDefaultPolicy(politica =>
@@ -70,6 +71,7 @@ app.MapearPagamentos();
 app.MapearRemoto();
 app.MapearConversa();
 app.MapearDecisoes();
+app.MapearPush();
 app.MapearProvisao();
 
 await app.RunAsync();

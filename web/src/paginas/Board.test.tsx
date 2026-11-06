@@ -38,6 +38,40 @@ function responder(lista = [maquina()]) {
 }
 
 describe('Board remoto', () => {
+  it('preserva a notificação após login e recusa destino externo', () => {
+    expect(destinoDa(tokenDoDev(), '/board?notificacao=' + 'a'.repeat(32))).toBe('/board?notificacao=' + 'a'.repeat(32));
+    expect(destinoDa(tokenDoDev(), '//evil.test/board')).toBe('/conta');
+  });
+
+  it('abre diretamente a revisão da aprovação indicada pelo push sem autorizar nenhum ato', async () => {
+    responder(); const id = 'a'.repeat(32);
+    servidor.use(
+      http.get(`${API}/api/remoto/push/entregas/${id}`, () => HttpResponse.json({ maquinaId: 'notebook', pendenciaId: 'p1', snapshotId: 'b'.repeat(64) })),
+      http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Revisar este snapshot?' }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null }])),
+      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
+    );
+    renderizar('/board?notificacao=' + id, tokenDoDev());
+    expect(await screen.findByRole('main', { name: 'Revisão da decisão' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aprovar com segundo fator' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirmar e aprovar este SHA' })).not.toBeInTheDocument();
+  });
+
+  it('notificação de pergunta seleciona a máquina e dá foco à pergunta atual', async () => {
+    responder([maquina(), maquina('outra')]); const id = 'c'.repeat(32);
+    servidor.use(http.get(`${API}/api/remoto/push/entregas/${id}`, () => HttpResponse.json({ maquinaId: 'outra', pendenciaId: 'p1', snapshotId: 'a'.repeat(64) })));
+    renderizar('/board?aba=chat&notificacao=' + id, tokenDoDev());
+    await waitFor(() => expect(screen.getByLabelText('Máquina')).toHaveValue('outra'));
+    await waitFor(() => expect(document.getElementById('board-decisao-p1')).toHaveFocus());
+    expect(await screen.findByText(/Decisão aberta a partir da notificação/)).toBeInTheDocument();
+  });
+
+  it('notificação resolvida ou de outra conta informa indisponibilidade sem abrir aprovação', async () => {
+    responder(); const id = 'd'.repeat(32);
+    servidor.use(http.get(`${API}/api/remoto/push/entregas/${id}`, () => HttpResponse.json({ detail: 'Esta decisão não está mais pendente ou não pertence à sua conta.' }, { status: 404 })));
+    renderizar('/board?notificacao=' + id, tokenDoDev());
+    expect(await screen.findByText(/Esta decisão não está mais pendente/)).toBeInTheDocument();
+    expect(screen.queryByRole('main', { name: 'Revisão da decisão' })).not.toBeInTheDocument();
+  });
   it('exige login e preserva o destino do desenvolvedor após autenticar', async () => {
     renderizar('/board');
     expect(await screen.findByRole('heading', { name: /Entrar/i })).toBeInTheDocument();

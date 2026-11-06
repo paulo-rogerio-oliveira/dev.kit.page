@@ -97,6 +97,13 @@ public static class Composicao
         servicos.AddDataProtection();
         servicos.AddScoped<ISegundoFator, SegundoFator>();
         servicos.AddScoped<IDecisoesRemotas, DecisoesRemotas>();
+        servicos.Configure<OpcoesDoPush>(configuracao.GetSection(OpcoesDoPush.Secao));
+        servicos.AddScoped<IPushDoBoard, PushDoBoard>();
+        servicos.AddScoped<IProcessamentoDePush, ProcessamentoDePush>();
+        servicos.AddScoped<ITransporteDePush, TransporteDePush>();
+        servicos.AddHttpClient(TransporteDePush.NomeDoCliente, c => c.Timeout = TimeSpan.FromSeconds(15))
+            .RemoveAllLoggers()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         servicos.AddScoped<IExpurgoDaConversa, ExpurgoDaConversa>();
         servicos.AddSingleton<IAvisoDaConversa, AvisoDaConversa>();
         servicos.AddSingleton<FilaSimulada>();

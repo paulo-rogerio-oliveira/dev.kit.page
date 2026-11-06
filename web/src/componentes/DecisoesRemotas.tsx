@@ -29,7 +29,7 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
   const resumo = p.tipo === 'aprovacao' && snapshot
     ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
     : p.jaTentei;
-  return <section className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
+  return <section id={`${compacta ? 'board' : 'chat'}-decisao-${encodeURIComponent(p.id)}`} tabIndex={-1} className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
     <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
     {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
     {resumo && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}

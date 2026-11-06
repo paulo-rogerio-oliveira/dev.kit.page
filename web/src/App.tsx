@@ -40,8 +40,8 @@ export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin 
   const { sessao } = useSessao();
   const local = useLocation();
 
-  if (!sessao) return <Navigate to="/login" replace state={{ de: local.pathname }} />;
-  if (sessao.deveTrocarSenha && !permiteTrocaPendente) return <Navigate to="/trocar-senha" replace />;
+  if (!sessao) return <Navigate to="/login" replace state={{ de: local.pathname + local.search }} />;
+  if (sessao.deveTrocarSenha && !permiteTrocaPendente) return <Navigate to="/trocar-senha" replace state={{ de: local.pathname + local.search }} />;
   if ((doPainel || soAdmin || soGestor) && !entraNoPainel(sessao)) return <Navigate to="/conta" replace />;
   if (soAdmin && papelDa(sessao) !== 'admin') return <Navigate to="/dashboard" replace />;
   if (soGestor && papelDa(sessao) !== 'gestor') return <Navigate to="/dashboard" replace />;

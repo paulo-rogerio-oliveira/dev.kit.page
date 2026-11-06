@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import { destinoDa, useSessao } from '../sessao';
 
@@ -7,6 +7,7 @@ import { destinoDa, useSessao } from '../sessao';
 export function TrocarSenha() {
   const { sessao, entrar, sair } = useSessao();
   const navegar = useNavigate();
+  const de = (useLocation().state as { de?: string } | null)?.de;
   const [atual, setAtual] = useState('');
   const [nova, setNova] = useState('');
   const [confirmacao, setConfirmacao] = useState('');
@@ -22,7 +23,7 @@ export function TrocarSenha() {
     try {
       const resposta = await api.trocarSenha(sessao!.token, atual, nova);
       entrar(resposta);
-      navegar(destinoDa(resposta), { replace: true }); // o painel, ou a página inicial para o dev (US #405)
+      navegar(destinoDa(resposta, de), { replace: true });
     } catch (falha) {
       if (falha instanceof ErroDaApi && falha.status === 401) {
         sair('expirou');
