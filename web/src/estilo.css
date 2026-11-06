@@ -882,9 +882,15 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
 .secao-dos-sites .formulario-da-provisao .nota-da-cota { flex-basis: 100%; }
 /* A especificidade vence o ".cartao p { margin: 0 }": o endereço fica separado dos botões, como na proposta. */
 .cartao .recurso-provisionado .endereco-do-recurso { margin: -4px 0 12px; font-size: 0.875rem; }
-/* O nome no Azure (até 38 caracteres) numa linha só: a coluna do valor cresce até ele, as outras cedem. */
-.conta .secao-dos-sites .recurso-dados { grid-template-columns: repeat(4, max-content minmax(max-content, 1fr)); }
-.secao-dos-sites .recurso-dados dd code { white-space: nowrap; }
+/* O nome no Azure (até 38 caracteres) numa linha só, onde as quatro colunas cabem: a coluna do valor cresce até ele, as
+   outras cedem. Abaixo disso (o tablet), duas colunas, e o nome quebra se precisar — nunca transborda o cartão. */
+@media (min-width: 1100px) {
+  .conta .secao-dos-sites .recurso-dados { grid-template-columns: repeat(4, max-content minmax(max-content, 1fr)); }
+  .secao-dos-sites .recurso-dados dd code { white-space: nowrap; }
+}
+@media (min-width: 761px) and (max-width: 1099px) {
+  .conta .secao-dos-sites .recurso-dados { grid-template-columns: repeat(2, max-content minmax(0, 1fr)); }
+}
 .endereco-do-recurso a { font-family: var(--mono); font-weight: 600; }
 .confirmacao-da-remocao { display: grid; gap: 8px; margin: 14px 0 0; padding: 14px 16px; border: 1px solid rgba(226, 38, 28, 0.5); border-radius: 10px; background: var(--marca-tinta); }
 .cartao .confirmacao-da-remocao p { margin: 0; color: var(--texto); font-size: 0.9rem; }
@@ -897,7 +903,6 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
 @media (max-width: 760px) {
   .cota-da-provisao { grid-template-columns: minmax(0, 1fr); }
   .conta .secao-dos-sites .recurso-dados { grid-template-columns: max-content minmax(0, 1fr); }
-  .secao-dos-sites .recurso-dados dd code { white-space: normal; }
   .secao-dos-sites .formulario-da-provisao label, .secao-dos-sites .formulario-da-provisao select, .secao-dos-sites .formulario-da-provisao input { width: 100%; min-width: 0; }
 }
 
