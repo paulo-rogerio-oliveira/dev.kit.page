@@ -577,7 +577,12 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         {
             e.ToTable("RecursosProvisionados");
             e.Property(r => r.Tipo).HasMaxLength(20);
-            e.Property(r => r.Nome).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDaConta);
+            e.Property(r => r.Nome).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoNome);
+            e.Property(r => r.Rotulo).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoRotulo);
+            e.Property(r => r.Plano).HasMaxLength(20);
+            e.Property(r => r.NomeDoPlano).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoNome);
+            e.Property(r => r.CustoMensal).HasPrecision(10, 2);
+            e.Property(r => r.Passos).HasMaxLength(100);
             e.Property(r => r.Fila).HasMaxLength(63);
             e.Property(r => r.Regiao).HasMaxLength(40);
             e.Property(r => r.GrupoDeRecursos).HasMaxLength(90);
@@ -591,6 +596,9 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             // O nome é global no Azure: o índice único barra aqui o sorteio repetido antes de o worker o pedir.
             e.HasIndex(r => r.Nome).IsUnique();
             e.HasIndex(r => new { r.UsuarioId, r.Estado });
+            // A COTA atômica: uma vaga por (usuário, tipo) entre os não removidos — o pedido simultâneo que pegaria a mesma
+            // vaga é barrado aqui, e a remoção concluída a devolve.
+            e.HasIndex(r => new { r.UsuarioId, r.Tipo, r.Vaga }).IsUnique().HasFilter("[Estado] <> 'removido'");
             // A fila do worker: os pedidos por estado e pela próxima tentativa.
             e.HasIndex(r => new { r.Estado, r.ProximaTentativaEmUtc });
             // O recurso pago não some com o usuário: Restrict.

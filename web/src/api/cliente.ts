@@ -8,7 +8,7 @@ import type {
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta, AssinanteDoItem,
-  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
+  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado, CotaDaProvisao, TipoDoAplicativo,
 } from './tipos';
 import type { Projeto } from './projetos';
 import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
@@ -446,6 +446,15 @@ export const api = {
 
   removerRecurso: (token: string, id: number) =>
     chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}`, { metodo: 'DELETE', token }),
+
+  // O App Service e o Static Web App (item 12): a cota e o custo, o pedido e a remoção com o segundo fator.
+  cotaDaProvisao: (token: string) => chamar<CotaDaProvisao>('/api/provisao/cota', { token }),
+
+  pedirAplicativo: (token: string, pedido: { tipo: TipoDoAplicativo; nome: string; regiao: string; plano: string }) =>
+    chamar<RecursoProvisionado>('/api/provisao/aplicativos', { metodo: 'POST', corpo: pedido, token }),
+
+  removerComSegundoFator: (token: string, id: number, codigo: string) =>
+    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/remover`, { metodo: 'POST', corpo: { codigo }, token }),
 
   // ----- US #687 -----
 

@@ -204,6 +204,41 @@ public sealed class OpcoesDaProvisao
 
     /// <summary>O prefixo do grupo de recursos do usuário: <c>rg-devkit-u{id}</c>.</summary>
     public string PrefixoDoGrupo { get; set; } = "rg-devkit-u";
+
+    /// <summary>A cota de App Services ATIVOS (não removidos) por usuário.</summary>
+    public int MaximoDeAppServicesPorUsuario { get; set; } = 2;
+
+    /// <summary>A cota de Static Web Apps ATIVOS (não removidos) por usuário.</summary>
+    public int MaximoDeStaticWebAppsPorUsuario { get; set; } = 3;
+
+    /// <summary>
+    /// O teto do custo ESTIMADO do mês dos aplicativos de um usuário, em reais (a soma do custo do plano dos não removidos).
+    /// Chegou nele, novos pedidos param; o que já existe continua. Zero desliga o teto.
+    /// </summary>
+    public decimal LimiteDeCustoMensal { get; set; } = 150m;
+
+    /// <summary>A partir de quantos por cento do teto o site avisa e a auditoria registra o alerta de custo.</summary>
+    public int AlertaDeCustoPercentual { get; set; } = 80;
+
+    /// <summary>
+    /// As regiões do Static Web App, que existe em menos regiões que o App Service; vazia é
+    /// <see cref="RegrasDaProvisao.RegioesPadraoDoStaticWebApp"/>.
+    /// </summary>
+    public string[] RegioesDoStaticWebApp { get; set; } = [];
+
+    /// <summary>Os planos do App Service com o custo estimado do mês; vazia é <see cref="RegrasDaProvisao.PlanosPadraoDoAppService"/>.</summary>
+    public PlanoConfigurado[] PlanosDoAppService { get; set; } = [];
+
+    /// <summary>Os planos do Static Web App com o custo estimado do mês; vazia é <see cref="RegrasDaProvisao.PlanosPadraoDoStaticWebApp"/>.</summary>
+    public PlanoConfigurado[] PlanosDoStaticWebApp { get; set; } = [];
+}
+
+/// <summary>Um plano de aplicativo da configuração: o SKU do Azure, como o site o mostra e o custo estimado do mês, em reais.</summary>
+public sealed class PlanoConfigurado
+{
+    public string Id { get; set; } = string.Empty;
+    public string Rotulo { get; set; } = string.Empty;
+    public decimal CustoMensal { get; set; }
 }
 
 /// <summary>

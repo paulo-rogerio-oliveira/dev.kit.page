@@ -8,12 +8,15 @@ import { Selo, type VarianteDoSelo } from './Selo';
 export const INTERVALO_DE_ACOMPANHAMENTO_MS = 5000;
 
 /** Os nomes das regiões que o site conhece; a fora da lista aparece só pelo código. */
-const NOME_DA_REGIAO: Record<string, string> = { brazilsouth: 'Brasil (Sul)', eastus2: 'Leste dos EUA 2' };
+const NOME_DA_REGIAO: Record<string, string> = {
+  brazilsouth: 'Brasil (Sul)', eastus2: 'Leste dos EUA 2', westus2: 'Oeste dos EUA 2', centralus: 'EUA Central',
+  westeurope: 'Europa Ocidental', eastasia: 'Ásia Oriental',
+};
 
-const rotuloDaRegiao = (regiao: string) => (NOME_DA_REGIAO[regiao] ? `${NOME_DA_REGIAO[regiao]} · ${regiao}` : regiao);
+export const rotuloDaRegiao = (regiao: string) => (NOME_DA_REGIAO[regiao] ? `${NOME_DA_REGIAO[regiao]} · ${regiao}` : regiao);
 
 /** O pedido ainda nas mãos do worker: a seção acompanha. */
-const emCurso = (r: RecursoProvisionado) => r.estado === 'pedido' || r.estado === 'em-provisao';
+export const emCurso = (r: RecursoProvisionado) => r.estado === 'pedido' || r.estado === 'em-provisao';
 
 /** O estado em palavras, com a cor do selo — a remoção tem as próprias. */
 export function situacaoDoRecurso(r: RecursoProvisionado): { texto: string; variante: VarianteDoSelo } {
@@ -29,13 +32,15 @@ export function situacaoDoRecurso(r: RecursoProvisionado): { texto: string; vari
 
 const ROTULO_DO_EVENTO: Record<string, string> = {
   'pedido': 'Pedido', 'inicio': 'Em provisão', 'pronto': 'Pronta', 'falha-transitoria': 'Falhou (transitória)', 'falha': 'Falhou',
-  'repeticao': 'Repetição', 'remocao-pedida': 'Remoção pedida', 'removido': 'Removida',
+  'repeticao': 'Repetição', 'remocao-pedida': 'Remoção pedida', 'removido': 'Removida', 'passo': 'Passo feito',
+  'alerta-de-custo': 'Alerta de custo',
 };
 
 /** "03/11 11:40" no fuso de quem lê. */
-const horaCurta = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+export const horaCurta = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
 
-function LinhaDoTempo({ eventos }: { eventos: EventoDaProvisao[] }) {
+/** A auditoria do recurso, do mais antigo ao mais novo: quando, o quê, quem (o login; o worker não aparece) e o detalhe. */
+export function LinhaDoTempo({ eventos }: { eventos: EventoDaProvisao[] }) {
   return (
     <ol className="linha-do-tempo" aria-label="Histórico">
       {eventos.map((e, i) => (
@@ -140,7 +145,9 @@ export function FilaDoControleRemoto({ token, sair }: { token: string; sair: (mo
     else setErro(mensagemDaFalha(falha));
   }, [sair]);
 
-  const carregar = useCallback(() => api.recursosProvisionados(token).then(setRecursos).catch(tratar), [token, tratar]);
+  // A rota devolve todos os recursos do usuário: aqui ficam só as filas (os aplicativos têm a seção deles).
+  const carregar = useCallback(() => api.recursosProvisionados(token)
+    .then((lidos) => setRecursos(lidos.filter((r) => r.tipo === 'fila'))).catch(tratar), [token, tratar]);
 
   useEffect(() => {
     api.permissaoDeProvisao(token).then((lida) => {
