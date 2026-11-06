@@ -11,6 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { Projeto } from './projetos';
+import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -125,6 +126,15 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  decisoesRemotas: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes`, { token, signal }),
+  responderDecisao: (token: string, maquina: string, pendencia: string, corpo: ResponderDecisao) =>
+    chamar<RespostaDaDecisao>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`, { token, metodo: 'POST', corpo }),
+  estadoDoSegundoFator: (token: string, signal?: AbortSignal) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator', { token, signal }),
+  prepararSegundoFator: (token: string, senha: string) => chamar<{ chave: string; uri: string; expiraEm: string }>('/api/remoto/segundo-fator/preparar', { token, metodo: 'POST', corpo: { senha } }),
+  confirmarSegundoFator: (token: string, codigo: string) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator/confirmar', { token, metodo: 'POST', corpo: { codigo } }),
+  capturaDaDecisao: async (token: string, caminho: string, signal: AbortSignal) =>
+    (await requisitar(caminho, { token, signal, aceita: 'image/png' })).blob(),
   conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
   /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */

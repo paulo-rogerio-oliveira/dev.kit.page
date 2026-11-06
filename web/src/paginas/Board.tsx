@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
+import type { DecisaoPendente, ResponderDecisao } from '../api/remoto';
+import { CartaoDaDecisao, RevisaoDaDecisao, type AoDecidir } from '../componentes/DecisoesRemotas';
 import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
 import { Abas } from '../componentes/Abas';
@@ -11,7 +13,6 @@ import { useConversaRemota } from '../componentes/useConversaRemota';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
-const motivo = 'Disponível somente no dev.kit da máquina nesta fase.';
 const atualizacaoMs = 15_000;
 
 function idade(data: string | null | undefined, agora: number) {
@@ -23,19 +24,17 @@ function idade(data: string | null | undefined, agora: number) {
   return `há ${Math.floor(segundos / 3600)} h`;
 }
 
-function ConteudoDoBoard({ foto, agora }: { foto: RetratoDaMaquina | null; agora: number }) {
+function ConteudoDoBoard({ foto, agora, decisoes, desabilitado, decidir, revisar }: { foto: RetratoDaMaquina | null; agora: number; decisoes: DecisaoPendente[]; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void }) {
   const retrato = foto?.retrato;
   return <>
     <h2>Precisa de você · {retrato?.pendencias?.length ?? 0}</h2>
-    {retrato?.pendencias?.map(p => <section className="br-card br-need" key={p.id}>
-      <b>{p.titulo}</b>
-      {p.pergunta && <p>{p.pergunta}</p>}
-      {p.jaTentei && <p>{p.jaTentei}</p>}
-      {p.opcoes && p.opcoes.length > 0 && <p>Opções: {p.opcoes.join(' · ')}</p>}
-      <div className="br-row"><button className="br-btn" title={motivo} disabled>Ver detalhes</button><button className="br-btn" title={motivo} disabled>Decidir</button></div>
-    </section>)}
+    {retrato?.pendencias?.map(p => {
+      const d = decisoes.find(d => d.pendencia.id === p.id);
+      return d ? <CartaoDaDecisao key={`${p.id}-${d.snapshotId}`} decisao={d} compacta desabilitado={desabilitado} decidir={decidir} revisar={revisar} />
+        : <section className="br-card br-need" key={p.id}><b>{p.titulo}</b><p>{p.pergunta}</p><p>{p.jaTentei}</p><p className="br-note">Aguardando os dados da decisão.</p></section>;
+    })}
     {!retrato?.pendencias?.length && <p className="br-note">Nenhuma pendência recebida.</p>}
-    <p className="br-note">Decida no dev.kit. As decisões remotas serão liberadas em uma próxima fase.</p>
+    <p className="br-note">Confira os detalhes antes de decidir. O texto do chat nunca aprova.</p>
     <h2>Projetos</h2>
     {retrato?.projetos?.map(p => {
       const itens = p.itens ?? [];
@@ -60,8 +59,8 @@ function ConteudoDoBoard({ foto, agora }: { foto: RetratoDaMaquina | null; agora
 }
 
 /**
- * Board isolado da administração, com conversa remota e decisões somente na máquina. O Ligar e o Reiniciar do dev.kit (item 8)
- * vão ao serviço da máquina pela mesma conversa do chat.
+ * Board isolado da administração, com decisões auditadas e aprovação vinculada ao snapshot.
+ * O Ligar e o Reiniciar vão ao serviço da máquina pela mesma conversa do chat.
  */
 export function Board() {
   useEffect(prepararBoardPwa, []);
@@ -71,6 +70,8 @@ export function Board() {
   const [maquinas, setMaquinas] = useState<MaquinaRemota[]>([]);
   const [selecionada, setSelecionada] = useState('');
   const [foto, setFoto] = useState<RetratoDaMaquina | null>(null);
+  const [decisoes, setDecisoes] = useState<DecisaoPendente[]>([]);
+  const [revisao, setRevisao] = useState<DecisaoPendente | null>(null);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [tentativa, setTentativa] = useState(0);
@@ -95,12 +96,14 @@ export function Board() {
           if (id) { mudouMaquina = true; setCarregando(true); return; }
         }
         let novaFoto: RetratoDaMaquina | null = null;
+        let novasDecisoes: DecisaoPendente[] = [];
         if (id) {
-          try { novaFoto = await api.retratoRemoto(sessao!.token, id, controller.signal); }
+          try { [novaFoto, novasDecisoes] = await Promise.all([api.retratoRemoto(sessao!.token, id, controller.signal), api.decisoesRemotas(sessao!.token, id, controller.signal)]); }
           catch (falha) { if (!(falha instanceof ErroDaApi && falha.status === 404)) throw falha; }
         }
         if (controller.signal.aborted || atual !== geracao.current) return;
         setFoto(novaFoto);
+        setDecisoes(novasDecisoes);
         setErro('');
       } catch (falha) {
         if (controller.signal.aborted || atual !== geracao.current) return;
@@ -127,6 +130,20 @@ export function Board() {
   const conectada = !!maquina?.conectada && !!maquina.ultimoHeartbeatEm && agora - Date.parse(maquina.ultimoHeartbeatEm) <= 180_000;
   const estado = maquina ? `${conectada ? (maquina.origem === 'servico' ? 'Serviço ativo' : 'dev.kit conectado') : 'Máquina desconectada'} · dev.kit ${maquina.appAberto ? 'aberto' : 'fechado'}` : 'Nenhuma máquina conectada';
   const agente = maquina?.estadoDoAgente === 'limite' ? 'Agente em limite' : maquina?.estadoDoAgente === 'pausado' ? 'Agente pausado' : '';
+  const desabilitado = carregando || !!erro || !conectada;
+  async function decidir(d: DecisaoPendente, pedido: ResponderDecisao) {
+    const atual = geracao.current;
+    try {
+      const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, pedido);
+      if (atual === geracao.current)
+        setDecisoes(lista => lista.map(item => item.pendencia.id === d.pendencia.id && item.snapshotId === d.snapshotId ? { ...item, resposta } : item));
+      return resposta;
+    } catch (e) {
+      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+      throw e;
+    }
+  }
+  const mudou = !!revisao && !decisoes.some(d => d.pendencia.id === revisao.pendencia.id && d.snapshotId === revisao.snapshotId);
   // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
   const conversa = useConversaRemota(selecionada);
   const controle = useControleDoDevKit({ maquina, conectada, conversa: conversa.conversa, acionar: conversa.acionar, agora });
@@ -136,7 +153,7 @@ export function Board() {
       <b>dev.kit</b><span className="br-spacer" />
       <div className="br-machine">
         <div className={`br-host${conectada ? '' : ' br-offline'}`}><i aria-hidden="true" />
-          {maquinas.length > 1 ? <select aria-label="Máquina" value={selecionada} onChange={e => { setFoto(null); setErro(''); setCarregando(true); setSelecionada(e.target.value); }}>
+          {maquinas.length > 1 ? <select aria-label="Máquina" value={selecionada} onChange={e => { ++geracao.current; setFoto(null); setDecisoes([]); setRevisao(null); setErro(''); setCarregando(true); setSelecionada(e.target.value); }}>
             {maquinas.map(m => <option key={m.maquinaId} value={m.maquinaId}>{m.nome || 'Máquina'}</option>)}
           </select> : <span className="br-name" title={maquina?.nome || 'Máquina'}>{maquina?.nome || 'Máquina'}</span>}
           <span className="br-desktop-state"> · {estado.toLowerCase()}</span>
@@ -146,21 +163,22 @@ export function Board() {
       <BotaoDoDevKit controle={controle} />
     </header>
     <FaixaDoAcionamento controle={controle} />
-    <div className="br-navegacao"><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
+    {revisao && <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} />}
+    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
-        <div className="br-readonly"><strong>Somente leitura</strong><span>Fase 2</span></div>
+        <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
         {carregando && <p role="status" className="br-note">Carregando Board…</p>}
         {erro && <div role="alert" className="br-card br-need"><p>{erro}</p>{foto && <p>Exibindo o último retrato recebido; os dados podem estar desatualizados.</p>}<button className="br-btn" onClick={() => setTentativa(t => t + 1)}>Tentar novamente</button></div>}
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
-        {(!carregando || foto) && <ConteudoDoBoard foto={foto} agora={agora} />}
+        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} decisoes={decisoes} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
       </aside>
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
     </main>
     </Abas></div>
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
-    <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Somente leitura · decisões no dev.kit</span></footer>
+    <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>
   </div>;
 }

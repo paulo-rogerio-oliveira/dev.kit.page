@@ -26,6 +26,7 @@ function preparar(m: MaquinaRemota, conversa: ConversaRemota = { comandos: [], r
   servidor.use(
     http.get(`${API}/api/remoto/maquinas`, () => HttpResponse.json([m])),
     http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => new HttpResponse(null, { status: 404 })),
+    http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([])),
     http.get(`${API}/api/remoto/maquinas/:id/conversa`, () => HttpResponse.json(conversa)),
     http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
     http.post(`${API}/api/remoto/comandos`, async ({ request }) => {

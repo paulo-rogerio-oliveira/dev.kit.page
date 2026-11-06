@@ -2707,6 +2707,40 @@ namespace DevKitPage.Infrastructure.Migrations
                 {
                     b.Navigation("Versoes");
                 });
+            modelBuilder.Entity("DevKitPage.Core.AutenticadorDoUsuario", b =>
+                {
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("SegredoProtegido").IsRequired().HasMaxLength(1000).HasColumnType("TEXT");
+                    b.Property<bool>("Ativo").HasColumnType("INTEGER");
+                    b.Property<DateTime>("PreparadoEmUtc").HasColumnType("TEXT");
+                    b.Property<long>("UltimoPasso").HasColumnType("INTEGER");
+                    b.Property<int>("Tentativas").HasColumnType("INTEGER");
+                    b.Property<DateTime>("JanelaEmUtc").HasColumnType("TEXT");
+                    b.HasKey("UsuarioId");
+                    b.ToTable("Autenticadores");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithOne().HasForeignKey("DevKitPage.Core.AutenticadorDoUsuario", "UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.RespostaDaDecisao", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("PendenciaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("SnapshotId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Acao").IsRequired().HasMaxLength(20).HasColumnType("TEXT");
+                    b.Property<string>("Opcao").HasMaxLength(200).HasColumnType("TEXT");
+                    b.Property<string>("Origem").HasMaxLength(300).HasColumnType("TEXT");
+                    b.Property<string>("Destino").HasMaxLength(300).HasColumnType("TEXT");
+                    b.Property<string>("Sha").HasMaxLength(40).HasColumnType("TEXT");
+                    b.Property<DateTime>("EmUtc").HasColumnType("TEXT");
+                    b.Property<bool>("SegundoFator").HasColumnType("INTEGER");
+                    b.Property<string>("Estado").IsRequired().HasMaxLength(20).HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId", "PendenciaId", "SnapshotId").IsUnique().HasFilter("[Estado] <> 'vencida'");
+                    b.HasIndex("UsuarioId", "MaquinaId", "Estado");
+                    b.ToTable("RespostasDasDecisoes");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

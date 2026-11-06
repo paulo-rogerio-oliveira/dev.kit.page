@@ -54,6 +54,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<RespostaRemota> RespostasRemotas => Set<RespostaRemota>();
     public DbSet<FalaRemota> FalasRemotas => Set<FalaRemota>();
     public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
+    public DbSet<AutenticadorDoUsuario> Autenticadores => Set<AutenticadorDoUsuario>();
+    public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +63,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         ConfigurarRemoto(modelBuilder);
         ConfigurarProvisao(modelBuilder);
         ConfigurarConversa(modelBuilder);
+        ConfigurarDecisoes(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -671,6 +674,28 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(v => new { v.UsuarioId, v.Id });
             e.HasIndex(v => v.EmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(v => v.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    private static void ConfigurarDecisoes(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AutenticadorDoUsuario>(e =>
+        {
+            e.ToTable("Autenticadores"); e.HasKey(a => a.UsuarioId);
+            e.Property(a => a.SegredoProtegido).HasMaxLength(1000);
+            e.HasOne<Usuario>().WithOne().HasForeignKey<AutenticadorDoUsuario>(a => a.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<RespostaDaDecisao>(e =>
+        {
+            e.ToTable("RespostasDasDecisoes");
+            e.Property(r => r.MaquinaId).HasMaxLength(64); e.Property(r => r.PendenciaId).HasMaxLength(64);
+            e.Property(r => r.SnapshotId).HasMaxLength(64); e.Property(r => r.Acao).HasMaxLength(20);
+            e.Property(r => r.Opcao).HasMaxLength(200); e.Property(r => r.Origem).HasMaxLength(300);
+            e.Property(r => r.Destino).HasMaxLength(300); e.Property(r => r.Sha).HasMaxLength(40);
+            e.Property(r => r.Estado).HasMaxLength(20);
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique().HasFilter("[Estado] <> 'vencida'");
+            e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.Estado });
+            e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

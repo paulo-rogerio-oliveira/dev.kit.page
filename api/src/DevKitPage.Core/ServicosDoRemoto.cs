@@ -114,6 +114,8 @@ public static partial class RegrasDoRemoto
         var pendencias = retrato.Pendencias ?? [];
         if (pendencias.Count > RemotoV1.MaximoDePendencias)
             return $"O retrato tem até {RemotoV1.MaximoDePendencias} pendências.";
+        if (pendencias.Where(p => p is not null).Select(p => p.Id).Distinct(StringComparer.Ordinal).Count() != pendencias.Count)
+            return "O retrato precisa de ids de pendência únicos.";
         foreach (var (pendencia, i) in pendencias.Select((p, i) => (p, i)))
         {
             if (pendencia is null || Vazio(pendencia.Id) || pendencia.Id.Length > RemotoV1.TamanhoMaximoDoId)
@@ -130,6 +132,8 @@ public static partial class RegrasDoRemoto
                 return $"pendencias[{i}]: até {RemotoV1.MaximoDeOpcoes} opções, cada uma de até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
             if (pendencia.Item is <= 0)
                 return $"pendencias[{i}]: o item é positivo.";
+            if (RegrasDaDecisao.Validar(pendencia.Snapshot) is { } erroSnapshot)
+                return erroSnapshot;
         }
 
         return string.Empty;
@@ -186,6 +190,19 @@ public static partial class RegrasDoRemoto
             yield return ($"pendencias[{i}].fluxo", p.Fluxo);
             foreach (var (opcao, j) in (p.Opcoes ?? []).Select((o, j) => (o, j)))
                 yield return ($"pendencias[{i}].opcoes[{j}]", opcao);
+            if (p.Snapshot is { } s)
+            {
+                yield return ($"pendencias[{i}].snapshot.origem", s.Origem);
+                yield return ($"pendencias[{i}].snapshot.destino", s.Destino);
+                yield return ($"pendencias[{i}].snapshot.alteracoes", s.Alteracoes);
+                foreach (var (nota, j) in s.Notas.Select((n, j) => (n, j)))
+                    yield return ($"pendencias[{i}].snapshot.notas[{j}].avaliador", nota.Avaliador);
+                foreach (var (captura, j) in s.Capturas.Select((c, j) => (c, j)))
+                {
+                    yield return ($"pendencias[{i}].snapshot.capturas[{j}].titulo", captura.Titulo);
+                    yield return ($"pendencias[{i}].snapshot.capturas[{j}].url", captura.Url);
+                }
+            }
         }
     }
 
