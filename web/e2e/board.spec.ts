@@ -1,11 +1,14 @@
-import { chromium, expect, test } from '@playwright/test';
+import { chromium, expect, test, type Page } from '@playwright/test';
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { garantirSenhaDefinitiva } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
 
-test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados nos dois temas e tamanhos', async ({ page, request, context }) => {
+// Desde as decisões remotas (fase 3) a pendência aparece no Board E como cartão no chat: o cenário confere a do Board.
+const pendencia = (p: Page) => p.getByRole('complementary', { name: 'Board' }).getByText('Integrar o item 20 no projeto?');
+
+test('Board consulta o retrato real, atualiza e só decide pela revisão com segundo fator nos dois temas e tamanhos', async ({ page, request, context }) => {
   await garantirSenhaDefinitiva(request);
   const entrada = await request.post(`${API}/api/auth/login`, { data: { login: 'admin', senha: NOVA_SENHA } });
   expect(entrada.ok()).toBeTruthy();
@@ -49,7 +52,7 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
   };
   expect((await request.put(`${API}/api/remoto/retrato`, { headers, data: retrato })).ok()).toBeTruthy();
   // Sem recarregar: comprova o polling do produto sobre a API real.
-  await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible({ timeout: 25_000 });
+  await expect(pendencia(page)).toBeVisible({ timeout: 25_000 });
   await expect(page.getByRole('progressbar', { name: 'Progresso de projeto', exact: true })).toHaveAttribute('aria-valuenow', '20');
 
   const escritas: string[] = [];
@@ -58,9 +61,11 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
     await page.emulateMedia({ colorScheme });
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width > 700 ? 920 : 844 });
-      await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+      await expect(pendencia(page)).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      await expect(page.getByRole('button', { name: 'Decidir', exact: true })).toBeDisabled();
+      // Decidir só abre a revisão; o ato irreversível exige o segundo fator e o SHA conferido (nenhuma escrita aqui).
+      await expect(page.getByRole('button', { name: 'Decidir', exact: true })).toBeEnabled();
+      await expect(page.getByRole('complementary', { name: 'Board' }).getByText('Ato irreversível · exige segundo fator e SHA conferido.')).toBeVisible();
       if (width < 700) {
         await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
         await page.getByRole('tab', { name: 'Chat', exact: true }).click();
@@ -69,8 +74,9 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
         await page.keyboard.press('ArrowLeft');
         await expect(page.getByRole('tab', { name: 'Chat', exact: true })).toHaveAttribute('aria-selected', 'true');
       }
-      await expect(page.getByLabel('Mensagem ao Orquestrador')).toBeDisabled();
-      await expect(page.getByText(/será liberado na fase 2/)).toBeVisible();
+      // O chat foi ligado na fase 2: a caixa aceita texto, o envio vazio fica bloqueado e o chat nunca aprova.
+      await expect(page.getByLabel('Mensagem ao Orquestrador')).toBeEditable();
+      await expect(page.getByText('Conversa e consulta com login. Texto do chat nunca aprova.')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
       if (width < 700) await page.getByRole('tab', { name: 'Board', exact: true }).click();
     }
@@ -80,7 +86,7 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
   // A lista e o retrato não passam pelo cache do service worker.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
-  await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+  await expect(pendencia(page)).toBeVisible();
   const manifesto = await page.evaluate(async () => {
     const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]')!;
     return (await fetch(link.href)).json();
@@ -94,7 +100,7 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
     await persistente.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), sessao);
     const pwa = await persistente.newPage();
     await pwa.goto(page.url());
-    await expect(pwa.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+    await expect(pendencia(pwa)).toBeVisible();
     await pwa.evaluate(() => navigator.serviceWorker.ready);
     const cdp = await persistente.newCDPSession(pwa);
     await cdp.send('Page.enable');
@@ -112,7 +118,7 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
   }
   await context.setOffline(false);
   await page.getByRole('link', { name: 'Tentar novamente' }).click();
-  await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+  await expect(pendencia(page)).toBeVisible();
 
   // Limite aceito pelo contrato: uma máquina com nome sem espaços de 200 caracteres.
   const nomeLongo = 'X'.repeat(200);
@@ -148,7 +154,7 @@ test('Board consulta o retrato real, atualiza e mantém os comandos bloqueados n
   await expect(page.getByRole('alert')).toContainText('Não foi possível atualizar o Board');
   await page.unroute('**/api/remoto/maquinas');
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
-  await expect(page.getByText('Integrar o item 20 no projeto?')).toBeVisible();
+  await expect(pendencia(page)).toBeVisible();
   await page.route('**/api/remoto/maquinas', route => route.fulfill({ status: 401 }));
   await page.reload();
   await expect(page).toHaveURL(/\/login$/);

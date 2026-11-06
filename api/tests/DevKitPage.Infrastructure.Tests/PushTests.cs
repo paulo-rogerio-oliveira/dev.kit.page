@@ -17,7 +17,10 @@ public sealed class PushTests
     private static readonly ECParameters Dispositivo = NovaChave();
     private static ECParameters NovaChave() { using var e = ECDsa.Create(ECCurve.NamedCurves.nistP256); return e.ExportParameters(true); }
     private static string Publica(ECParameters p) => B64([4, .. p.Q.X!, .. p.Q.Y!]);
-    private static AssinaturaDePushV1 Assinatura(string sufixo = "demo") => new($"https://fcm.googleapis.com/fcm/send/{sufixo}", new(Publica(Dispositivo), B64(new byte[16])));
+    // Segredo auth de bytes NÃO nulos: 16 zeros viram 22 'A' em base64url, que coincidem com o cabeçalho do payload
+    // do DataProtection (CfDJ8 + o id da chave efêmera, Guid.Empty) e faziam o DoesNotContain falhar ao acaso.
+    private static readonly byte[] Autenticacao = [.. Enumerable.Range(1, 16).Select(i => (byte)i)];
+    private static AssinaturaDePushV1 Assinatura(string sufixo = "demo") => new($"https://fcm.googleapis.com/fcm/send/{sufixo}", new(Publica(Dispositivo), B64(Autenticacao)));
     private static readonly PendenciaNoRetratoV1 Pergunta = new("p1", "pergunta", "Pergunta privada", Pergunta: "Conteúdo privado", Opcoes: ["Sim", "Não"], JaTentei: "Tentativa privada");
     private static BaseDeTeste NovaBase(TransporteGuardado? falso = null, HttpMessageHandler? http = null) => new(new()
     {
@@ -160,7 +163,7 @@ public sealed class PushTests
         using var cliente = ECDiffieHellman.Create(Dispositivo);
         using var servidor = ECDiffieHellman.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = publica[1..33], Y = publica[33..65] } });
         var compartilhado = cliente.DeriveRawSecretAgreement(servidor.PublicKey);
-        var authPrk = HKDF.Extract(HashAlgorithmName.SHA256, compartilhado, new byte[16]);
+        var authPrk = HKDF.Extract(HashAlgorithmName.SHA256, compartilhado, Autenticacao);
         byte[] info = [.. Encoding.UTF8.GetBytes("WebPush: info\0"), 4, .. Dispositivo.Q.X!, .. Dispositivo.Q.Y!, .. publica];
         var ikm = HKDF.Expand(HashAlgorithmName.SHA256, authPrk, 32, info);
         var prk = HKDF.Extract(HashAlgorithmName.SHA256, ikm, salt);
