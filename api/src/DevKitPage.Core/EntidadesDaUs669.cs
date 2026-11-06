@@ -6,7 +6,7 @@ namespace DevKitPage.Core;
 /// por (<see cref="Espaco"/>, <see cref="Nivel"/>, <see cref="Time"/>, <see cref="UsuarioId"/>, <see cref="Chave"/>). O
 /// branch não separa projetos: é atributo de cada <see cref="VersaoDeDesign"/>.
 /// </summary>
-public sealed class ProjetoDeDesign
+public sealed class ProjetoDeDesign : IProjetoComAcessos
 {
     public long Id { get; set; }
 
@@ -41,7 +41,42 @@ public sealed class ProjetoDeDesign
     /// <summary>A última versão enviada ou apagada: a sincronização incremental (<c>?desde=</c>) compara com ela.</summary>
     public DateTime AtualizadoEmUtc { get; set; }
 
+    /// <summary>
+    /// O DONO do projeto: quem o criou no dev.kit.page (o primeiro envio). O vínculo é do projeto, e não da máquina nem do
+    /// login da vez; só ele concede e remove acesso (<see cref="Acessos"/>). 0 é o projeto sem dono (o anterior ao acesso
+    /// que ficou sem versão): o próximo envio o assume.
+    /// </summary>
+    public int DonoId { get; set; }
+
+    string IProjetoComAcessos.NomeDoAcesso => Repositorio;
+
     public List<TelaDeDesign> Telas { get; set; } = [];
+
+    /// <summary>Quem, além do dono, vê o projeto (leitor) ou também envia versões (editor).</summary>
+    public List<AcessoAoProjeto> Acessos { get; set; } = [];
+}
+
+/// <summary>
+/// Um ACESSO a um projeto de design, concedido pelo dono a um usuário da mesma empresa: <c>leitor</c> (vê e baixa as
+/// versões) ou <c>editor</c> (também envia). Único por (<see cref="ProjetoId"/>, <see cref="UsuarioId"/>).
+/// </summary>
+public sealed class AcessoAoProjeto
+{
+    public long Id { get; set; }
+    public long? ProjetoId { get; set; }
+    public ProjetoDeDesign? Projeto { get; set; }
+    public long? ProjetoEmOndasId { get; set; }
+    public ProjetoCompartilhado? ProjetoEmOndas { get; set; }
+    public int UsuarioId { get; set; }
+    public Usuario? Usuario { get; set; }
+
+    /// <summary><c>leitor</c> ou <c>editor</c> (<c>DesignV1.PapeisDeAcesso</c>).</summary>
+    public string Papel { get; set; } = string.Empty;
+
+    /// <summary>Quem concedeu (o dono da vez); 0 é o acesso que a migração deu a quem já tinha enviado versões.</summary>
+    public int ConcedidoPorId { get; set; }
+
+    public DateTime ConcedidoEmUtc { get; set; }
 }
 
 /// <summary>Uma tela do projeto: o identificador do dev.kit (letras, números, - e _), o nome e o estado.</summary>

@@ -48,6 +48,12 @@ public enum SituacaoDoEnvio
 
     /// <summary>Os dados não valem (a base que não existe, o time sem empresa): 400.</summary>
     Recusada,
+
+    /// <summary>
+    /// O projeto existe e quem envia não é o dono nem editor dele: 403, com o motivo (o usuário, o projeto, o papel que
+    /// ele tem e o exigido) — no lugar do conflito sem causa.
+    /// </summary>
+    Proibida,
 }
 
 /// <summary>O resultado do envio: a versão (na nova e na repetida) ou a mensagem.</summary>
@@ -103,6 +109,21 @@ public interface IDesignDaEmpresa
 
     /// <summary>O uso do teto do plano por quem consulta (a empresa dele, ou ele mesmo).</summary>
     Task<UsoDoDesignV1> UsoAsync(EscopoDoDesign escopo, CancellationToken ct);
+
+    /// <summary>Os acessos do projeto, para quem tem acesso a ele; os candidatos do Dar acesso, só para o dono.</summary>
+    Task<ResultadoDaGestao<AcessosDoDesignV1>> AcessosAsync(EscopoDoDesign escopo, long projeto, CancellationToken ct);
+
+    /// <summary>Concede o acesso a um usuário da empresa do projeto (só o dono); o que já tem acesso é conflito.</summary>
+    Task<ResultadoDaGestao<AcessosDoDesignV1>> ConcederAsync(EscopoDoDesign escopo, long projeto, ConcessaoDeAcessoV1 pedido, CancellationToken ct);
+
+    /// <summary>Muda o papel de quem já tem acesso (só o dono).</summary>
+    Task<ResultadoDaGestao<AcessosDoDesignV1>> AlterarPapelAsync(EscopoDoDesign escopo, long projeto, int usuario, string? papel, CancellationToken ct);
+
+    /// <summary>Tira o acesso (só o dono; o dono não se remove).</summary>
+    Task<ResultadoDaGestao<AcessosDoDesignV1>> RemoverAcessoAsync(EscopoDoDesign escopo, long projeto, int usuario, CancellationToken ct);
+
+    /// <summary>Passa o projeto a outro usuário da empresa (só o dono, com a confirmação explícita); o dono antigo fica editor.</summary>
+    Task<ResultadoDaGestao<AcessosDoDesignV1>> TransferirAsync(EscopoDoDesign escopo, long projeto, TransferenciaDeDonoV1 pedido, CancellationToken ct);
 }
 
 /// <summary>As regras puras do design (US #669): validação, visibilidade, quem apaga e o teto — sem banco.</summary>
@@ -143,6 +164,40 @@ public static partial class RegrasDoDesign
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
         return nivel == NiveisDeConvencao.Time && (doTime.Length == 0 || doTime == timeDoProjeto);
     }
+
+    /// <summary>
+    /// O papel de quem consulta no projeto de design (o ACESSO, que vale por cima do nível): o <c>dono</c>, quem o criou;
+    /// o papel concedido por ele (<c>leitor</c> ou <c>editor</c>), só na mesma empresa do projeto; vazio, sem acesso —
+    /// e o projeto não é visível (404). O nível continua sendo o espaço e a unicidade do projeto, não quem o vê.
+    /// </summary>
+    public static string PapelNoProjeto(EscopoDoDesign escopo, int dono, int? empresaDoProjeto, string? concedido)
+    {
+        if (dono > 0 && dono == escopo.UsuarioId)
+            return DesignV1.PapelDono;
+        if (string.IsNullOrEmpty(concedido) || escopo.EmpresaId is null || empresaDoProjeto != escopo.EmpresaId)
+            return string.Empty;
+        return DesignV1.PapeisDeAcesso.Contains(concedido) ? concedido : string.Empty;
+    }
+
+    /// <summary>Envia versões quem é o dono ou editor.</summary>
+    public static bool PodeEnviar(string papel) => papel is DesignV1.PapelDono or DesignV1.PapelEditor;
+
+    /// <summary>O papel de acesso normalizado (<c>leitor</c> ou <c>editor</c>), ou vazio quando não é um deles.</summary>
+    public static string PapelDeAcesso(string? papel)
+    {
+        var normalizado = papel?.Trim().ToLowerInvariant() ?? string.Empty;
+        return DesignV1.PapeisDeAcesso.Contains(normalizado) ? normalizado : string.Empty;
+    }
+
+    /// <summary>
+    /// O motivo da recusa do envio, em uma frase: o usuário que tentou, o projeto, o papel que ele tem e o exigido, e
+    /// como resolver — é o que o <c>devcli design --sincronizar</c> mostra no lugar do "conflito" sem causa.
+    /// </summary>
+    public static string MotivoDaRecusaDoEnvio(string usuario, string repositorio, string papel, string dono)
+        => $"O usuário {usuario} não pode enviar versões ao projeto de design {repositorio}: o envio exige o papel "
+           + $"{DesignV1.PapelEditor} (ou ser o dono), e ele {(papel.Length > 0 ? $"tem o papel {papel}" : "não tem acesso ao projeto")}. "
+           + $"Peça ao dono{(dono.Length > 0 ? $" ({dono})" : string.Empty)} o papel {DesignV1.PapelEditor}: no painel Acesso do "
+           + $"design no dev.kit.page, ou com devcli design --conceder {usuario} --papel {DesignV1.PapelEditor} --aplicar.";
 
     /// <summary>Quem apaga a versão: o autor dela, ou o gestor da empresa do projeto.</summary>
     public static bool PodeApagar(EscopoDoDesign escopo, int autor, int? empresaDoProjeto)

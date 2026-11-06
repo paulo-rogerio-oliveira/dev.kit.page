@@ -367,6 +367,27 @@ da API** e fica só na memória dela — nunca no banco, no log ou na configura�
 
 Para testar local sem o Azure: `Remoto__Fila=simulado` na API e `Provisao__Provedor=simulado` no worker, na mesma base.
 
+### Acesso aos projetos de design (dono, leitor e editor)
+
+Rode `api/scripts/sqlserver/DesignAcesso.sql` (idempotente, depois de `Us669.sql`) **antes de publicar a API** desta
+versão: ele acrescenta `ProjetosDeDesign.DonoId` e a tabela `AcessosAoDesign`, e reconhece o dono dos projetos que já
+existem (o do nível usuário, ou quem enviou a primeira versão), deixando editor quem já tinha enviado versões. Sem ele,
+todo o design falha. Depois dele, quem não é dono nem tem acesso deixa de ver o projeto: o dono concede pelo painel
+Acesso do site ou por `devcli design --conceder <login> --papel leitor|editor --aplicar`. SQLite aplica a migration
+`DesignAcesso` automaticamente.
+
+Para o acesso também aos projetos em ondas, execute depois
+`api/scripts/sqlserver/AcessoAosProjetos.sql`, antes da API nova. Ele preserva o dono
+atual de cada projeto (`UsuarioId` no nível usuário; `AutorId` nos demais), copia
+as concessões de design para `AcessosAosProjetos` e usa uma única tabela para os
+dois recursos. A cópia e a retirada da tabela antiga ocorrem na mesma transação.
+Em uma base já atualizada, execute somente o script novo ao reaplicar esta versão;
+não recrie a tabela antiga com `DesignAcesso.sql`.
+O SQLite aplica também `AcessoAosProjetos` automaticamente.
+Os projetos em ondas passam a ser visíveis somente ao dono e aos usuários com
+acesso explícito. Leitores veem os itens e o andamento; editores também enviam
+alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
+
 ## Web
 
 **Azure Static Web Apps**: `npm ci && npm run build` em `web/`, publicando `web/dist`, com as

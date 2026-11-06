@@ -8,10 +8,11 @@ namespace DevKitPage.Infrastructure;
 
 /// <summary>
 /// O design compartilhado (US #669): os projetos por repositório no banco e as imagens no <see cref="IArmazemDeImagens"/>.
-/// O isolamento é o <see cref="EscopoDoDesign"/>, aplicado em <see cref="Visiveis"/> e conferido de novo por
-/// <see cref="RegrasDoDesign.Visivel"/> — o projeto que não é visível é 404, sem revelar se existe.
+/// O isolamento é o ACESSO ao projeto (o dono e quem ele autorizou, <see cref="RegrasDoDesign.PapelNoProjeto"/>),
+/// aplicado em <see cref="Visiveis"/> e conferido de novo na versão — o projeto sem acesso é 404, sem revelar se existe.
+/// O envio é a exceção: recusado por papel, ele diz o motivo (403), para o dev.kit não chamar de conflito.
 /// </summary>
-public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, IOptions<OpcoesDoDesign> opcoes, TimeProvider relogio)
+public sealed partial class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, IOptions<OpcoesDoDesign> opcoes, TimeProvider relogio)
     : IDesignDaEmpresa
 {
     public async Task<IReadOnlyList<ProjetoDeDesignV1>> ProjetosAsync(EscopoDoDesign escopo, string? time, DateTimeOffset? desde, CancellationToken ct)
@@ -48,8 +49,18 @@ public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, 
         var sha = Convert.ToHexString(SHA256.HashData(png)).ToLowerInvariant();
         var (largura, altura) = RegrasDoDesign.DimensoesDoPng(png)!.Value;
 
-        var projeto = await db.ProjetosDeDesign.Include(p => p.Telas).ThenInclude(t => t.Versoes)
+        var projeto = await db.ProjetosDeDesign.Include(p => p.Telas).ThenInclude(t => t.Versoes).Include(p => p.Acessos)
             .FirstOrDefaultAsync(p => p.Espaco == espaco && p.Nivel == nivel && p.Time == time && p.UsuarioId == dono && p.Chave == chave, ct);
+        if (projeto is not null)
+        {
+            // O projeto anterior ao acesso que ficou sem versão não tem dono: quem envia agora o assume.
+            if (projeto.DonoId == 0)
+                projeto.DonoId = escopo.UsuarioId;
+            var papel = PapelEm(escopo, projeto);
+            if (!RegrasDoDesign.PodeEnviar(papel))
+                return new(SituacaoDoEnvio.Proibida, null, await MotivoDaRecusaAsync(escopo, projeto, papel, ct));
+        }
+
         var tela = projeto?.Telas.FirstOrDefault(t => t.Identificador == envio.Tela);
         var numero = envio.Numero ?? (tela?.Versoes.Count > 0 ? tela.Versoes.Max(v => v.Numero) + 1 : 1);
 
@@ -73,7 +84,7 @@ public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, 
             projeto = new ProjetoDeDesign
             {
                 EmpresaId = escopo.EmpresaId, Espaco = espaco, Nivel = nivel, Time = time, UsuarioId = dono,
-                Repositorio = repositorio, Chave = chave, CriadoEmUtc = agora,
+                Repositorio = repositorio, Chave = chave, CriadoEmUtc = agora, DonoId = escopo.UsuarioId,
             };
             db.ProjetosDeDesign.Add(projeto);
         }
@@ -147,6 +158,9 @@ public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, 
             return ResultadoDaGestao<VersaoDeDesignV1>.Falhou(FalhaNaGestao.NaoEncontrado, $"A versão v{numero:D3} da tela {tela} não existe neste projeto.");
         var daTela = versao.Tela!;
         var dono = daTela.Projeto!;
+        if (!RegrasDeAcesso.PodeEditar(PapelEm(escopo, dono)))
+            return ResultadoDaGestao<VersaoDeDesignV1>.Falhou(FalhaNaGestao.Proibida,
+                "O papel leitor permite ver e baixar versões; apagar exige editor ou dono.");
         if (!RegrasDoDesign.PodeApagar(escopo, versao.AutorId, dono.EmpresaId))
             return ResultadoDaGestao<VersaoDeDesignV1>.Falhou(FalhaNaGestao.Proibida, "Só quem enviou a versão, ou o gestor da empresa, a apaga.");
 
@@ -172,30 +186,46 @@ public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, 
     }
 
     /// <summary>
-    /// Os projetos que o escopo vê, num ponto só: o nível usuário do dono; o empresa e o time na empresa dele (o time só o
-    /// declarado, quando veio). É a mesma regra de <see cref="RegrasDoDesign.Visivel"/>, escrita para o banco.
+    /// Os projetos que o escopo vê, num ponto só: os de que ele é o dono e aqueles a que o dono lhe deu acesso, na mesma
+    /// empresa (o time, quando veio, filtra o nível time). É a regra de <see cref="RegrasDoDesign.PapelNoProjeto"/>,
+    /// escrita para o banco.
     /// </summary>
     private IQueryable<ProjetoDeDesign> Visiveis(EscopoDoDesign escopo, string? time)
     {
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
+        var eu = escopo.UsuarioId;
         var empresa = escopo.EmpresaId;
         return db.ProjetosDeDesign.AsNoTracking()
             .Include(p => p.Telas).ThenInclude(t => t.Versoes).ThenInclude(v => v.Autor)
-            .Where(p => (p.Nivel == NiveisDeConvencao.Usuario && p.UsuarioId == escopo.UsuarioId)
-                || (empresa != null && p.EmpresaId == empresa
-                    && (p.Nivel == NiveisDeConvencao.Empresa || (p.Nivel == NiveisDeConvencao.Time && (doTime == string.Empty || p.Time == doTime)))));
+            .Include(p => p.Acessos)
+            .Where(p => p.DonoId == eu || (empresa != null && p.EmpresaId == empresa && p.Acessos.Any(a => a.UsuarioId == eu)))
+            .Where(p => p.Nivel != NiveisDeConvencao.Time || doTime == string.Empty || p.Time == doTime);
     }
 
-    /// <summary>A versão de um projeto visível, com a tela, o projeto e o autor; nula quando não há.</summary>
+    /// <summary>A versão de um projeto a que o escopo tem acesso, com a tela, o projeto e o autor; nula quando não há.</summary>
     private async Task<VersaoDeDesign?> VersaoVisivelAsync(EscopoDoDesign escopo, long projeto, string tela, int numero, CancellationToken ct, bool rastrear = false)
     {
         if (!RegrasDoDesign.IdDeTelaValido(tela))
             return null;
         var versoes = rastrear ? db.VersoesDeDesign : db.VersoesDeDesign.AsNoTracking();
-        var versao = await versoes.Include(v => v.Autor).Include(v => v.Tela!).ThenInclude(t => t.Projeto)
+        var versao = await versoes.Include(v => v.Autor).Include(v => v.Tela!).ThenInclude(t => t.Projeto!).ThenInclude(p => p.Acessos)
             .FirstOrDefaultAsync(v => v.Numero == numero && v.Tela!.Identificador == tela && v.Tela.ProjetoId == projeto, ct);
         var dono = versao?.Tela?.Projeto;
-        return dono is not null && RegrasDoDesign.Visivel(escopo, dono.Nivel, dono.EmpresaId, dono.Time, dono.UsuarioId, null) ? versao : null;
+        return dono is not null && PapelEm(escopo, dono).Length > 0 ? versao : null;
+    }
+
+    /// <summary>O papel do escopo no projeto (com os acessos carregados): dono, editor, leitor ou vazio.</summary>
+    private static string PapelEm(EscopoDoDesign escopo, ProjetoDeDesign projeto)
+        => RegrasDoDesign.PapelNoProjeto(escopo, projeto.DonoId, projeto.EmpresaId,
+            projeto.Acessos.FirstOrDefault(a => a.UsuarioId == escopo.UsuarioId)?.Papel);
+
+    /// <summary>A recusa do envio por papel, com o login de quem tentou e o nome do dono.</summary>
+    private async Task<string> MotivoDaRecusaAsync(EscopoDoDesign escopo, ProjetoDeDesign projeto, string papel, CancellationToken ct)
+    {
+        var ids = new[] { escopo.UsuarioId, projeto.DonoId };
+        var usuarios = await db.Usuarios.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, ct);
+        var quem = usuarios.GetValueOrDefault(escopo.UsuarioId)?.Login ?? $"#{escopo.UsuarioId}";
+        return RegrasDoDesign.MotivoDaRecusaDoEnvio(quem, projeto.Repositorio, papel, Nome(usuarios.GetValueOrDefault(projeto.DonoId)));
     }
 
     /// <summary>Quantas versões e quantos bytes o espaço já guarda.</summary>
@@ -227,23 +257,23 @@ public sealed class DesignDaEmpresa(DevKitPageDb db, IArmazemDeImagens armazem, 
 
     private async Task<IReadOnlyList<ProjetoDeDesignV1>> ParaLeituraAsync(EscopoDoDesign escopo, IReadOnlyList<ProjetoDeDesign> projetos, CancellationToken ct)
     {
-        var donos = projetos.Where(p => p.UsuarioId > 0).Select(p => p.UsuarioId).Distinct().ToArray();
+        var donos = projetos.Where(p => p.DonoId > 0).Select(p => p.DonoId).Distinct().ToArray();
         var nomes = await db.Usuarios.AsNoTracking().Where(u => donos.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Nome.Length > 0 ? u.Nome : u.Login, ct);
 
         return projetos.Select(p => new ProjetoDeDesignV1(
-            p.Id, p.Repositorio, p.Chave, p.Nivel, p.Time, p.UsuarioId > 0 ? nomes.GetValueOrDefault(p.UsuarioId, string.Empty) : string.Empty,
+            p.Id, p.Repositorio, p.Chave, p.Nivel, p.Time, p.DonoId > 0 ? nomes.GetValueOrDefault(p.DonoId, string.Empty) : string.Empty,
             DevKitPageDb.Utc(p.AtualizadoEmUtc),
             p.Telas.Where(t => t.Versoes.Count > 0).OrderBy(t => t.Identificador, StringComparer.Ordinal)
                 .Select(t => new TelaDeDesignV1(t.Identificador, t.Nome, t.Estado,
                     t.Versoes.OrderBy(v => v.Numero).Select(v => Leitura(escopo, p, t, v, Nome(v.Autor))).ToArray()))
-                .ToArray())).ToArray();
+                .ToArray(), PapelEm(escopo, p))).ToArray();
     }
 
     private static VersaoDeDesignV1 Leitura(EscopoDoDesign escopo, ProjetoDeDesign projeto, TelaDeDesign tela, VersaoDeDesign v, string autor) => new(
         v.Numero, v.Tipo, v.Base, v.Tema, v.Largura, v.Altura, v.Origem, v.Alvo, v.Branch, v.Commit, v.Descricao, autor, v.AutorTipo,
         v.Runner, DevKitPageDb.Utc(v.CriadaEmUtc), v.Sha256, v.Bytes, DesignV1.Link(projeto.Id, tela.Identificador, v.Numero),
-        RegrasDoDesign.PodeApagar(escopo, v.AutorId, projeto.EmpresaId));
+        RegrasDeAcesso.PodeEditar(PapelEm(escopo, projeto)) && RegrasDoDesign.PodeApagar(escopo, v.AutorId, projeto.EmpresaId));
 
     private static string Nome(Usuario? usuario) => usuario is null ? string.Empty : usuario.Nome.Length > 0 ? usuario.Nome : usuario.Login;
 

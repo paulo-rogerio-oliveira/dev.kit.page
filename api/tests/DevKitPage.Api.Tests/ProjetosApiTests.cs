@@ -68,8 +68,8 @@ public sealed class ProjetosApiTests : IDisposable
             Assert.Equal(HttpStatusCode.Created, (await ana.PutAsJsonAsync("/api/projetos", Envio(nivel))).StatusCode);
         var deAna = (await ana.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!;
         Assert.Equal(3, deAna.Length);
-        Assert.Equal(2, (await bia.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!.Length);
-        Assert.Single((await bia.GetFromJsonAsync<ProjetoV1[]>("/api/projetos?time=outro"))!);
+        Assert.Empty((await bia.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!);
+        Assert.Empty((await bia.GetFromJsonAsync<ProjetoV1[]>("/api/projetos?time=outro"))!);
         Assert.Empty((await caio.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!);
         foreach (var p in deAna)
         {
@@ -148,7 +148,8 @@ public sealed class ProjetosCompatibilidadeApiTests : IDisposable
         Assert.Equal([1], criado.Itens.Single(i => i.Numero == 2).Dependencias);
         Assert.Equal($"/api/projetos/{criado.Id}", criacao.Headers.Location!.ToString());
 
-        // Bia, da mesma empresa, lê e regrava com a versão lida; Ana, com a velha, recebe conflito.
+        await ana.PostAsJsonAsync($"/api/projetos/{criado.Id}/acessos", new ConcessaoDeAcessoV1("bia@a.com", "editor"));
+        // Bia, editora, lê e regrava; Ana, com a versão velha, recebe conflito.
         var lido = Assert.Single(await ListarAsync(bia));
         var regravacao = await bia.PutAsJsonAsync("/api/projetos", Projeto("orquestrador", versao: lido.Versao, itens: [Item(1)]));
         Assert.Equal(HttpStatusCode.OK, regravacao.StatusCode);
@@ -170,9 +171,13 @@ public sealed class ProjetosCompatibilidadeApiTests : IDisposable
         await ana.PutAsJsonAsync("/api/projetos", Projeto("meu", nivel: "usuario"));
 
         Assert.Equal(["da-empresa", "de-vendas", "meu"], (await ListarAsync(ana)).Select(p => p.Slug).Order());
+        Assert.Empty(await ListarAsync(bia));
+        foreach (var p in await ListarAsync(ana))
+            if (p.Nivel != "usuario")
+                Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync($"/api/projetos/{p.Id}/acessos", new ConcessaoDeAcessoV1("bia@a.com", "leitor"))).StatusCode);
         Assert.Equal(["da-empresa", "de-vendas"], (await ListarAsync(bia)).Select(p => p.Slug).Order());
         Assert.Equal(["da-empresa"], (await ListarAsync(bia, "?time=Suporte")).Select(p => p.Slug));
-        Assert.Equal(["da-empresa", "de-vendas"], (await ListarAsync(gestor)).Select(p => p.Slug).Order());
+        Assert.Empty(await ListarAsync(gestor));
         Assert.Empty(await ListarAsync(caio));
 
         // O projeto de outra empresa é 404, sem revelar que existe.
@@ -198,16 +203,18 @@ public sealed class ProjetosCompatibilidadeApiTests : IDisposable
     }
 
     [Fact]
-    public async Task So_o_autor_ou_o_gestor_apagam_o_projeto()
+    public async Task So_o_dono_apaga_o_projeto()
     {
         var (ana, bia, gestor, _) = await EmpresasAsync();
         var a = (await (await ana.PutAsJsonAsync("/api/projetos", Projeto("um"))).Content.ReadFromJsonAsync<ProjetoV1>())!;
         var b = (await (await ana.PutAsJsonAsync("/api/projetos", Projeto("dois"))).Content.ReadFromJsonAsync<ProjetoV1>())!;
+        await ana.PostAsJsonAsync($"/api/projetos/{a.Id}/acessos", new ConcessaoDeAcessoV1("bia@a.com", "editor"));
         Assert.False((await ListarAsync(bia)).Single(p => p.Id == a.Id).PodeApagar);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await bia.DeleteAsync($"/api/projetos/{a.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await ana.DeleteAsync($"/api/projetos/{a.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await gestor.DeleteAsync($"/api/projetos/{b.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await gestor.DeleteAsync($"/api/projetos/{b.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ana.DeleteAsync($"/api/projetos/{b.Id}")).StatusCode);
         Assert.Empty(await ListarAsync(ana));
     }
 

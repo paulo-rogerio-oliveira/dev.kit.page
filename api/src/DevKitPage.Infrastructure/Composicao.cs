@@ -85,6 +85,7 @@ public static class Composicao
                 ? new ArmazemDeImagensNoBlob(sp.GetRequiredService<IOptions<OpcoesDoDesign>>())
                 : new ArmazemDeImagensEmDisco(sp.GetRequiredService<IOptions<OpcoesDoDesign>>()));
         servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
+        servicos.AddScoped<IAcessosAosProjetos, AcessosAosProjetos>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
         servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
         // O controle remoto, fase 1: o heartbeat e o retrato das máquinas, por usuário.
