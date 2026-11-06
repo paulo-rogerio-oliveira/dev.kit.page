@@ -320,6 +320,13 @@ identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
 | `Provisao__MaximoDeFilasPorUsuario` | A cota de filas ativas por usuário (1). |
 | `Provisao__PlanosQueLiberam__0`… | Os planos da empresa que liberam a provisão sem a permissão do admin — o tier de assinatura; vazio hoje. |
 | `Provisao__PedidosPorHora` | Pedidos (criar, repetir, remover) por usuário por hora (20); acima, 429. |
+| `Provisao__MaximoDeAppServicesPorUsuario` · `Provisao__MaximoDeStaticWebAppsPorUsuario` | A cota de App Services (2) e de Static Web Apps (3) ativos por usuário (item 12). |
+| `Provisao__LimiteDeCustoMensal` · `Provisao__AlertaDeCustoPercentual` | O teto do custo estimado do mês dos aplicativos, em reais (150; 0 desliga), e o alerta (80%). |
+| `Provisao__PlanosDoAppService__0__Id`, `__Rotulo`, `__CustoMensal`… · `Provisao__PlanosDoStaticWebApp__…` · `Provisao__RegioesDoStaticWebApp__0`… | Os planos com o custo estimado (padrão F1/B1 e Free/Standard, sem os preços conferidos) e as regiões do Static Web App. |
+
+**App Service e Static Web App (item 12).** Rode de novo o `Provisao.sql` (as colunas novas e o índice da vaga) antes de
+publicar a API desta versão. A identidade do worker passa a precisar também de `Microsoft.Web/serverfarms/read`, `/write` e
+`/delete`, `Microsoft.Web/sites/read`, `/write` e `/delete` e `Microsoft.Web/staticSites/read`, `/write` e `/delete`.
 
 **Liberar a um usuário**: `/usuarios` → a licença do usuário → **Recursos liberados** → Liberar. Retirar não apaga o que ele
 criou (só impede pedidos novos). **Custo**: um grupo por usuário com as tags `devkit=provisao`, `devkit-usuario` e

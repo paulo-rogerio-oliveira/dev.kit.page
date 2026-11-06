@@ -185,11 +185,14 @@ public enum FalhaNaGestao
     Proibida,
 }
 
-/// <summary>O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem.</summary>
-public sealed record ResultadoDaGestao<T>(T? Valor, FalhaNaGestao Falha = FalhaNaGestao.Nenhuma, string Mensagem = "")
+/// <summary>
+/// O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem — e, quando o site precisa
+/// distinguir a recusa (a cota cheia, o segundo fator), o <see cref="Codigo"/> que a API devolve no problema.
+/// </summary>
+public sealed record ResultadoDaGestao<T>(T? Valor, FalhaNaGestao Falha = FalhaNaGestao.Nenhuma, string Mensagem = "", string Codigo = "")
     where T : class
 {
-    public static ResultadoDaGestao<T> Falhou(FalhaNaGestao falha, string mensagem) => new(null, falha, mensagem);
+    public static ResultadoDaGestao<T> Falhou(FalhaNaGestao falha, string mensagem, string codigo = "") => new(null, falha, mensagem, codigo);
 }
 
 /// <summary>

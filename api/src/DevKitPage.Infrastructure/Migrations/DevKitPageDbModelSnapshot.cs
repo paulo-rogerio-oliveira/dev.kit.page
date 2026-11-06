@@ -1521,6 +1521,10 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("CustoMensal")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Endpoint")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -1553,10 +1557,25 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.Property<string>("Nome")
                         .IsRequired()
-                        .HasMaxLength(24)
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NomeDoPlano")
+                        .IsRequired()
+                        .HasMaxLength(60)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Operacao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Passos")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Plano")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
@@ -1583,6 +1602,11 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Rotulo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Tentativas")
                         .HasColumnType("INTEGER");
 
@@ -1592,6 +1616,9 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<int>("UsuarioId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Vaga")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Versao")
@@ -1606,6 +1633,10 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("Estado", "ProximaTentativaEmUtc");
 
                     b.HasIndex("UsuarioId", "Estado");
+
+                    b.HasIndex("UsuarioId", "Tipo", "Vaga")
+                        .IsUnique()
+                        .HasFilter("[Estado] <> 'removido'");
 
                     b.ToTable("RecursosProvisionados", (string)null);
                 });

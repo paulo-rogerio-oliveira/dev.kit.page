@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
 import { vi } from 'vitest';
-import { API, contaIndividual, escritas, filaPronta, permissaoLiberada, provisao, servidor, tokenDoDev } from '../testes/servidor';
+import {
+  API, appServiceParcial, appServicePronto, contaIndividual, escritas, filaPronta, permissaoComAplicativos, permissaoLiberada, provisao, servidor,
+  siteEmProvisao, tokenDoDev,
+} from '../testes/servidor';
 import { INTERVALO_DE_ACOMPANHAMENTO_MS } from '../componentes/FilaDoControleRemoto';
 
 afterEach(() => vi.restoreAllMocks());
@@ -262,5 +265,146 @@ describe('Fila do controle remoto na conta (controle remoto v2, item 4)', () => 
     await userEvent.click(within(secao).getByRole('button', { name: 'Criar a fila' }));
 
     expect(await within(secao).findByRole('alert')).toHaveTextContent('não está liberada para o seu usuário');
+  });
+});
+
+describe('Sites e APIs no Azure na conta (controle remoto v2, item 12)', () => {
+  it('sem a liberação, ou numa API anterior aos aplicativos, a seção não existe', async () => {
+    provisao.permissao = permissaoLiberada;
+    renderizar('/conta', tokenDoDev());
+
+    expect(await screen.findByRole('region', { name: 'Fila do controle remoto' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Sites e APIs no Azure' })).not.toBeInTheDocument();
+  });
+
+  it('mostra a cota de cada tipo, o custo com o alerta e só os aplicativos (a fila fica na seção dela)', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    provisao.recursos = [filaPronta(), appServicePronto(), { ...appServiceParcial() }, siteEmProvisao()];
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Sites e APIs no Azure' });
+    const cota = await within(secao).findByLabelText('Cota e custo');
+    expect(cota).toHaveTextContent('App Service2 de 2Cota cheia: remova um para criar outro.');
+    expect(cota).toHaveTextContent('Static Web App1 de 3Plano Free · cabe mais 2.');
+    expect(cota).toHaveTextContent('Custo estimado do mêsR$ 123,40 de R$ 150,00');
+    expect(within(cota).getByRole('meter', { name: 'Custo do mês' })).toHaveAttribute('aria-valuenow', '123.4');
+    expect(within(secao).getByText(/O custo estimado do mês passou de 80% do seu limite \(R\$ 123,40 de R\$ 150,00\)/)).toBeInTheDocument();
+
+    expect(within(secao).getAllByRole('article').map((a) => a.getAttribute('aria-label')))
+      .toEqual(['App Service api-pedidos', 'App Service api-relatorios', 'Static Web App site-docs']);
+    expect(within(screen.getByRole('region', { name: 'Fila do controle remoto' })).getAllByRole('article')).toHaveLength(1);
+
+    const pronto = within(secao).getByRole('article', { name: 'App Service api-pedidos' });
+    expect(within(pronto).getByText('Pronto')).toBeInTheDocument();
+    expect(pronto).toHaveTextContent('PlanoB1 · Linux');
+    expect(pronto).toHaveTextContent('Custo do mêsR$ 61,70 (estimado)');
+    expect(within(pronto).getByRole('link', { name: 'https://app-u2-api-pedidos-7f3k.azurewebsites.net' })).toBeInTheDocument();
+    expect(within(within(secao).getByRole('article', { name: 'Static Web App site-docs' })).getByText('Em provisão')).toBeInTheDocument();
+  });
+
+  it('com a cota de App Service cheia, o tipo fica desabilitado e o pedido vai como Static Web App', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    provisao.recursos = [appServicePronto(), { ...appServicePronto(), id: 24, rotulo: 'api-dois', nome: 'app-u2-api-dois-aaaa' }];
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Sites e APIs no Azure' });
+    const tipo = await within(secao).findByLabelText('Tipo');
+    await waitFor(() => expect(tipo).toHaveValue('static-web-app'));
+    expect(within(tipo).getByRole('option', { name: 'App Service · cota cheia' })).toBeDisabled();
+    expect(within(secao).getByLabelText('Região')).toHaveValue('eastus2');
+    expect(within(within(secao).getByLabelText('Plano')).getByRole('option', { name: 'Free · R$ 0,00/mês' })).toBeInTheDocument();
+    expect(within(secao).getByText('Até 2 App Services e 3 Static Web Apps por usuário. O nome no Azure ganha o prefixo e um sufixo únicos.')).toBeInTheDocument();
+
+    await userEvent.type(within(secao).getByLabelText('Nome'), 'Site-Blog');
+    await userEvent.click(within(secao).getByRole('button', { name: 'Criar' }));
+
+    expect(await within(secao).findByText(/Pedido aceito: o worker cria o site swa-u2-site-blog-n3w0/)).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'POST', caminho: '/api/provisao/aplicativos', corpo: { tipo: 'static-web-app', nome: 'site-blog', regiao: 'eastus2', plano: 'Free' } }]);
+    expect(await within(secao).findByRole('article', { name: 'Static Web App site-blog' })).toHaveTextContent('Pedida');
+  });
+
+  it('a recusa da API (a cota cheia num pedido simultâneo) aparece como erro', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    servidor.use(http.post(`${API}/api/provisao/aplicativos`, () =>
+      HttpResponse.json({ detail: 'A cota de App Service está cheia (2 de 2). Remova um para criar outro.', codigo: 'cota-cheia' }, { status: 409 })));
+    renderizar('/conta', tokenDoDev());
+
+    const secao = await screen.findByRole('region', { name: 'Sites e APIs no Azure' });
+    await within(secao).findByText(/Nenhum site ou API ainda/);
+    await userEvent.type(within(secao).getByLabelText('Nome'), 'api-pedidos');
+    await userEvent.click(within(secao).getByRole('button', { name: 'Criar' }));
+
+    expect(await within(secao).findByRole('alert')).toHaveTextContent('A cota de App Service está cheia (2 de 2)');
+  });
+
+  it('a falha parcial diz o que ficou no Azure e o Repetir retoma do aplicativo', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    provisao.recursos = [appServiceParcial()];
+    renderizar('/conta', tokenDoDev());
+
+    const parcial = await screen.findByRole('article', { name: 'App Service api-relatorios' });
+    expect(within(parcial).getByText('Falhou em parte')).toBeInTheDocument();
+    expect(parcial).toHaveTextContent('PlanoB1 · Linux (criado)');
+    expect(within(parcial).getByRole('alert')).toHaveTextContent(
+      'Falha parcial: o plano asp-u2-api-relatorios-q8m2 foi criado e o aplicativo não — o Azure respondeu 409, nome em uso. Repetir retoma do aplicativo; Remover apaga também o plano que ficou.');
+
+    await userEvent.click(within(parcial).getByRole('button', { name: 'Repetir' }));
+
+    expect(await screen.findByText('Pedido devolvido ao worker: ele retoma do aplicativo, sem criar o plano de novo.')).toBeInTheDocument();
+    expect(escritas).toEqual([{ metodo: 'POST', caminho: '/api/provisao/recursos/22/repetir', corpo: null }]);
+  });
+
+  it('remover pede o código do segundo fator no próprio cartão; o código errado é recusado', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    provisao.recursos = [appServicePronto()];
+    renderizar('/conta', tokenDoDev());
+
+    const app = await screen.findByRole('article', { name: 'App Service api-pedidos' });
+    await userEvent.click(within(app).getByRole('button', { name: 'Remover' }));
+    const confirmacao = within(app).getByRole('group', { name: 'Confirmar a remoção' });
+    expect(confirmacao).toHaveTextContent('Remover o App Service api-pedidos? O site sai do ar e o plano B1 é apagado do Azure. Não tem volta.');
+    const botao = within(confirmacao).getByRole('button', { name: 'Remover com segundo fator' });
+    expect(botao).toBeDisabled();
+
+    // O código só se digita depois de conferido o autenticador (o GET do segundo fator).
+    const codigo = within(confirmacao).getByLabelText('Código de 6 dígitos');
+    await waitFor(() => expect(codigo).toBeEnabled());
+    await userEvent.type(codigo, '000000');
+    await waitFor(() => expect(botao).toBeEnabled());
+    await userEvent.click(botao);
+    expect(await within(confirmacao).findByRole('alert')).toHaveTextContent('Código incorreto');
+
+    await userEvent.type(within(confirmacao).getByLabelText('Código de 6 dígitos'), '123456');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Remover com segundo fator' }));
+
+    expect(await screen.findByText(/Remoção pedida: o worker apaga o site app-u2-api-pedidos-7f3k e o plano asp-u2-api-pedidos-7f3k/)).toBeInTheDocument();
+    expect(escritas.map((e) => e.corpo)).toEqual([{ codigo: '000000' }, { codigo: '123456' }]);
+    expect(await within(app).findByText('Remoção pedida')).toBeInTheDocument();
+    expect(within(app).queryByRole('group', { name: 'Confirmar a remoção' })).not.toBeInTheDocument();
+  });
+
+  it('sem o autenticador, configura-o ali mesmo e então confirma a remoção', async () => {
+    provisao.permissao = permissaoComAplicativos;
+    provisao.recursos = [{ ...siteEmProvisao(), estado: 'pronto', prontoEm: '2026-11-05T17:40:00Z', endpoint: 'https://gentle-sea.azurestaticapps.net' }];
+    provisao.segundoFatorAtivo = false;
+    renderizar('/conta', tokenDoDev());
+
+    const site = await screen.findByRole('article', { name: 'Static Web App site-docs' });
+    await userEvent.click(within(site).getByRole('button', { name: 'Remover' }));
+    const confirmacao = within(site).getByRole('group', { name: 'Confirmar a remoção' });
+    expect(confirmacao).toHaveTextContent('O site sai do ar e é apagado do Azure. Não tem volta.');
+
+    await userEvent.type(await within(confirmacao).findByLabelText('Senha atual'), 'minha-senha');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Configurar autenticador' }));
+    expect(await within(confirmacao).findByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument();
+    await userEvent.type(within(confirmacao).getByLabelText('Código de 6 dígitos'), '654321');
+    await userEvent.click(within(confirmacao).getByRole('button', { name: 'Ativar autenticador' }));
+
+    const botao = await within(confirmacao).findByRole('button', { name: 'Remover com segundo fator' });
+    await userEvent.type(within(confirmacao).getByLabelText('Código de 6 dígitos'), '123456');
+    await userEvent.click(botao);
+
+    expect(await screen.findByText(/Remoção pedida: o worker apaga o site swa-u2-site-docs-2m9q em instantes/)).toBeInTheDocument();
+    expect(escritas.map((e) => e.caminho)).toEqual(['/api/remoto/segundo-fator/preparar', '/api/remoto/segundo-fator/confirmar', '/api/provisao/recursos/23/remover']);
   });
 });

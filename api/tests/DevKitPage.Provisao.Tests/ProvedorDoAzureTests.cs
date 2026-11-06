@@ -225,4 +225,89 @@ public sealed class ProvedorDoAzureTests
         Assert.DoesNotContain(typeof(OpcoesDoWorker).GetProperties(), p => p.Name.Contains("Segredo", StringComparison.OrdinalIgnoreCase)
             || p.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase) || p.Name.Contains("Chave", StringComparison.OrdinalIgnoreCase));
     }
+
+    private static readonly AplicativoNaNuvem AppService =
+        new(8, 42, Contracts.V1.ProvisaoV1.TipoAppService, "rg-devkit-u42", "app-u16-api-pedidos-7f3k", "asp-u16-api-pedidos-7f3k", "brazilsouth", "B1");
+
+    private static readonly AplicativoNaNuvem SiteEstatico =
+        new(9, 42, Contracts.V1.ProvisaoV1.TipoStaticWebApp, "rg-devkit-u42", "swa-u16-site-docs-2m9q", string.Empty, "eastus2", "Free");
+
+    private const string Web = $"https://management.azure.com/subscriptions/{Assinatura}/resourceGroups/rg-devkit-u42/providers/Microsoft.Web";
+
+    [Fact]
+    public async Task O_app_service_cria_o_plano_linux_e_o_site_so_https_no_plano_e_le_o_endereco()
+    {
+        var (provedor, arm, _) = Montar();
+
+        await provedor.CriarPlanoAsync(AppService, default);
+        arm.Responder(HttpStatusCode.OK);
+        arm.Responder(HttpStatusCode.OK);
+        arm.Responder(HttpStatusCode.OK, "{\"properties\":{\"defaultHostName\":\"app-u16-api-pedidos-7f3k.azurewebsites.net\"}}");
+        var criado = await provedor.CriarAplicativoAsync(AppService, default);
+
+        Assert.Equal(
+        [
+            (HttpMethod.Put, $"https://management.azure.com/subscriptions/{Assinatura}/resourcegroups/rg-devkit-u42?api-version=2021-04-01"),
+            (HttpMethod.Put, $"{Web}/serverfarms/asp-u16-api-pedidos-7f3k?api-version=2023-12-01"),
+            (HttpMethod.Put, $"https://management.azure.com/subscriptions/{Assinatura}/resourcegroups/rg-devkit-u42?api-version=2021-04-01"),
+            (HttpMethod.Put, $"{Web}/sites/app-u16-api-pedidos-7f3k?api-version=2023-12-01"),
+            (HttpMethod.Get, $"{Web}/sites/app-u16-api-pedidos-7f3k?api-version=2023-12-01"),
+        ], arm.Recebidos.Select(r => (r.Metodo, r.Url)));
+
+        using var plano = JsonDocument.Parse(arm.Recebidos[1].Corpo);
+        Assert.Equal(("linux", "B1", true), (plano.RootElement.GetProperty("kind").GetString(), plano.RootElement.GetProperty("sku").GetProperty("name").GetString(),
+            plano.RootElement.GetProperty("properties").GetProperty("reserved").GetBoolean()));
+        using var site = JsonDocument.Parse(arm.Recebidos[3].Corpo);
+        var propriedades = site.RootElement.GetProperty("properties");
+        Assert.Equal($"/subscriptions/{Assinatura}/resourceGroups/rg-devkit-u42/providers/Microsoft.Web/serverfarms/asp-u16-api-pedidos-7f3k",
+            propriedades.GetProperty("serverFarmId").GetString());
+        Assert.True(propriedades.GetProperty("httpsOnly").GetBoolean());
+        Assert.Equal("Disabled", propriedades.GetProperty("siteConfig").GetProperty("ftpsState").GetString());
+        Assert.Equal("8", site.RootElement.GetProperty("tags").GetProperty("devkit-recurso").GetString());
+
+        Assert.Equal("https://app-u16-api-pedidos-7f3k.azurewebsites.net", criado.Endpoint);
+        Assert.EndsWith("/Microsoft.Web/sites/app-u16-api-pedidos-7f3k", criado.IdNoAzure, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task O_static_web_app_usa_o_sku_pedido_e_o_endereco_sorteado_pelo_azure()
+    {
+        var (provedor, arm, _) = Montar();
+        arm.Responder(HttpStatusCode.OK);
+        arm.Responder(HttpStatusCode.OK);
+        arm.Responder(HttpStatusCode.OK, "{\"properties\":{\"defaultHostname\":\"gentle-sea-0a1b2c.azurestaticapps.net\"}}");
+
+        var criado = await provedor.CriarAplicativoAsync(SiteEstatico, default);
+
+        Assert.Equal($"{Web}/staticSites/swa-u16-site-docs-2m9q?api-version=2023-12-01", arm.Recebidos[1].Url);
+        using var corpo = JsonDocument.Parse(arm.Recebidos[1].Corpo);
+        Assert.Equal(("Free", "eastus2"), (corpo.RootElement.GetProperty("sku").GetProperty("name").GetString(), corpo.RootElement.GetProperty("location").GetString()));
+        Assert.Equal("https://gentle-sea-0a1b2c.azurestaticapps.net", criado.Endpoint);
+    }
+
+    [Fact]
+    public async Task O_nome_do_site_tomado_e_definitivo_e_remover_apaga_o_site_e_o_plano_mesmo_ja_apagados()
+    {
+        var (provedor, arm, _) = Montar();
+        arm.Responder(HttpStatusCode.OK);
+        arm.Responder(HttpStatusCode.Conflict, Erro("WebsiteAlreadyExists", $"Website with given name already exists in /subscriptions/{Assinatura}."));
+
+        var falha = await Assert.ThrowsAsync<FalhaNaNuvem>(() => provedor.CriarAplicativoAsync(AppService, default));
+        Assert.False(falha.Transitoria);
+        Assert.StartsWith("O nome do App Service já é usado no Azure (409)", falha.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Assinatura, falha.Message, StringComparison.Ordinal);
+
+        arm.Recebidos.Clear();
+        arm.Responder(HttpStatusCode.NotFound);
+        arm.Responder(HttpStatusCode.OK);
+        await provedor.RemoverAplicativoAsync(AppService, default);
+        await provedor.RemoverPlanoAsync(AppService, default);
+        await provedor.RemoverPlanoAsync(SiteEstatico, default);
+
+        Assert.Equal(
+        [
+            (HttpMethod.Delete, $"{Web}/sites/app-u16-api-pedidos-7f3k?api-version=2023-12-01"),
+            (HttpMethod.Delete, $"{Web}/serverfarms/asp-u16-api-pedidos-7f3k?api-version=2023-12-01"),
+        ], arm.Recebidos.Select(r => (r.Metodo, r.Url)));
+    }
 }

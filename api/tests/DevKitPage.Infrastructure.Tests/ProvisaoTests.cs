@@ -111,7 +111,7 @@ public sealed class ProvisaoTests
 
         Assert.Null(await DetalheAsync(b, bia, recurso.Id));
         Assert.Empty(await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().RecursosAsync(bia, default)));
-        var remocao = await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().RemoverAsync(bia, "bia", recurso.Id, default));
+        var remocao = await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().RemoverAsync(bia, "bia", recurso.Id, null, default));
         Assert.Equal(FalhaNaGestao.NaoEncontrado, remocao.Falha);
     }
 
@@ -236,14 +236,14 @@ public sealed class ProvisaoTests
         var id = (await PedirAsync(b, ana)).Valor!.Recurso.Id;
         IProvisao Provisao(IServiceProvider sp) => sp.GetRequiredService<IProvisao>();
 
-        Assert.Equal(FalhaNaGestao.Conflito, (await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, default))).Falha);
+        Assert.Equal(FalhaNaGestao.Conflito, (await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, null, default))).Falha);
 
         await ReservarAsync(b);
         await b.ComAsync(sp => sp.GetRequiredService<IMotorDeProvisao>().ConcluirAsync(id, "w1", new RecursoNaNuvem("id", "https://x"), default));
-        var pedida = (await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, default))).Valor!;
+        var pedida = (await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, null, default))).Valor!;
         Assert.True(pedida.Novo);
         Assert.Equal((ProvisaoV1.OperacaoRemover, ProvisaoV1.EstadoPedido), (pedida.Recurso.Operacao, pedida.Recurso.Estado));
-        Assert.False((await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, default))).Valor!.Novo);
+        Assert.False((await b.ComAsync(sp => Provisao(sp).RemoverAsync(ana, "ana", id, null, default))).Valor!.Novo);
 
         var reservada = await ReservarAsync(b);
         Assert.Equal(ProvisaoV1.OperacaoRemover, reservada!.Operacao);

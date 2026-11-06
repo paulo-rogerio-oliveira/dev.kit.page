@@ -39,4 +39,10 @@ public sealed class OpcoesDoWorker
     public int SimulacaoSegundos { get; set; } = 3;
 
     public int SimulacaoFalhasTransitorias { get; set; }
+
+    /// <summary>
+    /// O provedor simulado: o aplicativo cujo nome contém este texto falha DE VEZ no passo do aplicativo — com o plano do App
+    /// Service já criado, a falha parcial da demonstração. Vazio: nenhum falha.
+    /// </summary>
+    public string SimulacaoFalhaNoAplicativo { get; set; } = string.Empty;
 }

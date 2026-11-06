@@ -126,4 +126,116 @@ public sealed class RegrasDaProvisaoTests
         Assert.True(erro.Length <= RegrasDaProvisao.TamanhoMaximoDoErro);
         Assert.StartsWith("O Azure recusou a assinatura", erro);
     }
+
+    [Theory]
+    [InlineData("api-pedidos", true)]
+    [InlineData("site2", true)]
+    [InlineData("abc", true)]
+    [InlineData("ab", false)]
+    [InlineData("api-", false)]
+    [InlineData("1api", false)]
+    [InlineData("api--pedidos", false)]
+    [InlineData("Api-Pedidos", false)]
+    [InlineData("api_pedidos", false)]
+    [InlineData("um-nome-longo-demais-x", false)]
+    [InlineData(null, false)]
+    public void O_nome_do_usuario_e_curto_minusculo_e_sem_hifen_nas_pontas(string? rotulo, bool valido)
+        => Assert.Equal(valido, RegrasDaProvisao.RotuloValido(rotulo));
+
+    [Fact]
+    public void Os_nomes_no_azure_levam_o_prefixo_o_usuario_o_nome_e_o_sufixo_e_cabem_no_static_web_app()
+    {
+        Assert.Equal("app-u2-api-pedidos-7f3k", RegrasDaProvisao.NomeDoAplicativo(ProvisaoV1.TipoAppService, 2, "api-pedidos", "7f3k"));
+        Assert.Equal("swa-u2-site-docs-2m9q", RegrasDaProvisao.NomeDoAplicativo(ProvisaoV1.TipoStaticWebApp, 2, "site-docs", "2m9q"));
+        Assert.Equal("asp-u2-api-pedidos-7f3k", RegrasDaProvisao.NomeDoPlanoDoServico(2, "api-pedidos", "7f3k"));
+        Assert.Matches("^[a-z0-9]{4}$", RegrasDaProvisao.Sufixo());
+        Assert.True(RegrasDaProvisao.NomeDoAplicativo(ProvisaoV1.TipoStaticWebApp, int.MaxValue, new string('a', 20), "zzzz").Length <= 40);
+    }
+
+    [Fact]
+    public void O_pedido_de_aplicativo_valida_tipo_nome_regiao_do_tipo_e_plano_com_os_padroes()
+    {
+        var opcoes = Opcoes();
+
+        var (padrao, semErro) = RegrasDaProvisao.ValidarAplicativo(new PedidoDeAplicativoV1("App-Service", " api-pedidos ", null, null), opcoes);
+        Assert.Empty(semErro);
+        Assert.Equal((ProvisaoV1.TipoAppService, "api-pedidos", "brazilsouth", "F1"), (padrao!.Tipo, padrao.Rotulo, padrao.Regiao, padrao.Plano.Id));
+
+        // O Static Web App não existe em brazilsouth: a região padrão dele é a primeira das dele.
+        var (site, _) = RegrasDaProvisao.ValidarAplicativo(new PedidoDeAplicativoV1(ProvisaoV1.TipoStaticWebApp, "site-docs", null, "standard"), opcoes);
+        Assert.Equal(("eastus2", "Standard", 48.00m), (site!.Regiao, site.Plano.Id, site.Plano.CustoMensal));
+
+        var (nada, erros) = RegrasDaProvisao.ValidarAplicativo(new PedidoDeAplicativoV1(ProvisaoV1.TipoStaticWebApp, "x", "brazilsouth", "P1v3"), opcoes);
+        Assert.Null(nada);
+        Assert.Equal(["nome", "plano", "regiao"], erros.Keys.Order());
+        Assert.Equal(["tipo"], RegrasDaProvisao.ValidarAplicativo(new PedidoDeAplicativoV1(ProvisaoV1.TipoFila, "fila-x", null, null), opcoes).Erros.Keys);
+        Assert.Equal(["tipo"], RegrasDaProvisao.ValidarAplicativo(null, opcoes).Erros.Keys);
+    }
+
+    [Fact]
+    public void Os_planos_da_configuracao_substituem_os_padrao_e_a_cota_e_por_tipo()
+    {
+        var opcoes = Opcoes(o =>
+        {
+            o.PlanosDoAppService = [new PlanoConfigurado { Id = "S1", Rotulo = "S1 · Linux", CustoMensal = 300m }, new PlanoConfigurado { Id = " " }];
+            o.MaximoDeAppServicesPorUsuario = 4;
+            o.MaximoDeStaticWebAppsPorUsuario = 0;
+        });
+
+        Assert.Equal([new PlanoDeAplicativoV1("S1", "S1 · Linux", 300m)], RegrasDaProvisao.Planos(ProvisaoV1.TipoAppService, opcoes));
+        Assert.Equal(RegrasDaProvisao.PlanosPadraoDoStaticWebApp, RegrasDaProvisao.Planos(ProvisaoV1.TipoStaticWebApp, opcoes));
+        Assert.Equal((4, 1, 1), (RegrasDaProvisao.Maximo(ProvisaoV1.TipoAppService, opcoes), RegrasDaProvisao.Maximo(ProvisaoV1.TipoStaticWebApp, opcoes),
+            RegrasDaProvisao.Maximo(ProvisaoV1.TipoFila, opcoes)));
+        Assert.Equal(ProvisaoV1.TiposDeAplicativo, RegrasDaProvisao.Aplicativos(opcoes).Select(a => a.Tipo));
+    }
+
+    [Fact]
+    public void A_vaga_e_a_primeira_livre_e_nao_ha_com_a_cota_cheia()
+    {
+        Assert.Equal(1, RegrasDaProvisao.Vaga([], 2));
+        Assert.Equal(1, RegrasDaProvisao.Vaga([2], 2));
+        Assert.Equal(3, RegrasDaProvisao.Vaga([1, 2], 3));
+        Assert.Null(RegrasDaProvisao.Vaga([1, 2], 2));
+    }
+
+    [Theory]
+    [InlineData(0, 61.70, false)]
+    [InlineData(61.70, 61.70, false)]
+    [InlineData(123.40, 0, false)]
+    [InlineData(123.40, 48, true)]
+    [InlineData(150, 0, true)]
+    public void O_teto_do_custo_barra_o_que_passaria_dele_e_o_que_ja_esta_nele(double atual, double novo, bool passa)
+        => Assert.Equal(passa, RegrasDaProvisao.PassaDoTeto((decimal)atual, (decimal)novo, Opcoes()));
+
+    [Fact]
+    public void A_cota_soma_so_os_aplicativos_e_marca_o_alerta_e_o_bloqueio()
+    {
+        var opcoes = Opcoes();
+        var ativos = new[] { (ProvisaoV1.TipoAppService, 61.70m), (ProvisaoV1.TipoAppService, 61.70m), (ProvisaoV1.TipoStaticWebApp, 0m), (ProvisaoV1.TipoFila, 0m) };
+
+        var cota = RegrasDaProvisao.Cota(ativos, opcoes);
+
+        Assert.Equal((123.40m, 150m, 80, true, false), (cota.CustoDoMes, cota.LimiteDeCusto, cota.AlertaDeCustoPercentual, cota.Alerta, cota.Bloqueado));
+        Assert.Equal([new UsoDoTipoV1(ProvisaoV1.TipoAppService, 2, 2), new UsoDoTipoV1(ProvisaoV1.TipoStaticWebApp, 1, 3)], cota.Tipos);
+        Assert.False(RegrasDaProvisao.EmAlerta(119.99m, opcoes));
+        Assert.True(RegrasDaProvisao.Bloqueado(150m, opcoes));
+        // Sem teto, nada avisa nem bloqueia.
+        var semTeto = Opcoes(o => o.LimiteDeCustoMensal = 0);
+        Assert.False(RegrasDaProvisao.EmAlerta(10_000m, semTeto) || RegrasDaProvisao.PassaDoTeto(10_000m, 500m, semTeto));
+    }
+
+    [Fact]
+    public void A_falha_parcial_e_a_criacao_que_falhou_depois_de_um_passo_feito()
+    {
+        Assert.Equal("plano", RegrasDaProvisao.ComPasso(null, ProvisaoV1.PassoPlano));
+        Assert.Equal("plano", RegrasDaProvisao.ComPasso("plano", ProvisaoV1.PassoPlano));
+        Assert.Equal(["plano", "aplicativo"], RegrasDaProvisao.Passos("plano, aplicativo"));
+
+        Assert.True(RegrasDaProvisao.Parcial(ProvisaoV1.EstadoFalhou, ProvisaoV1.OperacaoCriar, "plano"));
+        Assert.False(RegrasDaProvisao.Parcial(ProvisaoV1.EstadoFalhou, ProvisaoV1.OperacaoCriar, ""));
+        Assert.False(RegrasDaProvisao.Parcial(ProvisaoV1.EstadoPronto, ProvisaoV1.OperacaoCriar, "plano"));
+        Assert.False(RegrasDaProvisao.Parcial(ProvisaoV1.EstadoFalhou, ProvisaoV1.OperacaoRemover, "plano"));
+        Assert.True(RegrasDaProvisao.RemocaoPedeSegundoFator(ProvisaoV1.TipoStaticWebApp));
+        Assert.False(RegrasDaProvisao.RemocaoPedeSegundoFator(ProvisaoV1.TipoFila));
+    }
 }

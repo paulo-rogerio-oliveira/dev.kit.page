@@ -8,16 +8,29 @@ namespace DevKitPage.Infrastructure;
 /// <summary>
 /// A provisão do lado da API: grava o pedido e a auditoria, e lê — sempre filtrando pelo usuário do token. Nada aqui fala
 /// com o Azure: quem executa é o worker, pelo <see cref="MotorDeProvisao"/>.
+/// <para>
+/// A COTA é atômica no banco (a ressalva do item 4): o pedido roda numa transação que primeiro TRAVA o usuário (uma
+/// atualização na linha dele, que segura o pedido simultâneo do mesmo usuário até o fim desta) e só então conta os ativos,
+/// confere o teto do custo e grava; e cada recurso ocupa uma VAGA da cota com índice único filtrado — mesmo sem a trava,
+/// dois pedidos não ocupam a mesma vaga.
+/// </para>
 /// </summary>
-public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDaProvisao> opcoes) : IProvisao
+public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDaProvisao> opcoes, ISegundoFator segundoFator) : IProvisao
 {
+    /// <summary>Quantas vezes o pedido é refeito quando o índice único barra a gravação (o nome sorteado repetido ou a vaga tomada).</summary>
+    private const int TentativasDeGravacao = 3;
+
     public async Task<PermissaoDeProvisaoV1> PermissaoAsync(int usuarioId, CancellationToken ct)
     {
         var cfg = opcoes.Value;
         var origem = await OrigemAsync(db, cfg, usuarioId, ct);
         return new PermissaoDeProvisaoV1(origem != ProvisaoV1.OrigemNenhuma, origem, RegrasDaProvisao.Regioes(cfg), RegrasDaProvisao.RegiaoPadrao(cfg),
-            Math.Max(1, cfg.MaximoDeFilasPorUsuario));
+            RegrasDaProvisao.Maximo(ProvisaoV1.TipoFila, cfg), RegrasDaProvisao.Aplicativos(cfg), Math.Max(0m, cfg.LimiteDeCustoMensal),
+            Math.Clamp(cfg.AlertaDeCustoPercentual, 1, 100));
     }
+
+    public async Task<CotaDaProvisaoV1> CotaAsync(int usuarioId, CancellationToken ct)
+        => RegrasDaProvisao.Cota((await AtivosAsync(usuarioId, ct)).Select(r => (r.Tipo, r.CustoMensal)), opcoes.Value);
 
     /// <summary>De onde vem a liberação do usuário: a permissão explícita, o plano da empresa, ou nenhuma.</summary>
     internal static async Task<string> OrigemAsync(DevKitPageDb db, OpcoesDaProvisao cfg, int usuarioId, CancellationToken ct)
@@ -44,46 +57,129 @@ public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<Opc
         return new DetalheDoRecursoV1(Leitura(recurso), eventos);
     }
 
-    public async Task<ResultadoDaGestao<PedidoAceito>> PedirFilaAsync(int usuarioId, string autor, string regiao, CancellationToken ct)
+    public Task<ResultadoDaGestao<PedidoAceito>> PedirFilaAsync(int usuarioId, string autor, string regiao, CancellationToken ct)
     {
         var cfg = opcoes.Value;
-        var agora = relogio.GetUtcNow().UtcDateTime;
-        var ativos = (await db.RecursosProvisionados.AsNoTracking()
-                .Where(r => r.UsuarioId == usuarioId && r.Tipo == ProvisaoV1.TipoFila && r.Estado != ProvisaoV1.EstadoRemovido).ToListAsync(ct))
-            .OrderByDescending(r => r.CriadoEmUtc).ToList();
-        if (ativos.Count >= Math.Max(1, cfg.MaximoDeFilasPorUsuario))
-            return new(new PedidoAceito(Leitura(ativos[0]), Novo: false));
-
-        // O nome é sorteado AQUI, uma vez: a repetição do pedido usa o mesmo, e o índice único barra o sorteio repetido.
-        for (var tentativa = 1; ; tentativa++)
+        return PedirAsync(usuarioId, ct, async (ativos, agora) =>
         {
-            var recurso = new RecursoProvisionado
-            {
-                UsuarioId = usuarioId,
-                Tipo = ProvisaoV1.TipoFila,
-                Nome = RegrasDaProvisao.NomeDaConta(usuarioId),
-                Fila = ProvisaoV1.NomeDaFila,
-                Regiao = regiao,
-                GrupoDeRecursos = RegrasDaProvisao.NomeDoGrupo(cfg.PrefixoDoGrupo, usuarioId),
-                Operacao = ProvisaoV1.OperacaoCriar,
-                Estado = ProvisaoV1.EstadoPedido,
-                CriadoEmUtc = agora,
-                AtualizadoEmUtc = agora,
-            };
-            db.RecursosProvisionados.Add(recurso);
-            try
-            {
-                await db.SaveChangesAsync(ct);
-            }
-            catch (DbUpdateException) when (tentativa < 3)
-            {
-                db.ChangeTracker.Clear();
-                continue;
-            }
+            var filas = ativos.Where(r => r.Tipo == ProvisaoV1.TipoFila).OrderByDescending(r => r.CriadoEmUtc).ThenByDescending(r => r.Id).ToList();
+            // Cota cheia: devolve a fila que já existe — o duplo clique e o reenvio não duplicam recurso pago.
+            if (RegrasDaProvisao.Vaga(filas.Select(r => r.Vaga), RegrasDaProvisao.Maximo(ProvisaoV1.TipoFila, cfg)) is not { } vaga)
+                return new(new PedidoAceito(Leitura(filas[0]), Novo: false));
 
+            // O nome é sorteado AQUI, uma vez: a repetição do pedido usa o mesmo, e o índice único barra o sorteio repetido.
+            var recurso = Novo(usuarioId, ProvisaoV1.TipoFila, vaga, RegrasDaProvisao.NomeDaConta(usuarioId), regiao, agora, cfg);
+            recurso.Fila = ProvisaoV1.NomeDaFila;
+            db.RecursosProvisionados.Add(recurso);
+            await db.SaveChangesAsync(ct);
             await AuditarAsync(recurso, ProvisaoV1.EventoPedido, autor, $"{recurso.Regiao} · conta {recurso.Nome} · grupo {recurso.GrupoDeRecursos}", agora, ct);
             return new(new PedidoAceito(Leitura(recurso), Novo: true));
+        });
+    }
+
+    public Task<ResultadoDaGestao<PedidoAceito>> PedirAplicativoAsync(int usuarioId, string autor, AplicativoPedido pedido, CancellationToken ct)
+    {
+        var cfg = opcoes.Value;
+        var tipo = RegrasDaProvisao.RotuloDoTipo(pedido.Tipo);
+        return PedirAsync(usuarioId, ct, async (ativos, agora) =>
+        {
+            // O mesmo aplicativo pedido de novo (o duplo clique, o reenvio) volta como está.
+            if (ativos.FirstOrDefault(r => r.Tipo == pedido.Tipo && r.Rotulo == pedido.Rotulo) is { } mesmo)
+                return new(new PedidoAceito(Leitura(mesmo), Novo: false));
+
+            var doTipo = ativos.Where(r => r.Tipo == pedido.Tipo).ToList();
+            var maximo = RegrasDaProvisao.Maximo(pedido.Tipo, cfg);
+            if (RegrasDaProvisao.Vaga(doTipo.Select(r => r.Vaga), maximo) is not { } vaga)
+                return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito,
+                    $"A cota de {tipo} está cheia ({doTipo.Count} de {maximo}). Remova um para criar outro.", ProvisaoV1.CodigoCotaCheia);
+
+            var custoAntes = ativos.Where(r => RegrasDaProvisao.EhAplicativo(r.Tipo)).Sum(r => r.CustoMensal);
+            if (RegrasDaProvisao.PassaDoTeto(custoAntes, pedido.Plano.CustoMensal, cfg))
+                return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito,
+                    $"O custo estimado do mês ({Reais(custoAntes)}) com o plano {pedido.Plano.Rotulo} ({Reais(pedido.Plano.CustoMensal)}) passaria do seu limite de {Reais(cfg.LimiteDeCustoMensal)}. "
+                    + "Remova um aplicativo ou escolha um plano gratuito.", ProvisaoV1.CodigoCustoNoLimite);
+
+            var sufixo = RegrasDaProvisao.Sufixo();
+            var recurso = Novo(usuarioId, pedido.Tipo, vaga, RegrasDaProvisao.NomeDoAplicativo(pedido.Tipo, usuarioId, pedido.Rotulo, sufixo), pedido.Regiao, agora, cfg);
+            recurso.Rotulo = pedido.Rotulo;
+            recurso.Plano = pedido.Plano.Id;
+            recurso.CustoMensal = pedido.Plano.CustoMensal;
+            if (pedido.Tipo == ProvisaoV1.TipoAppService)
+                recurso.NomeDoPlano = RegrasDaProvisao.NomeDoPlanoDoServico(usuarioId, pedido.Rotulo, sufixo);
+            db.RecursosProvisionados.Add(recurso);
+            await db.SaveChangesAsync(ct);
+
+            await AuditarAsync(recurso, ProvisaoV1.EventoPedido, autor,
+                $"{tipo} {recurso.Plano} em {recurso.Regiao} · {recurso.Nome} · cota reservada ({doTipo.Count + 1} de {maximo})", agora, ct);
+            var custoDepois = custoAntes + recurso.CustoMensal;
+            if (!RegrasDaProvisao.EmAlerta(custoAntes, cfg) && RegrasDaProvisao.EmAlerta(custoDepois, cfg))
+                await AuditarAsync(recurso, ProvisaoV1.EventoAlertaDeCusto, autor,
+                    $"{Math.Clamp(cfg.AlertaDeCustoPercentual, 1, 100)}% do limite do mês: {Reais(custoDepois)} de {Reais(cfg.LimiteDeCustoMensal)}", agora, ct);
+            return new(new PedidoAceito(Leitura(recurso), Novo: true));
+        });
+    }
+
+    /// <summary>
+    /// O pedido com a cota ATÔMICA: numa transação, trava o usuário, lê os recursos ativos dele e entrega à
+    /// <paramref name="decidir"/>, que grava (ou recusa); o índice único que barrar a gravação (o nome sorteado repetido, a
+    /// vaga tomada) refaz tudo do começo, relendo.
+    /// </summary>
+    private async Task<ResultadoDaGestao<PedidoAceito>> PedirAsync(int usuarioId, CancellationToken ct,
+        Func<List<RecursoProvisionado>, DateTime, Task<ResultadoDaGestao<PedidoAceito>>> decidir)
+    {
+        for (var tentativa = 1; ; tentativa++)
+        {
+            var agora = relogio.GetUtcNow().UtcDateTime;
+            await using var transacao = await db.Database.BeginTransactionAsync(ct);
+            try
+            {
+                await TravarAsync(usuarioId, ct);
+                var resultado = await decidir(await AtivosAsync(usuarioId, ct, rastrear: true), agora);
+                await transacao.CommitAsync(ct);
+                return resultado;
+            }
+            catch (DbUpdateException) when (tentativa < TentativasDeGravacao)
+            {
+                await transacao.RollbackAsync(ct);
+                db.ChangeTracker.Clear();
+            }
         }
+    }
+
+    /// <summary>
+    /// Trava o usuário até o fim da transação: uma atualização sem efeito na linha dele. No SQL Server ela segura o bloqueio
+    /// exclusivo da linha; no SQLite, a escrita da base. O segundo pedido do mesmo usuário espera aqui, e então lê os ativos
+    /// já com o primeiro gravado.
+    /// </summary>
+    private Task TravarAsync(int usuarioId, CancellationToken ct)
+        => db.Usuarios.Where(u => u.Id == usuarioId).ExecuteUpdateAsync(s => s.SetProperty(u => u.Login, u => u.Login), ct);
+
+    /// <summary>Os recursos não removidos do usuário (o que conta na cota e no custo).</summary>
+    private Task<List<RecursoProvisionado>> AtivosAsync(int usuarioId, CancellationToken ct, bool rastrear = false)
+    {
+        var consulta = db.RecursosProvisionados.Where(r => r.UsuarioId == usuarioId && r.Estado != ProvisaoV1.EstadoRemovido);
+        return (rastrear ? consulta : consulta.AsNoTracking()).ToListAsync(ct);
+    }
+
+    private static RecursoProvisionado Novo(int usuarioId, string tipo, int vaga, string nome, string regiao, DateTime agora, OpcoesDaProvisao cfg) => new()
+    {
+        UsuarioId = usuarioId,
+        Tipo = tipo,
+        Vaga = vaga,
+        Nome = nome,
+        Regiao = regiao,
+        GrupoDeRecursos = RegrasDaProvisao.NomeDoGrupo(cfg.PrefixoDoGrupo, usuarioId),
+        Operacao = ProvisaoV1.OperacaoCriar,
+        Estado = ProvisaoV1.EstadoPedido,
+        CriadoEmUtc = agora,
+        AtualizadoEmUtc = agora,
+    };
+
+    /// <summary>"R$ 1.234,50" — montado à mão: a API roda em globalização invariante, sem a cultura pt-BR.</summary>
+    internal static string Reais(decimal valor)
+    {
+        var invariante = valor.ToString("#,##0.00", System.Globalization.CultureInfo.InvariantCulture);
+        return "R$ " + string.Concat(invariante.Select(c => c switch { ',' => '.', '.' => ',', _ => c }));
     }
 
     public async Task<ResultadoDaGestao<PedidoAceito>> RepetirAsync(int usuarioId, string autor, long id, CancellationToken ct)
@@ -95,34 +191,56 @@ public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<Opc
             return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito, "Só o pedido que falhou se repete.");
 
         var agora = relogio.GetUtcNow().UtcDateTime;
+        // A falha parcial retoma do passo que faltou: os passos feitos ficam (o plano não é criado de novo).
+        var retoma = RegrasDaProvisao.Parcial(recurso.Estado, recurso.Operacao, recurso.Passos)
+            ? $" · retoma depois de: {string.Join(", ", RegrasDaProvisao.Passos(recurso.Passos))}"
+            : string.Empty;
         Reabrir(recurso, recurso.Operacao, agora);
         if (!await GravarAsync(ct))
             return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito, "O pedido mudou enquanto você o repetia. Atualize e tente de novo.");
-        await AuditarAsync(recurso, ProvisaoV1.EventoRepeticao, autor, RotuloDaOperacao(recurso.Operacao), agora, ct);
+        await AuditarAsync(recurso, ProvisaoV1.EventoRepeticao, autor, RotuloDaOperacao(recurso.Operacao) + retoma, agora, ct);
         return new(new PedidoAceito(Leitura(recurso), Novo: true));
     }
 
-    public async Task<ResultadoDaGestao<PedidoAceito>> RemoverAsync(int usuarioId, string autor, long id, CancellationToken ct)
+    public async Task<ResultadoDaGestao<PedidoAceito>> RemoverAsync(int usuarioId, string autor, long id, string? codigo, CancellationToken ct)
     {
         var recurso = await db.RecursosProvisionados.FirstOrDefaultAsync(r => r.Id == id && r.UsuarioId == usuarioId, ct);
         if (recurso is null)
             return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.NaoEncontrado, "Recurso não encontrado.");
 
+        var aplicativo = RegrasDaProvisao.EhAplicativo(recurso.Tipo);
         switch (RegrasDaProvisao.DecidirRemocao(recurso.Estado, recurso.Operacao))
         {
             case Remocao.JaFeita:
             case Remocao.JaPedida:
                 return new(new PedidoAceito(Leitura(recurso), Novo: false));
             case Remocao.AguardeACriacao:
-                return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito,
-                    "A fila ainda está sendo criada. Remova depois que ela ficar pronta (ou falhar).");
+                return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito, aplicativo
+                    ? $"O {RegrasDaProvisao.RotuloDoTipo(recurso.Tipo)} ainda está sendo criado. Remova depois que ele ficar pronto (ou falhar)."
+                    : "A fila ainda está sendo criada. Remova depois que ela ficar pronta (ou falhar).");
+        }
+
+        // O aplicativo só sai com o segundo fator: o código do autenticador, conferido (e gasto) antes de pedir a remoção.
+        if (RegrasDaProvisao.RemocaoPedeSegundoFator(recurso.Tipo))
+        {
+            var recusa = string.IsNullOrWhiteSpace(codigo)
+                ? "Remover um aplicativo pede o segundo fator: informe o código de 6 dígitos do seu aplicativo autenticador."
+                : !await segundoFator.AtivoAsync(usuarioId, ct)
+                    ? "Configure o aplicativo autenticador antes de remover: é o mesmo segundo fator do Aprovar remoto."
+                    : await segundoFator.VerificarAsync(usuarioId, codigo, ativar: false, ct);
+            if (recusa is not null)
+                return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Proibida, recusa, ProvisaoV1.CodigoSegundoFator);
         }
 
         var agora = relogio.GetUtcNow().UtcDateTime;
         Reabrir(recurso, ProvisaoV1.OperacaoRemover, agora);
         if (!await GravarAsync(ct))
             return ResultadoDaGestao<PedidoAceito>.Falhou(FalhaNaGestao.Conflito, "O pedido mudou enquanto você o removia. Atualize e tente de novo.");
-        await AuditarAsync(recurso, ProvisaoV1.EventoRemocaoPedida, autor, $"conta {recurso.Nome}", agora, ct);
+        var detalhe = !aplicativo
+            ? $"conta {recurso.Nome}"
+            : $"{RegrasDaProvisao.RotuloDoTipo(recurso.Tipo)} {recurso.Nome}"
+              + (recurso.NomeDoPlano.Length > 0 ? $" e o plano {recurso.NomeDoPlano}" : string.Empty) + " · segundo fator conferido";
+        await AuditarAsync(recurso, ProvisaoV1.EventoRemocaoPedida, autor, detalhe, agora, ct);
         return new(new PedidoAceito(Leitura(recurso), Novo: true));
     }
 
@@ -164,7 +282,9 @@ public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<Opc
         => new(r.Id, r.Tipo, r.Nome, r.Fila, r.Regiao, r.GrupoDeRecursos, r.Operacao, r.Estado, r.Tentativas, r.Erro, r.Endpoint,
             DevKitPageDb.Utc(r.CriadoEmUtc), DevKitPageDb.Utc(r.AtualizadoEmUtc),
             r.ProntoEmUtc is { } pronto ? DevKitPageDb.Utc(pronto) : null,
-            r.ProximaTentativaEmUtc is { } proxima ? DevKitPageDb.Utc(proxima) : null);
+            r.ProximaTentativaEmUtc is { } proxima ? DevKitPageDb.Utc(proxima) : null,
+            r.Rotulo, r.Plano, r.NomeDoPlano, r.CustoMensal, RegrasDaProvisao.Passos(r.Passos),
+            RegrasDaProvisao.Parcial(r.Estado, r.Operacao, r.Passos));
 }
 
 /// <summary>
@@ -236,6 +356,8 @@ public sealed class MotorDeProvisao(DevKitPageDb db, TimeProvider relogio, IOpti
         {
             recurso.RemovidoEmUtc = agora;
             recurso.Endpoint = string.Empty;
+            // Nada ficou no Azure: a vaga da cota volta (o índice filtra os removidos) e o custo deixa de contar.
+            recurso.Passos = string.Empty;
         }
         else
         {
@@ -247,7 +369,43 @@ public sealed class MotorDeProvisao(DevKitPageDb db, TimeProvider relogio, IOpti
         if (!await LiberarAsync(recurso, agora, ct))
             return false;
         await AuditarAsync(db, recurso.Id, recurso.UsuarioId, remocao ? ProvisaoV1.EventoRemovido : ProvisaoV1.EventoPronto, ProvisaoV1.AutorWorker,
-            remocao ? $"conta {recurso.Nome} removida" : $"grupo, conta e fila {recurso.Fila} prontos", agora, ct);
+            Desfecho(recurso, remocao), agora, ct);
+        return true;
+    }
+
+    /// <summary>O que a auditoria diz do recurso pronto ou removido, pelo tipo.</summary>
+    private static string Desfecho(RecursoProvisionado r, bool remocao) => (r.Tipo, remocao) switch
+    {
+        (ProvisaoV1.TipoFila, true) => $"conta {r.Nome} removida",
+        (ProvisaoV1.TipoFila, false) => $"grupo, conta e fila {r.Fila} prontos",
+        (ProvisaoV1.TipoAppService, true) => $"aplicativo {r.Nome} e plano {r.NomeDoPlano} removidos",
+        (ProvisaoV1.TipoAppService, false) => $"plano {r.NomeDoPlano} e aplicativo {r.Nome} prontos",
+        (_, true) => $"{RegrasDaProvisao.RotuloDoTipo(r.Tipo)} {r.Nome} removido",
+        _ => $"{RegrasDaProvisao.RotuloDoTipo(r.Tipo)} {r.Nome} pronto",
+    };
+
+    public async Task<bool> RegistrarPassoAsync(long id, string trabalhador, string passo, CancellationToken ct)
+    {
+        var agora = relogio.GetUtcNow().UtcDateTime;
+        var recurso = await DoTrabalhadorAsync(id, trabalhador, ct);
+        if (recurso is null)
+            return false;
+
+        recurso.Passos = RegrasDaProvisao.ComPasso(recurso.Passos, passo);
+        recurso.Versao++;
+        recurso.AtualizadoEmUtc = agora;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            db.Entry(recurso).State = EntityState.Detached;
+            return false;
+        }
+
+        await AuditarAsync(db, recurso.Id, recurso.UsuarioId, ProvisaoV1.EventoPasso, ProvisaoV1.AutorWorker,
+            passo == ProvisaoV1.PassoPlano ? $"plano {recurso.NomeDoPlano} criado" : $"{passo} criado", agora, ct);
         return true;
     }
 

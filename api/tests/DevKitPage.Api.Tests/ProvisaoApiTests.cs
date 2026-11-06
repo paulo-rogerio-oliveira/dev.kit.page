@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DevKitPage.Contracts.V1;
+using DevKitPage.Core;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DevKitPage.Api.Tests;
 
@@ -155,6 +158,103 @@ public sealed class ProvisaoApiTests : IDisposable
         var lista = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!;
         Assert.Equal([ProvisaoV1.RecursoProvisao], lista.Single(u => u.Id == id).RecursosLiberados);
         Assert.Empty(lista.Single(u => u.Login == "admin").RecursosLiberados!);
+    }
+
+    [Fact]
+    public async Task Sem_a_liberacao_as_rotas_dos_aplicativos_recusam_com_o_codigo()
+    {
+        var (_, dev, _) = await AdminEDevAsync();
+
+        foreach (var resposta in new[]
+                 {
+                     await dev.GetAsync("/api/provisao/cota"),
+                     await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoAppService, "api-pedidos", null, null)),
+                     await dev.PostAsJsonAsync("/api/provisao/recursos/1/remover", new RemocaoComSegundoFatorV1("123456")),
+                 })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, resposta.StatusCode);
+            Assert.Equal(ProvisaoV1.CodigoNaoLiberada, await CodigoAsync(resposta));
+        }
+    }
+
+    [Fact]
+    public async Task Os_aplicativos_aceitam_o_pedido_202_recusam_o_invalido_400_e_a_cota_cheia_409_com_o_codigo()
+    {
+        var (admin, dev, id) = await AdminEDevAsync();
+        await LiberarAsync(admin, id);
+
+        var permissao = (await dev.GetFromJsonAsync<PermissaoDeProvisaoV1>("/api/provisao/permissao"))!;
+        Assert.Equal(ProvisaoV1.TiposDeAplicativo, permissao.Aplicativos!.Select(a => a.Tipo));
+        var servico = permissao.Aplicativos!.Single(a => a.Tipo == ProvisaoV1.TipoAppService);
+        Assert.Equal((2, "B1"), (servico.Maximo, servico.Planos.Last().Id));
+        Assert.Equal((150m, 80), (permissao.LimiteDeCusto, permissao.AlertaDeCustoPercentual));
+
+        var invalido = await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1("maquina-virtual", "API Pedidos!", null, "P3"));
+        Assert.Equal(HttpStatusCode.BadRequest, invalido.StatusCode);
+        var nome = await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoStaticWebApp, "Site Docs", "brazilsouth", "Premium"));
+        var erros = await nome.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, nome.StatusCode);
+        Assert.All(new[] { "\"nome\"", "\"regiao\"", "\"plano\"" }, campo => Assert.Contains(campo, erros, StringComparison.Ordinal));
+
+        var pedido = await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoAppService, "api-pedidos", null, "B1"));
+        Assert.Equal(HttpStatusCode.Accepted, pedido.StatusCode);
+        var recurso = (await pedido.Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
+        Assert.Equal((ProvisaoV1.TipoAppService, "api-pedidos", "B1", 61.70m), (recurso.Tipo, recurso.Rotulo, recurso.Plano, recurso.CustoMensal));
+        Assert.Equal(HttpStatusCode.OK, (await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoAppService, "api-pedidos", null, "B1"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoAppService, "api-relatorios", null, "F1"))).StatusCode);
+
+        var cheia = await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoAppService, "api-terceira", null, "F1"));
+        Assert.Equal(HttpStatusCode.Conflict, cheia.StatusCode);
+        Assert.Equal(ProvisaoV1.CodigoCotaCheia, await CodigoAsync(cheia));
+
+        var cota = (await dev.GetFromJsonAsync<CotaDaProvisaoV1>("/api/provisao/cota"))!;
+        Assert.Equal(new UsoDoTipoV1(ProvisaoV1.TipoAppService, 2, 2), cota.Tipos[0]);
+        Assert.Equal((61.70m, false), (cota.CustoDoMes, cota.Alerta));
+    }
+
+    [Fact]
+    public async Task O_aplicativo_so_se_remove_com_o_segundo_fator()
+    {
+        var relogio = new RelogioDoTeste();
+        using var api = _api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var (admin, original, id) = await AdminEDevAsync();
+        await LiberarAsync(admin, id);
+        // O mesmo banco, pelo host com o relógio do teste (o TOTP depende dele).
+        var dev = api.CreateClient();
+        dev.DefaultRequestHeaders.Authorization = original.DefaultRequestHeaders.Authorization;
+
+        var recurso = (await (await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoStaticWebApp, "site-docs", "eastus2", "Free")))
+            .Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
+        using (var escopo = api.Services.CreateScope())
+        {
+            var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();
+            Assert.Equal(recurso.Id, (await motor.ReservarAsync("teste", default))!.Id);
+            Assert.True(await motor.ConcluirAsync(recurso.Id, "teste", new RecursoNaNuvem("/s/staticSites/x", "https://x.azurestaticapps.net"), default));
+        }
+
+        var delete = await dev.DeleteAsync($"/api/provisao/recursos/{recurso.Id}");
+        Assert.Equal((HttpStatusCode.Forbidden, ProvisaoV1.CodigoSegundoFator), (delete.StatusCode, await CodigoAsync(delete)));
+        var semAutenticador = await dev.PostAsJsonAsync($"/api/provisao/recursos/{recurso.Id}/remover", new RemocaoComSegundoFatorV1("123456"));
+        Assert.Equal(ProvisaoV1.CodigoSegundoFator, await CodigoAsync(semAutenticador));
+
+        var preparo = await dev.PostAsJsonAsync("/api/remoto/segundo-fator/preparar", new PrepararAutenticadorV1(ApiDeTeste.NovaSenha));
+        var chave = (await preparo.Content.ReadFromJsonAsync<AutenticadorPreparadoV1>())!.Chave;
+        Assert.Equal(HttpStatusCode.OK, (await dev.PostAsJsonAsync("/api/remoto/segundo-fator/confirmar", new ConfirmarAutenticadorV1(Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+        relogio.Avancar();
+
+        var removido = await dev.PostAsJsonAsync($"/api/provisao/recursos/{recurso.Id}/remover", new RemocaoComSegundoFatorV1(Totp.Codigo(chave, relogio.Passo)));
+        Assert.Equal(HttpStatusCode.Accepted, removido.StatusCode);
+        Assert.Equal(ProvisaoV1.OperacaoRemover, (await removido.Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!.Operacao);
+        var auditoria = (await dev.GetFromJsonAsync<DetalheDoRecursoV1>($"/api/provisao/recursos/{recurso.Id}"))!.Eventos.Last();
+        Assert.EndsWith("segundo fator conferido", auditoria.Detalhe, StringComparison.Ordinal);
+    }
+
+    private sealed class RelogioDoTeste : TimeProvider
+    {
+        private DateTimeOffset _agora = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _agora;
+        public long Passo => _agora.ToUnixTimeSeconds() / 30;
+        public void Avancar() => _agora = _agora.AddSeconds(30);
     }
 
     [Fact]

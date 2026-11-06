@@ -57,30 +57,81 @@ public sealed class ExecutorDaProvisao(IServiceScopeFactory escopos, IOptions<Op
         if (recurso is null)
             return false;
 
-        var fila = new FilaNaNuvem(recurso.Id, recurso.UsuarioId, recurso.GrupoDeRecursos, recurso.Nome, recurso.Fila, recurso.Regiao);
-        var remocao = recurso.Operacao == ProvisaoV1.OperacaoRemover;
-        log.LogInformation("Provisão {Recurso}: {Operacao}, tentativa {Tentativa}.", recurso.Id, recurso.Operacao, recurso.Tentativas);
+        log.LogInformation("Provisão {Recurso}: {Tipo}, {Operacao}, tentativa {Tentativa}.", recurso.Id, recurso.Tipo, recurso.Operacao, recurso.Tentativas);
         try
         {
-            RecursoNaNuvem? criado = null;
-            if (remocao)
-                await nuvem.RemoverFilaAsync(fila, ct);
+            var (seguiu, criado) = recurso.Tipo == ProvisaoV1.TipoFila
+                ? (true, await FilaAsync(nuvem, recurso, ct))
+                : await AplicativoAsync(motor, nuvem, recurso, ct);
+            if (!seguiu)
+                return true;
+            if (await motor.ConcluirAsync(recurso.Id, Trabalhador, criado, ct))
+                log.LogInformation("Provisão {Recurso}: {Operacao} concluída.", recurso.Id, recurso.Operacao);
             else
-                criado = await nuvem.CriarFilaAsync(fila, ct);
-            await motor.ConcluirAsync(recurso.Id, Trabalhador, criado, ct);
-            log.LogInformation("Provisão {Recurso}: {Operacao} concluída.", recurso.Id, recurso.Operacao);
+                ReservaPerdida(recurso, "concluir");
         }
         catch (FalhaNaNuvem falha)
         {
             log.LogWarning(falha, "Provisão {Recurso}: {Operacao} falhou ({Tipo}).", recurso.Id, recurso.Operacao, falha.Transitoria ? "transitória" : "definitiva");
-            await motor.FalharAsync(recurso.Id, Trabalhador, falha.Message, falha.Transitoria, ct);
+            if (!await motor.FalharAsync(recurso.Id, Trabalhador, falha.Message, falha.Transitoria, ct))
+                ReservaPerdida(recurso, "gravar a falha");
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             var codigo = Guid.NewGuid().ToString("N")[..8];
             log.LogError(e, "Provisão {Recurso}: falha inesperada (código {Codigo}).", recurso.Id, codigo);
-            await motor.FalharAsync(recurso.Id, Trabalhador, $"Falha inesperada no worker da provisão (código {codigo} no log).", transitoria: false, ct);
+            if (!await motor.FalharAsync(recurso.Id, Trabalhador, $"Falha inesperada no worker da provisão (código {codigo} no log).", transitoria: false, ct))
+                ReservaPerdida(recurso, "gravar a falha");
         }
         return true;
     }
+
+    private static async Task<RecursoNaNuvem?> FilaAsync(IProvedorDeNuvem nuvem, RecursoProvisionado recurso, CancellationToken ct)
+    {
+        var fila = new FilaNaNuvem(recurso.Id, recurso.UsuarioId, recurso.GrupoDeRecursos, recurso.Nome, recurso.Fila, recurso.Regiao);
+        if (recurso.Operacao == ProvisaoV1.OperacaoRemover)
+        {
+            await nuvem.RemoverFilaAsync(fila, ct);
+            return null;
+        }
+        return await nuvem.CriarFilaAsync(fila, ct);
+    }
+
+    /// <summary>
+    /// O aplicativo em PASSOS. O App Service cria o plano e grava o passo antes do site: a falha no site deixa a falha PARCIAL
+    /// (o plano lá, o site não), e a repetição pula o plano. A remoção apaga o aplicativo e, depois, o plano. Falso no
+    /// <c>Seguiu</c> quando a reserva se perdeu no meio: o worker para e não grava o desfecho.
+    /// </summary>
+    private async Task<(bool Seguiu, RecursoNaNuvem? Criado)> AplicativoAsync(IMotorDeProvisao motor, IProvedorDeNuvem nuvem, RecursoProvisionado recurso, CancellationToken ct)
+    {
+        var aplicativo = new AplicativoNaNuvem(recurso.Id, recurso.UsuarioId, recurso.Tipo, recurso.GrupoDeRecursos, recurso.Nome, recurso.NomeDoPlano,
+            recurso.Regiao, recurso.Plano);
+        var servico = recurso.Tipo == ProvisaoV1.TipoAppService;
+        if (recurso.Operacao == ProvisaoV1.OperacaoRemover)
+        {
+            await nuvem.RemoverAplicativoAsync(aplicativo, ct);
+            if (servico)
+                await nuvem.RemoverPlanoAsync(aplicativo, ct);
+            return (true, null);
+        }
+
+        if (servico && !RegrasDaProvisao.Passos(recurso.Passos).Contains(ProvisaoV1.PassoPlano))
+        {
+            await nuvem.CriarPlanoAsync(aplicativo, ct);
+            if (!await motor.RegistrarPassoAsync(recurso.Id, Trabalhador, ProvisaoV1.PassoPlano, ct))
+            {
+                ReservaPerdida(recurso, "gravar o plano criado");
+                return (false, null);
+            }
+        }
+        return (true, await nuvem.CriarAplicativoAsync(aplicativo, ct));
+    }
+
+    /// <summary>
+    /// A reserva passou a outro (venceu e outra instância a retomou, ou o usuário mudou o pedido): o desfecho desta execução
+    /// NÃO é gravado — fica no log, para achar o trabalho feito no Azure que não chegou à base.
+    /// </summary>
+    private void ReservaPerdida(RecursoProvisionado recurso, string acao)
+        => log.LogWarning("Provisão {Recurso}: o worker {Trabalhador} perdeu a reserva ao {Acao} ({Operacao}, tentativa {Tentativa}); o desfecho desta execução não foi gravado.",
+            recurso.Id, Trabalhador, acao, recurso.Operacao, recurso.Tentativas);
 }
