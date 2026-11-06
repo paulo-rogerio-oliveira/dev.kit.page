@@ -126,6 +126,16 @@ function preenchidos(valores: Record<string, string | null | undefined>): Record
 }
 
 export const api = {
+  configuracaoDoPush: (token: string, signal?: AbortSignal) =>
+    chamar<{ disponivel: boolean; chavePublica: string | null }>('/api/remoto/push', { token, signal }),
+  assinarPush: (token: string, corpo: PushSubscriptionJSON) =>
+    chamar<{ id: string }>('/api/remoto/push/assinaturas', { token, metodo: 'POST', corpo }),
+  assinaturaDoPush: (token: string, id: string, signal?: AbortSignal) =>
+    chamar<{ id: string }>(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, signal }),
+  cancelarPush: (token: string, id: string) =>
+    requisitar(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, metodo: 'DELETE' }),
+  destinoDoPush: (token: string, id: string, signal?: AbortSignal) =>
+    chamar<{ maquinaId: string; pendenciaId: string; snapshotId: string }>(`/api/remoto/push/entregas/${encodeURIComponent(id)}`, { token, signal }),
   decisoesRemotas: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes`, { token, signal }),
   responderDecisao: (token: string, maquina: string, pendencia: string, corpo: ResponderDecisao) =>

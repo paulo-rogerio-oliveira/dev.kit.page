@@ -56,6 +56,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
     public DbSet<AutenticadorDoUsuario> Autenticadores => Set<AutenticadorDoUsuario>();
     public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
+    public DbSet<AssinaturaDoPush> AssinaturasDoPush => Set<AssinaturaDoPush>();
+    public DbSet<EntregaDoPush> EntregasDoPush => Set<EntregaDoPush>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +66,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         ConfigurarProvisao(modelBuilder);
         ConfigurarConversa(modelBuilder);
         ConfigurarDecisoes(modelBuilder);
+        ConfigurarPush(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -704,6 +707,35 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique().HasFilter("[Estado] <> 'vencida'");
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.Estado });
             e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigurarPush(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AssinaturaDoPush>(e =>
+        {
+            e.ToTable("AssinaturasDoPush");
+            e.Property(a => a.Id).HasMaxLength(32);
+            e.Property(a => a.EndpointHash).HasMaxLength(64);
+            e.Property(a => a.DadosProtegidos).HasMaxLength(5000);
+            e.Property(a => a.ChavePublicaServidor).HasMaxLength(87);
+            e.HasIndex(a => a.EndpointHash).IsUnique();
+            e.HasIndex(a => a.UsuarioId);
+            e.HasIndex(a => a.VerificadaEmUtc);
+            e.HasIndex(a => a.AtualizadaEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(a => a.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<EntregaDoPush>(e =>
+        {
+            e.ToTable("EntregasDoPush");
+            e.Property(x => x.Id).HasMaxLength(32); e.Property(x => x.AssinaturaId).HasMaxLength(32);
+            e.Property(x => x.MaquinaId).HasMaxLength(64); e.Property(x => x.PendenciaId).HasMaxLength(64);
+            e.Property(x => x.SnapshotId).HasMaxLength(64); e.Property(x => x.Estado).HasMaxLength(20);
+            e.Property(x => x.Reserva).HasMaxLength(32);
+            e.HasIndex(x => new { x.AssinaturaId, x.MaquinaId, x.PendenciaId, x.SnapshotId }).IsUnique();
+            e.HasIndex(x => new { x.Estado, x.ProximaTentativaUtc });
+            e.HasIndex(x => x.CriadaEmUtc);
+            e.HasOne<AssinaturaDoPush>().WithMany().HasForeignKey(x => x.AssinaturaId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

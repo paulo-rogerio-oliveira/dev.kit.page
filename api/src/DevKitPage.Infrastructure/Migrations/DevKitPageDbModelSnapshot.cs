@@ -2772,6 +2772,40 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("RespostasDasDecisoes");
                     b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Restrict).IsRequired();
                 });
+            modelBuilder.Entity("DevKitPage.Core.AssinaturaDoPush", b =>
+                {
+                    b.Property<string>("Id").HasMaxLength(32).HasColumnType("TEXT");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("EndpointHash").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("DadosProtegidos").IsRequired().HasMaxLength(5000).HasColumnType("TEXT");
+                    b.Property<string>("ChavePublicaServidor").IsRequired().HasMaxLength(87).HasColumnType("TEXT");
+                    b.Property<DateTime>("AtualizadaEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("VerificadaEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("EndpointHash").IsUnique(); b.HasIndex("UsuarioId");
+                    b.HasIndex("VerificadaEmUtc"); b.HasIndex("AtualizadaEmUtc");
+                    b.ToTable("AssinaturasDoPush");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.EntregaDoPush", b =>
+                {
+                    b.Property<string>("Id").HasMaxLength(32).HasColumnType("TEXT");
+                    b.Property<string>("AssinaturaId").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("PendenciaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("SnapshotId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Estado").IsRequired().HasMaxLength(20).HasColumnType("TEXT");
+                    b.Property<string>("Reserva").IsRequired().HasMaxLength(32).HasColumnType("TEXT");
+                    b.Property<int>("Tentativas").HasColumnType("INTEGER");
+                    b.Property<DateTime>("CriadaEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiraEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("ProximaTentativaUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("AssinaturaId", "MaquinaId", "PendenciaId", "SnapshotId").IsUnique();
+                    b.HasIndex("Estado", "ProximaTentativaUtc"); b.HasIndex("CriadaEmUtc");
+                    b.ToTable("EntregasDoPush");
+                    b.HasOne("DevKitPage.Core.AssinaturaDoPush", null).WithMany().HasForeignKey("AssinaturaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

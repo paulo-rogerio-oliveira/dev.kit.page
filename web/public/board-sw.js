@@ -1,6 +1,36 @@
 // Nenhuma resposta autenticada, retrato ou sessão é armazenada no cache.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+// O servidor envia apenas o identificador opaco. Nunca renderiza texto recebido no payload.
+self.addEventListener('push', event => {
+  let id;
+  try { id = event.data?.json()?.entregaId; } catch { return; }
+  if (typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id)) return;
+  event.waitUntil(self.registration.showNotification('dev.kit · decisão pendente', {
+    body: 'Há uma decisão pendente. Abra o dev.kit para conferir.',
+    icon: '/board-192.png', badge: '/board-192.png',
+    tag: `devkit-decisao-${id}`, data: { entregaId: id },
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const id = event.notification.data?.entregaId;
+  if (typeof id !== 'string' || !/^[a-f0-9]{32}$/.test(id)) return;
+  const url = new URL(`/board?notificacao=${id}`, self.location.origin).href;
+  event.waitUntil((async () => {
+    const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const board = janelas.find(c => { const u = new URL(c.url); return u.origin === self.location.origin && u.pathname === '/board'; });
+    if (board) { await board.navigate(url); await board.focus(); }
+    else await self.clients.openWindow(url);
+  })());
+});
+self.addEventListener('pushsubscriptionchange', event => {
+  // O worker não tem JWT: uma renovação pede nova associação autenticada ao abrir o Board.
+  event.waitUntil((async () => {
+    await event.newSubscription?.unsubscribe();
+    for (const c of await self.clients.matchAll({ type: 'window' })) c.postMessage({ tipo: 'push-alterado' });
+  })());
+});
 self.addEventListener('fetch', event => {
   if (event.request.mode !== 'navigate') return;
   const url = new URL(event.request.url);

@@ -6,6 +6,7 @@ import type { DecisaoPendente, ResponderDecisao } from '../api/remoto';
 import { CartaoDaDecisao, RevisaoDaDecisao, type AoDecidir } from '../componentes/DecisoesRemotas';
 import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
+import { NotificacoesDoBoard } from '../componentes/NotificacoesDoBoard';
 import { Abas } from '../componentes/Abas';
 import { ChatRemoto } from '../componentes/ChatRemoto';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
@@ -77,6 +78,25 @@ export function Board() {
   const [tentativa, setTentativa] = useState(0);
   const [agora, setAgora] = useState(Date.now());
   const geracao = useRef(0);
+  const notificacao = parametros.get('notificacao');
+  const [destinoPush, setDestinoPush] = useState<{ maquinaId: string; pendenciaId: string; snapshotId: string } | null>(null);
+  const [avisoPush, setAvisoPush] = useState('');
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setDestinoPush(null); setAvisoPush('');
+    if (!notificacao || !sessao) return;
+    if (!/^[a-f0-9]{32}$/.test(notificacao)) { setAvisoPush('Notificação inválida. Consulte as pendências do Board.'); return; }
+    setAvisoPush('Abrindo a decisão da notificação…');
+    void api.destinoDoPush(sessao.token, notificacao, ctrl.signal).then(d => {
+      if (!ctrl.signal.aborted) setDestinoPush(d);
+    }).catch(e => {
+      if (ctrl.signal.aborted) return;
+      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+      else setAvisoPush(mensagemDaFalha(e));
+    });
+    return () => ctrl.abort();
+  }, [notificacao, sessao, sair]);
 
   useEffect(() => {
     if (!sessao) return;
@@ -89,7 +109,11 @@ export function Board() {
         const lista = await api.maquinasRemotas(sessao!.token, controller.signal);
         if (controller.signal.aborted || atual !== geracao.current) return;
         setMaquinas(lista);
-        const id = lista.some(m => m.maquinaId === selecionada) ? selecionada : lista[0]?.maquinaId ?? '';
+        if (destinoPush && !lista.some(m => m.maquinaId === destinoPush.maquinaId)) {
+          setDestinoPush(null); setAvisoPush('A máquina desta notificação não está disponível para sua conta.');
+        }
+        const preferida = destinoPush?.maquinaId ?? selecionada;
+        const id = lista.some(m => m.maquinaId === preferida) ? preferida : lista[0]?.maquinaId ?? '';
         if (id !== selecionada) {
           setFoto(null);
           setSelecionada(id);
@@ -118,7 +142,23 @@ export function Board() {
     }
     void carregar();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [sessao, selecionada, tentativa, sair]);
+  }, [sessao, selecionada, tentativa, sair, destinoPush]);
+
+  useEffect(() => {
+    if (!destinoPush || carregando || erro || selecionada !== destinoPush.maquinaId || !foto) return;
+    const d = decisoes.find(d => d.pendencia.id === destinoPush.pendenciaId && d.snapshotId === destinoPush.snapshotId);
+    setDestinoPush(null);
+    if (!d || (d.resposta && d.resposta.estado !== 'vencida')) {
+      setAvisoPush('Esta decisão foi resolvida ou o snapshot mudou. Consulte as pendências atuais.'); return;
+    }
+    setAvisoPush('Decisão aberta a partir da notificação. Confira os dados atuais antes de decidir.');
+    if (d.pendencia.tipo === 'aprovacao') setRevisao(d);
+    else {
+      const p = new URLSearchParams(parametros); p.set('aba', 'board'); setParametros(p, { replace: true });
+      const cartao = document.getElementById(`board-decisao-${encodeURIComponent(d.pendencia.id)}`);
+      cartao?.scrollIntoView?.({ block: 'nearest' }); cartao?.focus();
+    }
+  }, [destinoPush, carregando, erro, selecionada, foto, decisoes, parametros, setParametros]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setAgora(Date.now()), 1000);
@@ -163,8 +203,10 @@ export function Board() {
       <BotaoDoDevKit controle={controle} />
     </header>
     <FaixaDoAcionamento controle={controle} />
+    <NotificacoesDoBoard />
+    {avisoPush && <p className="br-aviso-push" role="status">{avisoPush}</p>}
     {revisao && <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} />}
-    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => setParametros({ aba: id }, { replace: true })}>
+    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => { const p = new URLSearchParams(parametros); p.set('aba', id); setParametros(p, { replace: true }); }}>
     <main className="br-main">
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
