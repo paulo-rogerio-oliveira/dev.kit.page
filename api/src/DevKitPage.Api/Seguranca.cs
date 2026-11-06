@@ -175,6 +175,61 @@ public sealed class EmissorDeToken(IOptions<OpcoesDeAutenticacao> opcoes, TimePr
 
         return new LoginResponse(token, expira, usuario.DeveTrocarSenha, usuario.Login, usuario.EhAdmin, papel, usuario.Empresa?.Nome);
     }
+
+    /// <summary>
+    /// A renovação da MÁQUINA (<see cref="SessaoDaMaquinaV1"/>): um JWT assinado com o mesmo segredo, mas com OUTRA audiência — não
+    /// abre rota nenhuma como Bearer —, preso ao usuário, à máquina e ao carimbo da senha dele. Sem estado no banco: trocar a
+    /// senha invalida todas; o bloqueio e o assento são conferidos a cada uso, como no login.
+    /// </summary>
+    public SessaoDaMaquinaV1 EmitirRenovacaoDaMaquina(Usuario usuario, int maquinaId)
+    {
+        var cfg = opcoes.Value;
+        var agora = relogio.GetUtcNow();
+        var expira = agora.AddDays(Math.Max(1, cfg.RenovacaoDaMaquinaDias));
+        var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+        {
+            Claims = new Dictionary<string, object>
+            {
+                [JwtRegisteredClaimNames.Sub] = usuario.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                [AutenticacaoDeMaquina.ClaimDaMaquina] = maquinaId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                [ClaimDoCarimbo] = Carimbo(usuario),
+            },
+            Issuer = cfg.Emissor,
+            Audience = AudienciaDaMaquina(cfg),
+            IssuedAt = agora.UtcDateTime,
+            NotBefore = agora.UtcDateTime,
+            Expires = expira.UtcDateTime,
+            SigningCredentials = new SigningCredentials(Seguranca.Chave(cfg), SecurityAlgorithms.HmacSha256),
+        });
+        return new SessaoDaMaquinaV1(token, expira);
+    }
+
+    /// <summary>O usuário da renovação, se ela vale para ESTA máquina e ainda não venceu; o carimbo é conferido por quem tem o usuário.</summary>
+    public async Task<(int UsuarioId, string Carimbo)?> LerRenovacaoDaMaquinaAsync(string? renovacao, int maquinaId)
+    {
+        if (string.IsNullOrWhiteSpace(renovacao) || renovacao.Length > 4096)
+            return null;
+        var cfg = opcoes.Value;
+        var parametros = Seguranca.Parametros(cfg);
+        parametros.ValidAudience = AudienciaDaMaquina(cfg);
+        var lida = await new JsonWebTokenHandler { MapInboundClaims = false }.ValidateTokenAsync(renovacao, parametros);
+        if (!lida.IsValid
+            || !int.TryParse(Claim(lida.Claims, JwtRegisteredClaimNames.Sub), out var usuario)
+            || Claim(lida.Claims, AutenticacaoDeMaquina.ClaimDaMaquina) != maquinaId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            || Claim(lida.Claims, ClaimDoCarimbo) is not { Length: > 0 } carimbo)
+            return null;
+        return (usuario, carimbo);
+
+        static string? Claim(IDictionary<string, object> claims, string nome) => claims.TryGetValue(nome, out var valor) ? valor as string : null;
+    }
+
+    /// <summary>O carimbo da senha: muda quando a senha muda (o hash é outro), e não revela nada dela.</summary>
+    public static string Carimbo(Usuario usuario)
+        => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(usuario.SenhaHash ?? string.Empty)))[..16];
+
+    private const string ClaimDoCarimbo = "carimbo";
+
+    private static string AudienciaDaMaquina(OpcoesDeAutenticacao cfg) => cfg.Audiencia + "/maquina";
 }
 
 /// <summary>

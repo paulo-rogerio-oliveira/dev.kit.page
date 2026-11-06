@@ -2,7 +2,7 @@
   "id": "/board",
   "name": "dev.kit — Board",
   "short_name": "dev.kit",
-  "description": "Acompanhe suas máquinas, pendências e projetos. Fase 1: somente leitura.",
+  "description": "Acompanhe e comande suas máquinas, pendências e projetos.",
   "lang": "pt-BR",
   "start_url": "/board",
   "scope": "/",

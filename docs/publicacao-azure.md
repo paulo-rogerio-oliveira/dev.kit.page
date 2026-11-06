@@ -302,9 +302,29 @@ identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
 3. **Banco para o worker, sem senha.** No Azure SQL, crie o usuário da identidade (`CREATE USER [id-devkit-provisao] FROM
    EXTERNAL PROVIDER`) com leitura e escrita, e use na connection string do worker
    `Authentication=Active Directory Managed Identity;User Id=<client id da identidade>`.
-4. **Publicar.** `dotnet publish api/src/DevKitPage.Provisao -c Release` num segundo Container App (ou App Service), **sem
-   ingress** — o worker não recebe chamada nenhuma —, com a identidade do passo 2 atribuída e uma réplica (mais de uma
-   também funciona: a reserva do pedido é concorrente-segura).
+4. **Publicar.** O caminho padrão é o **WebJob contínuo** no App Service da API (`devkit`): o workflow
+   `.github/workflows/main_devkit.yml` publica o worker no job `worker` e o põe em `App_Data/jobs/continuous/provisao` no
+   mesmo pacote da API, com o `run.cmd` (Windows), o `run.sh` (Linux) e o `settings.job` (`is_singleton`: uma instância só)
+   de `api/src/DevKitPage.Provisao/webjob/`. O WebJob contínuo exige o *Always On* (já pedido acima). A alternativa é
+   `dotnet publish api/src/DevKitPage.Provisao -c Release` num Container App próprio, **sem ingress** — o worker não recebe
+   chamada nenhuma —, com a identidade do passo 2 e uma réplica (mais de uma também funciona: a reserva do pedido é
+   concorrente-segura). Ver "O limite da identidade no WebJob", abaixo.
+
+**O WebJob e a identidade.** O WebJob herda as app settings do site: a mesma `ConnectionStrings__DevKitPage` e o
+`Banco__Provider` da API (e, com isso, o acesso ao banco da identidade do site — o passo 3 é só para o Container App). O
+`Provisao__IdentidadeClientId` diz ao worker qual identidade usar no Azure Resource Manager (`ManagedIdentityCredential`
+com o client id), e a API nunca pede essa identidade: ela usa a do sistema (ou a do `Remoto__IdentidadeClientId`). O
+ambiente do worker é `Production` sem configuração nenhuma (o host genérico lê o `DOTNET_ENVIRONMENT`, e não o
+`ASPNETCORE_ENVIRONMENT`), e o worker recusa subir nele sem o `Provisao__AssinaturaId`. No Linux, confira em *WebJobs* que o
+job aparece como *Running*: se o `run.sh` perder o bit de execução no pacote, o Kudu não o inicia.
+
+**O limite da identidade no WebJob.** O WebJob roda no MESMO sandbox do site: toda identidade atribuída ao App Service fica
+disponível a todos os processos dele (o `IDENTITY_ENDPOINT` é um só). A separação entre a identidade da API e a do worker
+é, portanto, de CONFIGURAÇÃO — o papel de criar recursos está só na identidade do worker, e a API não a pede —, e não uma
+fronteira de segurança: um código hostil rodando na API conseguiria pedir o token do worker. Para a separação de verdade,
+a alternativa mínima é tirar o worker do App Service: um **Container App** (ou um *Container Apps job* agendado) só com a
+identidade do worker, sem ingress — o mesmo `Program.cs`, as mesmas variáveis, nenhum código novo. Não está implementada:
+fica como o próximo passo se a política de segurança pedir.
 
 | Variável do worker | O que é |
 |---|---|
@@ -366,6 +386,115 @@ da API** e fica só na memória dela — nunca no banco, no log ou na configura�
 | `Remoto__RetencaoDaConversaDias` | 30: comandos, respostas, falas e eventos mais velhos saem no expurgo diário. |
 
 Para testar local sem o Azure: `Remoto__Fila=simulado` na API e `Provisao__Provedor=simulado` no worker, na mesma base.
+
+### Scripts SQL do controle remoto, na ordem
+
+Numa base Azure SQL que já existe, o controle remoto precisa de cinco scripts de `api/scripts/sqlserver/`, todos
+idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros):
+
+1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
+2. `Provisao.sql` — as permissões, os recursos provisionados e os eventos (rode de novo a cada versão: só acrescenta).
+3. `Conversa.sql` — os comandos, as respostas, os eventos e as falas.
+4. `Decisoes.sql` — as decisões remotas e o segundo fator.
+5. `Push.sql` — as assinaturas e as entregas do push do board.
+
+```bash
+for s in Remoto Provisao Conversa Decisoes Push; do
+  sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
+done
+```
+
+O workflow da `main` também os aplica, **desligado por padrão**: *Actions → Build and deploy… → Run workflow* com
+**aplicar_sql** marcado roda o job `sql` (um passo por script, na ordem acima) antes do deploy, e um script que falha
+segura o deploy. Ele usa o segredo do repositório `AZURE_SQL_CONNECTION_STRING`
+(`Server=tcp:<servidor>.database.windows.net;Database=<base>;Authentication=Active Directory Default;Encrypt=True`) e o
+login do `azure/login` — a identidade do workflow precisa de um usuário na base com `db_ddladmin`, `db_datareader` e
+`db_datawriter`. O `/health` sem `Degraded` confirma que nenhum falta.
+
+### Push do board (as chaves VAPID)
+
+O push precisa de um par VAPID (P-256) e de um contato. Gere o par UMA vez por ambiente, numa máquina com o SDK:
+
+```bash
+dotnet run --project api/src/DevKitPage.Api -- --gerar-chaves-vapid
+```
+
+A API imprime as três app settings e sai, sem subir o site nem ler o banco. Grave-as no App Service da API (*Settings →
+Environment variables*, ou o `az webapp config appsettings set` que o gerador também imprime) e reinicie:
+
+| Variável da API | O que é |
+|---|---|
+| `Push__ChavePublica` | A pública, 65 bytes em base64url (87 caracteres). O site a entrega ao navegador. |
+| `Push__ChavePrivada` | **Segredo**: o escalar privado, 32 bytes em base64url (43 caracteres). Nunca em commit nem chamado. |
+| `Push__Assunto` | O contato do VAPID: `mailto:<e-mail>` ou `https://<site>` (o serviço de push o usa para avisar de abuso). |
+
+Sem as três válidas, `GET /api/remoto/push` (com o login) responde `disponivel: false` e o board não oferece o aviso. Trocar o par
+invalida todas as assinaturas (o navegador assina de novo na próxima visita ao board).
+
+### Key ring do DataProtection (persistido e compartilhado)
+
+O push do board e o segundo fator das decisões guardam dados protegidos pelo DataProtection. Sem o key ring persistido e
+compartilhado, um reinício (ou outra instância) gera uma chave nova e o que foi protegido antes deixa de abrir. Por isso a
+API **não sobe em Production sem ele** (a mensagem diz `ProtecaoDeDados não configurada`). Fora de Production, sem nada,
+vale o padrão do ASP.NET (a pasta do usuário que roda).
+
+| Variável da API | O que é |
+|---|---|
+| `ProtecaoDeDados__Blob` | O blob do key ring: `https://<conta>.blob.core.windows.net/protecao-de-dados/keys.xml`. Lido e gravado com a identidade da API (`Storage Blob Data Contributor` no contêiner, que já precisa existir). |
+| `ProtecaoDeDados__ChaveDoCofre` | Opcional: a chave RSA do Key Vault que protege o key ring (`https://<cofre>.vault.azure.net/keys/devkit-keyring`). A identidade da API precisa do `Key Vault Crypto Service Encryption User` nela. Exige o `Blob` (ou a `Pasta`). |
+| `ProtecaoDeDados__Pasta` | A alternativa ao blob: uma pasta num disco compartilhado pelas instâncias (no App Service, `/home/dados/protecao`). Sem cofre, as chaves ficam em claro nesse disco. |
+| `ProtecaoDeDados__IdentidadeClientId` | O client id de uma identidade atribuída ao usuário para o blob e o cofre (não é segredo). Vazio: a do sistema. |
+
+O nome da aplicação no DataProtection é fixo (`DevKitPage.Api`): a primeira publicação desta versão invalida o que estava
+protegido com o padrão anterior — as assinaturas do push são refeitas na próxima visita ao board, e quem tinha o segundo
+fator preparado prepara de novo.
+
+### Renovação do login pela máquina (o serviço do dev.kit com o app fechado)
+
+O token do usuário vence em `Jwt__ExpiracaoMinutos` (60) e só o app aberto o renovava. Agora o app, logado, pede ao site
+uma **renovação presa à máquina** (`POST /api/auth/sessao-da-maquina`, com o JWT e a `X-Machine-Key`), e o serviço do
+dev.kit a troca por um token novo sozinho (`POST /api/auth/renovar-pela-maquina`, só com a `X-Machine-Key`) — sem a senha.
+A renovação não tem estado no banco: é um JWT com outra audiência (não abre rota nenhuma como Bearer), vale só naquela
+máquina e para aquele usuário, por `Jwt__RenovacaoDaMaquinaDias` (30) a partir do último uso, e cai com a troca de senha,
+com o bloqueio e com a falta de assento. Nenhuma configuração nova nem script.
+
+### Script de infraestrutura
+
+`api/scripts/azure/infra-controle-remoto.sh` faz, de forma idempotente, o que as seções acima pedem no Azure: a identidade do
+worker (`id-devkit-provisao`) e a função `devkit-provisao-worker` na assinatura (só os grupos, as contas e filas de Storage, os
+planos, os sites e os Static Web Apps); a identidade no App Service, ao lado da do sistema, com o `Provisao__AssinaturaId` e o
+`Provisao__IdentidadeClientId`; a função `devkit-api-chave-da-fila` (só o `listKeys`) para a identidade da API; e, com
+`--conta-keyring` (e `--cofre`), o contêiner do key ring, a chave RSA do cofre, os papéis da API neles e as app settings
+`ProtecaoDeDados__*`. Rode primeiro com `--dry-run`, que não chama o `az` e lista as consultas e gravações na ordem:
+
+```bash
+api/scripts/azure/infra-controle-remoto.sh --dry-run --assinatura <id> --grupo <grupo do App Service> \
+  --app devkit --conta-keyring <conta> --cofre <cofre>
+```
+
+Conferido, rode sem o `--dry-run`, com o `az login` numa conta que atribui papéis (Owner ou User Access Administrator).
+
+### Ativação do controle remoto — roteiro e checklist
+
+Na ordem, depois de mesclar na `main`:
+
+1. **Banco**: os cinco scripts acima (ou o workflow com `aplicar_sql`).
+2. **Azure**: `infra-controle-remoto.sh --dry-run …`, conferir, e rodar de verdade.
+3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service.
+4. **Publicar**: o workflow da `main` (a API e o WebJob `provisao` no mesmo pacote) e reiniciar o App Service.
+5. **dev.kit**: publicar o pacote com a renovação pela máquina e, em cada máquina, entrar uma vez no app (é o login que
+   pede a renovação) e reinstalar o serviço na conta do desenvolvedor (Configurações → Serviço de agendamento).
+
+Checklist verificável:
+
+- [ ] `GET /health` responde `Healthy` — nenhum `Degraded` (esquema, licenças).
+- [ ] O WebJob `provisao` aparece *Running* em *WebJobs*, e o log dele (*WebJobs → Logs*) mostra a varredura sem erro de
+      identidade ou de assinatura.
+- [ ] Um usuário liberado (`/usuarios` → Recursos liberados) pede a fila no site e ela fica **pronta**; o grupo
+      `rg-devkit-u{id}` tem a conta de Storage com a fila `comandos`.
+- [ ] `GET /api/remoto/push` (com o login) responde `disponivel: true`; o board assinado recebe o aviso de uma pendência nova.
+- [ ] Com o dev.kit FECHADO por mais de uma hora, a máquina continua *online* no site e o Ligar chega (o log do serviço,
+      `logs\scheduler-*.log`, mostra "sessão renovada pela máquina").
 
 ## Web
 
