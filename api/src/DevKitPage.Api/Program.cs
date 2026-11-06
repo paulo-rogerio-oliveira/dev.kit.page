@@ -1,5 +1,7 @@
 using DevKitPage.Api;
+using DevKitPage.Core;
 using DevKitPage.Infrastructure;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +15,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<DevKitPageDb>("banco").AddCheck<EsquemaDoBancoCheck>("esquema")
     .AddCheck<LicencasCheck>("licencas");
 builder.Services.AddHostedService<ExpurgoDiario>();
+builder.Services.AddHostedService<WorkerDePush>();
 
 // CORS por configuração: em Development, o Vite; no Azure, a origem do Static Web App.
 builder.Services.AddCors(opcoes => opcoes.AddDefaultPolicy(politica =>
@@ -25,6 +28,8 @@ builder.Services.AddCors(opcoes => opcoes.AddDefaultPolicy(politica =>
 var app = builder.Build();
 
 Seguranca.ValidarSegredo(app.Services, app.Environment);
+// A fila do controle remoto: a simulada não sobe em Production (o site fingiria que entregou).
+FilaDeComandos.Validar(app.Services.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value, app.Environment);
 using (var escopo = app.Services.CreateScope())
     await escopo.ServiceProvider.GetRequiredService<InicializadorDaBase>().InicializarAsync();
 
@@ -63,6 +68,11 @@ app.MapearLicencas();
 app.MapearLicencaDosUsuarios();
 app.MapearEdicaoDeEmpresas();
 app.MapearPagamentos();
+app.MapearRemoto();
+app.MapearConversa();
+app.MapearDecisoes();
+app.MapearPush();
+app.MapearProvisao();
 
 await app.RunAsync();
 

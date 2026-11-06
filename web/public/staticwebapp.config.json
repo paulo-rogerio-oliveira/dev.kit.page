@@ -1,10 +1,14 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/midia/*", "/capturas/*", "/*.{svg,png,jpg,txt,json,ico}"]
+    "exclude": ["/assets/*", "/midia/*", "/capturas/*", "/*.{svg,png,jpg,txt,json,ico,webmanifest,js}"]
   },
   "mimeTypes": {
+    ".webmanifest": "application/manifest+json",
     ".webm": "video/webm",
     ".mp4": "video/mp4"
-  }
+  },
+  "routes": [
+    { "route": "/board-sw.js", "headers": { "Cache-Control": "no-cache" } }
+  ]
 }

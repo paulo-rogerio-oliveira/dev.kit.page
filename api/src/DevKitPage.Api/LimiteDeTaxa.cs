@@ -50,6 +50,34 @@ public static class LimiteDeTaxa
     /// </summary>
     public const string PoliticaDoDesign = "Design";
 
+    /// <summary>
+    /// A política dos envios do controle remoto (heartbeat e retrato): por USUÁRIO do token, com
+    /// <see cref="OpcoesDoRemoto.EnviosPorMinuto"/>. O 429 só atrasa o próximo heartbeat: a máquina não some do site antes
+    /// de <c>RemotoV1.SegundosAteDesconectar</c>.
+    /// </summary>
+    public const string PoliticaDoRemoto = "Remoto";
+
+    /// <summary>
+    /// A política dos pedidos de provisão (criar, repetir, remover): por USUÁRIO do token, com
+    /// <see cref="OpcoesDaProvisao.PedidosPorHora"/> numa janela de uma hora. Cada pedido mexe em recurso pago no Azure.
+    /// </summary>
+    public const string PoliticaDaProvisao = "Provisao";
+
+    /// <summary>
+    /// A política das escritas da conversa remota (o comando do site, a SAS, o recebimento e a resposta do dev.kit): por
+    /// USUÁRIO do token, com <see cref="OpcoesDoRemoto.EnviosDaConversaPorMinuto"/>, separada da do heartbeat — o site
+    /// insistindo não derruba o heartbeat da máquina. O custo (cada comando pode abrir um turno) é o outro limite, por hora e
+    /// no SQL (<see cref="OpcoesDoRemoto.ComandosPorHora"/>).
+    /// </summary>
+    public const string PoliticaDaConversa = "Conversa";
+
+    /// <summary>
+    /// A política das falas do chat do dev.kit (<c>POST /api/remoto/conversa/falas</c>): por USUÁRIO do token, com
+    /// <see cref="OpcoesDoRemoto.FalasPorMinuto"/>, separada da <see cref="PoliticaDaConversa"/> — o espelho do chat do desktop
+    /// não tira a vez do comando do site. O 429 não perde a fala: o dev.kit a reenvia com o mesmo id.
+    /// </summary>
+    public const string PoliticaDasFalas = "Falas";
+
     public static IServiceCollection AdicionarLimiteDeTaxa(this IServiceCollection servicos, IConfiguration configuracao)
     {
         servicos.Configure<OpcoesDoProxy>(configuracao.GetSection(OpcoesDoProxy.Secao));
@@ -121,6 +149,50 @@ public static class LimiteDeTaxa
                 var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoDesign>>().Value.EnviosPorMinuto);
                 var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
                 return RateLimitPartition.GetFixedWindowLimiter("design:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDoRemoto, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.EnviosPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("remoto:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaProvisao, http =>
+            {
+                var porHora = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDaProvisao>>().Value.PedidosPorHora);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("provisao:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porHora,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDaConversa, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.EnviosDaConversaPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("conversa:" + usuario, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = porMinuto,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                });
+            });
+            limites.AddPolicy(PoliticaDasFalas, http =>
+            {
+                var porMinuto = Math.Max(1, http.RequestServices.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value.FalasPorMinuto);
+                var usuario = Seguranca.UsuarioId(http.User)?.ToString(CultureInfo.InvariantCulture) ?? IpDoCliente(http);
+                return RateLimitPartition.GetFixedWindowLimiter("falas:" + usuario, _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = porMinuto,
                     Window = TimeSpan.FromMinutes(1),

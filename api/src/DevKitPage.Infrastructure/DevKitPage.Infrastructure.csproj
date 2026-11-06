@@ -21,6 +21,9 @@
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <!-- As imagens do design (US #669) no Azure Blob Storage. -->
     <PackageReference Include="Azure.Storage.Blobs" />
+    <!-- A identidade gerenciada da API (a chave da fila do controle remoto) e a do worker da provisão: a mesma regra. -->
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Lib.Net.Http.WebPush" />
   </ItemGroup>
 
   <!--

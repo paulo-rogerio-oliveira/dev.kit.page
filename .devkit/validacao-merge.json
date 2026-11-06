@@ -1,0 +1,13 @@
+{
+  "versao": 1,
+  "regras": [
+    {
+      "caminho": "api/scripts/sqlserver/",
+      "projeto": "api/tests/DevKitPage.Infrastructure.Tests/DevKitPage.Infrastructure.Tests.csproj"
+    },
+    {
+      "caminho": ".devkit/validacao-merge.json",
+      "projeto": "api/tests/DevKitPage.Infrastructure.Tests/DevKitPage.Infrastructure.Tests.csproj"
+    }
+  ]
+}

@@ -47,6 +47,9 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly int _downloadsPorHora;
     private readonly int _relatosPorHora;
     private readonly int? _tetoDoDesign;
+    private readonly int _comandosPorHora;
+    private readonly int _duracaoDoSse;
+    private readonly int _falasPorMinuto;
 
     /// <summary>A pasta das imagens do design (US #669) desta API: temporária, apagada no fim.</summary>
     public string PastaDoDesign { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-design-{Guid.NewGuid():N}");
@@ -59,11 +62,18 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <param name="downloadsPorHora">O limite de downloads anônimos por IP (US #425).</param>
     /// <param name="relatosPorHora">O limite de relatos por usuário (US #602).</param>
     /// <param name="tetoDoDesign">O teto de versões de design de TODO plano (US #669); nulo é o da configuração.</param>
+    /// <param name="comandosPorHora">O limite de comandos remotos por usuário por hora (a conversa, fase 2).</param>
+    /// <param name="duracaoDoSse">Quanto tempo o SSE da conversa fica aberto antes de fechar sozinho.</param>
+    /// <param name="falasPorMinuto">O limite de falas do chat do dev.kit por usuário por minuto (item 13 do controle-remoto-v2).</param>
     public ApiDeTeste(
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
         string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100,
-        int relatosPorHora = 100, int? tetoDoDesign = null)
+        int relatosPorHora = 100, int? tetoDoDesign = null, int comandosPorHora = 100, int duracaoDoSse = 300,
+        int falasPorMinuto = 1000)
     {
+        _falasPorMinuto = falasPorMinuto;
+        _comandosPorHora = comandosPorHora;
+        _duracaoDoSse = duracaoDoSse;
         _relatosPorHora = relatosPorHora;
         _tetoDoDesign = tetoDoDesign;
         _ambiente = ambiente;
@@ -82,6 +92,9 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <summary>Os e-mails que a API "enviou" (US #425): o falso guarda as mensagens, e o teste lê o link.</summary>
     public EmailsDeTeste Emails { get; } = new();
 
+    /// <summary>A fila do controle remoto (fase 2): o falso guarda as mensagens, e o teste as lê ou faz a fila falhar.</summary>
+    public FilaDeTeste Fila { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(_ambiente);
@@ -93,6 +106,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         {
             s.AddHttpClient(ReleasesDoDevKit.NomeDoCliente).ConfigurePrimaryHttpMessageHandler(() => GitHub);
             s.AddSingleton<DevKitPage.Core.IEnvioDeEmail>(Emails);
+            s.AddSingleton<DevKitPage.Core.IFilaDeComandos>(Fila);
         });
         // A US #425: a licença assinada com a semente de teste, o webhook do gateway, o site do link e os limites
         // largos (os testes do limite usam os seus).
@@ -111,6 +125,11 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
             builder.UseSetting("Design:Tetos:Empresarial:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
             builder.UseSetting("Design:TetoPadrao:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+        // A conversa remota (fase 2): o limite do teste, o SSE que relê a cada segundo e a duração dele.
+        builder.UseSetting("Remoto:ComandosPorHora", _comandosPorHora.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting("Remoto:IntervaloDoSseSegundos", "1");
+        builder.UseSetting("Remoto:DuracaoDoSseSegundos", _duracaoDoSse.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting("Remoto:FalasPorMinuto", _falasPorMinuto.ToString(System.Globalization.CultureInfo.InvariantCulture));
         if (_redeConfiavel is not null)
             builder.UseSetting("Proxy:RedesConfiaveis:0", _redeConfiavel);
         if (_ipDaConexao is not null)

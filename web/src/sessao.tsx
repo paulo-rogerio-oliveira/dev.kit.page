@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { LoginResponse, Papel } from './api/tipos';
+import { cancelarPushAoSair } from './boardPush';
 
 /** Onde o token fica: a aba do navegador (fecha a aba, acaba a sessão). */
 export const CHAVE_DA_SESSAO = 'devkitpage.sessao';
@@ -33,7 +34,7 @@ export function entraNoPainel(sessao: LoginResponse): boolean {
  * As páginas que o dev abre (US #425): a conta dele e as públicas — o painel e a administração, não. Desde a US #491,
  * também os repositórios e as convenções da empresa, que ele audita e edita.
  */
-const DO_DEV = ['/', '/conta', '/catalogo', '/empresa/conhecimento'];
+const DO_DEV = ['/', '/conta', '/catalogo', '/empresa/conhecimento', '/board'];
 
 /**
  * Para onde a sessão vai depois do login (e da troca de senha): a troca pendente primeiro; depois o
@@ -42,7 +43,10 @@ const DO_DEV = ['/', '/conta', '/catalogo', '/empresa/conhecimento'];
  */
 export function destinoDa(sessao: LoginResponse, de?: string | null): string {
   if (sessao.deveTrocarSenha) return '/trocar-senha';
-  if (de && de !== '/login' && de !== '/trocar-senha' && (entraNoPainel(sessao) || DO_DEV.includes(de))) return de;
+  if (de?.startsWith('/') && !de.startsWith('//') && !de.includes('\\')) {
+    const caminho = de.split(/[?#]/)[0];
+    if (caminho !== '/login' && caminho !== '/trocar-senha' && (entraNoPainel(sessao) || DO_DEV.includes(caminho))) return de;
+  }
   return entraNoPainel(sessao) ? '/dashboard' : '/conta';
 }
 
@@ -71,6 +75,8 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sair = useCallback((novoMotivo: MotivoDaSaida = 'saiu') => {
+    const atual = sessaoGravada();
+    if (novoMotivo === 'saiu' && atual) void cancelarPushAoSair(atual.token).catch(() => {});
     sessionStorage.removeItem(CHAVE_DA_SESSAO);
     setMotivo(novoMotivo);
     setSessao(null);

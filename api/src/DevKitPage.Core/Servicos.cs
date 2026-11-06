@@ -185,11 +185,14 @@ public enum FalhaNaGestao
     Proibida,
 }
 
-/// <summary>O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem.</summary>
-public sealed record ResultadoDaGestao<T>(T? Valor, FalhaNaGestao Falha = FalhaNaGestao.Nenhuma, string Mensagem = "")
+/// <summary>
+/// O resultado de uma operação da gestão de usuários: o valor, ou a falha com a mensagem — e, quando o site precisa
+/// distinguir a recusa (a cota cheia, o segundo fator), o <see cref="Codigo"/> que a API devolve no problema.
+/// </summary>
+public sealed record ResultadoDaGestao<T>(T? Valor, FalhaNaGestao Falha = FalhaNaGestao.Nenhuma, string Mensagem = "", string Codigo = "")
     where T : class
 {
-    public static ResultadoDaGestao<T> Falhou(FalhaNaGestao falha, string mensagem) => new(null, falha, mensagem);
+    public static ResultadoDaGestao<T> Falhou(FalhaNaGestao falha, string mensagem, string codigo = "") => new(null, falha, mensagem, codigo);
 }
 
 /// <summary>
@@ -215,6 +218,13 @@ public interface IGestaoDeUsuarios
     /// TEMPORÁRIO por falhas — o bloqueio do admin fica como está.
     /// </summary>
     Task<ResultadoDaGestao<UsuarioComSenha>> RedefinirSenhaAsync(int id, CancellationToken ct);
+
+    /// <summary>
+    /// Libera ou retira um recurso (<see cref="Contracts.V1.ProvisaoV1.RecursosLiberaveis"/>) do usuário, com a linha na
+    /// auditoria da provisão. Idempotente: liberar o liberado (ou retirar o retirado) não grava nada. Retirar NÃO remove o
+    /// que o usuário já criou no Azure — só impede pedidos novos.
+    /// </summary>
+    Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, string autor, CancellationToken ct);
 }
 
 /// <summary>
