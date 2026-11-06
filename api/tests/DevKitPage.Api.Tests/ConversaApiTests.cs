@@ -372,7 +372,8 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            // Recursos são aditivos: conserva as falas e anuncia as decisões com snapshot no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.
