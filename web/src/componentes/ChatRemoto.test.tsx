@@ -4,7 +4,7 @@ import { delay, http, HttpResponse } from 'msw';
 import { transferableAbortController } from 'node:util';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenDoDev } from '../testes/servidor';
-import type { CatalogoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, EventoDaConversa, MaquinaRemota } from '../api/remoto';
+import type { CatalogoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, EventoDaConversa, FalaRemota, MaquinaRemota } from '../api/remoto';
 
 beforeAll(() => vi.stubGlobal('AbortController', transferableAbortController().constructor));
 afterAll(() => vi.unstubAllGlobals());
@@ -57,6 +57,46 @@ it('separa mensagens pelo dia real e usa Hoje somente nas mensagens de hoje', as
   expect(log.getByText(`${anterior.toLocaleDateString('pt-BR')} · mesma conversa do dev.kit`)).toBeInTheDocument();
   expect(log.getAllByText('Hoje · mesma conversa do dev.kit')).toHaveLength(1);
   expect(log.getAllByRole('article')).toHaveLength(2);
+});
+
+function fala(autor: FalaRemota['autor'], texto: string, ditaEm: Date, extra: Partial<FalaRemota> = {}): FalaRemota {
+  return { id: crypto.randomUUID().replaceAll('-', ''), maquinaId: 'notebook', autor, origem: 'desktop', texto, comandoId: null,
+    ditaEm: ditaEm.toISOString(), recebidaEm: ditaEm.toISOString(), ...extra };
+}
+
+it('mostra as falas digitadas no desktop e a resposta do Orquestrador, na ordem em que foram ditas (item 8 do v3)', async () => {
+  const site = comando('respondido');
+  const antes = new Date(Date.now() - 120000);
+  const depois = new Date(Date.now() - 60000);
+  preparar({ comandos: [site], respostas: [], ultimoEvento: 10, falas: [
+    fala('orquestrador', 'Resposta do Orquestrador no desktop', depois),
+    fala('dev', 'Fala digitada no dev.kit', antes),
+    // A fala de um comando do site já aparece como o próprio comando: não repete.
+    fala('dev', site.texto, new Date(), { origem: 'remoto', comandoId: site.id }),
+  ] });
+  await abrir();
+  const artigos = within(screen.getByRole('log')).getAllByRole('article');
+  expect(artigos).toHaveLength(3);
+  expect(artigos[0]).toHaveTextContent('Você · no dev.kit');
+  expect(artigos[0]).toHaveTextContent('Fala digitada no dev.kit');
+  expect(artigos[0]).toHaveClass('br-voce');
+  expect(artigos[1]).toHaveTextContent('Orquestrador · dev.kit');
+  expect(artigos[1]).toHaveTextContent('Resposta do Orquestrador no desktop');
+  expect(artigos[1]).not.toHaveClass('br-voce');
+  expect(artigos[2]).toHaveTextContent('Você · remoto · navegador');
+});
+
+it('a fala do desktop que chega pelo SSE entra no chat sem recarregar, uma vez só', async () => {
+  preparar();
+  const nova = fala('dev', 'Digitada agora no desktop', new Date());
+  const evento: EventoDaConversa = { id: 11, tipo: 'fala', maquinaId: 'notebook', comando: null, resposta: null, em: nova.recebidaEm, fala: nova };
+  servidor.use(http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse(
+    `id: 11\nevent: fala\ndata: ${JSON.stringify(evento)}\n\nid: 11\nevent: fala\ndata: ${JSON.stringify(evento)}\n\n`,
+    { headers: { 'Content-Type': 'text/event-stream' } })));
+  await abrir();
+  expect(await screen.findByText('Digitada agora no desktop')).toBeInTheDocument();
+  expect(within(screen.getByRole('log')).getAllByRole('article')).toHaveLength(1);
+  expect(screen.getByText(/Você · no dev.kit/)).toBeInTheDocument();
 });
 
 it('preserva ID e rascunho após falha de rede e não envia duas vezes por toque duplo', async () => {

@@ -4,7 +4,7 @@ import { lerEventosDaConversa } from '../api/eventosDaConversa';
 import type { ComandoNovo, ComandoRemoto, ConversaRemota } from '../api/remoto';
 import { useSessao } from '../sessao';
 
-const vazia: ConversaRemota = { comandos: [], respostas: [], ultimoEvento: 0 };
+const vazia: ConversaRemota = { comandos: [], respostas: [], ultimoEvento: 0, falas: [] };
 function juntar<T extends { id: string }>(lista: T[], item: T) {
   return [...lista.filter(x => x.id !== item.id), item];
 }
@@ -39,7 +39,7 @@ export function useConversaRemota(maquina: string) {
         if (!inicializada) {
           const historico = await api.conversaRemota(sessao!.token, maquina, signal);
           if (signal.aborted) return;
-          setConversa(historico); cursor = historico.ultimoEvento; inicializada = true;
+          setConversa({ ...historico, falas: historico.falas ?? [] }); cursor = historico.ultimoEvento; inicializada = true;
           setCarregando(false);
         }
         const resposta = await api.eventosDaConversa(sessao!.token, maquina, cursor, signal);
@@ -53,6 +53,8 @@ export function useConversaRemota(maquina: string) {
           setConversa(atual => ({
             comandos: evento.comando ? juntar(atual.comandos, evento.comando) : atual.comandos,
             respostas: evento.resposta ? juntar(atual.respostas, evento.resposta) : atual.respostas,
+            // A fala do chat do dev.kit (o que o dev digitou no desktop e a resposta do Orquestrador a ela).
+            falas: evento.fala ? juntar(atual.falas ?? [], evento.fala) : atual.falas,
             ultimoEvento: cursor,
           }));
         });
