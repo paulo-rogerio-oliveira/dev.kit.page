@@ -285,7 +285,7 @@ regras em `api/src/DevKitPage.Core/CatalogoDoRemoto.cs`.
   "repositorios": [ { "nome": "github.com/empresa/dev.kit.page", "branchPadrao": "main" } ],
   "fluxos": [ { "nome": "Tarefa avulsa", "descricao": "Implementação avaliada" } ],
   "projetos": [ { "slug": "remote-control-v3", "nome": "remote-control-v3", "situacao": "aprovado" } ],
-  "designs": [ { "nome": "dev.kit.page · board", "telas": 3 } ] }
+  "designs": [ { "nome": "dev.kit.page · board", "telas": 3, "repositorio": "github.com/empresa/dev.kit.page" } ] }
 ```
 
 - Resposta **200** `{ "maquinaId", "recebidoEm", "aplicado" }`; como no retrato, o catálogo gerado antes do gravado é aceito
@@ -297,6 +297,31 @@ regras em `api/src/DevKitPage.Core/CatalogoDoRemoto.cs`.
 - **Compatibilidade:** o dev.kit antigo não conhece o tipo `catalogo` e o recusa (`recusado`, "não é conhecido por esta
   versão"); o site guarda o último catálogo que tiver e deixa o texto livre nos atalhos. A API antiga recusa o tipo com
   **400** e não anuncia o recurso: o dev.kit novo não publica nela.
+- O `repositorio` do design (campo novo, opcional) é o mesmo nome dos `repositorios`: o site abre por ele o projeto de design
+  compartilhado de mesma chave. O dev.kit antigo não o manda.
+
+### 5.1 Criar projeto e projeto de design pelo site (remote-control-v3, item 4)
+
+O Board do site cria um projeto do Orquestrador e um projeto de design na máquina por dois comandos da mesma fila. O
+**formulário vai em JSON no `texto`**, conferido pela API antes da fila (400 com o campo); o dev.kit o executa pelo mesmo
+caminho do `devcli` e responde `concluido` (com o slug ou o projeto de design) ou `recusado` (com o motivo). Tipos em
+`api/src/DevKitPage.Contracts/V1/CriacaoRemotaV1.cs`; regras em `api/src/DevKitPage.Core/CriacaoRemota.cs`.
+
+| Tipo | Formulário (`texto`) | No dev.kit |
+|---|---|---|
+| `projeto` | `{ "nome", "repositorios": [nomes do catálogo], "definicao"?, "nivel"? }` | `devcli projeto --criar`: nasce em **rascunho**; o plano, a aprovação e o disparo seguem no dev.kit |
+| `design` | `{ "repositorio": nome do catálogo }` | `devcli design --repo`: abre (ou cria) o projeto do repositório, sem gravar nem enviar versão |
+
+- Os repositórios são **nomes do catálogo** (`repositorios[].nome`): o dev.kit só aceita os que conhece e recusa o resto.
+- Tetos: nome e repositório até 200 caracteres; até 20 repositórios; definição até 3000; `nivel` é `usuario`, `time` ou
+  `empresa` (vazio é o padrão do `devcli`). Contam no `Remoto:ComandosPorHora`, como a mensagem.
+- Depois de criar, o dev.kit republica o catálogo com o `comandoId` da criação: o site relê a lista sem outro handshake.
+- **O site não aprova nem dispara projeto**: não há comando para isso.
+- **Teto de versões do design:** a criação não grava versão, então não consome o teto do plano (`GET /api/design/uso`); o
+  formulário do site mostra o uso e avisa quando o teto está cheio, porque as versões seguintes do projeto serão recusadas
+  no envio (413).
+- **Compatibilidade:** o dev.kit antigo não conhece `projeto` nem `design` e os recusa (`recusado`, "não é conhecido por esta
+  versão do dev.kit"); a API antiga recusa o tipo com **400**. O site mostra as duas recusas no formulário.
 
 ## Retenção
 

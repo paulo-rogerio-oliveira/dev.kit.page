@@ -42,11 +42,15 @@ export function Projetos() {
   }, [sessao, sair]);
   useEffect(() => { void carregar(); return () => { sequencia.current++; }; }, [carregar]);
   const visiveis = projetos.filter(p => (!nivel || p.nivel === nivel) && (!situacao || p.situacao === situacao));
-  const escolhido = visiveis.find(p => String(p.id) === consulta.get('projeto')) ?? visiveis[0];
+  // O Board remoto (item 4 do remote-control-v3) abre o projeto pelo slug, que é o que a máquina conhece.
+  const slug = consulta.get('slug');
+  const peloSlug = slug ? visiveis.find(p => p.slug === slug) : undefined;
+  const escolhido = visiveis.find(p => String(p.id) === consulta.get('projeto')) ?? peloSlug ?? visiveis[0];
   function filtrar(chave: string, valor: string) {
     const proxima = new URLSearchParams(consulta);
     if (valor) proxima.set(chave, valor); else proxima.delete(chave);
     if (chave !== 'projeto') proxima.delete('projeto');
+    proxima.delete('slug');
     setConsulta(proxima);
   }
   return <div className="pagina">
@@ -67,6 +71,8 @@ export function Projetos() {
       </div>
       {erro && <div role="alert" className="erro">{erro} <button className="botao botao-fantasma" onClick={() => void carregar()}>Tentar novamente</button></div>}
       {carregando && <p role="status">Carregando projetos…</p>}
+      {!carregando && !erro && slug && !peloSlug && !consulta.get('projeto') && <p role="status" className="projetos-nota">
+        O projeto {slug} ainda não chegou ao site: no dev.kit, abra Projetos e use Sincronizar (o criado pelo Board vai sozinho quando há login).</p>}
       {!carregando && !erro && visiveis.length === 0 && <p>Nenhum projeto sincronizado com esses filtros. No dev.kit, abra Projetos e use Sincronizar.</p>}
       {!carregando && !erro && escolhido && <div className="projetos-board">
         <aside className="projetos-lista" aria-label="Projetos sincronizados">

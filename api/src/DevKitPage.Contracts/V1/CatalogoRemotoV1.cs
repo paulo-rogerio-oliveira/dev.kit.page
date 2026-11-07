@@ -27,7 +27,11 @@ public sealed record FluxoNoCatalogoV1(string Nome, string? Descricao = null);
 public sealed record ProjetoNoCatalogoV1(string Slug, string Nome, string? Situacao = null);
 
 /// <summary>Um projeto de design (a aba Design do dev.kit): o nome e quantas telas tem.</summary>
-public sealed record DesignNoCatalogoV1(string Nome, int Telas = 0);
+/// <param name="Repositorio">
+/// (campo novo, item 4) O repositório do projeto, pelo mesmo nome de <see cref="RepositorioNoCatalogoV1.Nome"/>: o site abre por
+/// ele o projeto de design compartilhado (<see cref="ProjetoDeDesignV1.Chave"/>). O dev.kit antigo não o manda.
+/// </param>
+public sealed record DesignNoCatalogoV1(string Nome, int Telas = 0, string? Repositorio = null);
 
 /// <summary>A resposta do envio do catálogo. <see cref="Aplicado"/> falso é o catálogo mais antigo que o gravado: aceito, mas descartado.</summary>
 public sealed record CatalogoRecebidoV1(string MaquinaId, DateTimeOffset RecebidoEm, bool Aplicado);

@@ -279,7 +279,8 @@ describe('Board remoto', () => {
     expect(chat).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(board);
     expect(board).toHaveAttribute('aria-selected', 'true');
-    expect(screen.queryByRole('link', { name: /Projetos|Fluxos|Infra/ })).not.toBeInTheDocument();
+    // A navegação continua só Chat e Board: o cabeçalho não leva a outras páginas (os projetos abrem pelo painel, item 4).
+    expect(within(document.querySelector('.br-top') as HTMLElement).queryAllByRole('link')).toHaveLength(0);
   });
 
   it('mostra estado sem máquinas e permite recuperar uma falha', async () => {
@@ -429,6 +430,123 @@ describe('Board remoto', () => {
       expect(painel.getByText('Notificação inválida. Consulte as pendências do Board.')).toBeInTheDocument();
       // O controle do push saiu da faixa do topo e mora no painel.
       expect(painel.getByText('Notificações neste dispositivo')).toBeInTheDocument();
+    });
+  });
+
+  describe('projetos e projetos de design pelo site (item 4 do remote-control-v3)', () => {
+    const catalogo = () => ({
+      maquinaId: 'notebook', recebidoEm: new Date().toISOString(),
+      catalogo: { contrato: 1, maquinaId: 'notebook', geradoEm: new Date().toISOString(), comandoId: null, workItems: [], fluxos: [],
+        repositorios: [{ nome: 'github.com/acme/portal' }, { nome: 'github.com/acme/api' }], projetos: [],
+        designs: [{ nome: 'github.com/acme/portal · main', telas: 2, repositorio: 'github.com/acme/portal' }] },
+    });
+    const unico = <T,>(lista: T[]) => { expect(lista).toHaveLength(1); return lista[0]; };
+    /**
+     * A fila e o dev.kit: o POST entra na-fila, e o desfecho que o teste escolhe (o concluido, ou a recusa) chega pelo SSE da
+     * conversa — a resposta do dev.kit e o comando no estado final, como a API os publica.
+     */
+    function comFila(desfecho: (comando: { id: string; tipo: string; texto: string }) => { estado: string; texto: string }) {
+      const enviados: Array<{ id: string; tipo: string; texto: string }> = [];
+      const eventos: Array<{ id: number; tipo: string; maquinaId: string; comando: unknown; resposta: unknown; em: string }> = [];
+      servidor.use(
+        http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogo())),
+        http.get(`${API}/api/design/uso`, () => HttpResponse.json({ versoes: 500, tetoDeVersoes: 500, bytes: 0, tetoDeBytes: 1, plano: 'Empresarial' })),
+        http.get(`${API}/api/remoto/conversa/eventos`, ({ request }) => {
+          const desde = Number(request.headers.get('Last-Event-ID') ?? 0);
+          const corpo = eventos.filter(e => e.id > desde).map(e => `id: ${e.id}\nevent: ${e.tipo}\ndata: ${JSON.stringify(e)}\n\n`).join('');
+          return new HttpResponse(corpo, { headers: { 'Content-Type': 'text/event-stream' } });
+        }),
+        http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+          const pedido = await request.json() as { id: string; tipo: string; texto: string };
+          const base = { ...pedido, maquinaId: 'notebook', dispositivo: 'navegador', criadoEm: new Date().toISOString(),
+            expiraEm: new Date(Date.now() + 900_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '' };
+          if (pedido.tipo === 'catalogo') return HttpResponse.json({ ...base, estado: 'na-fila' }, { status: 202 });
+          enviados.push(pedido);
+          const fim = desfecho(pedido);
+          const em = new Date().toISOString();
+          eventos.push({ id: eventos.length + 1, tipo: 'resposta', maquinaId: 'notebook', comando: null, em, resposta: { id: `r-${pedido.id}`, maquinaId: 'notebook',
+            comandoId: pedido.id, tipo: fim.estado === 'concluido' ? 'concluido' : 'recusado', texto: fim.texto, geradaEm: em, recebidaEm: em } });
+          eventos.push({ id: eventos.length + 1, tipo: 'comando', maquinaId: 'notebook', resposta: null, em, comando: { ...base, estado: fim.estado, concluidoEm: em } });
+          return HttpResponse.json({ ...base, estado: 'na-fila' }, { status: 202 });
+        }),
+      );
+      return enviados;
+    }
+
+    it('lista projetos e designs com o Abrir de cada um, sem escrever nada sem clique', async () => {
+      responder(); comFila(() => ({ estado: 'concluido', texto: '' }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      expect(await painel.findByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto');
+      expect(await painel.findByRole('link', { name: 'Abrir o design de github.com/acme/portal · main' }))
+        .toHaveAttribute('href', '/design?repositorio=github.com%2Facme%2Fportal');
+      expect(painel.getAllByRole('link', { name: 'Ver todos' }).map(l => l.getAttribute('href'))).toEqual(['/projetos', '/design']);
+      expect(painel.getByText('2 telas')).toBeInTheDocument();
+    });
+
+    it('cria o projeto pelo formulário com os repositórios do catálogo e mostra o desfecho do dev.kit, sem aprovar nem disparar', async () => {
+      responder();
+      const enviados = comFila(c => ({ estado: 'concluido', texto: `Projeto '${JSON.parse(c.texto).nome}' criado (portal-de-pedidos, branch feature/dev/projeto-portal-de-pedidos), em rascunho: o plano, a aprovação e o disparo seguem no dev.kit.` }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      await userEvent.click(await painel.findByRole('button', { name: '+ Novo projeto' }));
+      const dialogo = within(screen.getByRole('dialog', { name: 'Novo projeto no dev.kit' }));
+      const criar = dialogo.getByRole('button', { name: 'Criar no dev.kit' });
+      expect(criar).toBeDisabled();
+      await userEvent.type(dialogo.getByLabelText('Nome'), 'Portal de pedidos');
+      await userEvent.click(await dialogo.findByRole('checkbox', { name: 'github.com/acme/api' }));
+      await userEvent.type(dialogo.getByLabelText('Definição (opcional)'), 'Pedidos no portal');
+      expect(criar).toBeEnabled();
+      await userEvent.click(criar);
+
+      const pedido = unico(enviados);
+      expect(pedido.tipo).toBe('projeto');
+      expect(JSON.parse(pedido.texto)).toEqual({ nome: 'Portal de pedidos', repositorios: ['github.com/acme/api'], definicao: 'Pedidos no portal', nivel: 'usuario' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // O desfecho é o do dev.kit, no painel; o chat não o repete.
+      const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Novo projeto'), { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent("Projeto 'Portal de pedidos' criado"), { timeout: 6000 });
+      expect(within(screen.getByRole('log', { name: 'Conversa com o Orquestrador' })).queryByText(/Portal de pedidos/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Aprovar|Disparar/ })).not.toBeInTheDocument();
+    }, 15_000);
+
+    it('o design mostra o teto de versões cheio e a recusa do dev.kit antigo volta com o motivo', async () => {
+      responder();
+      const enviados = comFila(() => ({ estado: 'recusado', texto: "Não executado: o tipo de comando 'design' não é conhecido por esta versão do dev.kit." }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      await userEvent.click(await painel.findByRole('button', { name: '+ Novo design' }));
+      const dialogo = within(screen.getByRole('dialog', { name: 'Novo projeto de design' }));
+      // O repositório que ainda não tem design vem escolhido; o teto cheio é avisado (regra de impacto #25).
+      expect(dialogo.getByLabelText('Repositório (catálogo da máquina)')).toHaveValue('github.com/acme/api');
+      expect(await dialogo.findByRole('alert')).toHaveTextContent('500 de 500 versões de design');
+      await userEvent.click(dialogo.getByRole('button', { name: 'Criar no dev.kit' }));
+
+      expect(JSON.parse(unico(enviados).texto)).toEqual({ repositorio: 'github.com/acme/api' });
+      const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Novo design'), { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent("o tipo de comando 'design' não é conhecido por esta versão do dev.kit"), { timeout: 6000 });
+      expect(within(desfecho).getByText(/Novo design · .* · recusado/)).toBeInTheDocument();
+    }, 15_000);
+
+    it('a API que não conhece o tipo recusa e o formulário mostra o motivo, sem fechar', async () => {
+      responder(); comFila(() => ({ estado: 'concluido', texto: '' }));
+      servidor.use(http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+        const pedido = await request.json() as { tipo: string };
+        return pedido.tipo === 'catalogo'
+          ? HttpResponse.json({ ...pedido, estado: 'na-fila', criadoEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 900_000).toISOString() }, { status: 202 })
+          : HttpResponse.json({ detail: 'O tipo é um de: mensagem, ligar, reiniciar, catalogo.' }, { status: 400 });
+      }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      await userEvent.click(await painel.findByRole('button', { name: '+ Novo design' }));
+      const dialogo = within(screen.getByRole('dialog', { name: 'Novo projeto de design' }));
+      await userEvent.click(dialogo.getByRole('button', { name: 'Criar no dev.kit' }));
+      expect(await dialogo.findByText(/Não enviado\. O tipo é um de: mensagem, ligar, reiniciar, catalogo/)).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Novo projeto de design' })).toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 

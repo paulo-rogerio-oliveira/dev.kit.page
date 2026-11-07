@@ -47,6 +47,21 @@ describe('Projetos sincronizados', () => {
     expect(screen.getByLabelText('Situação do projeto')).toHaveValue('aprovado');
   });
 
+  it('o Board remoto abre o projeto pelo slug e avisa quando ele ainda não chegou ao site', async () => {
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto, { ...projeto, id: 8, slug: 'outro', nome: 'Outro' }])));
+    renderizar('/projetos?slug=outro', tokenDoDev());
+    const detalhe = await screen.findByRole('article', { name: 'Detalhe do projeto' });
+    expect(within(detalhe).getByRole('heading', { name: 'Outro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Outro/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('o slug que o site ainda não tem cai no primeiro projeto com o aviso de sincronizar', async () => {
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])));
+    renderizar('/projetos?slug=criado-agora', tokenDoDev());
+    expect(await screen.findByText(/O projeto criado-agora ainda não chegou ao site/)).toBeInTheDocument();
+    expect(within(screen.getByRole('article', { name: 'Detalhe do projeto' })).getByRole('heading', { name: 'Portal' })).toBeInTheDocument();
+  });
+
   it('mostra estado vazio e permite repetir uma consulta que falhou', async () => {
     servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json({ detail: 'Sem conexão' }, { status: 503 })));
     renderizar('/projetos', tokenDoDev());

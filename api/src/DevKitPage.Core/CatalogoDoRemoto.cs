@@ -90,8 +90,8 @@ public static class RegrasDoCatalogo
         }
         foreach (var (d, i) in (catalogo.Designs ?? []).Select((d, i) => (d, i)))
         {
-            if (d is null || Invalido(d.Nome) || d.Telas < 0)
-                return $"designs[{i}]: informe o nome (até {RemotoV1.TamanhoMaximoDoNome} caracteres) e as telas, não negativas.";
+            if (d is null || Invalido(d.Nome) || d.Telas < 0 || Longo(d.Repositorio))
+                return $"designs[{i}]: informe o nome e o repositório (até {RemotoV1.TamanhoMaximoDoNome} caracteres) e as telas, não negativas.";
         }
         return string.Empty;
     }
@@ -127,7 +127,10 @@ public static class RegrasDoCatalogo
             yield return ($"projetos[{i}].situacao", p.Situacao);
         }
         foreach (var (d, i) in (c.Designs ?? []).Select((d, i) => (d, i)))
+        {
             yield return ($"designs[{i}].nome", d.Nome);
+            yield return ($"designs[{i}].repositorio", d.Repositorio);
+        }
     }
 
     private static bool Invalido(string? texto) => string.IsNullOrWhiteSpace(texto) || texto.Length > RemotoV1.TamanhoMaximoDoNome;
