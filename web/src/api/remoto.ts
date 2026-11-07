@@ -64,9 +64,16 @@ export interface ComandoNovo {
 export interface RespostaRemota {
   id: string; maquinaId: string; comandoId: string | null; tipo: string; texto: string; geradaEm: string; recebidaEm: string;
 }
+/** A fala do chat do dev.kit (o recurso `falas-do-desktop`): quem falou e onde a fala nasceu. */
+export interface FalaRemota {
+  id: string; maquinaId: string; autor: 'dev' | 'orquestrador' | string; origem: 'desktop' | 'remoto' | string; texto: string;
+  comandoId: string | null; ditaEm: string; recebidaEm: string;
+}
 export interface ConversaRemota {
-  comandos: ComandoRemoto[]; respostas: RespostaRemota[]; ultimoEvento: number;
+  /** `falas` é campo novo do contrato v1: a API antiga não o manda. */
+  comandos: ComandoRemoto[]; respostas: RespostaRemota[]; ultimoEvento: number; falas?: FalaRemota[] | null;
 }
 export interface EventoDaConversa {
   id: number; tipo: string; maquinaId: string; comando: ComandoRemoto | null; resposta: RespostaRemota | null; em: string;
+  fala?: FalaRemota | null;
 }
