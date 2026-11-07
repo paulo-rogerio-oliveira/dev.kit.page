@@ -88,12 +88,14 @@ describe('Board remoto', () => {
     servidor.events.on('request:start', registrar);
     try {
       renderizar('/board', tokenDoDev());
-      expect(await screen.findAllByText('Integrar o item 20 no projeto?')).toHaveLength(2);
+      // A decisão aparece só no painel (remote-control-v3, item 3): o chat não renderiza aprovação.
+      expect(await screen.findAllByText('Integrar o item 20 no projeto?')).toHaveLength(1);
+      expect(within(screen.getByRole('region', { name: 'Orquestrador' })).queryByText('Integrar o item 20 no projeto?')).not.toBeInTheDocument();
       // No painel o cartão nasce recolhido: as opções aparecem depois do Ver detalhes.
-      expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(1);
+      expect(screen.queryAllByRole('button', { name: 'Integrar' })).toHaveLength(0);
       await userEvent.click(within(screen.getByRole('complementary', { name: 'Board' })).getByRole('button', { name: 'Ver detalhes' }));
-      expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(2);
-      expect(screen.getByText('Decisão comum')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(1);
+      expect(within(screen.getByRole('complementary', { name: 'Board' })).getByText('Pergunta')).toBeInTheDocument();
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
       expect(screen.getByText('Item 20 · layout do plano')).toBeInTheDocument();
       expect(screen.getByText(/Implementação · codex/)).toBeInTheDocument();
@@ -198,7 +200,10 @@ describe('Board remoto', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'dev.kit.page');
     await userEvent.type(screen.getByRole('textbox', { name: 'Branch existente' }), 'feature/item-9');
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Revisar e aprovar' }));
+    // A decisão fica só no painel de decisões: o chat não tem cartão de aprovação.
+    const decidir = await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' });
+    expect(screen.queryByRole('button', { name: 'Revisar e aprovar' })).not.toBeInTheDocument();
+    await userEvent.click(decidir);
     expect(screen.queryByRole('textbox', { name: 'Mensagem ao Orquestrador' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Voltar ao Board/ }));
     expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBe(caixa);
@@ -256,7 +261,7 @@ describe('Board remoto', () => {
     expect(screen.getByLabelText('Máquina')).toHaveValue('outra');
     expect(board.getByRole('button', { name: 'Aguardar' })).toBeEnabled();
     expect(board.queryByText(/Resposta: Aguardar registrada/)).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Orquestrador' })).getByRole('button', { name: 'Aguardar' })).toBeEnabled();
+    expect(within(screen.getByRole('region', { name: 'Orquestrador' })).queryByRole('button', { name: 'Aguardar' })).not.toBeInTheDocument();
   });
 
   it('navega entre Chat e Board mantendo somente essas duas abas', async () => {

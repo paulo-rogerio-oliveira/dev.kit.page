@@ -21,8 +21,12 @@ export function BotaoDeDetalhes({ aberto, alternar, controla, principal = false 
   return <button className={`br-btn${principal && !aberto ? ' br-primary' : ''}`} aria-expanded={aberto} aria-controls={controla} onClick={alternar}>{aberto ? 'Ocultar detalhes' : 'Ver detalhes'}</button>;
 }
 
-export function CartaoDaDecisao({ decisao: d, compacta = false, destacada = false, desabilitado, decidir, revisar }: {
-  decisao: DecisaoPendente; compacta?: boolean; destacada?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+/**
+ * O cartão da decisão no PAINEL de decisões, o único lugar dela (remote-control-v3, item 3: o chat não renderiza aprovação).
+ * A aprovação abre a revisão, com o segundo fator e o SHA conferido; a pergunta responde com a opção, auditada.
+ */
+export function CartaoDaDecisao({ decisao: d, destacada = false, desabilitado, decidir, revisar }: {
+  decisao: DecisaoPendente; destacada?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
@@ -31,7 +35,7 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, destacada = fals
   const [aberto, setAberto] = useState(destacada);
   useEffect(() => { if (destacada) setAberto(true); }, [destacada]);
   const p = d.pendencia;
-  const idDoCartao = `${compacta ? 'board' : 'chat'}-decisao-${encodeURIComponent(p.id)}`;
+  const idDoCartao = `board-decisao-${encodeURIComponent(p.id)}`;
   async function responder(opcao: string) {
     if (enviando) return;
     setEnviando(true); setErro('');
@@ -45,45 +49,26 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, destacada = fals
     ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
     : p.jaTentei;
   const pendente = !registro || registro.estado === 'vencida';
-  if (compacta) {
-    const detalhes = `${idDoCartao}-detalhes`;
-    return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card br-need br-compacta" aria-label={p.titulo}>
-      <div className="br-decisao-titulo"><b>{p.titulo}</b></div>
-      <OrigemDaPendencia pendencia={p} />
-      {p.tipo === 'aprovacao' && resumo && <p>{resumo}</p>}
-      {registro && <RegistroDaDecisao resposta={registro} />}
-      <div id={detalhes} className="br-detalhes">{aberto && <>
-        {p.pergunta && <p>{p.pergunta}</p>}
-        {p.tipo !== 'aprovacao' && resumo && <p>{resumo}</p>}
-        {pendente && <>
-          {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
-          {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
-          <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
-          {d.bloqueio && <p role="status">{d.bloqueio}</p>}
-        </>}
-      </>}</div>
-      <div className="br-row">
-        <BotaoDeDetalhes aberto={aberto} alternar={() => setAberto(a => !a)} controla={detalhes} principal={p.tipo !== 'aprovacao' && pendente} />
-        {p.tipo === 'aprovacao' && pendente && <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>}
-      </div>
-      {erro && <p role="alert">{erro}</p>}
-    </section>;
-  }
-  return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card" aria-label={p.titulo}>
-    <div className="br-decisao-titulo"><b>{p.titulo}</b>{p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
-    {p.pergunta && <p><strong>Pergunta: </strong>{p.pergunta}</p>}
-    {resumo && <p className={p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
+  const detalhes = `${idDoCartao}-detalhes`;
+  return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card br-need br-compacta" aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b></div>
+    <OrigemDaPendencia pendencia={p} />
+    {p.tipo === 'aprovacao' && resumo && <p>{resumo}</p>}
     {registro && <RegistroDaDecisao resposta={registro} />}
-    {pendente && <>
-      {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
-      {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
-      {p.tipo === 'aprovacao' && <div className="br-row">
-        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Revisar e aprovar</button>
-        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Pedir ajuste</button>
-      </div>}
-      <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
-      {d.bloqueio && <p role="status">{d.bloqueio}</p>}
-    </>}
+    <div id={detalhes} className="br-detalhes">{aberto && <>
+      {p.pergunta && <p>{p.pergunta}</p>}
+      {p.tipo !== 'aprovacao' && resumo && <p>{resumo}</p>}
+      {pendente && <>
+        {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
+        {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
+        <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
+        {d.bloqueio && <p role="status">{d.bloqueio}</p>}
+      </>}
+    </>}</div>
+    <div className="br-row">
+      <BotaoDeDetalhes aberto={aberto} alternar={() => setAberto(a => !a)} controla={detalhes} principal={p.tipo !== 'aprovacao' && pendente} />
+      {p.tipo === 'aprovacao' && pendente && <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>}
+    </div>
     {erro && <p role="alert">{erro}</p>}
   </section>;
 }
