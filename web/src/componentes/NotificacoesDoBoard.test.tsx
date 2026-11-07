@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { NotificacoesDoBoard } from './NotificacoesDoBoard';
+import { AvisosDoBoard, duracaoDoAviso, HistoricoDeAvisos, NotificacoesDoBoard, pendenciasNovas, useAvisosDoBoard } from './NotificacoesDoBoard';
 import { CHAVE_DO_PUSH, cancelarPushAoSair } from '../boardPush';
 import { API, servidor } from '../testes/servidor';
 
@@ -91,4 +91,97 @@ it('navegador sem suporte explica a limitação e não solicita permissão', asy
   await userEvent.click(screen.getByText('Notificações neste dispositivo'));
   expect(await screen.findByText(/Notificações indisponíveis neste navegador/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ativar notificações' })).toBeDisabled(); expect(permissao).not.toHaveBeenCalled();
+});
+
+describe('aviso do site com timer (US #858)', () => {
+  // Um Board mínimo: dispara avisos, mostra os da tela e o histórico do painel.
+  function Painel() {
+    const { avisos, avisar, encerrar } = useAvisosDoBoard();
+    return <>
+      <button onClick={() => avisar('Nova pendência: Integrar?', 'pendencia:p1')}>pendência</button>
+      <button onClick={() => avisar('Decisão aberta a partir da notificação.')}>outro</button>
+      <AvisosDoBoard avisos={avisos} encerrar={encerrar} />
+      <HistoricoDeAvisos avisos={avisos} />
+    </>;
+  }
+  const naTela = () => document.querySelector<HTMLElement>('.br-avisos')!;
+  const avancar = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('some sozinho depois do tempo definido e continua listado em Avisos', () => {
+    render(<Painel />);
+    fireEvent.click(screen.getByRole('button', { name: 'outro' }));
+    expect(within(naTela()).getByText('Decisão aberta a partir da notificação.')).toBeInTheDocument();
+    avancar(duracaoDoAviso - 1);
+    expect(within(naTela()).queryByText('Decisão aberta a partir da notificação.')).toBeInTheDocument();
+    avancar(1);
+    expect(naTela()).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole('button', { name: 'Avisos · 1' }));
+    expect(screen.getByText('Decisão aberta a partir da notificação.')).toBeInTheDocument();
+  });
+
+  it('pausa com o mouse e com o foco, e retoma o tempo que faltava', () => {
+    render(<Painel />);
+    fireEvent.click(screen.getByRole('button', { name: 'outro' }));
+    avancar(4_000);
+    fireEvent.mouseEnter(naTela());
+    avancar(30_000);
+    expect(within(naTela()).getByText('Decisão aberta a partir da notificação.')).toBeInTheDocument();
+    fireEvent.mouseLeave(naTela());
+    act(() => screen.getByRole('button', { name: 'Fechar aviso' }).focus());
+    avancar(30_000);
+    expect(within(naTela()).getByText('Decisão aberta a partir da notificação.')).toBeInTheDocument();
+    act(() => screen.getByRole('button', { name: 'outro' }).focus());
+    avancar(1_999);
+    expect(naTela()).not.toBeEmptyDOMElement();
+    avancar(1);
+    expect(naTela()).toBeEmptyDOMElement();
+  });
+
+  it('agrupa os avisos iguais num só, com contador, e recomeça o tempo', () => {
+    render(<Painel />);
+    fireEvent.click(screen.getByRole('button', { name: 'pendência' }));
+    fireEvent.click(screen.getByRole('button', { name: 'pendência' }));
+    expect(within(naTela()).getAllByText('Nova pendência: Integrar?')).toHaveLength(1);
+    expect(within(naTela()).getByText('×2')).toBeInTheDocument();
+    avancar(4_000);
+    fireEvent.click(screen.getByRole('button', { name: 'pendência' }));
+    expect(within(naTela()).getByText('×3')).toBeInTheDocument();
+    avancar(4_000);
+    expect(within(naTela()).getByText('Nova pendência: Integrar?')).toBeInTheDocument();
+    avancar(2_000);
+    expect(naTela()).toBeEmptyDOMElement();
+    fireEvent.click(screen.getByRole('button', { name: 'Avisos · 1' }));
+    expect(screen.getByText('Nova pendência: Integrar? ×3')).toBeInTheDocument();
+  });
+
+  it('o × fecha o aviso na hora, sem tirá-lo do histórico', () => {
+    render(<Painel />);
+    fireEvent.click(screen.getByRole('button', { name: 'outro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'pendência' }));
+    expect(screen.getAllByRole('button', { name: 'Fechar aviso' })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Fechar aviso' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Fechar aviso' })).toHaveLength(1);
+    const historico = screen.getByRole('button', { name: 'Avisos · 2' });
+    expect(historico).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(historico);
+    expect(historico).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('com menos movimento pedido pelo sistema, o aviso aparece sem animação', () => {
+    vi.stubGlobal('matchMedia', (consulta: string) => ({ matches: consulta === '(prefers-reduced-motion: reduce)', addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    render(<Painel />);
+    fireEvent.click(screen.getByRole('button', { name: 'outro' }));
+    expect(naTela()).not.toHaveClass('br-avisos-animados');
+    expect(naTela().querySelector('.br-aviso-tempo')).toBeNull();
+  });
+
+  it('avisa só as pendências que chegaram depois do primeiro retrato', () => {
+    const p = (id: string) => ({ id, tipo: 'pergunta', titulo: id });
+    expect(pendenciasNovas(null, [p('a'), p('b')])).toEqual([]);
+    expect(pendenciasNovas(new Set(['a']), [p('a'), p('b')]).map(x => x.id)).toEqual(['b']);
+    expect(pendenciasNovas(new Set(['a', 'b']), [p('b')])).toEqual([]);
+  });
 });

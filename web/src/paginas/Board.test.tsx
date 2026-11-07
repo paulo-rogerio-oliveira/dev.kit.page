@@ -63,6 +63,9 @@ describe('Board remoto', () => {
     await waitFor(() => expect(screen.getByLabelText('Máquina')).toHaveValue('outra'));
     await waitFor(() => expect(document.getElementById('board-decisao-p1')).toHaveFocus());
     expect(await screen.findByText(/Decisão aberta a partir da notificação/)).toBeInTheDocument();
+    // O cartão apontado pela notificação já vem com os detalhes abertos.
+    expect(within(document.getElementById('board-decisao-p1')!).getByRole('button', { name: 'Ocultar detalhes' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(document.getElementById('board-decisao-p1')!).getByRole('button', { name: 'Integrar' })).toBeInTheDocument();
   });
 
   it('notificação resolvida ou de outra conta informa indisponibilidade sem abrir aprovação', async () => {
@@ -86,6 +89,9 @@ describe('Board remoto', () => {
     try {
       renderizar('/board', tokenDoDev());
       expect(await screen.findAllByText('Integrar o item 20 no projeto?')).toHaveLength(2);
+      // No painel o cartão nasce recolhido: as opções aparecem depois do Ver detalhes.
+      expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(1);
+      await userEvent.click(within(screen.getByRole('complementary', { name: 'Board' })).getByRole('button', { name: 'Ver detalhes' }));
       expect(screen.getAllByRole('button', { name: 'Integrar' })).toHaveLength(2);
       expect(screen.getByText('Decisão comum')).toBeInTheDocument();
       expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '1');
@@ -118,7 +124,8 @@ describe('Board remoto', () => {
     }));
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
-    await userEvent.click(await board.findByRole('button', { name: 'Aguardar' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Ver detalhes' }));
+    await userEvent.click(board.getByRole('button', { name: 'Aguardar' }));
     expect(recebido).toEqual({ snapshotId: 'a'.repeat(64), acao: 'responder', opcao: 'Aguardar' });
     expect(await board.findByRole('status')).toHaveTextContent('Resposta: Aguardar registrada');
     expect(board.queryByRole('button', { name: 'Aguardar' })).not.toBeInTheDocument();
@@ -236,9 +243,12 @@ describe('Board remoto', () => {
     }));
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
-    await userEvent.click(await board.findByRole('button', { name: 'Aguardar' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Ver detalhes' }));
+    await userEvent.click(board.getByRole('button', { name: 'Aguardar' }));
     await waitFor(() => expect(inicio).toBe(true));
     await userEvent.selectOptions(screen.getByLabelText('Máquina'), 'outra');
+    // A outra máquina monta os cartões de novo, recolhidos.
+    await userEvent.click(await board.findByRole('button', { name: 'Ver detalhes' }));
     await board.findByRole('button', { name: 'Aguardar' });
     await act(async () => { liberar(); await espera; });
     await waitFor(() => expect(concluiu).toBe(true));
@@ -310,6 +320,116 @@ describe('Board remoto', () => {
     await screen.findByText('Projeto notebook');
     await act(() => new Promise(resolve => setTimeout(resolve, 200)));
     expect(screen.queryByText('Projeto outra')).not.toBeInTheDocument();
+  });
+
+  describe('fiel ao Board do dev.kit (US #858)', () => {
+    const horas = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    // Meia-noite de hoje + 1 min: "hoje" sem depender da hora em que o teste roda.
+    const hojeCedo = () => { const d = new Date(); d.setHours(0, 1, 0, 0); return d.toISOString(); };
+    const ontem = () => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - 1); return d.toISOString(); };
+    function comDatas() {
+      responder();
+      servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => {
+        const foto = retrato();
+        foto.retrato.pendencias!.push({ id: 'p2', tipo: 'pergunta', titulo: 'Pendência antiga sem decisão', pergunta: 'De dez dias atrás', jaTentei: 'Nada ainda', projeto: 'projeto', item: 3 });
+        foto.retrato.fluxos = [
+          { id: 'f-hoje', nome: 'Execução de hoje', etapa: 'Implementação', situacao: 'rodando', desdeEm: hojeCedo() },
+          { id: 'f-ontem', nome: 'Execução de ontem', etapa: 'Avaliação', situacao: 'fila', desdeEm: ontem() },
+          { id: 'f-semana', nome: 'Execução de três dias', etapa: 'Fechamento', situacao: 'rodando', desdeEm: horas(72) },
+          { id: 'f-antiga', nome: 'Execução de dez dias', etapa: 'Regressão', situacao: 'rodando', desdeEm: horas(240) },
+          { id: 'f-sem-data', nome: 'Execução sem data', etapa: 'Planejamento', situacao: 'rodando' },
+        ];
+        foto.retrato.projetos = Array.from({ length: 7 }, (_, i) => ({ slug: `p${i}`, nome: `Projeto ${i + 1}`, ondaAtual: 1, situacao: 'aprovado', itens: [] }));
+        return HttpResponse.json(foto);
+      }));
+    }
+    const nomes = (painel: ReturnType<typeof within>) => painel.queryAllByText(/^Execução /).map((e: HTMLElement) => e.textContent);
+
+    it('põe o painel de auxílio à direita do chat, na mesma ordem de leitura', async () => {
+      responder();
+      renderizar('/board', tokenDoDev());
+      const painel = await screen.findByRole('complementary', { name: 'Board' });
+      const chat = screen.getByRole('region', { name: 'Orquestrador' });
+      expect(chat.compareDocumentPosition(painel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(painel.closest('main')).toBe(chat.closest('main'));
+      // No celular a aba Board traz o número de pendências, sem mudar o nome acessível da aba.
+      await within(painel).findByText('Integrar o item 20 no projeto?');
+      expect(screen.getByRole('tab', { name: 'Board' })).toHaveTextContent('Board1');
+    });
+
+    it('filtra as execuções por dia, preserva as pendências e guarda o período na URL', async () => {
+      comDatas();
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      await painel.findByText('Execução de hoje');
+      const filtro = within(painel.getByRole('group', { name: 'Filtro de dia' }));
+      expect(filtro.getByRole('button', { name: 'Hoje' })).toHaveAttribute('aria-pressed', 'true');
+      expect(nomes(painel)).toEqual(['Execução de hoje', 'Execução sem data']);
+      await userEvent.click(filtro.getByRole('button', { name: 'Ontem' }));
+      expect(nomes(painel)).toEqual(['Execução de ontem', 'Execução sem data']);
+      // O período só existe no parâmetro dia: o botão pressionado depois do clique é a URL escrita.
+      expect(filtro.getByRole('button', { name: 'Ontem' })).toHaveAttribute('aria-pressed', 'true');
+      await userEvent.click(filtro.getByRole('button', { name: 'Semana' }));
+      expect(nomes(painel)).toEqual(['Execução de hoje', 'Execução de ontem', 'Execução de três dias', 'Execução sem data']);
+      await userEvent.click(filtro.getByRole('button', { name: 'Tudo' }));
+      expect(nomes(painel)).toHaveLength(5);
+      // As pendências nunca são filtradas por data.
+      expect(painel.getByRole('heading', { name: 'Precisa de você · 2' })).toBeInTheDocument();
+      expect(painel.getByText('Pendência antiga sem decisão')).toBeInTheDocument();
+    });
+
+    it('o período escolhido sobrevive ao recarregar pelo parâmetro dia', async () => {
+      comDatas();
+      renderizar('/board?dia=semana', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      await painel.findByText('Execução de três dias');
+      expect(painel.getByRole('button', { name: 'Semana' })).toHaveAttribute('aria-pressed', 'true');
+      expect(painel.queryByText('Execução de dez dias')).not.toBeInTheDocument();
+      expect(painel.getByRole('heading', { name: /Executando · 4/ })).toBeInTheDocument();
+    });
+
+    it('cartões nascem recolhidos, abrem com Ver detalhes e listas longas mostram Ver mais', async () => {
+      comDatas();
+      renderizar('/board?dia=tudo', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      const cartao = within(await painel.findByRole('region', { name: 'Integrar o item 20 no projeto?' }));
+      expect(cartao.queryByText('Escolha o destino')).not.toBeInTheDocument();
+      expect(cartao.queryByRole('button', { name: 'Integrar' })).not.toBeInTheDocument();
+      const detalhes = cartao.getByRole('button', { name: 'Ver detalhes' });
+      expect(detalhes).toHaveAttribute('aria-expanded', 'false');
+      await userEvent.click(detalhes);
+      expect(cartao.getByRole('button', { name: 'Ocultar detalhes' })).toHaveAttribute('aria-expanded', 'true');
+      expect(cartao.getByText('Escolha o destino')).toBeInTheDocument();
+      expect(cartao.getByText('Nota 100 · regressão sem falhas')).toBeInTheDocument();
+      expect(cartao.getByRole('button', { name: 'Integrar' })).toBeEnabled();
+      // A pendência ainda sem dados de decisão também nasce recolhida, com o projeto e o item.
+      const antiga = within(painel.getByRole('region', { name: 'Pendência antiga sem decisão' }));
+      expect(antiga.getByText('projeto · item 3')).toBeInTheDocument();
+      expect(antiga.queryByText('De dez dias atrás')).not.toBeInTheDocument();
+      await userEvent.click(antiga.getByRole('button', { name: 'Ver detalhes' }));
+      expect(antiga.getByText('De dez dias atrás')).toBeInTheDocument();
+      // Sete projetos: cinco na tela e o Ver mais com o restante.
+      expect(painel.getAllByRole('progressbar')).toHaveLength(5);
+      await userEvent.click(painel.getByRole('button', { name: 'Ver mais (2)' }));
+      expect(painel.getAllByRole('progressbar')).toHaveLength(7);
+      expect(painel.getByRole('button', { name: 'Ver menos' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('o aviso da notificação vira aviso com timer, fica em Avisos e o push está no painel', async () => {
+      responder();
+      renderizar('/board?notificacao=xyz', tokenDoDev());
+      expect(await screen.findByText('Notificação inválida. Consulte as pendências do Board.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Fechar aviso' })).toBeInTheDocument();
+      const painel = within(screen.getByRole('complementary', { name: 'Board' }));
+      const avisos = painel.getByRole('button', { name: 'Avisos · 1' });
+      expect(avisos).toHaveAttribute('aria-expanded', 'false');
+      await userEvent.click(screen.getByRole('button', { name: 'Fechar aviso' }));
+      expect(screen.queryByRole('button', { name: 'Fechar aviso' })).not.toBeInTheDocument();
+      await userEvent.click(avisos);
+      expect(painel.getByText('Notificação inválida. Consulte as pendências do Board.')).toBeInTheDocument();
+      // O controle do push saiu da faixa do topo e mora no painel.
+      expect(painel.getByText('Notificações neste dispositivo')).toBeInTheDocument();
+    });
   });
 
   it('encerra a sessão quando a API responde 401', async () => {
