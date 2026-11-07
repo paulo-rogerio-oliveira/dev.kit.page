@@ -125,7 +125,8 @@ e a fila de outro usuário são **404**.
   "texto": "Como está o projeto controle-remoto-v2?", "ttlSegundos": 900, "dispositivo": "celular" }
 ```
 
-- `tipo`: `mensagem` (ao Orquestrador; `texto` obrigatório, até 4000), `ligar` ou `reiniciar` (para o serviço; sem texto).
+- `tipo`: `mensagem` (ao Orquestrador; `texto` obrigatório, até 4000), `ligar` ou `reiniciar` (para o serviço; sem texto)
+  e `catalogo` (o handshake do chat, seção 5; sem texto).
 - `id`: escolhido pelo site (um GUID). O reenvio com o MESMO id e o mesmo conteúdo devolve o comando que já existe (**200**),
   sem outra mensagem na fila e sem contar no limite — o duplo toque no celular não duplica. O mesmo id com outro conteúdo é
   **409** `id-em-uso`. Sem id, a API sorteia.
@@ -239,14 +240,51 @@ As da seção "Recusas dos envios" (400, 401, 413 acima de 32 KB, 415, 422) e:
 | **429** | `limite-de-envio`: mais de `Remoto:ComandosPorHora` (30) comandos na última hora, contados no SQL (vale entre instâncias), com `Retry-After`. Cada mensagem pode abrir um turno do agente. As escritas da conversa também têm `Remoto:EnviosDaConversaPorMinuto` (60), separado do heartbeat. As falas têm o seu, `Remoto:FalasPorMinuto` (60), com `Retry-After`: o espelho do chat não tira a vez do comando nem da resposta. |
 | **503** | `fila-indisponivel`: a fila não aceitou, ou a SAS não pôde ser assinada. |
 
+## 5. Catálogo do chat — o handshake (remote-control-v3)
+
+Os atalhos do chat do Board (`/` fluxo, projeto ou design · `#` work item · `@` repositório) mostram o que o dev.kit da
+máquina tem. O site pede esse catálogo por um **comando** da fila e o dev.kit o publica; a API guarda o último por máquina,
+com a data, e o site o mostra também com o dev.kit fechado. Tipos em `api/src/DevKitPage.Contracts/V1/CatalogoRemotoV1.cs`;
+regras em `api/src/DevKitPage.Core/CatalogoDoRemoto.cs`.
+
+- **Sinal de suporte:** a API anuncia `catalogo-remoto` nos `recursos` do heartbeat (seção 1). O dev.kit só publica com ele.
+- **O pedido (handshake):** `POST /api/remoto/comandos` com `"tipo": "catalogo"` e sem texto — o site manda ao conectar
+  (com o dev.kit aberto e o catálogo ausente ou velho) e no botão **Atualizar**. Ele **não conta** no
+  `Remoto:ComandosPorHora` (não abre turno do agente) e não empilha: enquanto um pedido da mesma máquina está `pendente` ou
+  `na-fila`, o novo devolve esse mesmo (**200**). O dev.kit confirma o recebimento como qualquer comando (seção 4.2); o
+  serviço não avisa nada na conversa quando o app está fechado — o pedido espera o app abrir.
+- **A resposta:** o app monta o catálogo, sanitizado, e faz `PUT /api/remoto/catalogo` com o `comandoId` do pedido; depois
+  fecha o comando com a resposta `concluido` (ou `recusado`, com o motivo). O site não mostra essas respostas no chat: o
+  `concluido` só o faz reler o catálogo.
+
+```json
+{ "contrato": 1, "maquinaId": "3f2b9c0e5d7a", "geradoEm": "2026-11-06T20:00:00Z", "comandoId": "9b1deb4d3b7d",
+  "workItems": [ { "id": 812, "titulo": "Handshake do chat", "tipo": "User Story", "estado": "Active" } ],
+  "repositorios": [ { "nome": "github.com/empresa/dev.kit.page", "branchPadrao": "main" } ],
+  "fluxos": [ { "nome": "Tarefa avulsa", "descricao": "Implementação avaliada" } ],
+  "projetos": [ { "slug": "remote-control-v3", "nome": "remote-control-v3", "situacao": "aprovado" } ],
+  "designs": [ { "nome": "dev.kit.page · board", "telas": 3 } ] }
+```
+
+- Resposta **200** `{ "maquinaId", "recebidoEm", "aplicado" }`; como no retrato, o catálogo gerado antes do gravado é aceito
+  com `aplicado: false`. **404** sem o heartbeat da máquina (o catálogo não cria máquina) ou de outro usuário.
+- Tetos: 256 KB de corpo; até 200 entradas em cada lista; nomes e títulos até 200 caracteres, a descrição do fluxo até
+  2000. As recusas são as dos envios (400, 413, 415, 422 com os campos, como `workItems[0].titulo`, 429).
+- **`GET /api/remoto/maquinas/{maquinaId}/catalogo`** → `{ "maquinaId", "recebidoEm", "catalogo" }`: o último recebido.
+  **404** sem catálogo ou de outro usuário.
+- **Compatibilidade:** o dev.kit antigo não conhece o tipo `catalogo` e o recusa (`recusado`, "não é conhecido por esta
+  versão"); o site guarda o último catálogo que tiver e deixa o texto livre nos atalhos. A API antiga recusa o tipo com
+  **400** e não anuncia o recurso: o dev.kit novo não publica nela.
+
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no
-expurgo diário. O retrato guardado é só o último: não há histórico. A conversa (comandos, respostas, falas e eventos) sai
+expurgo diário; o catálogo sai pelo mesmo prazo, contado do último recebimento. O retrato guardado é só o último: não há histórico. A conversa (comandos, respostas, falas e eventos) sai
 depois de `Remoto:RetencaoDaConversaDias` (padrão 30), pela data de cada linha.
 
 ## No Azure SQL
 
 A tabela `MaquinasRemotas` vem de `api/scripts/sqlserver/Remoto.sql`, e as da conversa (`ComandosRemotos`,
 `RespostasRemotas`, `EventosDaConversa`, `FalasRemotas`), de `api/scripts/sqlserver/Conversa.sql` — idempotentes; rode-os antes
-de publicar a API. Numa base que já tem a conversa do item 5, rodar de novo o `Conversa.sql` só cria `FalasRemotas`.
+de publicar a API. Numa base que já tem a conversa do item 5, rodar de novo o `Conversa.sql` só cria `FalasRemotas`. O
+catálogo (seção 5) vem de `api/scripts/sqlserver/CatalogoRemoto.sql` (`CatalogosRemotos`), também idempotente.

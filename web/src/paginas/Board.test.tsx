@@ -84,7 +84,7 @@ describe('Board remoto', () => {
   it('mostra o retrato, progresso, execuções e opções auditadas no Board e no Chat', async () => {
     responder();
     const chamadas: Request[] = [];
-    const registrar = ({ request }: { request: Request }) => { chamadas.push(request); };
+    const registrar = ({ request }: { request: Request }) => { chamadas.push(request.clone()); };
     servidor.events.on('request:start', registrar);
     try {
       renderizar('/board', tokenDoDev());
@@ -104,7 +104,14 @@ describe('Board remoto', () => {
       expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toBeEnabled();
       expect(screen.getByText('Mesma conversa do Board do dev.kit')).toBeInTheDocument();
       expect(chamadas.length).toBeGreaterThan(0);
-      expect(chamadas.every(r => r.method === 'GET' && r.headers.has('Authorization'))).toBe(true);
+      expect(chamadas.every(r => r.headers.has('Authorization'))).toBe(true);
+      // (remote-control-v3) A única escrita sem clique é o handshake do catálogo dos atalhos: ele pede, não executa nada.
+      const escritas = chamadas.filter(r => r.method !== 'GET');
+      expect(escritas.length).toBeLessThanOrEqual(1);
+      for (const r of escritas) {
+        expect([r.method, new URL(r.url).pathname]).toEqual(['POST', '/api/remoto/comandos']);
+        expect(await r.json()).toMatchObject({ tipo: 'catalogo', texto: '' });
+      }
     } finally { servidor.events.removeListener('request:start', registrar); }
   });
 
@@ -185,7 +192,7 @@ describe('Board remoto', () => {
     const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
     await userEvent.type(caixa, 'rascunho antes da revisão');
     await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Fluxo ou design' }), 'Tela');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Fluxo, projeto ou design' }), 'Tela');
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
     await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'dev.kit.page');

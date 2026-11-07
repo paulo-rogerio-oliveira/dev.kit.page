@@ -982,6 +982,14 @@ export const handlersPadrao = [
     Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
     return HttpResponse.json(recurso, { status: 202 });
   }),
+  // O catálogo dos atalhos do chat (remote-control-v3): sem catálogo, e o handshake aceito na fila — o cenário que testa o
+  // catálogo responde por conta própria.
+  http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json({ detail: 'Máquina sem catálogo, ou não é sua.' }, { status: 404 })),
+  http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+    const pedido = await request.json() as { id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string };
+    return HttpResponse.json({ ...pedido, estado: 'na-fila', criadoEm: new Date().toISOString(),
+      expiraEm: new Date(Date.now() + 900_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '' }, { status: 202 });
+  }),
   http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: provisao.segundoFatorAtivo })),
   http.post(`${API}/api/remoto/segundo-fator/preparar`, async ({ request }) => {
     escritas.push({ metodo: 'POST', caminho: '/api/remoto/segundo-fator/preparar', corpo: await request.json() });

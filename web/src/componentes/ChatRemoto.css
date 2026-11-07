@@ -25,7 +25,20 @@
 .br-contexto label {display:block; color:var(--ink); font-size:12px; margin-bottom:8px}
 .br-contexto input {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
 .br-contexto p {color:var(--muted); font-size:11px; margin:6px 0}
+/* O catálogo do dev.kit nos atalhos (remote-control-v3): as opções e a linha com a data e o Atualizar. */
+.br-opcoes {max-height:min(240px,40vh); overflow:auto; margin:0 0 8px; border:1px solid var(--line); border-radius:7px; background:var(--panel)}
+.br-opcoes-grupo {display:block; padding:6px 9px 2px; color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em}
+.br-composer-ativo .br-contexto .br-opcao {display:flex; flex-direction:column; align-items:flex-start; gap:1px; width:100%; box-sizing:border-box; padding:6px 9px; border:0; border-radius:0; background:transparent; color:var(--ink); text-align:left; font:12px/1.35 'Segoe UI',system-ui,sans-serif; cursor:pointer; overflow-wrap:anywhere}
+.br-composer-ativo .br-contexto .br-opcao small {color:var(--muted); font-size:10.5px}
+.br-composer-ativo .br-contexto .br-opcao:hover,.br-composer-ativo .br-contexto .br-opcao:focus-visible {background:var(--bluetint); outline:none}
+.br-composer-ativo .br-contexto .br-opcao-escolhida {background:var(--bluetint); box-shadow:inset 3px 0 0 var(--violet)}
+.br-catalogo {flex:none; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 10px; margin:0 12px 6px; font-size:11px; color:var(--muted); text-align:center}
+.br-catalogo p {margin:0; overflow-wrap:anywhere}
+.br-catalogo .br-btn {font-size:11px; padding:3px 10px}
+.br-catalogo .br-catalogo-aviso {flex-basis:100%; color:var(--warn)}
 @media(max-width:700px) {
+  .br-catalogo {font-size:10px; margin:0 10px 4px}
+  .br-catalogo .br-btn {font-size:10px; padding:2px 8px}
   .br-chat-aviso {display:block; padding:7px 12px; font-size:11.5px}
   .br-chat-aviso strong,.br-chat-aviso span {display:block}
   .br-chat-aviso span {font-size:10.5px; line-height:1.35; margin-top:2px}

@@ -418,7 +418,7 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 ### Scripts SQL do controle remoto, na ordem
 
-Numa base Azure SQL que já existe, o controle remoto precisa de cinco scripts de `api/scripts/sqlserver/`, todos
+Numa base Azure SQL que já existe, o controle remoto precisa de seis scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros):
 
 1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
@@ -426,9 +426,10 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 3. `Conversa.sql` — os comandos, as respostas, os eventos e as falas.
 4. `Decisoes.sql` — as decisões remotas e o segundo fator.
 5. `Push.sql` — as assinaturas e as entregas do push do board.
+6. `CatalogoRemoto.sql` — o último catálogo de cada máquina (o handshake dos atalhos do chat).
 
 ```bash
-for s in Remoto Provisao Conversa Decisoes Push; do
+for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto; do
   sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
 done
 ```
