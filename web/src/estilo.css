@@ -843,10 +843,8 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
   .conta > .secao-da-provisao { grid-column: 1 / -1; }
 }
 
-/* A fila do controle remoto na conta (controle remoto v2, item 4; proposta conta v12): o pedido, o recurso e o histórico. */
-.formulario-da-provisao { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 0 0 16px; }
-.formulario-da-provisao label { display: grid; gap: 6px; font-weight: 600; font-size: 0.875rem; }
-.formulario-da-provisao select { min-width: 220px; }
+/* A fila do controle remoto na conta (controle remoto v2, item 4; proposta conta v12; só a situação desde a v30 do
+   remote-control-v3, item 5): o recurso e o histórico. */
 .nota-da-cota { margin: 0; font-size: 0.8rem; color: var(--texto-2); }
 .recursos-da-conta { display: grid; gap: 12px; }
 .recurso-provisionado { border: 1px solid var(--borda); border-radius: 12px; padding: 16px 18px; }
@@ -864,52 +862,20 @@ body { background: var(--pagina); -webkit-font-smoothing: antialiased; }
   .conta .recurso-dados { grid-template-columns: max-content minmax(0, 1fr); }
 }
 
-/* Sites e APIs no Azure (controle remoto v2, item 12; proposta conta v17/v18): a cota por tipo, o custo com o alerta, o
-   pedido, o endereço e a remoção com o segundo fator. */
-.cota-da-provisao { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 14px; }
-.cota-item { display: grid; gap: 4px; align-content: start; border: 1px solid var(--borda); border-radius: 12px; padding: 14px 16px; background: var(--superficie-2); }
-.cota-rotulo { font-size: 0.8rem; color: var(--texto-2); }
-.cota-valor { font-size: 1.35rem; font-weight: 800; color: var(--texto); }
-.cota-valor small { font-size: 0.85rem; font-weight: 600; color: var(--texto-2); }
-.medidor { position: relative; height: 8px; border-radius: 999px; background: var(--grade); margin: 6px 0 4px; }
-.medidor-preenchido { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--sucesso); }
-.medidor-preenchido.medidor-em-alerta { background: var(--alerta); }
-.medidor-preenchido.medidor-no-teto { background: var(--erro); }
-.medidor-marca { position: absolute; top: -4px; width: 2px; height: 16px; border-radius: 1px; background: var(--texto); }
-.cartao .aviso.aviso-de-custo { margin: 0 0 16px; background: var(--alerta-tinta); border-color: rgba(247, 193, 77, 0.4); color: var(--texto); }
-.secao-dos-sites > .erro, .secao-dos-sites > .aviso:not(.aviso-de-custo) { margin: 0 0 16px; }
-.secao-dos-sites .formulario-da-provisao input { min-width: 200px; }
-.secao-dos-sites .formulario-da-provisao .nota-da-cota { flex-basis: 100%; }
-/* A especificidade vence o ".cartao p { margin: 0 }": o endereço fica separado dos botões, como na proposta. */
-.cartao .recurso-provisionado .endereco-do-recurso { margin: -4px 0 12px; font-size: 0.875rem; }
-/* O nome no Azure (até 38 caracteres) numa linha só, onde as quatro colunas cabem: a coluna do valor cresce até ele, as
-   outras cedem. Abaixo disso (o tablet), duas colunas, e o nome quebra se precisar — nunca transborda o cartão. */
-@media (min-width: 1100px) {
-  .conta .secao-dos-sites .recurso-dados { grid-template-columns: repeat(4, max-content minmax(max-content, 1fr)); }
-  .secao-dos-sites .recurso-dados dd code { white-space: nowrap; }
-}
-@media (min-width: 761px) and (max-width: 1099px) {
-  .conta .secao-dos-sites .recurso-dados { grid-template-columns: repeat(2, max-content minmax(0, 1fr)); }
-}
-.endereco-do-recurso a { font-family: var(--mono); font-weight: 600; }
+/* A confirmação de um ato que não volta atrás, no próprio cartão ou painel (a retirada da provisão com a remoção da fila). */
 .confirmacao-da-remocao { display: grid; gap: 8px; margin: 14px 0 0; padding: 14px 16px; border: 1px solid rgba(226, 38, 28, 0.5); border-radius: 10px; background: var(--marca-tinta); }
-.cartao .confirmacao-da-remocao p { margin: 0; color: var(--texto); font-size: 0.9rem; }
-.linha-da-confirmacao { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
-.linha-da-confirmacao > p { flex-basis: 100%; }
-.linha-da-confirmacao label { display: grid; gap: 6px; font-weight: 600; font-size: 0.875rem; }
-.codigo-do-segundo-fator { width: 210px; font-family: var(--mono); letter-spacing: 10px; font-size: 18px; }
-.chave-do-autenticador { flex-basis: 100%; font-family: var(--mono); font-size: 0.95rem; overflow-wrap: anywhere; }
-.recurso-provisionado .erro code { font-weight: 600; }
-@media (max-width: 760px) {
-  .cota-da-provisao { grid-template-columns: minmax(0, 1fr); }
-  .conta .secao-dos-sites .recurso-dados { grid-template-columns: max-content minmax(0, 1fr); }
-  .secao-dos-sites .formulario-da-provisao label, .secao-dos-sites .formulario-da-provisao select, .secao-dos-sites .formulario-da-provisao input { width: 100%; min-width: 0; }
-}
+.cartao .confirmacao-da-remocao p, .confirmacao-da-remocao p { margin: 0; color: var(--texto); font-size: 0.9rem; }
 
-/* Os recursos liberados por usuário, no painel do admin (proposta admin-usuarios v8). */
+/* Os recursos liberados por usuário, no painel do admin (proposta admin-usuarios v8; v11 com a fila e a retirada confirmada,
+   remote-control-v3 item 5) e a situação da fila na lista. */
 .recursos-liberados { margin: 0 0 8px; }
 .recurso-liberado { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--borda); border-radius: 10px; }
 .recurso-liberado small { display: block; margin-top: 2px; font-size: 0.78rem; line-height: 1.4; }
+.recurso-liberado .fila-do-usuario { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; font-size: 0.8rem; color: var(--texto-2); }
+.recursos-liberados .confirmacao-da-remocao { margin: 10px 0 0; }
+.confirmacao-da-remocao .acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+label.opcao-da-retirada { flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 400; font-size: 0.85rem; line-height: 1.45; }
+.fila-na-lista { display: block; margin-top: 4px; font-size: 0.75rem; color: var(--texto-2); }
 
 /* O topo numa linha só a partir de 1200px: o menu e quem está logado mais compactos (o gestor tem cinco links). */
 @media (min-width: 1200px) {

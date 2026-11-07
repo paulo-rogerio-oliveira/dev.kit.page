@@ -549,7 +549,8 @@ Checklist verificável:
 - [ ] `GET /health` responde `Healthy` — nenhum `Degraded` (esquema, licenças).
 - [ ] O WebJob `provisao` aparece *Running* em *WebJobs*, e o log dele (*WebJobs → Logs*) mostra a varredura sem erro de
       identidade ou de assinatura.
-- [ ] Um usuário liberado (`/usuarios` → Recursos liberados) pede a fila no site e ela fica **pronta**; o grupo
+- [ ] O admin libera a provisão de um usuário (`/usuarios`, menu ⋯ ou Recursos liberados) e a fila dele, pedida na
+      liberação (remote-control-v3, item 5), fica **pronta** — a `/conta` do usuário só mostra a situação; o grupo
       `devkit-clients` tem a conta de Storage com a fila `comandos` e a tag `devkit-usuario` dele, e nenhum grupo novo
       apareceu na assinatura.
 - [ ] `GET /api/remoto/push` (com o login) responde `disponivel: true`; o board assinado recebe o aviso de uma pendência nova.

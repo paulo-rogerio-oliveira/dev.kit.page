@@ -5,6 +5,7 @@ import type { EmpresaResumo, Papel, UsuarioResumo } from '../api/tipos';
 import { Avatar } from '../componentes/Avatar';
 import { BotaoCopiar } from '../componentes/BotaoCopiar';
 import { Pagina } from '../componentes/Pagina';
+import { situacaoDoRecurso } from '../componentes/FilaDoControleRemoto';
 import { apoioDaLicenca, BarraDaLicenca, descreverLicenca, PainelDaLicenca } from '../componentes/PainelDaLicenca';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo, type VarianteDoSelo } from '../componentes/Selo';
@@ -82,26 +83,83 @@ export function resumoDasLicencas(usuarios: UsuarioResumo[]): { vencendo: number
 /** O usuário tem a provisão no Azure liberada pelo admin (controle remoto v2, item 4). */
 export const temProvisao = (u: UsuarioResumo) => (u.recursosLiberados ?? []).includes('provisao');
 
+/** A situação da fila do usuário em poucas palavras, para a lista ("fila pronta", "fila: remoção pedida"); nula sem fila. */
+export function textoDaFila(u: UsuarioResumo): string | null {
+  if (!u.fila) return null;
+  const texto = situacaoDoRecurso(u.fila).texto.toLowerCase();
+  return u.fila.operacao === 'remover' ? `fila: ${texto}` : `fila ${texto}`;
+}
+
 /**
- * Os recursos liberados do usuário, no painel dele (proposta admin-usuarios v8): a provisão no Azure, com Liberar ou
- * Retirar. Retirar não apaga o que o usuário já criou — só impede pedidos novos (a API confere a cada pedido).
+ * A retirada da provisão, aberta no painel (proposta admin-usuarios v11): os pedidos novos param na hora, e a fila só sai do
+ * Azure se o admin marcar — sem marcar, ela fica (remote-control-v3, item 5).
  */
-function RecursosLiberados({ usuario, aoAlternar }: { usuario: UsuarioResumo; aoAlternar: (liberado: boolean) => void }) {
+function ConfirmacaoDaRetirada({ usuario, aoRetirar, aoCancelar }: {
+  usuario: UsuarioResumo;
+  aoRetirar: (removerFila: boolean) => void;
+  aoCancelar: () => void;
+}) {
+  const [removerFila, setRemoverFila] = useState(false);
+  const fila = usuario.fila?.operacao === 'criar' ? usuario.fila : null;
+  return (
+    <div className="confirmacao-da-remocao" role="group" aria-label="Confirmar a retirada">
+      <p>Retirar a provisão de <strong>{usuario.login}</strong>? Os pedidos novos param na hora.</p>
+      {fila && (
+        <label className="opcao-da-retirada">
+          <input type="checkbox" checked={removerFila} onChange={(e) => setRemoverFila(e.target.checked)} />
+          <span>Remover também a fila <code>{fila.nome}</code> do Azure: as mensagens que estiverem nela se perdem. Sem marcar, a fila fica.</span>
+        </label>
+      )}
+      <div className="acoes">
+        <button className="botao botao-primario botao-pequeno" type="button" onClick={() => aoRetirar(removerFila)}>Retirar a provisão</button>
+        <button className="botao botao-fantasma botao-pequeno" type="button" onClick={aoCancelar}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Os recursos liberados do usuário, no painel dele (proposta admin-usuarios v8; v11 no remote-control-v3, item 5): a provisão
+ * no Azure, com Liberar ou Retirar, e a fila do controle remoto que a liberação pede na hora. Liberado e sem fila (a removida,
+ * ou a liberação anterior a esta regra), o "Pedir a fila" repete a liberação, que a pede de novo. Retirar abre a confirmação.
+ */
+function RecursosLiberados({ usuario, retirando, aoLiberar, aoPedirRetirada, aoRetirar, aoCancelar }: {
+  usuario: UsuarioResumo;
+  retirando: boolean;
+  aoLiberar: () => void;
+  aoPedirRetirada: () => void;
+  aoRetirar: (removerFila: boolean) => void;
+  aoCancelar: () => void;
+}) {
   const liberada = temProvisao(usuario);
+  const fila = usuario.fila;
+  const situacaoDaFila = fila && situacaoDoRecurso(fila);
   return (
     <div className="recursos-liberados">
       <h3 className="subtitulo-do-painel">Recursos liberados</h3>
       <div className="recurso-liberado">
         <div>
           <strong>Provisão no Azure</strong>
-          <small className="texto-mudo">A fila do controle remoto na conta. Hoje por permissão; depois, pelo plano.</small>
+          <small className="texto-mudo">Liberar pede na hora a fila do controle remoto do usuário; retirar só a remove com a sua confirmação.</small>
         </div>
         {liberada ? <Selo variante="info">Liberada</Selo> : <Selo>Não liberada</Selo>}
         <button className="botao botao-fantasma botao-pequeno" type="button"
-          aria-label={`${liberada ? 'Retirar' : 'Liberar'} a provisão de ${usuario.login}`} onClick={() => aoAlternar(!liberada)}>
+          aria-label={`${liberada ? 'Retirar' : 'Liberar'} a provisão de ${usuario.login}`} onClick={liberada ? aoPedirRetirada : aoLiberar}>
           {liberada ? 'Retirar' : 'Liberar'}
         </button>
+        {fila && situacaoDaFila ? (
+          <p className="fila-do-usuario">
+            Fila <code>{fila.fila}</code> na conta <code>{fila.nome}</code> · {fila.regiao}{' '}
+            <Selo variante={situacaoDaFila.variante} ponto={fila.estado === 'pronto'}>{situacaoDaFila.texto}</Selo>
+          </p>
+        ) : liberada && (
+          <p className="fila-do-usuario">
+            Sem fila ativa.{' '}
+            <button className="botao botao-fantasma botao-pequeno" type="button" aria-label={`Pedir a fila de ${usuario.login}`} onClick={aoLiberar}>Pedir a fila</button>
+          </p>
+        )}
       </div>
+      {retirando && liberada && <ConfirmacaoDaRetirada usuario={usuario} aoRetirar={aoRetirar} aoCancelar={aoCancelar} />}
     </div>
   );
 }
@@ -150,6 +208,10 @@ function MenuDoUsuario({ usuario, acoes }: { usuario: UsuarioResumo; acoes: { ro
  * dias do fim, vermelho vencida, e a situação "Bloqueado: licença"), o filtro por licença, a contagem no título, o "Novo
  * usuário" no título e o painel "Licença de &lt;usuário&gt;", onde o admin define a validade que quiser.
  * </p>
+ * <p>
+ * Desde o remote-control-v3, item 5 (proposta admin-usuarios v11): a liberação da provisão também na lista — o selo com a
+ * situação da fila embaixo do papel e o Liberar/Retirar a provisão no menu ⋯ — e a fila pedida na liberação.
+ * </p>
  */
 export function Usuarios() {
   const { sessao, sair } = useSessao();
@@ -171,6 +233,8 @@ export function Usuarios() {
   const [empresaId, setEmpresaId] = useState<number | null>(null);
   const [edicao, setEdicao] = useState<Edicao | null>(null);
   const [senha, setSenha] = useState<SenhaMostrada | null>(null);
+  // A retirada da provisão aberta no painel (o usuário dela), à espera da confirmação do admin.
+  const [retirando, setRetirando] = useState<number | null>(null);
   const [aviso, setAviso] = useState('');
   const [erro, setErro] = useState('');
 
@@ -235,18 +299,33 @@ export function Usuarios() {
     }
   }
 
-  async function liberarProvisao(u: UsuarioResumo, liberado: boolean) {
+  /**
+   * Libera (e a API pede a fila na hora) ou retira a provisão — a retirada só depois da confirmação no painel, e a fila só
+   * sai do Azure com `removerFila` (remote-control-v3, item 5).
+   */
+  async function liberarProvisao(u: UsuarioResumo, liberado: boolean, removerFila = false) {
     limpar();
-    if (!liberado && !window.confirm(`Retirar a provisão no Azure de ${u.login}? O que já foi criado continua lá; só os pedidos novos param.`)) return;
     try {
-      await api.liberarRecurso(token, u.id, 'provisao', liberado);
+      const alterado = await api.liberarRecurso(token, u.id, 'provisao', liberado, removerFila);
+      // A fila pedida vem na resposta; a retirada fala da fila que o usuário tinha.
+      const fila = liberado ? alterado.fila : u.fila;
+      setRetirando(null);
       setAviso(liberado
-        ? `Provisão liberada para ${u.login}: a ação "Fila do controle remoto" aparece na conta, e a API aceita o pedido.`
-        : `Provisão retirada de ${u.login}: a ação some da conta, e a API recusa os pedidos novos.`);
+        ? `Provisão liberada para ${u.login}: a fila do controle remoto ${fila ? `(conta ${fila.nome}) ` : ''}foi pedida, e o worker a cria em instantes.`
+        : removerFila && fila
+          ? `Provisão retirada de ${u.login}, e a remoção da fila (conta ${fila.nome}) pedida: o worker a apaga em instantes.`
+          : `Provisão retirada de ${u.login}: a API recusa os pedidos novos${fila ? `, e a fila (conta ${fila.nome}) continua no Azure` : ''}.`);
       await carregar();
     } catch (falha) {
       tratar(falha);
     }
+  }
+
+  /** Abre a retirada da provisão no painel do usuário, à espera da confirmação. */
+  function pedirRetirada(u: UsuarioResumo) {
+    limpar();
+    setLateral({ tipo: 'licenca', id: u.id });
+    setRetirando(u.id);
   }
 
   async function redefinir(u: UsuarioResumo) {
@@ -377,6 +456,8 @@ export function Usuarios() {
                           <td>
                             <Selo variante={COR_DO_PAPEL[u.papel] ?? 'neutro'}>{NOME_DO_PAPEL[u.papel] ?? u.papel}</Selo>
                             {temProvisao(u) && <> <Selo variante="info">Provisão</Selo></>}
+                            {/* A fila aparece também depois da retirada sem a remoção: ela ficou no Azure. */}
+                            {textoDaFila(u) && <small className="fila-na-lista">{textoDaFila(u)}</small>}
                           </td>
                           <td>{u.empresa ?? '—'}</td>
                           <td>
@@ -400,6 +481,11 @@ export function Usuarios() {
                                   ? [{ rotulo: u.bloqueado ? 'Desbloquear' : 'Bloquear', aoEscolher: () => void alternarBloqueio(u) }]
                                   : []),
                                 { rotulo: 'Redefinir senha', aoEscolher: () => void redefinir(u) },
+                                // A liberação da provisão na própria lista (remote-control-v3, item 5): liberar pede a fila;
+                                // retirar abre a confirmação no painel do usuário.
+                                temProvisao(u)
+                                  ? { rotulo: 'Retirar a provisão', aoEscolher: () => pedirRetirada(u) }
+                                  : { rotulo: 'Liberar a provisão', aoEscolher: () => void liberarProvisao(u, true) },
                               ]}
                             />
                           </td>
@@ -418,9 +504,15 @@ export function Usuarios() {
               token={token}
               usuarioId={lateral.id}
               aoMudar={(mensagem) => { setAviso(mensagem); void carregar(); }}
-              aoFechar={() => setLateral(null)}
+              aoFechar={() => { setLateral(null); setRetirando(null); }}
               tratar={tratar}
-              recursos={doPainel && <RecursosLiberados usuario={doPainel} aoAlternar={(liberado) => void liberarProvisao(doPainel, liberado)} />}
+              recursos={doPainel && (
+                <RecursosLiberados usuario={doPainel} retirando={retirando === doPainel.id}
+                  aoLiberar={() => void liberarProvisao(doPainel, true)}
+                  aoPedirRetirada={() => pedirRetirada(doPainel)}
+                  aoRetirar={(removerFila) => void liberarProvisao(doPainel, false, removerFila)}
+                  aoCancelar={() => setRetirando(null)} />
+              )}
             />
           )}
 
