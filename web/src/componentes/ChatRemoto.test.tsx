@@ -142,6 +142,20 @@ it('não mostra os turnos automáticos do Orquestrador nem repete o mesmo aviso 
   expect(artigos[2].querySelector('time')).toHaveAttribute('dateTime', ultimoAviso.toISOString());
 });
 
+it('a resposta do Orquestrador que repete o texto depois de outra pergunta do dev é conversa e fica', async () => {
+  const minutos = (n: number) => new Date(Date.now() - n * 60000);
+  const resposta = 'Nada novo: os três fluxos seguem em execução.';
+  preparar({ comandos: [], respostas: [], ultimoEvento: 10, falas: [
+    fala('dev', 'Alguma novidade?', minutos(30), { id: 'fd-1' }),
+    fala('orquestrador', resposta, minutos(29), { id: 'fo-1-1' }),
+    fala('dev', 'E agora?', minutos(10), { id: 'fd-2' }),
+    fala('orquestrador', resposta, minutos(9), { id: 'fo-2-1' }),
+  ] });
+  await abrir();
+  const artigos = within(screen.getByRole('log')).getAllByRole('article');
+  expect(artigos.map(a => a.querySelector('p')?.textContent?.trim())).toEqual(['Alguma novidade?', resposta, 'E agora?', resposta]);
+});
+
 it('a fala de turno automático que chega pelo SSE não entra no chat', async () => {
   preparar();
   const automatica = fala('orquestrador', 'Aviso do dev.kit: gatilho concluído.', new Date(), { id: 'fl-c-1' });

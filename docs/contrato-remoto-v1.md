@@ -173,7 +173,8 @@ As `falas` (campo novo; vazias com o dev.kit antigo) são a conversa do chat do 
 `autor`, `origem`, `texto`, `comandoId`, `ditaEm`, `recebidaEm` —, na ordem em que foram **ditas** (`ditaEm`): a que chega
 atrasada entra no lugar dela. O chat do site mostra só a **conversa** (remote-control-v3, item 3): a fala do Orquestrador com
 id `fl-…` é a resposta de um turno de **lote** (avisos, retratos e gatilhos da varredura, marcada na origem pelo dev.kit) e
-não aparece; a fala espontânea do Orquestrador repetida com o mesmo texto aparece uma vez, a mais recente; e as decisões ficam
+não aparece; a fala espontânea do Orquestrador repetida com o mesmo texto, sem fala do dev nem comando no meio (o aviso
+empilhado), aparece uma vez, a mais recente — a que repete depois de outra pergunta é conversa e fica; e as decisões ficam
 só no painel de decisões, nunca no chat.
 
 **`GET /api/remoto/conversa/eventos[?maquinaId=...]`** → `text/event-stream`. Cada evento:

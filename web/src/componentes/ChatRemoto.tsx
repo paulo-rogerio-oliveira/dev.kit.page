@@ -41,8 +41,8 @@ function autorDaLinha(linha: LinhaDoChat, doServico: Set<string>) {
 export function turnoAutomatico(fala: FalaRemota) { return fala.autor !== 'dev' && fala.id.startsWith('fl-'); }
 
 /**
- * A chave da fala espontânea do Orquestrador (a fala sem comando e a resposta sem comando): o mesmo texto repetido é o
- * mesmo aviso empilhado, e o chat mostra só a última vez. A fala do dev e a resposta a um comando nunca se juntam.
+ * A chave da fala espontânea do Orquestrador (a fala sem comando e a resposta sem comando): o mesmo texto repetido SEM
+ * conversa no meio é o mesmo aviso empilhado. A fala do dev e a resposta a um comando nunca se juntam (chave nula).
  */
 function chaveDeRepeticao(linha: LinhaDoChat) {
   const texto = linha.fala && linha.fala.autor !== 'dev' && !linha.fala.comandoId ? linha.fala.texto
@@ -50,11 +50,22 @@ function chaveDeRepeticao(linha: LinhaDoChat) {
   return texto === null ? null : texto.replace(/\s+/g, ' ').trim();
 }
 
-/** As linhas em ordem, sem a repetição de uma fala espontânea do Orquestrador: fica a mais recente, no lugar dela. */
+/**
+ * As linhas em ordem, sem a repetição EMPILHADA de uma fala espontânea do Orquestrador: dentro de uma sequência dessas falas
+ * (sem fala do dev nem comando entre elas), o mesmo texto aparece uma vez, a mais recente, no lugar dela. A resposta que
+ * repete o texto depois de outra pergunta do dev é conversa e fica.
+ */
 function semRepeticao(linhas: LinhaDoChat[]) {
-  const ultimaVez = new Map<string, string>();
-  for (const linha of linhas) { const chave = chaveDeRepeticao(linha); if (chave) ultimaVez.set(chave, linha.id); }
-  return linhas.filter(linha => { const chave = chaveDeRepeticao(linha); return !chave || ultimaVez.get(chave) === linha.id; });
+  const repetidas = new Set<string>();
+  let sequencia = new Map<string, string>();
+  for (const linha of linhas) {
+    const chave = chaveDeRepeticao(linha);
+    if (!chave) { sequencia = new Map(); continue; }
+    const anterior = sequencia.get(chave);
+    if (anterior) repetidas.add(anterior);
+    sequencia.set(chave, linha.id);
+  }
+  return linhas.filter(linha => !repetidas.has(linha.id));
 }
 
 /**
