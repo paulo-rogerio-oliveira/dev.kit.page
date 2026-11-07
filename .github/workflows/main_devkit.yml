@@ -125,6 +125,12 @@ jobs:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
           path: api/scripts/sqlserver/CatalogoRemoto.sql
 
+      - name: ClienteDaMaquina.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ClienteDaMaquina.sql
+
   deploy:
     runs-on: ubuntu-latest
     needs: [build, worker, sql]

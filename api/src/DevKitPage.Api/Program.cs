@@ -39,6 +39,8 @@ Seguranca.ValidarSegredo(app.Services, app.Environment);
 FilaDeComandos.Validar(app.Services.GetRequiredService<IOptions<OpcoesDoRemoto>>().Value, app.Environment);
 // O key ring do DataProtection: em Production, persistido e compartilhado (o push e o segundo fator dependem dele).
 KeyRing.Validar(app.Services.GetRequiredService<IOptions<OpcoesDaProtecaoDeDados>>().Value, app.Environment);
+// O client credentials da máquina: a validade do token e da asserção fora da faixa não sobe.
+OpcoesDoClienteDaMaquina.Validar(app.Services.GetRequiredService<IOptions<OpcoesDoClienteDaMaquina>>().Value);
 using (var escopo = app.Services.CreateScope())
     await escopo.ServiceProvider.GetRequiredService<InicializadorDaBase>().InicializarAsync();
 
@@ -53,6 +55,7 @@ app.UseRateLimiter();
 app.MapOpenApi().AllowAnonymous();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapearAutenticacao();
+app.MapearClienteDaMaquina();
 app.MapearMaquinas();
 app.MapearTelemetria();
 app.MapearPainel();

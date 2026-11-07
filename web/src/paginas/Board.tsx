@@ -13,6 +13,7 @@ import { filtrarPorDia, periodoDaUrl, periodosDoDia, type PeriodoDoDia } from '.
 import { ChatRemoto } from '../componentes/ChatRemoto';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
 import { useConversaRemota } from '../componentes/useConversaRemota';
+import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
@@ -229,6 +230,18 @@ export function Board() {
       throw e;
     }
   }
+  // O Desvincular do serviço: a lista já mostra a máquina sem vínculo, e a próxima leitura confirma pela API.
+  async function desvincular() {
+    const maquinaId = selecionada;
+    try {
+      await api.desvincularMaquina(sessao!.token, maquinaId);
+    } catch (e) {
+      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+      throw e;
+    }
+    setMaquinas(lista => lista.map(m => m.maquinaId === maquinaId ? { ...m, vinculada: false } : m));
+    avisar('Serviço desvinculado: o heartbeat e a fila desta máquina pararam até o próximo login no dev.kit nela.');
+  }
   const mudou = !!revisao && !decisoes.some(d => d.pendencia.id === revisao.pendencia.id && d.snapshotId === revisao.snapshotId);
   // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
   const conversa = useConversaRemota(selecionada);
@@ -263,6 +276,8 @@ export function Board() {
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
+        {/* A chave é própria: o ConteudoDoBoard, irmão dele, já usa a da máquina. */}
+        {maquina && <VinculoDoServico key={`vinculo-${selecionada}`} maquina={maquina} desvincular={desvincular} />}
         <HistoricoDeAvisos avisos={avisos} />
         <NotificacoesDoBoard />
       </aside>

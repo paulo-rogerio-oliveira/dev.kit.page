@@ -63,11 +63,13 @@ public sealed record RetratoRecebidoV1(string MaquinaId, DateTimeOffset Recebido
 
 /// <summary>
 /// Uma máquina do usuário, como o site a lista. <see cref="Conectada"/> é o heartbeat recebido há no máximo
-/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API.
+/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API. <see cref="Vinculada"/> (campo novo, item 9 do
+/// remote-control-v3) é o serviço da máquina com o client credentials ativo: o site oferece o "Desvincular".
 /// </summary>
 public sealed record MaquinaRemotaV1(
     string MaquinaId, string Nome, string VersaoDevKit, string Origem, bool AppAberto, string EstadoDoAgente,
-    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm);
+    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm,
+    bool Vinculada = false);
 
 /// <summary>O retrato mais recente de uma máquina do usuário, com a máquina.</summary>
 public sealed record RetratoDaMaquinaV1(MaquinaRemotaV1 Maquina, RetratoV1 Retrato, DateTimeOffset RecebidoEm);

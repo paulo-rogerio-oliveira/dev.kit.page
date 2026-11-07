@@ -19,6 +19,28 @@ um dado que a API leria errado.
   usuário é outra máquina, e nenhum lê ou grava a do outro. A máquina de outro usuário é **404**, sem revelar que existe.
   Nem o admin lê a máquina alheia.
 - Limite por usuário: `Remoto:EnviosPorMinuto` (padrão 60) envios por minuto, heartbeat e retrato somados; acima, **429**.
+- **Token da máquina (client credentials, remote-control-v3 item 9).** Os envios do serviço — heartbeat, retrato, catálogo,
+  SAS da fila, recebimento, respostas e falas — aceitam também o token que a máquina obtém sozinha, sem o usuário:
+  1. No login do app, o dev.kit vincula a máquina: `POST /api/auth/cliente-da-maquina` com o JWT, a `X-Machine-Key` e
+     `{ "chavePublica": "<SPKI ECDSA P-256 em base64>" }`. A resposta (`ClienteDaMaquinaRegistradoV1`) é o **anúncio**:
+     `clientId` (o `maquinaId`), `escopo` (`remoto`), `rotaDoToken`, `audiencia`, `algoritmo` (`ES256`) e
+     `validadeMaximaDaAssercaoSegundos`. Com **404** (a API antiga, ou `ClienteDaMaquina:Habilitado=false`), o dev.kit segue
+     na renovação pela máquina (`sessao-da-maquina` / `renovar-pela-maquina`), que continua aceita.
+  2. O serviço pede o token: `POST /api/auth/token` (`application/x-www-form-urlencoded`) com
+     `grant_type=client_credentials`, `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` e
+     `client_assertion` — um JWT ES256 assinado pela chave privada (que fica no DPAPI do usuário na máquina), com
+     `iss` = `sub` = `clientId`, `aud` = `audiencia`, `iat`, `exp` (no máximo 300 s depois do `iat`) e um `jti` novo a cada
+     pedido. A resposta é a da RFC 6749 (`access_token`, `token_type`, `expires_in`, `scope`); a recusa,
+     `{ "error", "error_description" }`: **401** `invalid_client` (asserção vencida, repetida, longa, de outra chave, ou a
+     máquina desvinculada), **400** `invalid_grant` (senha trocada, usuário bloqueado ou sem assento),
+     `unsupported_grant_type` ou `invalid_request`.
+  3. O token vale `ClienteDaMaquina:ValidadeDoTokenMinutos` (15) e **só** nestas rotas, e só para o `maquinaId` dele
+     (**403** para outro). Em qualquer outra rota, **401**. Sem renovação: vencido, o serviço pede outro com uma asserção nova.
+- **Revogação.** O "Desvincular" do Board (`DELETE /api/remoto/maquinas/{maquinaId}/vinculo`, só com o JWT do usuário:
+  **204**, ou **404** sem vínculo dele) derruba o token já emitido na chamada seguinte — e a máquina desvinculada também não
+  renova pela máquina (`sessao-da-maquina` e `renovar-pela-maquina` respondem **401**) até o próximo login no app, que a
+  vincula de novo. A troca de senha e o bloqueio do
+  usuário revogam todas as máquinas dele. A lista `GET /maquinas` diz `vinculada` em cada máquina.
 
 ## 1. Heartbeat — `POST /api/remoto/heartbeat`
 

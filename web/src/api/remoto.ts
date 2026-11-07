@@ -10,6 +10,8 @@ export interface MaquinaRemota {
   conectada: boolean;
   ultimoHeartbeatEm: string | null;
   retratoGeradoEm: string | null;
+  /** O serviço da máquina tem o client credentials ativo (item 9 do remote-control-v3); ausente na API antiga. */
+  vinculada?: boolean;
 }
 
 export interface RetratoDaMaquina {
