@@ -94,9 +94,12 @@ public sealed class Usuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, I
 /// <summary>
 /// A gestão de usuários pelo admin (US #405). O usuário criado ou redefinido recebe uma senha TEMPORÁRIA do
 /// <see cref="GeradorDeSenha"/> — o mesmo do admin semeado e do gestor convidado —, devolvida UMA vez, e a
-/// troca obrigatória no primeiro acesso (a regra que a API já aplica a todo token com a troca pendente).
+/// troca obrigatória no primeiro acesso (a regra que a API já aplica a todo token com a troca pendente). A liberação da provisão
+/// pede a fila do usuário pela mesma <see cref="IProvisao"/> do pedido (remote-control-v3, item 5).
 /// </summary>
-public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio, IOptions<OpcoesDeLicenca> licencas)
+public sealed class GestaoDeUsuarios(
+    DevKitPageDb db, IPasswordHasher<Usuario> hasher, TimeProvider relogio, IOptions<OpcoesDeLicenca> licencas, IProvisao provisao,
+    IOptions<OpcoesDaProvisao> opcoesDaProvisao)
     : IGestaoDeUsuarios
 {
     public async Task<IReadOnlyList<UsuarioResumo>> ListarAsync(CancellationToken ct)
@@ -104,10 +107,23 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
         var agora = relogio.GetUtcNow();
         var usos = await UltimosUsosAsync(db, null, ct);
         var liberados = await LiberadosAsync(null, ct);
+        var filas = await FilasAsync(null, ct);
         return (await db.Usuarios.AsNoTracking().Include(u => u.Empresa).OrderBy(u => u.Login).ToListAsync(ct))
-            .Select(u => Resumo(u, agora, usos.GetValueOrDefault(u.Id), liberados.GetValueOrDefault(u.Id)))
+            .Select(u => Resumo(u, agora, usos.GetValueOrDefault(u.Id), liberados.GetValueOrDefault(u.Id), filas.GetValueOrDefault(u.Id)))
             .ToArray();
     }
+
+    /// <summary>A fila ATIVA (não removida) mais nova de cada usuário (ou só de um): o que o admin vê na lista.</summary>
+    private async Task<Dictionary<int, FilaDoUsuarioV1>> FilasAsync(int? usuarioId, CancellationToken ct)
+        => (await FilasAtivasAsync(usuarioId, ct))
+            .GroupBy(r => r.UsuarioId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CriadoEmUtc).ThenByDescending(r => r.Id)
+                .Select(r => new FilaDoUsuarioV1(r.Id, r.Nome, r.Fila, r.Regiao, r.Operacao, r.Estado)).First());
+
+    private Task<List<RecursoProvisionado>> FilasAtivasAsync(int? usuarioId, CancellationToken ct)
+        => db.RecursosProvisionados.AsNoTracking()
+            .Where(r => r.Tipo == ProvisaoV1.TipoFila && r.Estado != ProvisaoV1.EstadoRemovido && (usuarioId == null || r.UsuarioId == usuarioId))
+            .ToListAsync(ct);
 
     /// <summary>Os recursos liberados de cada usuário (ou só de um), na ordem do contrato.</summary>
     private async Task<Dictionary<int, string[]>> LiberadosAsync(int? usuarioId, CancellationToken ct)
@@ -115,12 +131,18 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
             .GroupBy(p => p.UsuarioId)
             .ToDictionary(g => g.Key, g => g.Select(p => p.Recurso).OrderBy(r => r, StringComparer.Ordinal).ToArray());
 
-    public async Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, string autor, CancellationToken ct)
+    public async Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, bool removerFila, string autor, CancellationToken ct)
     {
         if (!ProvisaoV1.RecursosLiberaveis.Contains(recurso))
             return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Recusada, $"O recurso é um de: {string.Join(", ", ProvisaoV1.RecursosLiberaveis)}.");
         if (!await db.Usuarios.AnyAsync(u => u.Id == id, ct))
             return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.NaoEncontrado, "Usuário não encontrado.");
+
+        // A remoção confirmada da fila é conferida ANTES de tirar a liberação: a fila ainda em criação recusa tudo, sem mudar nada.
+        List<RecursoProvisionado> filasARemover = !liberado && removerFila ? await FilasAtivasAsync(id, ct) : [];
+        if (filasARemover.Any(f => RegrasDaProvisao.DecidirRemocao(f.Estado, f.Operacao) == Remocao.AguardeACriacao))
+            return ResultadoDaGestao<UsuarioResumo>.Falhou(FalhaNaGestao.Conflito,
+                "A fila ainda está sendo criada: retire depois que ela ficar pronta (ou falhar), ou retire sem remover a fila.");
 
         var agora = relogio.GetUtcNow().UtcDateTime;
         var atual = await db.PermissoesDeUsuario.FirstOrDefaultAsync(p => p.UsuarioId == id && p.Recurso == recurso, ct);
@@ -145,6 +167,22 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
             db.PermissoesDeUsuario.Remove(atual);
             await db.SaveChangesAsync(ct);
             await MotorDeProvisao.AuditarAsync(db, null, id, ProvisaoV1.EventoRetirado, autor, recurso, agora, ct);
+        }
+
+        // A fila nasce na liberação: o mesmo pedido idempotente da provisão (a que já existe volta como está). Repetir o
+        // Liberar de quem está liberado e sem fila — a removida, ou a liberação anterior a esta regra — pede a fila de novo.
+        if (liberado)
+        {
+            var pedido = await provisao.PedirFilaAsync(id, autor, RegrasDaProvisao.RegiaoPadrao(opcoesDaProvisao.Value), ct);
+            if (pedido.Valor is null)
+                return ResultadoDaGestao<UsuarioResumo>.Falhou(pedido.Falha, $"A provisão foi liberada, mas a fila não foi pedida: {pedido.Mensagem}");
+        }
+
+        foreach (var fila in filasARemover)
+        {
+            var remocao = await provisao.RemoverAsync(id, autor, fila.Id, null, ct);
+            if (remocao.Valor is null)
+                return ResultadoDaGestao<UsuarioResumo>.Falhou(remocao.Falha, $"A provisão foi retirada, mas a fila não foi removida: {remocao.Mensagem}");
         }
 
         return new(await ResumoAsync(id, ct));
@@ -278,13 +316,14 @@ public sealed class GestaoDeUsuarios(DevKitPageDb db, IPasswordHasher<Usuario> h
 
     private async Task<UsuarioResumo> ResumoAsync(int id, CancellationToken ct)
         => Resumo(await db.Usuarios.AsNoTracking().Include(u => u.Empresa).FirstAsync(u => u.Id == id, ct), relogio.GetUtcNow(),
-            (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id), (await LiberadosAsync(id, ct)).GetValueOrDefault(id));
+            (await UltimosUsosAsync(db, id, ct)).GetValueOrDefault(id), (await LiberadosAsync(id, ct)).GetValueOrDefault(id),
+            (await FilasAsync(id, ct)).GetValueOrDefault(id));
 
-    private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso, string[]? liberados)
+    private UsuarioResumo Resumo(Usuario u, DateTimeOffset agora, DateTime? ultimoUso, string[]? liberados, FilaDoUsuarioV1? fila)
         => new(u.Id, u.Login, u.Nome, PapelDe(u), u.EmpresaId, u.Empresa?.Nome, u.BloqueadoPeloAdmin,
             u.BloqueadoAteUtc is { } ate && ate > agora.UtcDateTime ? DevKitPageDb.Utc(ate) : null, u.DeveTrocarSenha, DevKitPageDb.Utc(u.CriadoEmUtc),
             Licenca(u, agora, ultimoUso, licencas.Value.TrialDias), u.UltimoLoginEmUtc is { } login ? DevKitPageDb.Utc(login) : null,
-            liberados ?? []);
+            liberados ?? [], fila);
 }
 
 /// <summary>
