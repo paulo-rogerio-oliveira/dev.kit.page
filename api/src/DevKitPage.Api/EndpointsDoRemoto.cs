@@ -7,7 +7,8 @@ namespace DevKitPage.Api;
 /// <summary>
 /// As rotas do controle remoto, fase 1 (<c>docs/contrato-remoto-v1.md</c>): o dev.kit publica, com o JWT do USUÁRIO, o
 /// heartbeat e o retrato de cada máquina, e o site lê — só o dono. Todas exigem o usuário autenticado sem troca pendente
-/// (a política padrão); a chave de máquina (<c>X-Machine-Key</c>) sozinha não entra.
+/// (a política padrão); a chave de máquina (<c>X-Machine-Key</c>) sozinha não entra. Os ENVIOS do dev.kit aceitam também o
+/// token da máquina (<see cref="Seguranca.PoliticaRemotoDaMaquina"/>, o client credentials), e só para o <c>maquinaId</c> dela.
 /// <list type="bullet">
 /// <item><c>POST /heartbeat</c>: 200 com o intervalo esperado;</item>
 /// <item><c>PUT /retrato</c>: 200, com <c>aplicado</c> falso para o retrato mais velho que o gravado;</item>
@@ -38,8 +39,10 @@ public static class EndpointsDoRemoto
                     return recusa;
                 if (Recusar(heartbeat!.Contrato, RegrasDoRemoto.Validar(heartbeat), () => RegrasDoRemoto.CamposSensiveis(heartbeat)) is { } problema)
                     return problema;
+                if (TokenDaMaquina.OutraMaquina(quem, heartbeat.MaquinaId) is { } outra)
+                    return outra;
                 return Results.Ok(await remoto.RegistrarHeartbeatAsync(usuario, heartbeat, ct));
-            })).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
+            })).RequireAuthorization(Seguranca.PoliticaRemotoDaMaquina).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
 
         grupo.MapPut("/retrato", (HttpContext http, ClaimsPrincipal quem, IRemoto remoto, CancellationToken ct)
             => ComUsuario(quem, async usuario =>
@@ -49,8 +52,10 @@ public static class EndpointsDoRemoto
                     return recusa;
                 if (Recusar(retrato!.Contrato, RegrasDoRemoto.Validar(retrato), () => RegrasDoRemoto.CamposSensiveis(retrato)) is { } problema)
                     return problema;
+                if (TokenDaMaquina.OutraMaquina(quem, retrato.MaquinaId) is { } outra)
+                    return outra;
                 return Results.Ok(await remoto.GravarRetratoAsync(usuario, retrato, ct));
-            })).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
+            })).RequireAuthorization(Seguranca.PoliticaRemotoDaMaquina).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
 
         grupo.MapGet("/maquinas", (ClaimsPrincipal quem, IRemoto remoto, CancellationToken ct)
             => ComUsuario(quem, async usuario => Results.Ok(await remoto.MaquinasAsync(usuario, ct))));
@@ -70,10 +75,12 @@ public static class EndpointsDoRemoto
                     return recusa;
                 if (Recusar(catalogo!.Contrato, RegrasDoCatalogo.Validar(catalogo), () => RegrasDoCatalogo.CamposSensiveis(catalogo)) is { } problema)
                     return problema;
+                if (TokenDaMaquina.OutraMaquina(quem, catalogo.MaquinaId) is { } outra)
+                    return outra;
                 return await catalogos.GravarAsync(usuario, catalogo, ct) is { } recebido
                     ? Results.Ok(recebido)
                     : Results.Problem("Máquina não encontrada (o heartbeat vai antes do catálogo), ou não é sua.", statusCode: StatusCodes.Status404NotFound);
-            })).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
+            })).RequireAuthorization(Seguranca.PoliticaRemotoDaMaquina).RequireRateLimiting(LimiteDeTaxa.PoliticaDoRemoto);
 
         grupo.MapGet("/maquinas/{maquinaId}/catalogo", (string maquinaId, ClaimsPrincipal quem, ICatalogoRemoto catalogos, CancellationToken ct)
             => ComUsuario(quem, async usuario =>

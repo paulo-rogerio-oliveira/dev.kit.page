@@ -418,7 +418,7 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 ### Scripts SQL do controle remoto, na ordem
 
-Numa base Azure SQL que já existe, o controle remoto precisa de seis scripts de `api/scripts/sqlserver/`, todos
+Numa base Azure SQL que já existe, o controle remoto precisa de sete scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros):
 
 1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
@@ -427,9 +427,10 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 4. `Decisoes.sql` — as decisões remotas e o segundo fator.
 5. `Push.sql` — as assinaturas e as entregas do push do board.
 6. `CatalogoRemoto.sql` — o último catálogo de cada máquina (o handshake dos atalhos do chat).
+7. `ClienteDaMaquina.sql` — o client credentials da máquina (o cliente e os jti gastos das asserções).
 
 ```bash
-for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto; do
+for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina; do
   sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
 done
 ```
@@ -487,6 +488,27 @@ dev.kit a troca por um token novo sozinho (`POST /api/auth/renovar-pela-maquina`
 A renovação não tem estado no banco: é um JWT com outra audiência (não abre rota nenhuma como Bearer), vale só naquela
 máquina e para aquele usuário, por `Jwt__RenovacaoDaMaquinaDias` (30) a partir do último uso, e cai com a troca de senha,
 com o bloqueio e com a falta de assento. Nenhuma configuração nova nem script.
+
+### Client credentials da máquina (o serviço do dev.kit só no remoto)
+
+Desde o item 9 do remote-control-v3, o serviço do dev.kit não depende mais do token do usuário: no login do app, o dev.kit
+registra a máquina como CLIENTE (`POST /api/auth/cliente-da-maquina`, com o JWT e a `X-Machine-Key`), mandando a chave
+PÚBLICA de um par ECDSA P-256 que ele gerou (a privada fica no DPAPI do usuário na máquina). O serviço pede o token com
+`grant_type=client_credentials` e uma asserção assinada (`private_key_jwt`, RFC 7523) em `POST /api/auth/token`: curta, de
+uso único (`jti`), e o token que volta vale só para o controle remoto daquela máquina e daquele usuário — as demais rotas o
+recusam. O "Desvincular" do Board revoga a máquina; a troca de senha e o bloqueio do usuário revogam todas as dele. A
+renovação pela máquina (seção anterior) continua aceita: o dev.kit cai nela quando a API não anuncia o client credentials.
+
+1. **Banco.** Rode `api/scripts/sqlserver/ClienteDaMaquina.sql` (idempotente; é também o passo 7 da lista do controle remoto) antes de publicar a API.
+2. **Configuração (opcional).** A seção `ClienteDaMaquina` tem padrões seguros, e a API **não sobe** com um valor fora da faixa
+   (a mensagem diz qual):
+
+| Variável da API | Padrão | O que é |
+|---|---|---|
+| `ClienteDaMaquina__Habilitado` | `true` | `false` faz o registro e o token responderem 404: o dev.kit segue na renovação pela máquina. |
+| `ClienteDaMaquina__ValidadeDoTokenMinutos` | `15` | A validade do token da máquina (1 a 60). |
+| `ClienteDaMaquina__ValidadeMaximaDaAssercaoSegundos` | `300` | O maior intervalo entre `iat` e `exp` da asserção (30 a 600). |
+| `ClienteDaMaquina__ToleranciaDoRelogioSegundos` | `60` | A tolerância do relógio da máquina (0 a 300). |
 
 ### Script de infraestrutura
 
