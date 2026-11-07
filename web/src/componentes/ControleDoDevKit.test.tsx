@@ -31,6 +31,8 @@ function preparar(m: MaquinaRemota, conversa: ConversaRemota = { comandos: [], r
     http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse('', { headers: { 'Content-Type': 'text/event-stream' } })),
     http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
       const pedido = await request.json() as ComandoNovo;
+      // O handshake do catálogo (o chat o pede ao conectar com o dev.kit aberto) não é Ligar nem Reiniciar.
+      if (pedido.tipo === 'catalogo') return HttpResponse.json(comando(pedido.tipo, 'na-fila', pedido.id), { status: 202 });
       enviados.push(pedido);
       return responder(pedido, enviados.length);
     }),

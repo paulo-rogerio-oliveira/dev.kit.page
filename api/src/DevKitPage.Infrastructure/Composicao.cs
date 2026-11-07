@@ -96,6 +96,8 @@ public static class Composicao
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();
         servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
+        // O handshake do chat remoto: o último catálogo de cada máquina.
+        servicos.AddScoped<ICatalogoRemoto, CatalogosDoRemoto>();
         // A conversa e os comandos remotos (fase 2): o SQL, a fila do usuário e o aviso do SSE. A fila do Azure lê a chave da
         // conta com a identidade gerenciada da API; a simulada é de desenvolvimento (a API não sobe com ela em Production).
         servicos.AddScoped<IConversaRemota, ConversaRemota>();

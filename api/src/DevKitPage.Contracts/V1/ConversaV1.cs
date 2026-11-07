@@ -131,8 +131,15 @@ public static class ConversaV1
     public const string ComandoLigar = "ligar";
     public const string ComandoReiniciar = "reiniciar";
 
-    /// <summary>O que o site manda: a mensagem ao Orquestrador e, ao serviço, ligar ou reiniciar o dev.kit.</summary>
-    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar];
+    /// <summary>
+    /// O HANDSHAKE do chat remoto (campo novo, contrato seção 5): o site pede o catálogo da máquina, e o dev.kit responde com o
+    /// <c>PUT /api/remoto/catalogo</c> e o <c>concluido</c>. Não abre turno do agente, então não conta no limite por hora; o
+    /// dev.kit antigo o recusa (<c>recusado</c>), e o site segue com o último catálogo e o texto livre.
+    /// </summary>
+    public const string ComandoCatalogo = "catalogo";
+
+    /// <summary>O que o site manda: a mensagem ao Orquestrador, ao serviço ligar ou reiniciar o dev.kit, e o pedido do catálogo.</summary>
+    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo];
 
     public const string EstadoPendente = "pendente";
     public const string EstadoNaFila = "na-fila";

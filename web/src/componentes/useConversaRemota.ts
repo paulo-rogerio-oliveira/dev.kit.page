@@ -129,10 +129,32 @@ export function useConversaRemota(maquina: string) {
     }
   }, [sessao, maquina, sair]);
 
+  /**
+   * (remote-control-v3) O HANDSHAKE dos atalhos do chat: pede à máquina o catálogo pela mesma fila. O dev.kit responde publicando
+   * o catálogo e fechando o pedido (`concluido`), que chega pelo SSE; a API devolve o pedido que ainda espera na fila em vez de
+   * empilhar outro.
+   */
+  const pedirCatalogo = useCallback(async (): Promise<{ ok: true } | { ok: false; mensagem: string }> => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };
+    const pedido: ComandoNovo = {
+      id: crypto.randomUUID(), maquinaId: maquina, tipo: 'catalogo', texto: '',
+      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+    };
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
+      if (!controller.signal.aborted) setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+      return { ok: true };
+    } catch (falha) {
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return { ok: false, mensagem: '' }; }
+      return { ok: false, mensagem: mensagemDaFalha(falha) };
+    }
+  }, [sessao, maquina, sair]);
+
   const atual = carregadaPara === maquina;
   return {
     conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
-    carregando: carregando || !atual, enviando, enviar, acionar, recarregar: () => setTentativa(x => x + 1),
+    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, recarregar: () => setTentativa(x => x + 1),
   };
 }
 

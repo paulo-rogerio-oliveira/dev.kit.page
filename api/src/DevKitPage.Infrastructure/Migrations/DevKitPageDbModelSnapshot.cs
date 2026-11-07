@@ -2880,6 +2880,19 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("EntregasDoPush");
                     b.HasOne("DevKitPage.Core.AssinaturaDoPush", null).WithMany().HasForeignKey("AssinaturaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
+            modelBuilder.Entity("DevKitPage.Core.CatalogoRemoto", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Catalogo").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("GeradoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("RecebidoEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId").IsUnique(); b.HasIndex("RecebidoEmUtc");
+                    b.ToTable("CatalogosRemotos");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

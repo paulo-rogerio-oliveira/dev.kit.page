@@ -108,12 +108,16 @@ public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
             m.RetratoGeradoEmUtc is { } gerado ? DevKitPageDb.Utc(gerado) : null);
 }
 
-/// <summary>A retenção do controle remoto (<see cref="OpcoesDoRemoto.RetencaoDias"/>): pelo último contato da máquina.</summary>
+/// <summary>
+/// A retenção do controle remoto (<see cref="OpcoesDoRemoto.RetencaoDias"/>): pelo último contato da máquina, e o catálogo
+/// pelo último recebimento — o da máquina que saiu não fica órfão por mais que o prazo.
+/// </summary>
 public sealed class ExpurgoDoRemoto(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDoRemoto> opcoes) : IExpurgoDoRemoto
 {
-    public Task<int> ExpurgarAsync(CancellationToken ct)
+    public async Task<int> ExpurgarAsync(CancellationToken ct)
     {
         var corte = relogio.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, opcoes.Value.RetencaoDias));
-        return db.MaquinasRemotas.Where(m => m.AtualizadaEmUtc < corte).ExecuteDeleteAsync(ct);
+        await db.CatalogosRemotos.Where(c => c.RecebidoEmUtc < corte).ExecuteDeleteAsync(ct);
+        return await db.MaquinasRemotas.Where(m => m.AtualizadaEmUtc < corte).ExecuteDeleteAsync(ct);
     }
 }

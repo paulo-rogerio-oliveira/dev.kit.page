@@ -59,11 +59,13 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
     public DbSet<AssinaturaDoPush> AssinaturasDoPush => Set<AssinaturaDoPush>();
     public DbSet<EntregaDoPush> EntregasDoPush => Set<EntregaDoPush>();
+    public DbSet<CatalogoRemoto> CatalogosRemotos => Set<CatalogoRemoto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
         ConfigurarRemoto(modelBuilder);
+        ConfigurarCatalogoRemoto(modelBuilder);
         ConfigurarProvisao(modelBuilder);
         ConfigurarConversa(modelBuilder);
         ConfigurarDecisoes(modelBuilder);
@@ -572,6 +574,20 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(m => new { m.UsuarioId, m.MaquinaId }).IsUnique();
             e.HasIndex(m => m.AtualizadaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+    /// <summary>
+    /// O catálogo de cada máquina (o handshake do chat remoto), por usuário. No Azure SQL a tabela vem de
+    /// api/scripts/sqlserver/CatalogoRemoto.sql. O catálogo é nvarchar(max), com o teto do contrato conferido antes.
+    /// </summary>
+    private static void ConfigurarCatalogoRemoto(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<CatalogoRemoto>(e =>
+        {
+            e.ToTable("CatalogosRemotos");
+            e.Property(c => c.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.HasIndex(c => new { c.UsuarioId, c.MaquinaId }).IsUnique();
+            e.HasIndex(c => c.RecebidoEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
 
     /// <summary>

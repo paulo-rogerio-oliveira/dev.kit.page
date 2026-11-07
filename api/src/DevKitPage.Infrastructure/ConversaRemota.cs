@@ -40,10 +40,20 @@ public sealed class ConversaRemota(
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.SemFila,
                 "Você ainda não tem a fila do controle remoto pronta. Peça-a na sua conta (Fila do controle remoto).");
 
+        // O handshake (o pedido do catálogo) ainda na fila serve a quem pede de novo: o site que reabre o Board e o duplo
+        // "Atualizar" não empilham pedidos que o dev.kit responderia todos com o mesmo catálogo.
+        if (tipo == ConversaV1.ComandoCatalogo && await db.ComandosRemotos.AsNoTracking()
+                .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == pedido.MaquinaId && c.Tipo == ConversaV1.ComandoCatalogo
+                            && (c.Estado == ConversaV1.EstadoPendente || c.Estado == ConversaV1.EstadoNaFila) && c.ExpiraEmUtc > agora)
+                .OrderByDescending(c => c.CriadoEmUtc).FirstOrDefaultAsync(ct) is { } aguardando)
+            return new(new ComandoAceito(Leitura(aguardando), Novo: false));
+
+        // O limite por hora é de quem pode abrir turno do agente: o handshake não abre, e não conta nem é barrado por ele.
         var inicioDaJanela = agora.AddHours(-1);
-        var naJanela = await db.ComandosRemotos.AsNoTracking().Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela)
+        var naJanela = await db.ComandosRemotos.AsNoTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela && c.Tipo != ConversaV1.ComandoCatalogo)
             .Select(c => c.CriadoEmUtc).ToListAsync(ct);
-        if (RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
+        if (tipo != ConversaV1.ComandoCatalogo && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
         {
             var espera = RegrasDaConversa.TenteEm(naJanela.Min(), agora);
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.Limite,

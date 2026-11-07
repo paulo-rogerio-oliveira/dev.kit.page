@@ -55,9 +55,12 @@ export interface ComandoRemoto {
   estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
   criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
 }
-/** O envio: a mensagem ao Orquestrador, ou o Ligar/Reiniciar que o serviço da máquina executa (item 8). */
+/**
+ * O envio: a mensagem ao Orquestrador, o Ligar/Reiniciar que o serviço da máquina executa (item 8) ou o pedido do catálogo dos
+ * atalhos do chat (o handshake, remote-control-v3).
+ */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar'; texto: string; dispositivo: 'celular' | 'navegador';
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo'; texto: string; dispositivo: 'celular' | 'navegador';
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
 }
@@ -73,6 +76,17 @@ export interface ConversaRemota {
   /** `falas` é campo novo do contrato v1: a API antiga não o manda. */
   comandos: ComandoRemoto[]; respostas: RespostaRemota[]; ultimoEvento: number; falas?: FalaRemota[] | null;
 }
+/** O catálogo da máquina (contrato seção 5, Contracts/V1/CatalogoRemotoV1.cs): o que os atalhos / # @ do chat oferecem. */
+export interface CatalogoRemoto {
+  contrato: number; maquinaId: string; geradoEm: string; comandoId: string | null;
+  workItems: Array<{ id: number; titulo: string; tipo?: string | null; estado?: string | null }> | null;
+  repositorios: Array<{ nome: string; branchPadrao?: string | null }> | null;
+  fluxos: Array<{ nome: string; descricao?: string | null }> | null;
+  projetos: Array<{ slug: string; nome: string; situacao?: string | null }> | null;
+  designs: Array<{ nome: string; telas: number }> | null;
+}
+/** O último catálogo recebido da máquina, com a data em que a API o recebeu (vale também com o dev.kit fechado). */
+export interface CatalogoDaMaquina { maquinaId: string; recebidoEm: string; catalogo: CatalogoRemoto }
 export interface EventoDaConversa {
   id: number; tipo: string; maquinaId: string; comando: ComandoRemoto | null; resposta: RespostaRemota | null; em: string;
   fala?: FalaRemota | null;
