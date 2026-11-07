@@ -2,13 +2,10 @@
 .board-remoto .br-btn.br-primary:disabled {background:var(--panel); color:var(--soft)!important; border-color:var(--line)}
 .board-remoto .br-decisao-card {width:100%; max-width:680px; flex:none; overflow-wrap:anywhere; border-color:var(--needline)}
 .br-decisao-titulo {display:flex; align-items:start; justify-content:space-between; gap:8px}
-.br-decisao-titulo .br-chip {font-size:10px}
 .br-decisao-card p {font-size:12px; margin:8px 0}
 .br-decisao-card small {display:block; margin-top:10px; font-size:10.5px}
 .br-decisao-card .br-row {flex-wrap:wrap}
 .br-decisao-card .br-row .br-btn {min-width:90px}
-.br-tentativa {background:var(--panel); padding:8px; border-radius:6px; color:var(--muted)}
-.br-tentativa strong {font-size:11px; color:var(--ink)}
 .br-registro {color:var(--ok)!important; overflow-wrap:anywhere}
 /* US #858: o cartão do painel nasce recolhido (título, origem, tipo e a ação principal). */
 .br-compacta .br-origem {display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin:3px 0 6px; font-size:11.5px; color:var(--muted)}
@@ -19,7 +16,6 @@
 .br-compacta .br-detalhes>p {margin:0 0 7px}
 .br-compacta .br-detalhes>small {margin:0 0 8px}
 .br-compacta .br-detalhes>.br-row {margin-bottom:6px}
-.br-chat-decisoes {display:flex; flex-direction:column; gap:14px; flex:none}
 .br-chat-aviso.br-chat-seguranca {background:var(--surface); color:var(--muted); font-size:11px}
 .br-review {flex:1; display:flex; flex-direction:column; overflow:auto; padding:24px 30px; font-size:12px; min-height:0}
 .br-review h1 {font-size:19px; margin:12px 0 4px}

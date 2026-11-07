@@ -86,6 +86,89 @@ it('mostra as falas digitadas no desktop e a resposta do Orquestrador, na ordem 
   expect(artigos[2]).toHaveTextContent('Você · remoto · navegador');
 });
 
+// ----- Só a conversa (remote-control-v3, item 3) -----
+
+it('o chat não renderiza decisão: a aprovação fica só no painel de decisões', async () => {
+  preparar({ comandos: [comando('respondido')], respostas: [], ultimoEvento: 10 });
+  let lidas = false;
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => { lidas = true; return HttpResponse.json([
+    { pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Integrar o item 4?' }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null },
+    { pendencia: { id: 'p2', tipo: 'pergunta', titulo: 'Seguir com o Fechamento?', opcoes: ['Seguir', 'Aguardar'] }, snapshotId: 'c'.repeat(64), bloqueio: null, resposta: null },
+  ]); }));
+  await abrir();
+  await waitFor(() => expect(lidas).toBe(true));
+  await act(() => new Promise(resolve => setTimeout(resolve, 50)));
+  const log = within(screen.getByRole('log'));
+  expect(log.getAllByRole('article')).toHaveLength(1);
+  expect(log.queryByText('Integrar o item 4?')).not.toBeInTheDocument();
+  expect(log.queryByText('Seguir com o Fechamento?')).not.toBeInTheDocument();
+  expect(log.queryByRole('button', { name: 'Revisar e aprovar' })).not.toBeInTheDocument();
+  expect(log.queryByRole('button', { name: 'Pedir ajuste' })).not.toBeInTheDocument();
+  expect(log.queryByRole('button', { name: 'Seguir' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Revisar e aprovar' })).not.toBeInTheDocument();
+});
+
+it('não mostra os turnos automáticos do Orquestrador nem repete o mesmo aviso empilhado', async () => {
+  const minutos = (n: number) => new Date(Date.now() - n * 60000);
+  const aviso = 'Aviso do dev.kit: o item 4 aguarda a sua aprovação no painel de decisões.';
+  const ultimoAviso = minutos(10);
+  const site = comando('respondido');
+  preparar({ comandos: [{ ...site, criadoEm: minutos(5).toISOString() }], ultimoEvento: 10,
+    respostas: [{ id: 'r1', maquinaId: 'notebook', comandoId: site.id, tipo: 'mensagem', texto: 'Resposta à pergunta do site', geradaEm: minutos(4).toISOString(), recebidaEm: minutos(4).toISOString() }],
+    falas: [
+      fala('dev', 'Qual é a situação da onda 2?', minutos(50), { id: 'fd-1' }),
+      fala('orquestrador', 'A onda 2 tem três itens integrados.', minutos(49), { id: 'fo-1-1' }),
+      // Os turnos de lote (o git.kit marca com fl-): a resposta aos avisos, retratos e gatilhos não é conversa.
+      fala('orquestrador', 'Retrato atualizado: 3 pendências.', minutos(40), { id: 'fl-a-1' }),
+      fala('orquestrador', 'Gatilho "Avaliador" concluído para o item 6: nota 92.', minutos(30), { id: 'fl-b-1' }),
+      // O dev.kit sem a marca: o mesmo aviso, três vezes, fica uma vez só — a última.
+      fala('orquestrador', aviso, minutos(20), { id: 'fo-2-1' }),
+      fala('orquestrador', `${aviso} `, minutos(15), { id: 'fo-3-1' }),
+      fala('orquestrador', aviso, ultimoAviso, { id: 'fo-4-1' }),
+      // A fala do dev nunca se junta, mesmo repetida.
+      fala('dev', 'ok', minutos(9), { id: 'fd-2' }),
+      fala('dev', 'ok', minutos(8), { id: 'fd-3' }),
+    ] });
+  await abrir();
+  const log = within(screen.getByRole('log'));
+  expect(log.queryByText(/Retrato atualizado/)).not.toBeInTheDocument();
+  expect(log.queryByText(/Gatilho "Avaliador"/)).not.toBeInTheDocument();
+  expect(log.getAllByText(aviso)).toHaveLength(1);
+  const artigos = log.getAllByRole('article');
+  expect(artigos.map(a => a.querySelector('p')?.textContent?.trim())).toEqual([
+    'Qual é a situação da onda 2?', 'A onda 2 tem três itens integrados.', aviso, 'ok', 'ok',
+    `${site.texto} Respondido pelo dev.kit.`, 'Resposta à pergunta do site',
+  ]);
+  expect(artigos[2].querySelector('time')).toHaveAttribute('dateTime', ultimoAviso.toISOString());
+});
+
+it('a resposta do Orquestrador que repete o texto depois de outra pergunta do dev é conversa e fica', async () => {
+  const minutos = (n: number) => new Date(Date.now() - n * 60000);
+  const resposta = 'Nada novo: os três fluxos seguem em execução.';
+  preparar({ comandos: [], respostas: [], ultimoEvento: 10, falas: [
+    fala('dev', 'Alguma novidade?', minutos(30), { id: 'fd-1' }),
+    fala('orquestrador', resposta, minutos(29), { id: 'fo-1-1' }),
+    fala('dev', 'E agora?', minutos(10), { id: 'fd-2' }),
+    fala('orquestrador', resposta, minutos(9), { id: 'fo-2-1' }),
+  ] });
+  await abrir();
+  const artigos = within(screen.getByRole('log')).getAllByRole('article');
+  expect(artigos.map(a => a.querySelector('p')?.textContent?.trim())).toEqual(['Alguma novidade?', resposta, 'E agora?', resposta]);
+});
+
+it('a fala de turno automático que chega pelo SSE não entra no chat', async () => {
+  preparar();
+  const automatica = fala('orquestrador', 'Aviso do dev.kit: gatilho concluído.', new Date(), { id: 'fl-c-1' });
+  const conversa = fala('orquestrador', 'Resposta de conversa.', new Date(), { id: 'fo-c-1' });
+  const quadro = (id: number, f: FalaRemota) => `id: ${id}\nevent: fala\ndata: ${JSON.stringify({ id, tipo: 'fala', maquinaId: 'notebook', comando: null, resposta: null, em: f.recebidaEm, fala: f })}\n\n`;
+  servidor.use(http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse(quadro(11, automatica) + quadro(12, conversa),
+    { headers: { 'Content-Type': 'text/event-stream' } })));
+  await abrir();
+  expect(await screen.findByText('Resposta de conversa.')).toBeInTheDocument();
+  expect(screen.queryByText('Aviso do dev.kit: gatilho concluído.')).not.toBeInTheDocument();
+  expect(within(screen.getByRole('log')).getAllByRole('article')).toHaveLength(1);
+});
+
 it('a fala do desktop que chega pelo SSE entra no chat sem recarregar, uma vez só', async () => {
   preparar();
   const nova = fala('dev', 'Digitada agora no desktop', new Date());

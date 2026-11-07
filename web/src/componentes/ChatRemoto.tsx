@@ -3,8 +3,6 @@ import type { ComandoRemoto, FalaRemota, MaquinaRemota, RespostaRemota } from '.
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
 import type { CatalogoDoChat } from './useCatalogoRemoto';
-import { CartaoDaDecisao, type AoDecidir } from './DecisoesRemotas';
-import type { DecisaoPendente } from '../api/remoto';
 import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
 import { rotuloDoDia } from './filtroDeDia';
 
@@ -36,15 +34,51 @@ function autorDaLinha(linha: LinhaDoChat, doServico: Set<string>) {
 }
 
 /**
+ * A fala de um turno AUTOMÁTICO do Orquestrador (remote-control-v3, item 3): o git.kit marca na origem o turno de lote — a
+ * resposta aos avisos, retratos e gatilhos da varredura — com o id `fl-` (JobPonteRemota.TurnoDeLote). Não é conversa: o site
+ * não a mostra, e o que ela anuncia já está no painel de decisões.
+ */
+export function turnoAutomatico(fala: FalaRemota) { return fala.autor !== 'dev' && fala.id.startsWith('fl-'); }
+
+/**
+ * A chave da fala espontânea do Orquestrador (a fala sem comando e a resposta sem comando): o mesmo texto repetido SEM
+ * conversa no meio é o mesmo aviso empilhado. A fala do dev e a resposta a um comando nunca se juntam (chave nula).
+ */
+function chaveDeRepeticao(linha: LinhaDoChat) {
+  const texto = linha.fala && linha.fala.autor !== 'dev' && !linha.fala.comandoId ? linha.fala.texto
+    : linha.resposta && !linha.resposta.comandoId ? linha.resposta.texto : null;
+  return texto === null ? null : texto.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * As linhas em ordem, sem a repetição EMPILHADA de uma fala espontânea do Orquestrador: dentro de uma sequência dessas falas
+ * (sem fala do dev nem comando entre elas), o mesmo texto aparece uma vez, a mais recente, no lugar dela. A resposta que
+ * repete o texto depois de outra pergunta do dev é conversa e fica.
+ */
+function semRepeticao(linhas: LinhaDoChat[]) {
+  const repetidas = new Set<string>();
+  let sequencia = new Map<string, string>();
+  for (const linha of linhas) {
+    const chave = chaveDeRepeticao(linha);
+    if (!chave) { sequencia = new Map(); continue; }
+    const anterior = sequencia.get(chave);
+    if (anterior) repetidas.add(anterior);
+    sequencia.set(chave, linha.id);
+  }
+  return linhas.filter(linha => !repetidas.has(linha.id));
+}
+
+/**
  * O chat do Orquestrador, sobre a conversa que o Board abre (a mesma do controle do dev.kit, item 8): as mensagens, as
  * respostas e o Ligar/Reiniciar pedido ao serviço da máquina, com o desfecho que ele mandou — e as falas do chat do dev.kit
  * (o que o dev digitou no desktop e a resposta do Orquestrador), para o site mostrar a mesma conversa (item 8 do v3).
+ * Só a CONVERSA (remote-control-v3, item 3): as decisões e aprovações ficam no painel de decisões, com o segundo fator e o
+ * SHA conferido, e os turnos automáticos e os avisos repetidos não entram.
  */
-export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo, decisoes = [], desabilitarDecisoes = true, decidir, revisar }: {
+export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo }: {
   maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; conversaRemota: ConversaDaMaquina;
   /** O catálogo da máquina, o MESMO do painel do Board (um handshake só por máquina). */
   catalogo: CatalogoDoChat;
-  decisoes?: DecisaoPendente[]; desabilitarDecisoes?: boolean; decidir?: AoDecidir; revisar?: (d: DecisaoPendente) => void;
 }) {
   const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
@@ -61,18 +95,27 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
   // não são conversa: nem o pedido nem a resposta deles entram no chat.
   const foraDoChat = new Set(conversa.comandos.filter(c => c.tipo !== 'mensagem' && !doServico.has(c.id)).map(c => c.id));
   const comandosDaConversa = new Set(conversa.comandos.map(c => c.id));
-  const linhas: LinhaDoChat[] = [
+  const linhas = semRepeticao([
     ...conversa.comandos.filter(c => c.tipo === 'mensagem' || doServico.has(c.id)).map(c => ({ id: `c-${c.id}`, data: c.criadoEm, comando: c, resposta: null, fala: null })),
     ...conversa.respostas.filter(r => !r.comandoId || !foraDoChat.has(r.comandoId))
       .map(r => ({ id: `r-${r.id}`, data: r.geradaEm, comando: null, resposta: r, fala: null })),
-    // As falas do chat do dev.kit, na hora em que foram ditas; a de um comando do site já aparece como ele (não repete).
-    ...(conversa.falas ?? []).filter(f => !(f.comandoId && comandosDaConversa.has(f.comandoId)))
+    // As falas do chat do dev.kit, na hora em que foram ditas; a de um comando do site já aparece como ele (não repete), e a
+    // de um turno automático do Orquestrador não é conversa.
+    ...(conversa.falas ?? []).filter(f => !(f.comandoId && comandosDaConversa.has(f.comandoId)) && !turnoAutomatico(f))
       .map(f => ({ id: `f-${f.id}`, data: f.ditaEm, comando: null, resposta: null, fala: f })),
-  ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id));
+  ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id)));
   const ultima = linhas.at(-1)?.id;
+  // A rolagem fica na última mensagem: na mensagem nova e quando a área do chat muda de altura (um aviso que entra ou sai).
   useEffect(() => {
     if (pertoDoFim.current && mensagens.current) mensagens.current.scrollTop = mensagens.current.scrollHeight;
-  }, [ultima]);
+  }, [ultima, carregando]);
+  useEffect(() => {
+    const area = mensagens.current;
+    if (!area || typeof ResizeObserver === 'undefined') return;
+    const observador = new ResizeObserver(() => { if (pertoDoFim.current) area.scrollTop = area.scrollHeight; });
+    observador.observe(area);
+    return () => observador.disconnect();
+  }, []);
   async function submeter() {
     if (desabilitado || excedeu || !texto.trim()) return;
     if (await enviar(textoFinal)) { setTexto(''); caixa.current?.focus(); pertoDoFim.current = true; }
@@ -113,7 +156,6 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
           </article>
         </Fragment>;
       })}
-    {decidir && revisar && <div className="br-chat-decisoes">{decisoes.map(d => <CartaoDaDecisao key={`${d.pendencia.id}-${d.snapshotId}`} decisao={d} desabilitado={desabilitarDecisoes} decidir={decidir} revisar={revisar} />)}</div>}
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>
