@@ -239,7 +239,14 @@ public sealed class OpcoesDaProvisao
     /// <summary>Por quanto tempo uma execução fica reservada a um worker: passou disto, outro a retoma (o worker caiu).</summary>
     public int ReservaMinutos { get; set; } = 10;
 
-    /// <summary>O prefixo do grupo de recursos do usuário: <c>rg-devkit-u{id}</c>.</summary>
+    /// <summary>
+    /// O grupo de recursos FIXO da provisão (ex.: <c>devkit-clients</c>), já criado na assinatura: a fila e os aplicativos de todos
+    /// os usuários ficam nele, com nomes únicos por usuário e as tags de dono. O worker não cria grupo e não sobe sem ele; a API
+    /// grava este grupo no pedido. Vazio só no desenvolvimento (cai no <see cref="PrefixoDoGrupo"/>).
+    /// </summary>
+    public string Grupo { get; set; } = string.Empty;
+
+    /// <summary>O grupo do usuário quando o <see cref="Grupo"/> não está configurado (desenvolvimento, provedor simulado): <c>rg-devkit-u{id}</c>.</summary>
     public string PrefixoDoGrupo { get; set; } = "rg-devkit-u";
 
     /// <summary>A cota de App Services ATIVOS (não removidos) por usuário.</summary>
