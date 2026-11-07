@@ -60,7 +60,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     <h2>Precisa de você · {retrato?.pendencias?.length ?? 0}</h2>
     {retrato?.pendencias?.map(p => {
       const d = decisoes.find(d => d.pendencia.id === p.id);
-      return d ? <CartaoDaDecisao key={`${p.id}-${d.snapshotId}`} decisao={d} compacta destacada={destacada === p.id} desabilitado={desabilitado} decidir={decidir} revisar={revisar} />
+      return d ? <CartaoDaDecisao key={`${p.id}-${d.snapshotId}`} decisao={d} destacada={destacada === p.id} desabilitado={desabilitado} decidir={decidir} revisar={revisar} />
         : <PendenciaSemDados key={p.id} pendencia={p} />;
     })}
     {!retrato?.pendencias?.length && <p className="br-note">Nenhuma pendência recebida.</p>}
@@ -266,7 +266,7 @@ export function Board() {
     <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board', contagem: foto?.retrato?.pendencias?.length }]} ativa={aba} aoMudar={id => mudarParametro('aba', id)}>
     {/* Como no Board do dev.kit: o chat na coluna principal e o painel de auxílio à direita, na mesma ordem de leitura. */}
     <main className="br-main">
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} />
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
         <Chips rotulo="Filtro de dia" opcoes={periodosDoDia} valor={periodo} aoMudar={valor => mudarParametro('dia', valor)} />
