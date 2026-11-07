@@ -5,6 +5,11 @@ const CONSULTA = '(prefers-reduced-motion: reduce)';
 function assinar(avisar: () => void): () => void {
   if (typeof window.matchMedia !== 'function') return () => {};
   const lista = window.matchMedia(CONSULTA);
+  // O Safari antes do 14 (e dublês de teste) só têm o addListener legado na MediaQueryList.
+  if (typeof lista.addEventListener !== 'function') {
+    lista.addListener?.(avisar);
+    return () => lista.removeListener?.(avisar);
+  }
   lista.addEventListener('change', avisar);
   return () => lista.removeEventListener('change', avisar);
 }

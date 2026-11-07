@@ -5,6 +5,8 @@ export interface Aba {
   rotulo: string;
   /** A aba recém-chegada leva o selo "novo" ao lado do rótulo (a Design da US #669). */
   novo?: boolean;
+  /** O número ao lado do rótulo (as pendências da aba Board, US #858); zero ou ausente, não aparece. */
+  contagem?: number;
 }
 
 /**
@@ -48,6 +50,7 @@ export function Abas({ rotulo, abas, ativa, aoMudar, prefixo = 'aba', acao, chil
         >
           {aba.rotulo}
           {aba.novo && <span className="recurso-novo" aria-hidden="true">novo</span>}
+          {!!aba.contagem && <span className="aba-contagem" aria-hidden="true">{aba.contagem}</span>}
         </button>
       ))}
     </div>
