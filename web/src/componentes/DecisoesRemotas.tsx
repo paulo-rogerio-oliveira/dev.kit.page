@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from '../api/remoto';
+import type { DecisaoPendente, PendenciaRemota, ResponderDecisao, RespostaDaDecisao } from '../api/remoto';
 import { useSessao } from '../sessao';
 import './DecisoesRemotas.css';
 
@@ -10,13 +10,28 @@ export function RegistroDaDecisao({ resposta }: { resposta: RespostaDaDecisao })
   return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
 }
 
-export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, decidir, revisar }: {
-  decisao: DecisaoPendente; compacta?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+/** O projeto e o item da pendência, e o tipo dela: a linha do cartão recolhido do painel. */
+export function OrigemDaPendencia({ pendencia: p }: { pendencia: PendenciaRemota }) {
+  const origem = [p.projeto, p.item ? `item ${p.item}` : ''].filter(Boolean).join(' · ');
+  return <p className="br-origem">{origem && <span>{origem}</span>}<span className={`br-tipo${p.tipo === 'aprovacao' ? ' br-tipo-aprovacao' : ''}`}>{p.tipo === 'aprovacao' ? 'Aprovação' : 'Pergunta'}</span></p>;
+}
+
+/** O Ver detalhes do cartão recolhido (US #858): o painel mostra o título e a ação principal, e o resto sob pedido. */
+export function BotaoDeDetalhes({ aberto, alternar, controla, principal = false }: { aberto: boolean; alternar: () => void; controla: string; principal?: boolean }) {
+  return <button className={`br-btn${principal && !aberto ? ' br-primary' : ''}`} aria-expanded={aberto} aria-controls={controla} onClick={alternar}>{aberto ? 'Ocultar detalhes' : 'Ver detalhes'}</button>;
+}
+
+export function CartaoDaDecisao({ decisao: d, compacta = false, destacada = false, desabilitado, decidir, revisar }: {
+  decisao: DecisaoPendente; compacta?: boolean; destacada?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
   const [resposta, setResposta] = useState<RespostaDaDecisao | null>(null);
+  // No painel o cartão nasce recolhido; a notificação que aponta para ele o abre.
+  const [aberto, setAberto] = useState(destacada);
+  useEffect(() => { if (destacada) setAberto(true); }, [destacada]);
   const p = d.pendencia;
+  const idDoCartao = `${compacta ? 'board' : 'chat'}-decisao-${encodeURIComponent(p.id)}`;
   async function responder(opcao: string) {
     if (enviando) return;
     setEnviando(true); setErro('');
@@ -29,21 +44,43 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
   const resumo = p.tipo === 'aprovacao' && snapshot
     ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
     : p.jaTentei;
-  return <section id={`${compacta ? 'board' : 'chat'}-decisao-${encodeURIComponent(p.id)}`} tabIndex={-1} className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
-    <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
-    {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
-    {resumo && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
+  const pendente = !registro || registro.estado === 'vencida';
+  if (compacta) {
+    const detalhes = `${idDoCartao}-detalhes`;
+    return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card br-need br-compacta" aria-label={p.titulo}>
+      <div className="br-decisao-titulo"><b>{p.titulo}</b></div>
+      <OrigemDaPendencia pendencia={p} />
+      {p.tipo === 'aprovacao' && resumo && <p>{resumo}</p>}
+      {registro && <RegistroDaDecisao resposta={registro} />}
+      <div id={detalhes} className="br-detalhes">{aberto && <>
+        {p.pergunta && <p>{p.pergunta}</p>}
+        {p.tipo !== 'aprovacao' && resumo && <p>{resumo}</p>}
+        {pendente && <>
+          {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
+          {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
+          <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
+          {d.bloqueio && <p role="status">{d.bloqueio}</p>}
+        </>}
+      </>}</div>
+      <div className="br-row">
+        <BotaoDeDetalhes aberto={aberto} alternar={() => setAberto(a => !a)} controla={detalhes} principal={p.tipo !== 'aprovacao' && pendente} />
+        {p.tipo === 'aprovacao' && pendente && <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>}
+      </div>
+      {erro && <p role="alert">{erro}</p>}
+    </section>;
+  }
+  return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card" aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b>{p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
+    {p.pergunta && <p><strong>Pergunta: </strong>{p.pergunta}</p>}
+    {resumo && <p className={p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
     {registro && <RegistroDaDecisao resposta={registro} />}
-    {(!registro || registro.estado === 'vencida') && <>
+    {pendente && <>
       {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
       {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
-      {p.tipo === 'aprovacao' && <div className="br-row">{compacta ? <>
-        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Ver detalhes</button>
-        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>
-      </> : <>
+      {p.tipo === 'aprovacao' && <div className="br-row">
         <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Revisar e aprovar</button>
         <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Pedir ajuste</button>
-      </>}</div>}
+      </div>}
       <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
       {d.bloqueio && <p role="status">{d.bloqueio}</p>}
     </>}

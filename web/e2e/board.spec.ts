@@ -65,7 +65,11 @@ test('Board consulta o retrato real, atualiza e só decide pela revisão com seg
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
       // Decidir só abre a revisão; o ato irreversível exige o segundo fator e o SHA conferido (nenhuma escrita aqui).
       await expect(page.getByRole('button', { name: 'Decidir', exact: true })).toBeEnabled();
-      await expect(page.getByRole('complementary', { name: 'Board' }).getByText('Ato irreversível · exige segundo fator e SHA conferido.')).toBeVisible();
+      // Desde a US #858 o cartão do painel nasce recolhido: a nota de segurança aparece com o Ver detalhes.
+      const painel = page.getByRole('complementary', { name: 'Board' });
+      const detalhes = painel.getByRole('button', { name: 'Ver detalhes', exact: true });
+      if (await detalhes.count()) await detalhes.click();
+      await expect(painel.getByText('Ato irreversível · exige segundo fator e SHA conferido.')).toBeVisible();
       if (width < 700) {
         await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
         await page.getByRole('tab', { name: 'Chat', exact: true }).click();

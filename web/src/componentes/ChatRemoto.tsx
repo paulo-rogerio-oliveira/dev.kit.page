@@ -6,13 +6,10 @@ import { useCatalogoRemoto } from './useCatalogoRemoto';
 import { CartaoDaDecisao, type AoDecidir } from './DecisoesRemotas';
 import type { DecisaoPendente } from '../api/remoto';
 import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
+import { rotuloDoDia } from './filtroDeDia';
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function dataCompleta(data: string) { return new Date(data).toLocaleString('pt-BR'); }
-function dia(data: string, agora: number) {
-  const mensagem = new Date(data);
-  return mensagem.toDateString() === new Date(agora).toDateString() ? 'Hoje' : mensagem.toLocaleDateString('pt-BR');
-}
 function estadoDo(comando: ComandoRemoto, agora: number) {
   switch (comando.estado) {
     case 'pendente': return ['Registrado', 'Entrando na fila; envio ainda não confirmado.', false] as const;
@@ -104,7 +101,7 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, decisoes
         const doDev = !!comando || fala?.autor === 'dev';
         const novoDia = indice === 0 || new Date(linha.data).toDateString() !== new Date(linhas[indice - 1].data).toDateString();
         return <Fragment key={linha.id}>
-          {novoDia && <p className="br-dia">{dia(linha.data, agora)} · mesma conversa do dev.kit</p>}
+          {novoDia && <p className="br-dia">{rotuloDoDia(linha.data, agora)} · mesma conversa do dev.kit</p>}
           <article className={`br-msg${doDev ? ' br-voce' : ''}`}>
           <div className="br-meta"><span>{autorDaLinha(linha, doServico)} · <time dateTime={linha.data} title={dataCompleta(linha.data)}>{hora(linha.data)}</time></span>
             {estado && <strong className={estado[2] ? 'br-entregue' : 'br-espera'}>{estado[0]}</strong>}</div>
