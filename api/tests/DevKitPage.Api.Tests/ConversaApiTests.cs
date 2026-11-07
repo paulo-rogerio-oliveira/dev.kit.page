@@ -39,16 +39,18 @@ public sealed class ConversaApiTests : IDisposable
         => new(RemotoV1.Contrato, Maquina, id, comando, tipo, texto, DateTimeOffset.UtcNow);
 
     /// <summary>
-    /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera, o dev pede a fila e o motor do worker a conclui — e a
-    /// máquina já mandou o heartbeat.
+    /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera (e a liberação pede a fila, remote-control-v3 item 5) e
+    /// o motor do worker a conclui — e a máquina já mandou o heartbeat.
     /// </summary>
     private async Task<(HttpClient Admin, HttpClient Dev)> DevComFilaAsync(string login = "ana", HttpClient? admin = null)
     {
         admin ??= await _api.AdminAsync();
         var (dev, _) = await _api.UsuarioAsync(admin, login, Papeis.Dev);
         var id = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == login).Id;
-        (await admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true))).EnsureSuccessStatusCode();
-        var pedido = (await (await dev.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null))).Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
+        var liberacao = await admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true));
+        liberacao.EnsureSuccessStatusCode();
+        var fila = (await liberacao.Content.ReadFromJsonAsync<UsuarioResumo>())!.Fila!;
+        var pedido = (await dev.GetFromJsonAsync<DetalheDoRecursoV1>($"/api/provisao/recursos/{fila.Id}"))!.Recurso;
         using (var escopo = _api.Services.CreateScope())
         {
             var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();
