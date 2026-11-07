@@ -157,6 +157,9 @@ export const api = {
     requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
   maquinasRemotas: (token: string, signal?: AbortSignal) =>
     chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
+  /** O "Desvincular": revoga o client credentials do serviço da máquina (204); o token dela deixa de valer na hora. */
+  desvincularMaquina: (token: string, maquina: string) =>
+    chamar<void>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/vinculo`, { metodo: 'DELETE', token }),
   retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<RetratoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/retrato`, { token, signal }),
   /** O último catálogo dos atalhos do chat (o handshake); 404 enquanto a máquina não mandou nenhum. */

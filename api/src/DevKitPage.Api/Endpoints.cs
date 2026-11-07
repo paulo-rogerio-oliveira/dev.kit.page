@@ -34,20 +34,27 @@ public static class Endpoints
         // A renovação PELA MÁQUINA (o serviço do dev.kit com o app fechado): o app, logado, pede a renovação presa à máquina
         // (o JWT E a X-Machine-Key); o serviço a troca depois por um token novo só com a chave da máquina — sem a senha. Cada
         // troca devolve a renovação seguinte, e as recusas são as do login (bloqueio, assento) mais a senha trocada.
-        grupo.MapPost("/sessao-da-maquina", async (HttpContext http, ClaimsPrincipal quem, IUsuarios usuarios, IMaquinas maquinas, EmissorDeToken emissor, CancellationToken ct) =>
+        // A máquina DESVINCULADA no site (o client credentials do item 9 do remote-control-v3) também não renova por aqui: o
+        // "Desvincular" vale para o serviço inteiro, até o próximo login no app vincular de novo.
+        grupo.MapPost("/sessao-da-maquina", async (HttpContext http, ClaimsPrincipal quem, IUsuarios usuarios, IMaquinas maquinas, IClientesDaMaquina clientes,
+            EmissorDeToken emissor, CancellationToken ct) =>
         {
             if (Seguranca.UsuarioId(quem) is not { } id || await usuarios.ObterAsync(id, ct) is not { } usuario)
                 return Results.Unauthorized();
             if (await maquinas.AutenticarAsync(http.Request.Headers[ContratoV1.CabecalhoDaChave].ToString(), ct) is not { } maquina)
                 return Results.Problem("Informe a chave da máquina (X-Machine-Key): a renovação é de um usuário numa máquina.", statusCode: StatusCodes.Status401Unauthorized);
+            if (await clientes.RevogadaAsync(maquina.Id, ct))
+                return Results.Problem("Esta máquina foi desvinculada no site: entre no dev.kit com a sua conta para vinculá-la de novo.", statusCode: StatusCodes.Status401Unauthorized);
             return Results.Ok(emissor.EmitirRenovacaoDaMaquina(usuario, maquina.Id));
         });
 
-        grupo.MapPost("/renovar-pela-maquina", async (RenovacaoPelaMaquinaV1? pedido, HttpContext http, IUsuarios usuarios, IMaquinas maquinas, EmissorDeToken emissor, CancellationToken ct) =>
+        grupo.MapPost("/renovar-pela-maquina", async (RenovacaoPelaMaquinaV1? pedido, HttpContext http, IUsuarios usuarios, IMaquinas maquinas, IClientesDaMaquina clientes,
+            EmissorDeToken emissor, CancellationToken ct) =>
         {
             const string invalida = "A renovação da máquina não vale mais: entre no dev.kit com a sua conta.";
             if (await maquinas.AutenticarAsync(http.Request.Headers[ContratoV1.CabecalhoDaChave].ToString(), ct) is not { } maquina
-                || await emissor.LerRenovacaoDaMaquinaAsync(pedido?.Renovacao, maquina.Id) is not { } lida)
+                || await emissor.LerRenovacaoDaMaquinaAsync(pedido?.Renovacao, maquina.Id) is not { } lida
+                || await clientes.RevogadaAsync(maquina.Id, ct))
                 return Results.Problem(invalida, statusCode: StatusCodes.Status401Unauthorized);
             var (resultado, usuario) = await usuarios.RenovarAsync(lida.UsuarioId, ct);
             if (resultado != ResultadoDoLogin.Ok)
