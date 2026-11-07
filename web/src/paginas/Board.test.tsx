@@ -336,7 +336,7 @@ describe('Board remoto', () => {
         return HttpResponse.json(foto);
       }));
     }
-    const nomes = (painel: ReturnType<typeof within>) => painel.queryAllByText(/^Execução /).map(e => e.textContent);
+    const nomes = (painel: ReturnType<typeof within>) => painel.queryAllByText(/^Execução /).map((e: HTMLElement) => e.textContent);
 
     it('põe o painel de auxílio à direita do chat, na mesma ordem de leitura', async () => {
       responder();

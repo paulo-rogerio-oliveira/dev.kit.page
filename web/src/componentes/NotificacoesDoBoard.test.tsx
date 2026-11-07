@@ -104,7 +104,7 @@ describe('aviso do site com timer (US #858)', () => {
       <HistoricoDeAvisos avisos={avisos} />
     </>;
   }
-  const naTela = () => document.querySelector('.br-avisos')!;
+  const naTela = () => document.querySelector<HTMLElement>('.br-avisos')!;
   const avancar = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
