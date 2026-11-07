@@ -18,6 +18,12 @@ public sealed class OpcoesDoWorker
     public string AssinaturaId { get; set; } = string.Empty;
 
     /// <summary>
+    /// O grupo de recursos FIXO da provisão (ex.: <c>devkit-clients</c>, o mesmo <c>Provisao:Grupo</c> da API), obrigatório com o
+    /// provedor <c>azure</c>: o worker só cria e remove dentro dele, nunca cria nem apaga o grupo, e recusa o pedido de outro.
+    /// </summary>
+    public string Grupo { get; set; } = string.Empty;
+
+    /// <summary>
     /// O client id da identidade gerenciada ATRIBUÍDA AO USUÁRIO do worker. Vazio: a credencial padrão do Azure (a identidade
     /// do sistema no Azure, o <c>az login</c> no desenvolvimento) — nunca um client secret.
     /// </summary>

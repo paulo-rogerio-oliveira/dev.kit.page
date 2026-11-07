@@ -290,15 +290,20 @@ Rode `api/scripts/sqlserver/UltimoLogin.sql` (idempotente) **antes de publicar a
 ### Provisão no Azure e o worker (controle remoto v2, item 4)
 
 A API pública só GRAVA o pedido; quem cria e remove no Azure é o **worker** `DevKitPage.Provisao`, outro processo, com a
-identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
+identidade gerenciada dele. **Nada fica no escopo da assinatura**: a fila, os planos, os sites e os Static Web Apps de todos
+os usuários vivem num grupo de recursos FIXO, já criado (`Provisao__Grupo`, ex.: `devkit-clients`), com nomes únicos por
+usuário (`dkq{usuário}{sorteio}`, `app-u{usuário}-…`, `asp-u{usuário}-…`, `swa-u{usuário}-…`) e as tags de dono
+`devkit=provisao`, `devkit-usuario` e `devkit-recurso`. O worker não cria nem apaga grupo; antes de REMOVER, ele lê o recurso
+e só apaga se as tags disserem que é do usuário do pedido (o que já não existe é sucesso; o de outro dono é recusado).
 
 1. **Banco.** Rode `api/scripts/sqlserver/Provisao.sql` (idempotente) antes de publicar a API desta versão: cria
    `PermissoesDeUsuario`, `RecursosProvisionados` e `EventosDaProvisao`. Sem ele, o `/health` fica `Degraded` e aponta o script.
-2. **Identidade do worker.** Crie uma identidade gerenciada atribuída ao usuário (ex.: `id-devkit-provisao`) e dê a ela, na
-   assinatura do dev.kit, só o que a provisão usa — uma função personalizada com `Microsoft.Resources/subscriptions/resourceGroups/read`
-   e `/write`, `Microsoft.Storage/storageAccounts/read`, `/write` e `/delete` e
-   `Microsoft.Storage/storageAccounts/queueServices/queues/read` e `/write` (o `Contributor` da assinatura também serve, mas
-   dá mais do que precisa). A identidade da API continua sem papel na assinatura.
+2. **Grupo e identidade do worker.** Crie o grupo da provisão (ex.: `az group create -n devkit-clients -l brazilsouth`) e uma
+   identidade gerenciada atribuída ao usuário (ex.: `id-devkit-provisao`), e dê a ela, **no grupo** (não na assinatura), só o
+   que a provisão usa — a função personalizada `devkit-provisao-worker`, atribuível só no grupo, com
+   `Microsoft.Storage/storageAccounts/read`, `/write` e `/delete`, `Microsoft.Storage/storageAccounts/queueServices/queues/read`
+   e `/write`, `Microsoft.Web/serverfarms`, `Microsoft.Web/sites` e `Microsoft.Web/staticSites` (`/read`, `/write` e
+   `/delete`) — sem `resourceGroups/write`. O script de infraestrutura (abaixo) faz tudo isso.
 3. **Banco para o worker, sem senha.** No Azure SQL, crie o usuário da identidade (`CREATE USER [id-devkit-provisao] FROM
    EXTERNAL PROVIDER`) com leitura e escrita, e use na connection string do worker
    `Authentication=Active Directory Managed Identity;User Id=<client id da identidade>`.
@@ -315,7 +320,8 @@ identidade gerenciada dele. A API não recebe papel nenhum na assinatura.
 `Provisao__IdentidadeClientId` diz ao worker qual identidade usar no Azure Resource Manager (`ManagedIdentityCredential`
 com o client id), e a API nunca pede essa identidade: ela usa a do sistema (ou a do `Remoto__IdentidadeClientId`). O
 ambiente do worker é `Production` sem configuração nenhuma (o host genérico lê o `DOTNET_ENVIRONMENT`, e não o
-`ASPNETCORE_ENVIRONMENT`), e o worker recusa subir nele sem o `Provisao__AssinaturaId`. No Linux, confira em *WebJobs* que o
+`ASPNETCORE_ENVIRONMENT`), e o worker recusa subir nele sem o `Provisao__AssinaturaId` e sem o `Provisao__Grupo` (a mensagem diz
+`Provisao:Grupo não configurado`). No Linux, confira em *WebJobs* que o
 job aparece como *Running*: se o `run.sh` perder o bit de execução no pacote, o Kudu não o inicia.
 
 **O limite da identidade no WebJob.** O WebJob roda no MESMO sandbox do site: toda identidade atribuída ao App Service fica
@@ -330,7 +336,8 @@ fica como o próximo passo se a política de segurança pedir.
 |---|---|
 | `ConnectionStrings__DevKitPage` · `Banco__Provider` | A MESMA base da API (`SqlServer`), com a autenticação da identidade (passo 3). |
 | `Provisao__Provedor` | `azure` (padrão). O `simulado` é de desenvolvimento: o worker se recusa a subir com ele em Production. |
-| `Provisao__AssinaturaId` | A assinatura do dev.kit onde ficam os grupos `rg-devkit-u{id}` (obrigatória). |
+| `Provisao__AssinaturaId` | A assinatura do dev.kit onde fica o grupo da provisão (obrigatória). |
+| `Provisao__Grupo` | O grupo de recursos FIXO da provisão, já criado (ex.: `devkit-clients`) — obrigatório; vale também para a API, que o grava em cada pedido. O worker recusa o pedido de outro grupo (um antigo, de `rg-devkit-u{id}`): remova esse pelo portal. |
 | `Provisao__IdentidadeClientId` | O client id da identidade do passo 2 (não é segredo). Vazio: a identidade do sistema. |
 | `Provisao__MaximoDeTentativas` · `EsperaInicialSegundos` · `EsperaMaximaSegundos` · `ReservaMinutos` | 5 · 30 · 900 · 10: a repetição da falha transitória (recuo exponencial) e a validade da reserva de um pedido. |
 
@@ -349,8 +356,9 @@ publicar a API desta versão. A identidade do worker passa a precisar também de
 `/delete`, `Microsoft.Web/sites/read`, `/write` e `/delete` e `Microsoft.Web/staticSites/read`, `/write` e `/delete`.
 
 **Liberar a um usuário**: `/usuarios` → a licença do usuário → **Recursos liberados** → Liberar. Retirar não apaga o que ele
-criou (só impede pedidos novos). **Custo**: um grupo por usuário com as tags `devkit=provisao`, `devkit-usuario` e
-`devkit-recurso`; crie o orçamento com alerta da assinatura filtrado pela tag `devkit=provisao` (os preços e a
+criou (só impede pedidos novos). **Custo e dono**: tudo no grupo da provisão, com as tags `devkit=provisao`, `devkit-usuario` e
+`devkit-recurso` — o que é de um usuário se lista com `az resource list -g devkit-clients --tag devkit-usuario=<id>`; crie o
+orçamento com alerta no grupo (ou filtrado pela tag `devkit=provisao`) (os preços e a
 disponibilidade das regiões não foram conferidos nesta entrega). A conta de armazenamento aceita só HTTPS e TLS 1.2, sem
 acesso público a blob; a chave compartilhada continua ligada porque a fila não aceita SAS de delegação de usuário, e a SAS
 curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
@@ -365,10 +373,10 @@ da API** e fica só na memória dela — nunca no banco, no log ou na configura�
    publicar a API desta versão: cria `ComandosRemotos`, `RespostasRemotas`, `EventosDaConversa` e `FalasRemotas` (item 13 —
    numa base que já tem as outras, rodar de novo só cria esta). Sem ele, o `/health` fica `Degraded` e aponta o script.
 2. **Identidade da API.** Ligue uma identidade gerenciada à API (a do sistema, ou uma atribuída ao usuário com o client id em
-   `Remoto__IdentidadeClientId`) e dê a ela, na assinatura do dev.kit, SÓ uma função personalizada com
-   `Microsoft.Storage/storageAccounts/listkeys/action` (ex.: `devkit-api-chave-da-fila`). Ela não cria, não remove e não lê
-   mais nada: quem provisiona continua sendo o worker, com a identidade dele. O escopo é a assinatura porque cada usuário tem o
-   seu grupo `rg-devkit-u{id}`; restrinja com uma condição pela tag `devkit=provisao` se a política da assinatura pedir.
+   `Remoto__IdentidadeClientId`) e dê a ela, **no grupo da provisão** (`devkit-clients`), SÓ a função personalizada
+   `devkit-api-chave-da-fila`, atribuível só no grupo, com `Microsoft.Storage/storageAccounts/listkeys/action`. Ela não cria,
+   não remove e não lê mais nada, e não alcança conta de Storage fora do grupo: quem provisiona continua sendo o worker, com a
+   identidade dele.
 3. **Rede.** A API sai para `management.azure.com` e `*.queue.core.windows.net` (HTTPS); a máquina do usuário só faz chamadas
    de saída à API e à fila dele.
 4. **SSE.** O `GET /api/remoto/conversa/eventos` é uma conexão longa (até `Remoto:DuracaoDoSseSegundos`, 300 s): o ingress do
@@ -481,19 +489,24 @@ com o bloqueio e com a falta de assento. Nenhuma configuração nova nem script.
 
 ### Script de infraestrutura
 
-`api/scripts/azure/infra-controle-remoto.sh` faz, de forma idempotente, o que as seções acima pedem no Azure: a identidade do
-worker (`id-devkit-provisao`) e a função `devkit-provisao-worker` na assinatura (só os grupos, as contas e filas de Storage, os
-planos, os sites e os Static Web Apps); a identidade no App Service, ao lado da do sistema, com o `Provisao__AssinaturaId` e o
-`Provisao__IdentidadeClientId`; a função `devkit-api-chave-da-fila` (só o `listKeys`) para a identidade da API; e, com
-`--conta-keyring` (e `--cofre`), o contêiner do key ring, a chave RSA do cofre, os papéis da API neles e as app settings
-`ProtecaoDeDados__*`. Rode primeiro com `--dry-run`, que não chama o `az` e lista as consultas e gravações na ordem:
+`api/scripts/azure/infra-controle-remoto.sh` faz, de forma idempotente e **sem nada no escopo da assinatura**, o que as seções
+acima pedem no Azure: confere que o grupo da provisão (`--grupo-clientes`) existe (não o cria); a identidade do worker
+(`id-devkit-provisao`) e a função `devkit-provisao-worker` atribuível e atribuída só nesse grupo (as contas e filas de Storage, os
+planos, os sites e os Static Web Apps — sem `resourceGroups/write`); a identidade no App Service, ao lado da do sistema, com o
+`Provisao__AssinaturaId`, o `Provisao__Grupo` e o `Provisao__IdentidadeClientId`; a função `devkit-api-chave-da-fila` (só o
+`listKeys`) para a identidade da API, também só no grupo; e, com `--conta-keyring` (e `--cofre`), o contêiner do key ring, a
+chave RSA do cofre, os papéis da API neles e as app settings `ProtecaoDeDados__*`. Rode primeiro com `--dry-run`, que não
+chama o `az` e lista as consultas e gravações na ordem:
 
 ```bash
-api/scripts/azure/infra-controle-remoto.sh --dry-run --assinatura <id> --grupo <grupo do App Service> \
-  --app devkit --conta-keyring <conta> --cofre <cofre>
+api/scripts/azure/infra-controle-remoto.sh --dry-run --assinatura 82ba9ad4-40bb-4bfe-91e3-1a4ba1edf95a \
+  --grupo <grupo do App Service> --app devkit --grupo-clientes devkit-clients [--conta-keyring <conta> --cofre <cofre>]
 ```
 
-Conferido, rode sem o `--dry-run`, com o `az login` numa conta que atribui papéis (Owner ou User Access Administrator).
+Conferido, rode sem o `--dry-run`, com o `az login` numa conta que cria funções e atribui papéis no grupo (Owner ou User
+Access Administrator nele). Com o key ring em `ProtecaoDeDados__Pasta` (o caso de hoje, numa instância B1), omita
+`--conta-keyring` e `--cofre`. Os testes do script (`InfraDoControleRemotoTests`) rodam a simulação e conferem que nada fica
+no escopo da assinatura.
 
 ### Ativação do controle remoto — roteiro e checklist
 
@@ -501,7 +514,8 @@ Na ordem, depois de mesclar na `main`:
 
 1. **Banco**: os cinco scripts acima (ou o workflow com `aplicar_sql`) e, se ainda não rodaram nesta base, os do acesso
    aos projetos (`DesignAcesso.sql` e depois `AcessoAosProjetos.sql`, na seção acima) — a mesma publicação leva a API deles.
-2. **Azure**: `infra-controle-remoto.sh --dry-run …`, conferir, e rodar de verdade.
+2. **Azure**: `infra-controle-remoto.sh --dry-run … --grupo-clientes devkit-clients`, conferir, e rodar de verdade (grava o
+   `Provisao__Grupo`; sem ele o WebJob não sobe).
 3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service.
 4. **Publicar**: o workflow da `main` (a API e o WebJob `provisao` no mesmo pacote) e reiniciar o App Service.
 5. **dev.kit**: publicar o pacote com a renovação pela máquina e, em cada máquina, entrar uma vez no app (é o login que
@@ -513,7 +527,8 @@ Checklist verificável:
 - [ ] O WebJob `provisao` aparece *Running* em *WebJobs*, e o log dele (*WebJobs → Logs*) mostra a varredura sem erro de
       identidade ou de assinatura.
 - [ ] Um usuário liberado (`/usuarios` → Recursos liberados) pede a fila no site e ela fica **pronta**; o grupo
-      `rg-devkit-u{id}` tem a conta de Storage com a fila `comandos`.
+      `devkit-clients` tem a conta de Storage com a fila `comandos` e a tag `devkit-usuario` dele, e nenhum grupo novo
+      apareceu na assinatura.
 - [ ] `GET /api/remoto/push` (com o login) responde `disponivel: true`; o board assinado recebe o aviso de uma pendência nova.
 - [ ] Com o dev.kit FECHADO por mais de uma hora, a máquina continua *online* no site e o Ligar chega (o log do serviço,
       `logs\scheduler-*.log`, mostra "sessão renovada pela máquina").

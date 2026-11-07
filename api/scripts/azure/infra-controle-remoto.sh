@@ -3,19 +3,24 @@
 # da provisão e os papéis mínimos dele, o papel do listKeys da identidade da API e, opcionalmente, o key ring do DataProtection
 # (o contêiner do blob e a chave do Key Vault). IDEMPOTENTE: confere antes de criar, e rodar de novo não duplica nada.
 #
+# NADA no escopo da assinatura: a provisão vive num grupo de recursos FIXO (--grupo-clientes, ex.: devkit-clients), já criado.
+# As duas funções personalizadas têm o grupo como único escopo atribuível e são atribuídas nele; o worker não cria grupos.
+#
 # --dry-run (ou --simular) NÃO chama o az: mostra, na ordem, as consultas (?) e as gravações (+) que faria, supondo que nada
-# existe ainda. É o que se confere antes de rodar de verdade, com o az logado numa conta que pode atribuir papéis (Owner ou
-# User Access Administrator na assinatura).
+# existe ainda (só os grupos informados). É o que se confere antes de rodar de verdade, com o az logado numa conta que pode
+# criar funções e atribuir papéis no grupo (Owner ou User Access Administrator nele).
 set -euo pipefail
 # O Git Bash converteria /subscriptions/... num caminho do Windows.
 export MSYS_NO_PATHCONV=1
 
 uso() {
   cat <<'EOF'
-Uso: infra-controle-remoto.sh --assinatura <id> --grupo <grupo do App Service> [opções] [--dry-run]
+Uso: infra-controle-remoto.sh --assinatura <id> --grupo <grupo do App Service> --grupo-clientes <grupo da provisão> [opções] [--dry-run]
 
-  --assinatura <id>          A assinatura do dev.kit (a dos grupos rg-devkit-u{id} dos usuários).       (obrigatória)
+  --assinatura <id>          A assinatura do dev.kit.                                                    (obrigatória)
   --grupo <nome>             O grupo de recursos do App Service da API.                                  (obrigatória)
+  --grupo-clientes <nome>    O grupo FIXO da provisão (ex.: devkit-clients), já criado: a fila e os aplicativos dos usuários
+                             ficam nele, e é o único escopo das funções e das atribuições.               (obrigatória)
   --app <nome>               O App Service da API (que também hospeda o WebJob do worker).               (padrão: devkit)
   --regiao <região>          A região da identidade do worker.                                           (padrão: brazilsouth)
   --identidade <nome>        A identidade atribuída ao usuário do worker.                                (padrão: id-devkit-provisao)
@@ -28,7 +33,7 @@ Uso: infra-controle-remoto.sh --assinatura <id> --grupo <grupo do App Service> [
 EOF
 }
 
-ASSINATURA="" GRUPO="" APP="devkit" REGIAO="brazilsouth" IDENTIDADE="id-devkit-provisao"
+ASSINATURA="" GRUPO="" GRUPO_CLIENTES="" APP="devkit" REGIAO="brazilsouth" IDENTIDADE="id-devkit-provisao"
 CONTA_KEYRING="" GRUPO_KEYRING="" CONTEINER_KEYRING="protecao-de-dados" COFRE="" CHAVE_KEYRING="devkit-keyring" SIMULAR=0
 PAPEL_WORKER="devkit-provisao-worker" PAPEL_API="devkit-api-chave-da-fila"
 
@@ -36,6 +41,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --assinatura) ASSINATURA="$2"; shift 2 ;;
     --grupo) GRUPO="$2"; shift 2 ;;
+    --grupo-clientes) GRUPO_CLIENTES="$2"; shift 2 ;;
     --app) APP="$2"; shift 2 ;;
     --regiao) REGIAO="$2"; shift 2 ;;
     --identidade) IDENTIDADE="$2"; shift 2 ;;
@@ -50,15 +56,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$ASSINATURA" ] || [ -z "$GRUPO" ]; then uso >&2; exit 2; fi
+if [ -z "$ASSINATURA" ] || [ -z "$GRUPO" ] || [ -z "$GRUPO_CLIENTES" ]; then uso >&2; exit 2; fi
 if [ -n "$COFRE" ] && [ -z "$CONTA_KEYRING" ]; then
   echo "O --cofre protege o key ring do blob: informe também a --conta-keyring." >&2; exit 2
 fi
 GRUPO_KEYRING="${GRUPO_KEYRING:-$GRUPO}"
-ESCOPO="/subscriptions/$ASSINATURA"
+ASSINATURA_ID="/subscriptions/$ASSINATURA"
+# O ÚNICO escopo das funções da provisão e das atribuições delas: o grupo dos clientes.
+ESCOPO="$ASSINATURA_ID/resourceGroups/$GRUPO_CLIENTES"
 
 if [ "$SIMULAR" = 1 ]; then
-  echo "# SIMULAÇÃO (--dry-run): nada é enviado ao Azure. '?' é consulta, '+' é gravação; supõe-se que nada existe ainda."
+  echo "# SIMULAÇÃO (--dry-run): nada é enviado ao Azure. '?' é consulta, '+' é gravação; supõe-se que nada existe ainda, exceto os grupos."
 else
   command -v az >/dev/null || { echo "O az não está instalado." >&2; exit 1; }
 fi
@@ -107,7 +115,8 @@ atribui() {
   fi
 }
 
-# Cria ou atualiza a função personalizada (o JSON vai num arquivo temporário; na simulação, é mostrado).
+# Cria ou atualiza a função personalizada, atribuível SÓ no grupo dos clientes (o JSON vai num arquivo temporário; na
+# simulação, é mostrado).
 funcao() {
   local nome="$1" descricao="$2" acoes="$3"
   local arquivo
@@ -125,50 +134,61 @@ EOF
   local existente
   existente=$(consulta "" role definition list --custom-role-only true --name "$nome" --scope "$ESCOPO" --query "[0].id" -o tsv)
   if [ "$SIMULAR" = 1 ]; then sed 's/^/    /' "$arquivo"; fi
+  local parametro
+  parametro="@$(caminho_para_o_az "$arquivo")"
   if [ -n "$existente" ]; then
-    grava role definition update --role-definition "@$arquivo"
+    grava role definition update --role-definition "$parametro"
   else
-    grava role definition create --role-definition "@$arquivo"
+    grava role definition create --role-definition "$parametro"
   fi
   rm -f "$arquivo"
 }
 
+# O caminho de um arquivo como o az o lê. No Git Bash o az é o do Windows, que não enxerga o /tmp do MSYS (e o
+# MSYS_NO_PATHCONV acima impede a conversão automática): com o cygpath, vai o caminho do Windows (C:\...\Temp\tmp.x).
+caminho_para_o_az() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
+
 grava account set --subscription "$ASSINATURA"
+
+echo "## 0. O grupo da provisão ($GRUPO_CLIENTES) já existe — o script não o cria"
+GRUPO_ID=$(consulta "$ESCOPO" group show -n "$GRUPO_CLIENTES" --query id -o tsv)
+if [ -z "$GRUPO_ID" ]; then echo "O grupo $GRUPO_CLIENTES não existe na assinatura: crie-o antes (az group create)." >&2; exit 1; fi
 
 echo "## 1. A identidade do worker ($IDENTIDADE), exclusiva dele"
 ID_WORKER=$(consulta "" identity show -g "$GRUPO" -n "$IDENTIDADE" --query id -o tsv)
 if [ -z "$ID_WORKER" ]; then
   grava identity create -g "$GRUPO" -n "$IDENTIDADE" -l "$REGIAO"
 fi
-ID_WORKER=$(consulta "$ESCOPO/resourcegroups/$GRUPO/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$IDENTIDADE" identity show -g "$GRUPO" -n "$IDENTIDADE" --query id -o tsv)
+ID_WORKER=$(consulta "$ASSINATURA_ID/resourcegroups/$GRUPO/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$IDENTIDADE" identity show -g "$GRUPO" -n "$IDENTIDADE" --query id -o tsv)
 CLIENT_WORKER=$(consulta "<clientId de $IDENTIDADE>" identity show -g "$GRUPO" -n "$IDENTIDADE" --query clientId -o tsv)
 PRINCIPAL_WORKER=$(consulta "<principalId de $IDENTIDADE>" identity show -g "$GRUPO" -n "$IDENTIDADE" --query principalId -o tsv)
 
-echo "## 2. A função do worker: criar e remover a fila e os sites nos grupos dos usuários, e nada mais"
-funcao "$PAPEL_WORKER" "Worker da provisão do dev.kit: grupos, contas e filas de Storage, planos, sites e Static Web Apps dos usuários." \
-  '"Microsoft.Resources/subscriptions/resourceGroups/read", "Microsoft.Resources/subscriptions/resourceGroups/write",
-   "Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write", "Microsoft.Storage/storageAccounts/delete",
+echo "## 2. A função do worker: criar e remover a fila e os sites dos usuários DENTRO do grupo $GRUPO_CLIENTES, e nada mais"
+# Sem resourceGroups/write: o worker não cria grupo nenhum.
+funcao "$PAPEL_WORKER" "Worker da provisão do dev.kit: contas e filas de Storage, planos, sites e Static Web Apps dos usuários, só no grupo da provisão." \
+  '"Microsoft.Storage/storageAccounts/read", "Microsoft.Storage/storageAccounts/write", "Microsoft.Storage/storageAccounts/delete",
    "Microsoft.Storage/storageAccounts/queueServices/queues/read", "Microsoft.Storage/storageAccounts/queueServices/queues/write",
    "Microsoft.Web/serverfarms/read", "Microsoft.Web/serverfarms/write", "Microsoft.Web/serverfarms/delete",
    "Microsoft.Web/sites/read", "Microsoft.Web/sites/write", "Microsoft.Web/sites/delete",
    "Microsoft.Web/staticSites/read", "Microsoft.Web/staticSites/write", "Microsoft.Web/staticSites/delete"'
-# O escopo é a assinatura porque o worker CRIA o grupo de cada usuário (rg-devkit-u{id}): não há grupo prévio onde atribuir.
 atribui "$PRINCIPAL_WORKER" "$PAPEL_WORKER" "$ESCOPO"
 
-echo "## 3. O App Service: a identidade do worker ao lado da do sistema (a da API), e as configurações do worker"
+echo "## 3. O App Service: a identidade do worker ao lado da do sistema (a da API), e as configurações da provisão"
 grava webapp identity assign -g "$GRUPO" -n "$APP" --identities "[system]" "$ID_WORKER"
-grava webapp config appsettings set -g "$GRUPO" -n "$APP" --settings "Provisao__AssinaturaId=$ASSINATURA" "Provisao__IdentidadeClientId=$CLIENT_WORKER"
+grava webapp config appsettings set -g "$GRUPO" -n "$APP" --settings "Provisao__AssinaturaId=$ASSINATURA" "Provisao__Grupo=$GRUPO_CLIENTES" "Provisao__IdentidadeClientId=$CLIENT_WORKER"
 PRINCIPAL_API=$(consulta "<principalId da identidade do sistema de $APP>" webapp identity show -g "$GRUPO" -n "$APP" --query principalId -o tsv)
 if [ -z "$PRINCIPAL_API" ]; then echo "O App Service $APP está sem a identidade do sistema." >&2; exit 1; fi
 
-echo "## 4. A função da API: só o listKeys das contas das filas (assina a SAS curta do serviço da máquina)"
-funcao "$PAPEL_API" "API do dev.kit.page: lê a chave das contas de Storage das filas dos usuários (listKeys), e nada mais." \
+echo "## 4. A função da API: só o listKeys das contas das filas no grupo $GRUPO_CLIENTES (assina a SAS curta do serviço da máquina)"
+funcao "$PAPEL_API" "API do dev.kit.page: lê a chave das contas de Storage das filas dos usuários (listKeys), só no grupo da provisão." \
   '"Microsoft.Storage/storageAccounts/listkeys/action"'
 atribui "$PRINCIPAL_API" "$PAPEL_API" "$ESCOPO"
 
 if [ -n "$CONTA_KEYRING" ]; then
   echo "## 5. O key ring do DataProtection: o contêiner, o papel da API nele e a app setting"
-  CONTA_ID=$(consulta "$ESCOPO/resourceGroups/$GRUPO_KEYRING/providers/Microsoft.Storage/storageAccounts/$CONTA_KEYRING" storage account show -g "$GRUPO_KEYRING" -n "$CONTA_KEYRING" --query id -o tsv)
+  CONTA_ID=$(consulta "$ASSINATURA_ID/resourceGroups/$GRUPO_KEYRING/providers/Microsoft.Storage/storageAccounts/$CONTA_KEYRING" storage account show -g "$GRUPO_KEYRING" -n "$CONTA_KEYRING" --query id -o tsv)
   if [ -z "$CONTA_ID" ]; then echo "A conta $CONTA_KEYRING não existe no grupo $GRUPO_KEYRING." >&2; exit 1; fi
   EXISTE=$(consulta "false" storage container-rm exists -g "$GRUPO_KEYRING" --storage-account "$CONTA_KEYRING" -n "$CONTEINER_KEYRING" -o tsv)
   if [ "$EXISTE" != "true" ]; then
@@ -179,7 +199,7 @@ if [ -n "$CONTA_KEYRING" ]; then
 
   if [ -n "$COFRE" ]; then
     echo "## 6. A chave do Key Vault que protege o key ring, e o papel da API nela"
-    COFRE_ID=$(consulta "$ESCOPO/resourceGroups/<grupo do cofre>/providers/Microsoft.KeyVault/vaults/$COFRE" keyvault show -n "$COFRE" --query id -o tsv)
+    COFRE_ID=$(consulta "$ASSINATURA_ID/resourceGroups/<grupo do cofre>/providers/Microsoft.KeyVault/vaults/$COFRE" keyvault show -n "$COFRE" --query id -o tsv)
     if [ -z "$COFRE_ID" ]; then echo "O Key Vault $COFRE não existe." >&2; exit 1; fi
     CHAVE=$(consulta "" keyvault key show --vault-name "$COFRE" -n "$CHAVE_KEYRING" --query key.kid -o tsv)
     if [ -z "$CHAVE" ]; then

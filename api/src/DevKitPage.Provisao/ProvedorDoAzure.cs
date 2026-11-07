@@ -11,11 +11,13 @@ using Microsoft.Extensions.Options;
 namespace DevKitPage.Provisao;
 
 /// <summary>
-/// A fila do usuário no Azure Resource Manager, pela REST — sem SDK de gestão: três PUT idempotentes (o grupo, a conta de
-/// armazenamento e a fila) e um DELETE. O App Service é o plano e o site (dois passos), e o Static Web App, um recurso só
-/// (item 12) — PUT idempotentes, e o DELETE do que não existe é sucesso. O token vem da <see cref="TokenCredential"/> (a identidade gerenciada do worker);
+/// A fila do usuário no Azure Resource Manager, pela REST — sem SDK de gestão: dois PUT idempotentes (a conta de armazenamento
+/// e a fila) e um DELETE. O App Service é o plano e o site (dois passos), e o Static Web App, um recurso só (item 12) — PUT
+/// idempotentes. Tudo fica no grupo FIXO da provisão (<see cref="OpcoesDoWorker.Grupo"/>, ex.: <c>devkit-clients</c>): o worker
+/// não cria nem apaga grupo, recusa o pedido de outro grupo, e só REMOVE o recurso cujas tags dizem que é do usuário do pedido
+/// (o que já não existe é sucesso). O token vem da <see cref="TokenCredential"/> (a identidade gerenciada do worker);
 /// nenhuma chave passa por aqui nem é guardada. Cada falha sai CLASSIFICADA (<see cref="FalhaNaNuvem"/>): 408, 429, 5xx e a
-/// rede são transitórias; 401/403 (a identidade sem papel), 409 do nome tomado e 400 são definitivas.
+/// rede são transitórias; 401/403 (a identidade sem papel), 404 do grupo, 409 do nome tomado e 400 são definitivas.
 /// </summary>
 public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial, IOptions<OpcoesDoWorker> opcoes) : IProvedorDeNuvem
 {
@@ -32,8 +34,8 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
 
     public async Task<RecursoNaNuvem> CriarFilaAsync(FilaNaNuvem fila, CancellationToken ct)
     {
+        Grupo(fila.GrupoDeRecursos);
         var tags = Tags(fila.UsuarioId, fila.RecursoId);
-        await GrupoAsync(fila.GrupoDeRecursos, fila.Regiao, tags, ct);
 
         // A conta: HTTPS, TLS 1.2 e sem acesso público a blob. A chave compartilhada continua permitida: a fila não aceita SAS de
         // delegação do usuário, e a SAS curta que o serviço do dev.kit vai pedir à API (fase 2) é assinada com ela.
@@ -53,13 +55,16 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
     }
 
     public Task RemoverFilaAsync(FilaNaNuvem fila, CancellationToken ct)
-        => EnviarAsync(HttpMethod.Delete, $"{Conta(fila)}?api-version={VersaoDoStorage}", null, "a remoção da conta de armazenamento", ct);
+    {
+        Grupo(fila.GrupoDeRecursos);
+        return RemoverDoUsuarioAsync($"{Conta(fila)}?api-version={VersaoDoStorage}", fila.UsuarioId, "a conta de armazenamento", ct);
+    }
 
     /// <summary>O plano Linux do App Service (o <c>serverfarm</c>, com <c>reserved</c>), no SKU pedido.</summary>
     public async Task CriarPlanoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
     {
+        Grupo(aplicativo.GrupoDeRecursos);
         var tags = Tags(aplicativo.UsuarioId, aplicativo.RecursoId);
-        await GrupoAsync(aplicativo.GrupoDeRecursos, aplicativo.Regiao, tags, ct);
         await EnviarAsync(HttpMethod.Put, $"{Plano(aplicativo)}?api-version={VersaoDaWeb}", new
         {
             location = aplicativo.Regiao,
@@ -76,8 +81,8 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
     /// </summary>
     public async Task<RecursoNaNuvem> CriarAplicativoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
     {
+        Grupo(aplicativo.GrupoDeRecursos);
         var tags = Tags(aplicativo.UsuarioId, aplicativo.RecursoId);
-        await GrupoAsync(aplicativo.GrupoDeRecursos, aplicativo.Regiao, tags, ct);
         object corpo = Estatico(aplicativo)
             ? new { location = aplicativo.Regiao, sku = new { name = aplicativo.Plano, tier = aplicativo.Plano }, tags, properties = new { } }
             : new
@@ -99,12 +104,67 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
     }
 
     public Task RemoverAplicativoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
-        => EnviarAsync(HttpMethod.Delete, $"{Aplicativo(aplicativo)}?api-version={VersaoDaWeb}", null, $"a remoção d{OQue(aplicativo)}", ct);
+    {
+        Grupo(aplicativo.GrupoDeRecursos);
+        return RemoverDoUsuarioAsync($"{Aplicativo(aplicativo)}?api-version={VersaoDaWeb}", aplicativo.UsuarioId, OQue(aplicativo), ct);
+    }
 
     public Task RemoverPlanoAsync(AplicativoNaNuvem aplicativo, CancellationToken ct)
-        => aplicativo.NomeDoPlano.Length == 0
-            ? Task.CompletedTask
-            : EnviarAsync(HttpMethod.Delete, $"{Plano(aplicativo)}?api-version={VersaoDaWeb}", null, "a remoção do plano do App Service", ct);
+    {
+        if (aplicativo.NomeDoPlano.Length == 0)
+            return Task.CompletedTask;
+        Grupo(aplicativo.GrupoDeRecursos);
+        return RemoverDoUsuarioAsync($"{Plano(aplicativo)}?api-version={VersaoDaWeb}", aplicativo.UsuarioId, "o plano do App Service", ct);
+    }
+
+    /// <summary>
+    /// Remove SÓ o que é do usuário: lê o recurso e confere as tags de dono (<c>devkit=provisao</c> e <c>devkit-usuario</c>) antes
+    /// do DELETE — no grupo compartilhado, um nome errado não apaga o de outro. O que já não existe é sucesso; o de outro dono (ou
+    /// sem as tags) é recusa definitiva, sem DELETE.
+    /// </summary>
+    private async Task RemoverDoUsuarioAsync(string caminho, int usuarioId, string oQue, CancellationToken ct)
+    {
+        using (var lido = await ChamarAsync(HttpMethod.Get, caminho.TrimStart('/'), null, oQue, ct))
+        {
+            if (lido.StatusCode == HttpStatusCode.NotFound)
+                return;
+            if (!lido.IsSuccessStatusCode)
+                throw await ClassificarAsync(lido, oQue, ct);
+            if (!await DoUsuarioAsync(lido, usuarioId, ct))
+                throw new FalhaNaNuvem($"O Azure diz que {oQue} não é deste usuário (as tags de dono não conferem): o worker não o remove.", transitoria: false);
+        }
+        await EnviarAsync(HttpMethod.Delete, caminho, null, $"a remoção d{oQue}", ct);
+    }
+
+    private static async Task<bool> DoUsuarioAsync(HttpResponseMessage resposta, int usuarioId, CancellationToken ct)
+    {
+        try
+        {
+            using var json = JsonDocument.Parse(await resposta.Content.ReadAsStringAsync(ct));
+            return json.RootElement.ValueKind == JsonValueKind.Object
+                   && json.RootElement.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Object
+                   && Texto(tags, "devkit") == "provisao"
+                   && Texto(tags, "devkit-usuario") == usuarioId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// O grupo do pedido, conferido contra o grupo FIXO da provisão: sem a configuração, ou com o pedido gravado para outro grupo
+    /// (um pedido antigo, de <c>rg-devkit-u{id}</c>), o worker falha de vez sem chamar o ARM.
+    /// </summary>
+    private string Grupo(string doPedido)
+    {
+        var grupo = opcoes.Value.Grupo.Trim();
+        if (grupo.Length == 0)
+            throw new FalhaNaNuvem("O worker está sem o grupo da provisão (Provisao:Grupo, ex.: devkit-clients).", transitoria: false);
+        if (!string.Equals(doPedido?.Trim(), grupo, StringComparison.OrdinalIgnoreCase))
+            throw new FalhaNaNuvem($"O pedido é do grupo '{doPedido}', fora do grupo da provisão ({grupo}): o worker só cria e remove dentro dele.", transitoria: false);
+        return grupo;
+    }
 
     private static Dictionary<string, string> Tags(int usuarioId, long recursoId) => new()
     {
@@ -112,10 +172,6 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
         ["devkit-usuario"] = usuarioId.ToString(System.Globalization.CultureInfo.InvariantCulture),
         ["devkit-recurso"] = recursoId.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
-
-    /// <summary>O grupo do usuário (PUT idempotente: cria ou confirma).</summary>
-    private Task GrupoAsync(string grupo, string regiao, Dictionary<string, string> tags, CancellationToken ct)
-        => EnviarAsync(HttpMethod.Put, $"{Assinatura()}/resourcegroups/{grupo}?api-version={VersaoDosGrupos}", new { location = regiao, tags }, "o grupo de recursos", ct);
 
     private static bool Estatico(AplicativoNaNuvem aplicativo) => aplicativo.Tipo == ProvisaoV1.TipoStaticWebApp;
 
@@ -257,6 +313,7 @@ public sealed class ProvedorDoAzure(HttpClient http, TokenCredential credencial,
         {
             (409, "StorageAccountAlreadyTaken") => "O nome da conta já é usado por outra no Azure. Remova este pedido e peça a fila de novo (outro nome é sorteado).",
             (409, "WebsiteAlreadyExists") => $"O nome d{oQue} já é usado no Azure (409). Remova este pedido e peça de novo (outro sufixo é sorteado).",
+            (404, "ResourceGroupNotFound") => $"O grupo da provisão não existe na assinatura ({codigo}) ao criar {oQue}: crie-o — o worker não cria grupos.",
             (401 or 403, _) => $"A identidade do worker não tem permissão para {oQue} ({codigo}). Confira o papel dela na assinatura.",
             (429, _) => $"O Azure limitou os pedidos ({codigo}) ao criar {oQue}.",
             _ => $"O Azure recusou {oQue} ({status} {codigo}): {mensagem}",

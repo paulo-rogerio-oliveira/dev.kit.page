@@ -50,10 +50,24 @@ public sealed class RegrasDaProvisaoTests
     public void Nome_fora_da_regra_do_azure_nao_vale(string? nome) => Assert.False(RegrasDaProvisao.ContaValida(nome));
 
     [Fact]
-    public void O_grupo_e_um_por_usuario()
+    public void Sem_o_grupo_fixo_o_grupo_e_um_por_usuario()
     {
         Assert.Equal("rg-devkit-u42", RegrasDaProvisao.NomeDoGrupo("rg-devkit-u", 42));
         Assert.Equal("rg-devkit-u42", RegrasDaProvisao.NomeDoGrupo(" ", 42));
+        Assert.Equal("rg-devkit-u42", RegrasDaProvisao.GrupoDoRecurso(new OpcoesDaProvisao(), 42));
+    }
+
+    [Fact]
+    public void Com_o_grupo_fixo_todo_usuario_vai_para_ele()
+    {
+        var opcoes = new OpcoesDaProvisao { Grupo = " devkit-clients " };
+
+        Assert.Equal("devkit-clients", RegrasDaProvisao.GrupoDoRecurso(opcoes, 42));
+        Assert.Equal("devkit-clients", RegrasDaProvisao.GrupoDoRecurso(opcoes, 7));
+        // Os nomes continuam únicos por usuário dentro do grupo compartilhado (o usuário em base 36 no nome).
+        Assert.NotEqual(RegrasDaProvisao.NomeDoAplicativo(Contracts.V1.ProvisaoV1.TipoAppService, 42, "api", "abcd"),
+            RegrasDaProvisao.NomeDoAplicativo(Contracts.V1.ProvisaoV1.TipoAppService, 7, "api", "abcd"));
+        Assert.NotEqual(RegrasDaProvisao.NomeDaConta(42, "abcd1234"), RegrasDaProvisao.NomeDaConta(7, "abcd1234"));
     }
 
     [Fact]

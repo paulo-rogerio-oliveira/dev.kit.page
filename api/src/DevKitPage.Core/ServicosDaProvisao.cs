@@ -203,7 +203,14 @@ public static partial class RegrasDaProvisao
         return Regioes(opcoes).Contains(regiao) ? regiao : null;
     }
 
-    /// <summary>O grupo de recursos do usuário: um só por usuário, com o papel do worker limitado a ele.</summary>
+    /// <summary>
+    /// O grupo de recursos do pedido: o FIXO da provisão (<see cref="OpcoesDaProvisao.Grupo"/>), com o papel do worker limitado a
+    /// ele; sem ele (o desenvolvimento), o do usuário pelo prefixo.
+    /// </summary>
+    public static string GrupoDoRecurso(OpcoesDaProvisao opcoes, int usuarioId)
+        => string.IsNullOrWhiteSpace(opcoes.Grupo) ? NomeDoGrupo(opcoes.PrefixoDoGrupo, usuarioId) : opcoes.Grupo.Trim();
+
+    /// <summary>O grupo de recursos de um usuário pelo prefixo (o desenvolvimento, sem <see cref="OpcoesDaProvisao.Grupo"/>).</summary>
     public static string NomeDoGrupo(string prefixo, int usuarioId)
         => $"{(string.IsNullOrWhiteSpace(prefixo) ? "rg-devkit-u" : prefixo.Trim())}{usuarioId.ToString(CultureInfo.InvariantCulture)}";
 

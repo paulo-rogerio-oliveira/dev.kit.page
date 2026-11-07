@@ -46,7 +46,7 @@ public static class ComposicaoDoWorker
 
     /// <summary>
     /// O worker NÃO sobe mal configurado: o provedor desconhecido, o simulado em Production (ele diria "pronto" sem criar nada)
-    /// e o do Azure sem a assinatura.
+    /// e o do Azure sem a assinatura ou sem o grupo fixo da provisão.
     /// </summary>
     public static void Validar(OpcoesDoWorker cfg, IHostEnvironment ambiente)
     {
@@ -56,7 +56,11 @@ public static class ComposicaoDoWorker
         if (provedor == OpcoesDoWorker.ProvedorSimulado && ambiente.IsProduction())
             throw new InvalidOperationException("O provedor simulado não sobe em Production: ele marcaria a fila pronta sem criar nada no Azure.");
         if (provedor == OpcoesDoWorker.ProvedorAzure && string.IsNullOrWhiteSpace(cfg.AssinaturaId))
-            throw new InvalidOperationException("Provisao:AssinaturaId não configurada: é a assinatura do dev.kit onde ficam os grupos dos usuários.");
+            throw new InvalidOperationException("Provisao:AssinaturaId não configurada: é a assinatura do dev.kit onde fica o grupo da provisão.");
+        if (provedor == OpcoesDoWorker.ProvedorAzure && string.IsNullOrWhiteSpace(cfg.Grupo))
+            throw new InvalidOperationException(
+                "Provisao:Grupo não configurado: é o grupo de recursos fixo (ex.: devkit-clients), já criado na assinatura, onde o worker " +
+                "cria a fila e os aplicativos dos usuários — ele não cria grupos. Configure Provisao__Grupo no App Service.");
     }
 
     /// <summary>A credencial do Azure: a identidade gerenciada em produção; a padrão (o az login) no desenvolvimento — a mesma regra da API.</summary>
