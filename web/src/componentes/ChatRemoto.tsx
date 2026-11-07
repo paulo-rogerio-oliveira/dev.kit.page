@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComandoRemoto, MaquinaRemota } from '../api/remoto';
 import type { ConversaDaMaquina } from './useConversaRemota';
-import { ContextoDoChatRemoto, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
+import { ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
+import { useCatalogoRemoto } from './useCatalogoRemoto';
 import { CartaoDaDecisao, type AoDecidir } from './DecisoesRemotas';
 import type { DecisaoPendente } from '../api/remoto';
 import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
@@ -46,9 +47,12 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, decisoes
   const excedeu = textoFinal.length > 4000;
   const desabilitado = !maquina || carregando || enviando;
   const doServico = new Set(conversa.comandos.filter(c => comandosDoServico.includes(c.tipo)).map(c => c.id));
+  // O handshake dos atalhos (remote-control-v3) não é conversa: nem o pedido nem a resposta dele entram no chat.
+  const catalogo = useCatalogoRemoto({ maquina, conectada, conversa: conversaRemota });
   const linhas = [
     ...conversa.comandos.filter(c => c.tipo === 'mensagem' || doServico.has(c.id)).map(c => ({ id: `c-${c.id}`, data: c.criadoEm, comando: c, resposta: null })),
-    ...conversa.respostas.map(r => ({ id: `r-${r.id}`, data: r.geradaEm, comando: null, resposta: r })),
+    ...conversa.respostas.filter(r => !r.comandoId || !catalogo.idsDosPedidos.has(r.comandoId))
+      .map(r => ({ id: `r-${r.id}`, data: r.geradaEm, comando: null, resposta: r })),
   ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id));
   const ultima = linhas.at(-1)?.id;
   useEffect(() => {
@@ -104,12 +108,14 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, decisoes
           if (!texto && ['/', '#', '@'].includes(e.key)) { e.preventDefault(); setAtalho(e.key as '/' | '#' | '@'); }
         }} />
       <div className="br-bottom">
-        <ContextoDoChatRemoto contexto={contexto} alterar={setContexto} atalho={atalho} abrir={setAtalho} desabilitado={desabilitado} />
+        <ContextoDoChatRemoto contexto={contexto} alterar={setContexto} atalho={atalho} abrir={setAtalho} desabilitado={desabilitado}
+          catalogo={catalogo.catalogo?.catalogo ?? null} />
         <span className="br-spacer" /><button type="submit" className="br-send" disabled={desabilitado || !texto.trim() || excedeu} aria-label="Enviar mensagem">{enviando ? '…' : '➤'}</button>
       </div>
       {contexto.branch && <div className="br-branch">Branch existente · {contexto.branch}</div>}
       {excedeu && <p className="br-note" role="alert">Texto e contexto excedem o limite de 4000 caracteres.</p>}
     </form>
-    <p className="br-hint">/ trocar o fluxo ou design · # work item · @ repositório<br />Enter envia · Shift+Enter quebra linha</p>
+    {maquina && <EstadoDoCatalogo estado={catalogo} appAberto={conectada && maquina.appAberto} agora={agora} />}
+    <p className="br-hint">/ fluxo, projeto ou design · # work item · @ repositório<br />Enter envia · Shift+Enter quebra linha</p>
   </section>;
 }

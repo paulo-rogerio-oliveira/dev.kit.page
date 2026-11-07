@@ -12,7 +12,7 @@ import type {
 } from './tipos';
 import type { Projeto } from './projetos';
 import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
-import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota } from './remoto';
+import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -159,6 +159,9 @@ export const api = {
     chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
   retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<RetratoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/retrato`, { token, signal }),
+  /** O último catálogo dos atalhos do chat (o handshake); 404 enquanto a máquina não mandou nenhum. */
+  catalogoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   login: (login: string, senha: string) =>

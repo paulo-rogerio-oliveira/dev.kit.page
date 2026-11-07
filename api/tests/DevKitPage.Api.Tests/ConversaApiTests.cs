@@ -355,6 +355,43 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(3, api.Fila.Enviadas.Count);
     }
 
+    [Fact]
+    public async Task O_handshake_do_catalogo_vai_pela_fila_nao_conta_no_limite_nao_empilha_e_fecha_com_o_catalogo_publicado()
+    {
+        using var teste = new ConversaApiTests(new ApiDeTeste(comandosPorHora: 1));
+        var api = teste._api;
+        var (_, ana) = await teste.DevComFilaAsync();
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).StatusCode);
+
+        // A cota das mensagens está cheia, e o handshake passa: ele não abre turno do agente.
+        var pedido = new ComandoNovoV1("h-1", Maquina, ConversaV1.ComandoCatalogo, null, null, ConversaV1.DispositivoNavegador);
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-2"))).StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(api.Fila.Enviadas.Last().Mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoCatalogo, "h-1"), (naFila.Tipo, naFila.Id));
+
+        // O Board reaberto (outro id) recebe o pedido que ainda espera na fila, sem outra mensagem nela.
+        var repetido = await ana.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "h-2" });
+        Assert.Equal(HttpStatusCode.OK, repetido.StatusCode);
+        Assert.Equal("h-1", (await repetido.Content.ReadFromJsonAsync<ComandoRemotoV1>())!.Id);
+        Assert.Equal(2, api.Fila.Enviadas.Count);
+
+        // O dev.kit confirma, publica o catálogo e fecha o pedido com o concluido.
+        var recebido = await ana.PostAsJsonAsync("/api/remoto/comandos/h-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina));
+        Assert.True((await recebido.Content.ReadFromJsonAsync<RecebimentoAceitoV1>())!.Executar);
+        var catalogo = new CatalogoRemotoV1(RemotoV1.Contrato, Maquina, DateTimeOffset.UtcNow, "h-1", [new WorkItemNoCatalogoV1(812, "Handshake do chat", "User Story", "Active")],
+            [new RepositorioNoCatalogoV1("dev.kit.page", "main")], [new FluxoNoCatalogoV1("Tarefa avulsa")], [], []);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync("/api/remoto/catalogo", catalogo)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/respostas",
+            Resposta("ok-h-1", "h-1", ConversaV1.RespostaConcluido, "Catálogo publicado."))).StatusCode);
+        Assert.Equal(ConversaV1.EstadoConcluido, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/h-1"))!.Estado);
+        var lido = (await ana.GetFromJsonAsync<CatalogoDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/catalogo"))!;
+        Assert.Equal(812, Assert.Single(lido.Catalogo.WorkItems!).Id);
+
+        // Fechado o pedido, o "Atualizar" seguinte é um handshake novo.
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "h-3" })).StatusCode);
+    }
+
     private static FalaDoDevKitV1 Fala(string id, string autor = ConversaV1.AutorDev, string origem = ConversaV1.OrigemDesktop,
         string texto = "Como está o item 13?", DateTimeOffset? ditaEm = null, string? comando = null)
         => new(RemotoV1.Contrato, Maquina, id, autor, origem, texto, ditaEm ?? DateTimeOffset.UtcNow, comando);
@@ -372,8 +409,8 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: conserva as falas e anuncia as decisões com snapshot no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            // Recursos são aditivos: conserva as falas e as decisões com snapshot, e anuncia o catálogo do chat no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.

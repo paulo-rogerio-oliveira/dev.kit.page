@@ -4,7 +4,7 @@ import { delay, http, HttpResponse } from 'msw';
 import { transferableAbortController } from 'node:util';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenDoDev } from '../testes/servidor';
-import type { ComandoNovo, ComandoRemoto, ConversaRemota, EventoDaConversa, MaquinaRemota } from '../api/remoto';
+import type { CatalogoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, EventoDaConversa, MaquinaRemota } from '../api/remoto';
 
 beforeAll(() => vi.stubGlobal('AbortController', transferableAbortController().constructor));
 afterAll(() => vi.unstubAllGlobals());
@@ -194,7 +194,7 @@ it('aplica / # @ e branch existente, Enter envia e Shift+Enter mantém a quebra'
   await abrir();
   const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
   await userEvent.click(caixa); await userEvent.keyboard('/');
-  await userEvent.type(screen.getByRole('textbox', { name: 'Fluxo ou design' }), 'Tela');
+  await userEvent.type(screen.getByRole('textbox', { name: 'Fluxo, projeto ou design' }), 'Tela');
   await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
   await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
   await userEvent.type(screen.getByRole('textbox', { name: 'Work item' }), '7');
@@ -219,4 +219,132 @@ it.each([409, 422, 429, 503])('mostra recusa HTTP %s preservando o rascunho', as
   expect(await screen.findByRole('alert')).toHaveTextContent('Recusa de demonstração');
   expect(screen.getByLabelText('Mensagem ao Orquestrador')).toHaveValue('Mensagem recusada');
   expect(screen.queryByText('Enviado')).not.toBeInTheDocument();
+});
+
+// ----- O catálogo dos atalhos (o handshake do chat, remote-control-v3) -----
+
+function catalogo(recebidoEm = new Date().toISOString()): CatalogoDaMaquina {
+  return { maquinaId: 'notebook', recebidoEm, catalogo: { contrato: 1, maquinaId: 'notebook', geradoEm: recebidoEm, comandoId: null,
+    workItems: [{ id: 812, titulo: 'Handshake do chat remoto', tipo: 'User Story', estado: 'Active' }, { id: 815, titulo: 'Filtro de dia', tipo: 'Bug', estado: 'Active' }],
+    repositorios: [{ nome: 'github.com/empresa/dev.kit.page', branchPadrao: 'main' }, { nome: 'github.com/empresa/git.kit' }],
+    fluxos: [{ nome: 'Tarefa avulsa', descricao: 'Implementação avaliada' }],
+    projetos: [{ slug: 'remote-control-v3', nome: 'remote-control-v3', situacao: 'aprovado' }],
+    designs: [{ nome: 'github.com/empresa/dev.kit.page · main', telas: 3 }] } };
+}
+function pedidoDoCatalogo(estado: ComandoRemoto['estado'], id: string = crypto.randomUUID()): ComandoRemoto {
+  return { ...comando(estado), id, tipo: 'catalogo', texto: '' };
+}
+
+it('com o dev.kit fechado carrega os atalhos do último catálogo, mostra a data e não pede handshake sozinho', async () => {
+  const doisDias = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  preparar();
+  const pedidos: ComandoNovo[] = [];
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogo(doisDias))),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      const pedido = await request.json() as ComandoNovo; pedidos.push(pedido);
+      return HttpResponse.json(pedido.tipo === 'catalogo' ? pedidoDoCatalogo('na-fila', pedido.id) : { ...comando(), ...pedido }, { status: 202 });
+    }),
+  );
+  await abrir();
+  expect(await screen.findByText(/dev.kit fechado: último catálogo recebido/)).toBeInTheDocument();
+  expect(screen.getByText(/há 2 dias/)).toHaveAttribute('dateTime', doisDias);
+
+  // / : os fluxos, os projetos e os designs do catálogo; a escolha aplica e fecha.
+  await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
+  const barra = within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: fluxo, projeto ou design' }));
+  expect(barra.getByText('Fluxos')).toBeInTheDocument();
+  expect(barra.getByText('Projetos')).toBeInTheDocument();
+  expect(barra.getByRole('button', { name: /github.com\/empresa\/dev.kit.page · main 3 telas/ })).toBeInTheDocument();
+  await userEvent.click(barra.getByRole('button', { name: /^remote-control-v3/ }));
+  expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toHaveTextContent('/ projeto remote-control-v3');
+
+  // # : o texto filtra os work items em andamento.
+  await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Work item' }), '812');
+  const itens = within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: work item em andamento' }));
+  expect(itens.queryByRole('button', { name: /#815/ })).not.toBeInTheDocument();
+  await userEvent.click(itens.getByRole('button', { name: /#812 · Handshake do chat remoto/ }));
+  expect(screen.getByRole('button', { name: '# Work item' })).toHaveTextContent('# 812');
+
+  // @ : a escolha preenche e o branch ainda é informado antes de aplicar.
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  await userEvent.click(within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' })).getByRole('button', { name: 'github.com/empresa/git.kit' }));
+  expect(screen.getByRole('textbox', { name: 'Repositório' })).toHaveValue('github.com/empresa/git.kit');
+  await userEvent.type(screen.getByRole('textbox', { name: 'Branch existente' }), 'feature/item-1');
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
+
+  const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
+  await userEvent.click(caixa); await userEvent.type(caixa, 'Mostre{Enter}');
+  await waitFor(() => expect(pedidos.find(p => p.tipo === 'mensagem')?.texto)
+    .toBe('/ projeto remote-control-v3\n# 812\n@ github.com/empresa/git.kit\nBranch existente: feature/item-1\nMostre'));
+  expect(pedidos.filter(p => p.tipo === 'catalogo')).toHaveLength(0);
+
+  // O Atualizar pede mesmo assim: o serviço guarda o pedido, e o dev.kit responde quando abrir.
+  await userEvent.click(screen.getByRole('button', { name: 'Atualizar catálogo do dev.kit' }));
+  await waitFor(() => expect(pedidos.filter(p => p.tipo === 'catalogo')).toHaveLength(1));
+  expect(pedidos.find(p => p.tipo === 'catalogo')).toMatchObject({ maquinaId: 'notebook', texto: '' });
+  expect(await screen.findByText(/o dev.kit responde quando abrir/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Atualizar catálogo do dev.kit' })).toBeDisabled();
+});
+
+it('com o dev.kit aberto pede o catálogo ao conectar, relê quando o pedido conclui e não mostra o handshake no chat', async () => {
+  preparar(undefined, [{ ...maquina(), appAberto: true }]);
+  let canal: ReadableStreamDefaultController<Uint8Array>;
+  let publicado = false;
+  const encoder = new TextEncoder();
+  const pedidos: ComandoNovo[] = [];
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => publicado ? HttpResponse.json(catalogo()) : HttpResponse.json({ detail: 'sem catálogo' }, { status: 404 })),
+    http.get(`${API}/api/remoto/conversa/eventos`, ({ request }) => new HttpResponse(new ReadableStream({ start(controller) {
+      canal = controller;
+      request.signal.addEventListener('abort', () => { try { controller.close(); } catch { /* Já encerrado. */ } });
+    } }), { headers: { 'Content-Type': 'text/event-stream' } })),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      const pedido = await request.json() as ComandoNovo; pedidos.push(pedido);
+      const naFila = pedidoDoCatalogo('na-fila', pedido.id);
+      setTimeout(() => {
+        publicado = true;
+        const agora = new Date().toISOString();
+        const resposta = { id: `ok-${pedido.id}`, maquinaId: 'notebook', comandoId: pedido.id, tipo: 'concluido', texto: 'Catálogo do chat atualizado: 2 work items.', geradaEm: agora, recebidaEm: agora };
+        canal.enqueue(encoder.encode(`id: 11\nevent: resposta\ndata: ${JSON.stringify({ id: 11, tipo: 'resposta', maquinaId: 'notebook', comando: null, resposta, em: agora })}\n\n`));
+        canal.enqueue(encoder.encode(`id: 12\nevent: comando\ndata: ${JSON.stringify({ id: 12, tipo: 'comando', maquinaId: 'notebook', comando: { ...naFila, estado: 'concluido', concluidoEm: agora }, resposta: null, em: agora })}\n\n`));
+      }, 50);
+      return HttpResponse.json(naFila, { status: 202 });
+    }),
+  );
+  await abrir();
+  expect(await screen.findByText(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument();
+  expect(screen.getByText(/agora há pouco/)).toBeInTheDocument();
+  expect(pedidos).toHaveLength(1);
+  expect(pedidos[0]).toMatchObject({ maquinaId: 'notebook', tipo: 'catalogo', texto: '' });
+  expect(within(screen.getByRole('log')).queryByText(/Catálogo do chat atualizado/)).not.toBeInTheDocument();
+  expect(within(screen.getByRole('log')).queryAllByRole('article')).toHaveLength(0);
+
+  await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
+  expect(screen.getByRole('button', { name: /#815 · Filtro de dia/ })).toHaveTextContent('Bug · Active');
+  // O catálogo novo não pede de novo ao reabrir o painel.
+  expect(pedidos).toHaveLength(1);
+});
+
+it('o dev.kit antigo recusa o handshake: o chat avisa para atualizar, não mostra a recusa e não insiste ao abrir', async () => {
+  const recusado = pedidoDoCatalogo('recusado', 'h-antigo');
+  preparar({ comandos: [recusado], ultimoEvento: 10, respostas: [{ id: 'x-h-antigo', maquinaId: 'notebook', comandoId: 'h-antigo', tipo: 'recusado',
+    texto: "Não executado: o tipo de comando 'catalogo' não é conhecido por esta versão do dev.kit.", geradaEm: recusado.criadoEm, recebidaEm: recusado.criadoEm }] },
+  [{ ...maquina(), appAberto: true }]);
+  const pedidos: ComandoNovo[] = [];
+  servidor.use(http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+    pedidos.push(await request.json() as ComandoNovo); return new HttpResponse(null, { status: 500 });
+  }));
+  await abrir();
+  expect(await screen.findByRole('alert')).toHaveTextContent(/não é conhecido por esta versão do dev.kit. Atualize o dev.kit desta máquina/);
+  expect(within(screen.getByRole('log')).queryByText(/Não executado/)).not.toBeInTheDocument();
+  expect(screen.getByText(/Atalhos sem catálogo/)).toBeInTheDocument();
+  await act(() => new Promise(resolve => setTimeout(resolve, 100)));
+  expect(pedidos).toHaveLength(0);
+
+  // Sem catálogo, o atalho segue aceitando o texto livre.
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  expect(screen.getByText(/Sem catálogo do dev.kit desta máquina/)).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: /Do catálogo do dev.kit/ })).not.toBeInTheDocument();
 });
