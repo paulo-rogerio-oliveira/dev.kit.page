@@ -906,6 +906,8 @@ export const handlersPadrao = [
   // O catálogo dos atalhos do chat (remote-control-v3): sem catálogo, e o handshake aceito na fila — o cenário que testa o
   // catálogo responde por conta própria.
   http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json({ detail: 'Máquina sem catálogo, ou não é sua.' }, { status: 404 })),
+  // (controle-v4, item 2) Os últimos artefatos dos projetos do card: nenhum, por padrão; o cenário dos links responde os seus.
+  http.get(`${API}/api/projetos/artefatos`, () => HttpResponse.json([])),
   http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
     const pedido = await request.json() as { id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string };
     return HttpResponse.json({ ...pedido, estado: 'na-fila', criadoEm: new Date().toISOString(),

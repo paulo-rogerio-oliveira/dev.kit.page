@@ -63,6 +63,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<CatalogoRemoto> CatalogosRemotos => Set<CatalogoRemoto>();
     public DbSet<ClienteDaMaquina> ClientesDaMaquina => Set<ClienteDaMaquina>();
     public DbSet<AssercaoDoCliente> AssercoesDoCliente => Set<AssercaoDoCliente>();
+    public DbSet<ArtefatoDoProjeto> ArtefatosDosProjetos => Set<ArtefatoDoProjeto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -272,6 +273,23 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne(p => p.Autor).WithMany().HasForeignKey(p => p.AutorId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(p => p.Itens).WithOne(i => i.Projeto).HasForeignKey(i => i.ProjetoId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(p => p.Acessos).WithOne(a => a.ProjetoEmOndas).HasForeignKey(a => a.ProjetoEmOndasId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // Os artefatos do projeto (controle-v4, item 2): o zip no armazém e a URL do preview. No Azure SQL a tabela vem de
+        // api/scripts/sqlserver/ArtefatosDosProjetos.sql; apagar o projeto apaga as linhas (o zip vence na retenção do contêiner).
+        modelBuilder.Entity<ArtefatoDoProjeto>(e =>
+        {
+            e.ToTable("ArtefatosDosProjetos");
+            e.Property(a => a.Tipo).HasMaxLength(20);
+            e.Property(a => a.Repositorio).HasMaxLength(Contracts.V1.ArtefatosV1.TamanhoMaximoDoRepositorio);
+            e.Property(a => a.Sha).HasMaxLength(40);
+            e.Property(a => a.Chave).HasMaxLength(200);
+            e.Property(a => a.NomeDoArquivo).HasMaxLength(200);
+            e.Property(a => a.Url).HasMaxLength(Contracts.V1.ArtefatosV1.TamanhoMaximoDaUrl);
+            e.Property(a => a.Ambiente).HasMaxLength(Contracts.V1.ArtefatosV1.TamanhoMaximoDoAmbiente);
+            e.Property(a => a.Hash).HasMaxLength(64);
+            e.HasIndex(a => new { a.ProjetoId, a.CriadoEmUtc });
+            e.HasOne(a => a.Projeto).WithMany().HasForeignKey(a => a.ProjetoId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ItemDeProjetoCompartilhado>(e =>

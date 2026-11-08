@@ -15,7 +15,9 @@ import { ChatRemoto } from '../componentes/ChatRemoto';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
 import { useConversaRemota } from '../componentes/useConversaRemota';
 import { useCatalogoRemoto } from '../componentes/useCatalogoRemoto';
-import { DesfechoDaCriacao, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
+import { DesfechoDaCriacao, ehGerarArtefato, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
+import { ArtefatosDoCard, useArtefatosDoBoard } from '../componentes/ArtefatosDoProjeto';
+import type { Artefato } from '../api/projetos';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
@@ -59,7 +61,7 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]> }) {
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todosOsDesigns, setTodosOsDesigns] = useState(false);
@@ -99,11 +101,16 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
       const integrados = itens.filter(i => i.situacao === 'integrado').length;
       const rodando = itens.filter(i => i.situacao === 'rodando').length;
       const ondas = Math.max(p.ondaAtual, ...itens.map(i => i.onda));
-      return <Link className="br-card br-proj br-abrir" key={p.slug} to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
-        <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
-        <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
-        <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
-      </Link>;
+      // (controle-v4, item 2) O card abre o projeto e, embaixo, gera artefato e mostra os últimos links.
+      return <div className="br-card br-proj-card" key={p.slug}>
+        <Link className="br-proj br-abrir" to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
+          <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
+          <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
+          <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
+        </Link>
+        <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.get(p.slug) ?? []} gerar={slug => void criacao.gerarArtefato(slug)}
+          desabilitado={criacao.desabilitado} motivo={criacao.motivo} agora={agora} />
+      </div>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
     {(terminando > 0 || comConcluidos) && <label className="br-interruptor">
@@ -317,6 +324,9 @@ export function Board() {
   // (item 4) O catálogo da máquina (o handshake) é UM para o chat e o painel: os atalhos, os designs e os formulários.
   const catalogo = useCatalogoRemoto({ maquina, conectada, conversa });
   const criacao = useCriacaoRemota({ maquina, conversa, agora });
+  // (controle-v4, item 2) Os links do card relidos a cada desfecho de um "Gerar artefato".
+  const desfechosDoArtefato = conversa.conversa.comandos.filter(c => ehGerarArtefato(c) && c.estado === 'concluido').map(c => c.id).join(',');
+  const artefatos = useArtefatosDoBoard(sessao?.token, desfechosDoArtefato);
   const doCatalogo = catalogo.catalogo?.catalogo ?? null;
   const dispensadas = dispensadasDe(foto?.retrato?.pendencias ?? [], decisoes, dispensasLocais);
   const abertas = (foto?.retrato?.pendencias ?? []).filter(p => !dispensadas.has(p.id)).length;
@@ -350,7 +360,7 @@ export function Board() {
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
-          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} />}
+          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} />}
         {/* A chave é própria: o ConteudoDoBoard, irmão dele, já usa a da máquina. */}
         {maquina && <VinculoDoServico key={`vinculo-${selecionada}`} maquina={maquina} desvincular={desvincular} />}
         <HistoricoDeAvisos avisos={avisos} />

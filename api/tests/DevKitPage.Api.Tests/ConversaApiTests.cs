@@ -428,6 +428,21 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Contains("não é conhecido por esta versão", conversa.Respostas.Single(r => r.ComandoId == "d-1").Texto, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task A_acao_artefato_no_projeto_vai_pela_fila_no_comando_projeto_sem_tipo_novo()
+    {
+        var (_, ana) = await DevComFilaAsync();
+
+        // (controle-v4, item 2) O "Gerar artefato" do card: o mesmo comando projeto, com a ação no texto.
+        var acao = new AcaoNoProjetoRemotoV1(ArtefatosV1.AcaoArtefato, "controle-v4", Sha: "3f9c2a1");
+        var envio = await ana.PostAsJsonAsync("/api/remoto/comandos", Criacao("a-1", ConversaV1.ComandoProjeto, acao));
+        Assert.Equal(HttpStatusCode.Accepted, envio.StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal(ConversaV1.ComandoProjeto, naFila.Tipo);
+        var lida = JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(naFila.Texto, Json)!;
+        Assert.Equal((ArtefatosV1.AcaoArtefato, "controle-v4", null, "3f9c2a1"), (lida.Acao, lida.Projeto, lida.Repositorio, lida.Sha));
+    }
+
     [Theory]
     [InlineData(ConversaV1.ComandoProjeto, "", "Envie o formulário")]
     [InlineData(ConversaV1.ComandoProjeto, "{nome", "não é um JSON válido")]
@@ -435,6 +450,9 @@ public sealed class ConversaApiTests : IDisposable
     [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":[]}""", "ao menos um repositório")]
     [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":["github.com/org/app"],"nivel":"mundo"}""", "nível")]
     [InlineData(ConversaV1.ComandoDesign, """{"repositorio":" "}""", "repositório do catálogo")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"acao":"artefato","projeto":""}""", "Informe o projeto")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"acao":"artefato","projeto":"controle-v4","sha":"zz"}""", "hexadecimais")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"acao":"publicar","projeto":"controle-v4"}""", "A ação no projeto é artefato")]
     public async Task O_formulario_da_criacao_invalido_e_recusado_antes_da_fila(string tipo, string texto, string motivo)
     {
         var (_, ana) = await DevComFilaAsync();

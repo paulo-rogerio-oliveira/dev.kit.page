@@ -326,6 +326,14 @@ caminho do `devcli` e responde `concluido` (com o slug ou o projeto de design) o
   no envio (413).
 - **Compatibilidade:** o dev.kit antigo não conhece `projeto` nem `design` e os recusa (`recusado`, "não é conhecido por esta
   versão do dev.kit"); a API antiga recusa o tipo com **400**. O site mostra as duas recusas no formulário.
+- **Ação no projeto (controle-v4, item 2):** o `texto` do `projeto` com a propriedade `acao` é uma AÇÃO num projeto que
+  já existe, e não a criação: `{ "acao": "artefato", "projeto": slug, "repositorio"?, "sha"? }`
+  (`AcaoNoProjetoRemotoV1`). O dev.kit a executa como `devcli projeto --projeto <slug> --artefato --aplicar` — enfileira a
+  geração no executor delegado (pacote .NET ou preview da página estática, nunca produção) e responde `concluido` com o
+  número do artefato, ou `recusado` com o motivo (o leitor do projeto, o projeto que não existe). Sem `repositorio`, o
+  primeiro do projeto; sem `sha`, o HEAD do branch do projeto. O link chega ao site pelo `POST /api/projetos/{id}/artefatos`
+  da máquina, e o card do Board o lê em `GET /api/projetos/artefatos`. O dev.kit antigo lê o texto como um Novo projeto sem
+  nome e recusa com o motivo, sem criar nada; a API antiga recusa a ação com **400** (o formulário sem nome).
 
 ### 5.2 Correções do board remoto (07/11/2026)
 

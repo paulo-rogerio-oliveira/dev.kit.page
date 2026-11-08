@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, ComandoRemoto, ConversaRemota, MaquinaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
 import type { UsoDoDesign } from '../api/tipos';
+import type { AcaoNoProjetoRemoto } from '../api/projetos';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { tiposDeCriacao } from './useCatalogoRemoto';
 import { useSessao } from '../sessao';
@@ -11,15 +12,26 @@ const emCurso = ['pendente', 'na-fila', 'entregue'];
 const vistaDoDesfechoMs = 15 * 60_000;
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
-export function rotuloDaCriacao(tipo: string) { return tipo === 'projeto' ? 'Novo projeto' : 'Novo design'; }
+
+/** (controle-v4, item 2) O comando projeto com `acao` é o "Gerar artefato", e não a criação. */
+export function ehGerarArtefato(comando: Pick<ComandoRemoto, 'tipo' | 'texto'>) {
+  if (comando.tipo !== 'projeto') return false;
+  try { return (JSON.parse(comando.texto) as { acao?: string } | null)?.acao === 'artefato'; } catch { return false; }
+}
+export function rotuloDaCriacao(tipo: string, texto = '') {
+  return ehGerarArtefato({ tipo, texto }) ? 'Gerar artefato' : tipo === 'projeto' ? 'Novo projeto' : 'Novo design';
+}
 
 /** Onde a criação está, com o texto do dev.kit quando ele já respondeu (o que criou, ou o motivo da recusa). */
 function situacao(comando: ComandoRemoto, conversa: ConversaRemota) {
   const resposta = conversa.respostas.filter(r => r.comandoId === comando.id).at(-1)?.texto ?? '';
+  const artefato = ehGerarArtefato(comando);
   switch (comando.estado) {
-    case 'pendente': case 'na-fila': return { classe: '', titulo: 'aguardando o dev.kit', texto: 'O pedido está na fila: quem cria é o dev.kit da máquina, pelo mesmo caminho do devcli.' };
-    case 'entregue': return { classe: '', titulo: 'em execução no dev.kit', texto: 'O dev.kit recebeu o pedido e está criando.' };
-    case 'concluido': case 'respondido': return { classe: ' br-ok', titulo: 'concluído', texto: resposta || 'Criado pelo dev.kit.' };
+    case 'pendente': case 'na-fila': return { classe: '', titulo: 'aguardando o dev.kit', texto: artefato
+      ? 'O pedido está na fila: quem gera é o dev.kit da máquina, no executor delegado, pelo mesmo caminho do devcli.'
+      : 'O pedido está na fila: quem cria é o dev.kit da máquina, pelo mesmo caminho do devcli.' };
+    case 'entregue': return { classe: '', titulo: 'em execução no dev.kit', texto: artefato ? 'O dev.kit recebeu o pedido e está gerando o artefato.' : 'O dev.kit recebeu o pedido e está criando.' };
+    case 'concluido': case 'respondido': return { classe: ' br-ok', titulo: 'concluído', texto: resposta || (artefato ? 'Artefato pedido ao dev.kit.' : 'Criado pelo dev.kit.') };
     // O dev.kit antigo não conhece o comando e recusa com o motivo (regra de impacto #2): o site o mostra como veio.
     case 'recusado': return { classe: ' br-recusa', titulo: 'recusado', texto: (resposta || comando.erro || 'O dev.kit recusou o pedido.').replace(/^Não executado:\s*/, '') };
     case 'expirado': return { classe: ' br-recusa', titulo: 'expirado', texto: 'O prazo venceu antes de o dev.kit receber o pedido: a máquina pode estar desligada.' };
@@ -45,7 +57,7 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
 
   useEffect(() => { setAberta(null); setFalha(''); }, [maquina?.maquinaId]);
 
-  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto) {
+  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto) {
     setEnviando(true); setFalha('');
     try {
       const desfecho = await conversa.criar(tipo, formulario, crypto.randomUUID());
@@ -58,6 +70,8 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
 
   return {
     maquina, aberta, enviando, falha, motivo, criar,
+    /** (controle-v4, item 2) O "Gerar artefato" do card: a ação no projeto pela mesma fila, sem formulário. */
+    gerarArtefato: (projeto: string) => criar('projeto', { acao: 'artefato', projeto }),
     desabilitado: !maquina || ocupado,
     abrir: (tipo: TipoDeCriacao) => { setFalha(''); setAberta(tipo); },
     fechar: () => { setFalha(''); setAberta(null); },
@@ -72,7 +86,7 @@ export function DesfechoDaCriacao({ criacao }: { criacao: CriacaoDoBoard }) {
   const d = criacao.desfecho;
   if (!d) return null;
   return <div className={`br-criacao${d.classe}`} role="status" aria-label="Desfecho da criação">
-    <strong>{d.comando.estado === 'concluido' ? '✓ ' : ''}{rotuloDaCriacao(d.comando.tipo)} · {hora(d.comando.criadoEm)} · {d.titulo}</strong>
+    <strong>{d.comando.estado === 'concluido' ? '✓ ' : ''}{rotuloDaCriacao(d.comando.tipo, d.comando.texto)} · {hora(d.comando.criadoEm)} · {d.titulo}</strong>
     <span>{d.texto}</span>
   </div>;
 }

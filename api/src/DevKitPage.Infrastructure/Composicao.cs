@@ -92,6 +92,20 @@ public static class Composicao
         servicos.AddScoped<IAcessosAosProjetos, AcessosAosProjetos>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
         servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
+        // Os artefatos do projeto (controle-v4, item 2): sem a seção Artefatos, o armazém e a conexão do Blob são os do design.
+        servicos.AddOptions<OpcoesDosArtefatos>().Bind(configuracao.GetSection(OpcoesDosArtefatos.Secao))
+            .PostConfigure<IOptions<OpcoesDoDesign>>((opcoes, design) =>
+            {
+                if (string.IsNullOrWhiteSpace(opcoes.Armazem))
+                    opcoes.Armazem = design.Value.Armazem;
+                if (string.IsNullOrWhiteSpace(opcoes.ConexaoDoBlob))
+                    opcoes.ConexaoDoBlob = design.Value.ConexaoDoBlob;
+            });
+        servicos.TryAddSingleton<IArmazemDeArtefatos>(sp =>
+            string.Equals(sp.GetRequiredService<IOptions<OpcoesDosArtefatos>>().Value.Armazem, OpcoesDoDesign.Blob, StringComparison.OrdinalIgnoreCase)
+                ? new ArmazemDeArtefatosNoBlob(sp.GetRequiredService<IOptions<OpcoesDosArtefatos>>())
+                : ActivatorUtilities.CreateInstance<ArmazemDeArtefatosEmDisco>(sp));
+        servicos.AddScoped<IArtefatosDosProjetos, ArtefatosDosProjetosNoBanco>();
         // O controle remoto, fase 1: o heartbeat e o retrato das máquinas, por usuário.
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();
