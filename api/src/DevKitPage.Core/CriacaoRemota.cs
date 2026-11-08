@@ -22,6 +22,8 @@ public static class RegrasDaCriacaoRemota
         {
             return tipo switch
             {
+                // (controle-v4, item 2) Com "acao", o texto é uma ação no projeto que já existe; sem ela, a criação de sempre.
+                ConversaV1.ComandoProjeto when EhAcao(texto) => RegrasDosArtefatos.ValidarAcao(JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(texto, Json)),
                 ConversaV1.ComandoProjeto => Validar(JsonSerializer.Deserialize<NovoProjetoRemotoV1>(texto, Json)),
                 ConversaV1.ComandoDesign => Validar(JsonSerializer.Deserialize<NovoDesignRemotoV1>(texto, Json)),
                 _ => string.Empty,
@@ -63,6 +65,14 @@ public static class RegrasDaCriacaoRemota
         return Invalido(design.Repositorio)
             ? $"Escolha o repositório do catálogo da máquina (até {RemotoV1.TamanhoMaximoDoNome} caracteres)."
             : string.Empty;
+    }
+
+    /// <summary>O texto do comando projeto é uma AÇÃO (tem a propriedade <c>acao</c>), e não o formulário de criação.</summary>
+    public static bool EhAcao(string texto)
+    {
+        using var documento = JsonDocument.Parse(texto);
+        return documento.RootElement.ValueKind == JsonValueKind.Object
+            && documento.RootElement.EnumerateObject().Any(p => string.Equals(p.Name, "acao", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool Invalido(string? texto) => string.IsNullOrWhiteSpace(texto) || texto.Length > RemotoV1.TamanhoMaximoDoNome;

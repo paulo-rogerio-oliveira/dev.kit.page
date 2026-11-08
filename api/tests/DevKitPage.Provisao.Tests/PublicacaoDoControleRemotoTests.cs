@@ -201,7 +201,7 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         secao = secao[..secao.IndexOf("\n### ", 5, StringComparison.Ordinal)];
         var noDoc = Regex.Matches(secao, @"^\d+\. `(\S+\.sql)`", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToArray();
 
-        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql"], noWorkflow);
+        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql", "ArtefatosDosProjetos.sql"], noWorkflow);
         Assert.Equal(noWorkflow, noDoc);
         Assert.All(noWorkflow, nome => ScriptsDoRepositorio.Arquivo($"api/scripts/sqlserver/{nome}"));
         // O disparo manual diz quais scripts roda: todos, pelo nome.
@@ -214,6 +214,7 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
     [InlineData("ClientesDaMaquina")]
     [InlineData("AssercoesDoCliente")]
     [InlineData("PendenciasDispensadas")]
+    [InlineData("ArtefatosDosProjetos")]
     public async Task As_tabelas_novas_do_remote_control_v3_vem_de_um_script_aplicado_pelo_workflow(string tabela)
     {
         var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));

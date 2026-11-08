@@ -4,6 +4,7 @@ import { lerEventosDaConversa } from '../api/eventosDaConversa';
 import {
   dispositivoAtual, type ComandoNovo, type ComandoRemoto, type ConversaRemota, type NovoDesignRemoto, type NovoProjetoRemoto, type TipoDeCriacao,
 } from '../api/remoto';
+import type { AcaoNoProjetoRemoto } from '../api/projetos';
 import { useSessao } from '../sessao';
 
 const vazia: ConversaRemota = { comandos: [], respostas: [], ultimoEvento: 0, falas: [] };
@@ -163,7 +164,7 @@ export function useConversaRemota(maquina: string) {
    * texto, e o dev.kit responde `concluido` (o que criou) ou `recusado` (o motivo) — o desfecho chega pelo SSE. O mesmo id no
    * reenvio (o duplo clique) devolve o comando que já existe.
    */
-  const criar = useCallback(async (tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto, id: string)
+  const criar = useCallback(async (tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto, id: string)
     : Promise<{ ok: true; comando: ComandoRemoto } | { ok: false; mensagem: string }> => {
     const controller = ciclo.current;
     if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };

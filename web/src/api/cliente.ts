@@ -10,7 +10,7 @@ import type {
   UtilidadeResposta, AssinanteDoItem,
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
-import type { Projeto } from './projetos';
+import type { ArtefatosDoProjeto, Projeto } from './projetos';
 import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
@@ -172,6 +172,8 @@ export const api = {
     chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
+  /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
+  artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 

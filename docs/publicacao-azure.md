@@ -254,6 +254,21 @@ Rode também `api/scripts/sqlserver/Us693.sql` (idempotente): cria `ProjetosComp
 Rule de impacto 5): o dev.kit trata o 404 da API antiga como "o projeto fica só nesta máquina", mas o compartilhamento
 só existe com a rota publicada. Nenhuma configuração nova.
 
+### Artefatos do projeto (controle-v4, item 2)
+
+Rode também `api/scripts/sqlserver/ArtefatosDosProjetos.sql` (idempotente, o passo 9 da lista do controle remoto). O
+`POST /api/projetos/{id}/artefatos` recebe o zip do pacote .NET (multipart, campo `arquivo`) ou a URL do preview (JSON), e
+o `GET /api/projetos/artefatos` dá os últimos de cada projeto ao card do Board. **Nenhuma configuração obrigatória nova**:
+sem a seção `Artefatos`, o armazém e a conexão são os do design (`Design__Armazem=blob`, `Design__ConexaoDoBlob`), num
+contêiner PRIVADO `artefatos` criado na primeira gravação. Opcionais: `Artefatos__Conteiner`, `Artefatos__ConexaoDoBlob`
+(outra conta), `Artefatos__TamanhoMaximoMb` (teto do zip, padrão 100; acima, 413), `Artefatos__RetencaoDias` (padrão 7),
+`Artefatos__LinkHoras` (o prazo da SAS, padrão 24, nunca além da retenção) e `Artefatos__MaximoPorProjeto` (padrão 10).
+O link é uma SAS de serviço do blob, só leitura, só HTTPS e com prazo — leva a assinatura, nunca a chave da conta; por
+isso a connection string precisa da chave (`AccountKey`). Nada é publicado em produção: o site guarda o zip e a URL do
+ambiente de **preview** do Static Web App. A retenção apaga o zip vencido a cada novo registro do projeto; para o zip de um
+projeto apagado, configure no Storage a política de ciclo de vida (*Lifecycle management*) do contêiner `artefatos`
+apagando blobs com mais de 7 dias.
+
 ### Como saber que falta um script (bug do painel Uso, 26/10)
 
 Sem o `Us687.sql`, o painel Uso do admin mostrava só "An error occurred while processing your request" (o
@@ -418,10 +433,10 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 ### Scripts SQL do controle remoto, na ordem
 
-Numa base Azure SQL que já existe, o controle remoto precisa de oito scripts de `api/scripts/sqlserver/`, todos
+Numa base Azure SQL que já existe, o controle remoto precisa de nove scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros; o `CatalogoRemoto.sql` e o
 `ClienteDaMaquina.sql`, das `Maquinas` e dos `Usuarios` que já existem; o `BoardRemoto.sql`, do `Conversa.sql` e do
-`Decisoes.sql`):
+`Decisoes.sql`; o `ArtefatosDosProjetos.sql`, dos `ProjetosCompartilhados` do `Us693.sql`):
 
 1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
 2. `Provisao.sql` — as permissões, os recursos provisionados e os eventos (rode de novo a cada versão: só acrescenta).
@@ -435,6 +450,9 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
    colunas `ComandosRemotos.Contexto` (o fluxo, o agente e os parâmetros do chat), `FalasRemotas.Anexos` (as imagens das
    falas) e `RespostasDasDecisoes.Dispositivo` (o celular ou o navegador da decisão; controle-v4, item 3). Sem ele, a API
    nova não grava a fala, o comando nem a decisão nessas tabelas, e a verificação do esquema na subida o aponta.
+9. `ArtefatosDosProjetos.sql` — os artefatos do projeto (controle-v4, item 2): a tabela `ArtefatosDosProjetos` (o zip do
+   pacote .NET no Blob, com o hash e a retenção, e a URL do preview). Sem ele, `POST /api/projetos/{id}/artefatos` e
+   `GET /api/projetos/artefatos` respondem 500, e a verificação do esquema na subida o aponta.
 
 **O que o remote-control-v3 acrescenta ao banco** são só os passos 6 e 7 (as tabelas `CatalogosRemotos`,
 `ClientesDaMaquina` e `AssercoesDoCliente`). Os itens 4 (ver e criar projeto e design pelo site) e 5 (a fila criada pela
@@ -444,7 +462,7 @@ mesma linha de `RecursosProvisionados` do `Provisao.sql`. Os testes `PublicacaoD
 lista e o job `sql` do workflow têm os mesmos scripts, na mesma ordem, e que as tabelas novas vêm deles.
 
 ```bash
-for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina; do
+for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos; do
   sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
 done
 ```
@@ -600,7 +618,7 @@ na `main`:
    não muda nada.
 3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service (se ainda não estão).
 4. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** marcado — `configuracao` → `sql` (os
-   sete scripts, na ordem da seção "Scripts SQL do controle remoto") → `deploy` (a API e o WebJob `provisao` no mesmo
+   nove scripts, na ordem da seção "Scripts SQL do controle remoto") → `deploy` (a API e o WebJob `provisao` no mesmo
    pacote). O push na `main` já publica; o disparo manual é o que aplica o SQL. Se os scripts já foram aplicados à mão
    (`sqlcmd`), o push basta. **Não** reinicie nem mude settings durante o deploy (as DLLs corrompidas do 500 `Bad IL
    range`).
@@ -629,6 +647,12 @@ Checklist verificável (`<api>` é a URL da API, `<site>` a do Static Web App, `
       `estado: "pronto"`; `az storage account list -g devkit-clients --query "[?tags.\"devkit-usuario\"=='<id do usuário>'].name" -o tsv`
       lista a conta; a `/conta` do usuário mostra só a situação da **Fila do controle remoto** (sem região, sem Criar a
       fila, sem Remover); nenhum grupo novo apareceu na assinatura.
+- [ ] **O artefato do projeto (controle-v4, item 2).** `curl -s https://<api>/api/projetos/artefatos -H "Authorization:
+      Bearer $TOKEN"` responde **200** com uma lista (vazia antes do primeiro artefato) — o 500 é o
+      `ArtefatosDosProjetos.sql` faltando. No `/board`, o card do projeto tem **Gerar artefato**; o clique vira o comando
+      `projeto` com `acao: artefato` na fila, o dev.kit responde com o número do artefato, e o link aparece no card quando o
+      executor termina: **Baixar** (o zip no contêiner `artefatos`, link SAS com prazo) ou **Abrir preview** (o ambiente de
+      preview do Static Web App, nunca o de produção).
 - [ ] **O chat sem aprovação.** Com uma decisão pendente na máquina, no `/board`: a decisão aparece só no painel à direita
       (Decisões, com o segundo fator); o chat mostra só a conversa — nenhum cartão nem botão Aprovar/Recusar dentro dele,
       e os turnos automáticos do Orquestrador (avisos, retratos, gatilhos) não entram.

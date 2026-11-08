@@ -54,6 +54,9 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     /// <summary>A pasta das imagens do design (US #669) desta API: temporária, apagada no fim.</summary>
     public string PastaDoDesign { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-design-{Guid.NewGuid():N}");
 
+    /// <summary>A pasta dos zips dos artefatos (controle-v4, item 2): temporária, apagada no fim; o teto do teste é 1 MB.</summary>
+    public string PastaDosArtefatos { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-artefatos-{Guid.NewGuid():N}");
+
     /// <param name="ipDaConexao">O IP de quem abre a conexão (o proxy, atrás do Container Apps); nulo é o do TestServer, sem IP.</param>
     /// <param name="redeConfiavel">O <c>Proxy:RedesConfiaveis</c> — de quem o <c>X-Forwarded-For</c> é aceito.</param>
     /// <param name="repoKey">O <c>REPO_KEY</c> (US #405); nulo é a API sem ele — a atualização responde 503.</param>
@@ -120,6 +123,9 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         // O design (US #669): as imagens numa pasta temporária, sem limite de envio que atrapalhe, e o teto do teste.
         builder.UseSetting("Design:Pasta", PastaDoDesign);
         builder.UseSetting("Design:EnviosPorMinuto", "1000");
+        builder.UseSetting("Artefatos:Pasta", PastaDosArtefatos);
+        builder.UseSetting("Artefatos:TamanhoMaximoMb", "1");
+        builder.UseSetting("Artefatos:MaximoPorProjeto", "3");
         if (_tetoDoDesign is { } teto)
         {
             builder.UseSetting("Design:Tetos:Empresarial:Versoes", teto.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -254,6 +260,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         SqliteConnection.ClearAllPools();
         try { File.Delete(_arquivo); } catch (IOException) { }
         try { if (Directory.Exists(PastaDoDesign)) Directory.Delete(PastaDoDesign, recursive: true); } catch (IOException) { }
+        try { if (Directory.Exists(PastaDosArtefatos)) Directory.Delete(PastaDosArtefatos, recursive: true); } catch (IOException) { }
     }
 
     /// <summary>Faz toda requisição chegar deste IP, ANTES do pipeline da API — como o proxy na frente dela.</summary>

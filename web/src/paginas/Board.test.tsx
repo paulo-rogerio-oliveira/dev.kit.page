@@ -625,6 +625,46 @@ describe('Board remoto', () => {
       expect(painel.getByText('2 telas')).toBeInTheDocument();
     });
 
+    it('o card do projeto pede o artefato pela fila com a ação e, no desfecho, mostra os últimos links (item 2 do controle-v4)', async () => {
+      responder();
+      const artefato = (id: number, tipo: 'pacote' | 'preview') => ({
+        id, projetoId: 11, tipo, sha: '3f9c2a1b4d', autor: 'Ana', criadoEm: new Date().toISOString(),
+        repositorio: tipo === 'pacote' ? 'https://github.com/acme/app-desktop.git' : 'https://github.com/acme/portal-web',
+        link: tipo === 'pacote' ? 'https://conta.blob.core.windows.net/artefatos/projetos/11/a.zip?sv=2025-01-05&se=amanha&sp=r&sig=assinatura' : 'https://portal-projeto.eastus2.azurestaticapps.net',
+        expiraEm: tipo === 'pacote' ? new Date(Date.now() + 23.5 * 3_600_000).toISOString() : null,
+        hash: tipo === 'pacote' ? 'ab'.repeat(32) : '', tamanho: tipo === 'pacote' ? 43_200_000 : 0, ambiente: tipo === 'preview' ? 'projeto' : '',
+      });
+      let leituras = 0;
+      servidor.use(http.get(`${API}/api/projetos/artefatos`, () => {
+        leituras++;
+        return HttpResponse.json(leituras === 1 ? [] : [{ projetoId: 11, slug: 'projeto', nome: 'Projeto de demonstração', artefatos: [artefato(2, 'preview'), artefato(1, 'pacote')] }]);
+      }));
+      const enviados = comFila(() => ({ estado: 'concluido', texto: 'Artefato nº 7 pedido ao executor do dev.kit: pacote .NET de app-desktop no 3f9c2a1.' }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      const card = within(await painel.findByRole('group', { name: 'Artefatos de Projeto de demonstração' }));
+      expect(card.getByText(/Nenhum artefato ainda/)).toBeInTheDocument();
+
+      await userEvent.click(card.getByRole('button', { name: 'Gerar artefato' }));
+      const pedido = unico(enviados);
+      // O mesmo comando projeto, com a ação no texto: o site não gera nada, quem gera é o dev.kit da máquina.
+      expect(pedido.tipo).toBe('projeto');
+      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto' });
+      const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Gerar artefato'), { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Artefato nº 7 pedido ao executor'), { timeout: 6000 });
+
+      // O desfecho relê os links: o pacote baixa pelo link assinado com prazo, e o preview abre a URL do ambiente.
+      const baixar = await card.findByRole('link', { name: 'Baixar o pacote de app-desktop · 3f9c2a1' }, { timeout: 6000 });
+      expect(baixar.getAttribute('href')).toContain('sig=');
+      expect(baixar).toHaveTextContent('41,2 MB · expira em 23 h');
+      expect(card.getByRole('link', { name: 'Abrir o preview de portal-web · 3f9c2a1' })).toHaveAttribute('href', 'https://portal-projeto.eastus2.azurestaticapps.net');
+      expect(card.getByText('Artefatos · 2')).toBeInTheDocument();
+      expect(card.getByText(/nunca produção/)).toBeInTheDocument();
+      // O card continua abrindo o projeto.
+      expect(painel.getByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto');
+    }, 15_000);
+
     it('cria o projeto pelo formulário com os repositórios do catálogo e mostra o desfecho do dev.kit, sem aprovar nem disparar', async () => {
       responder();
       const enviados = comFila(c => ({ estado: 'concluido', texto: `Projeto '${JSON.parse(c.texto).nome}' criado (portal-de-pedidos, branch feature/dev/projeto-portal-de-pedidos), em rascunho: o plano, a aprovação e o disparo seguem no dev.kit.` }));
