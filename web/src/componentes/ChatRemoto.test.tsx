@@ -328,6 +328,43 @@ it('com o dev.kit fechado carrega os atalhos do último catálogo, mostra a data
   expect(screen.getByRole('button', { name: 'Atualizar catálogo do dev.kit' })).toBeDisabled();
 });
 
+it('o modelo se escolhe dentro do fluxo do /, como o branch no @, e vai no texto ao Orquestrador (US #867)', async () => {
+  preparar();
+  const pedidos: ComandoNovo[] = [];
+  const comModelos = catalogo();
+  comModelos.catalogo.fluxos = [{ nome: 'Tarefa avulsa', descricao: 'Implementação avaliada', agente: 'claude:opus' }];
+  comModelos.catalogo.modelos = [{ valor: 'claude:opus', rotulo: 'Claude · Opus' }, { valor: 'codex:gpt-5', rotulo: 'Codex · GPT-5' }];
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(comModelos)),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      const pedido = await request.json() as ComandoNovo; pedidos.push(pedido);
+      return HttpResponse.json(pedido.tipo === 'catalogo' ? pedidoDoCatalogo('na-fila', pedido.id) : { ...comando(), ...pedido }, { status: 202 });
+    }),
+  );
+  await abrir();
+  await screen.findByText(/dev.kit fechado: último catálogo recebido/);
+
+  // Não há atalho de modelo: ele aparece só depois de escolher um FLUXO do catálogo (o projeto não pede modelo).
+  await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
+  expect(screen.queryByRole('combobox', { name: 'Modelo do fluxo' })).not.toBeInTheDocument();
+  await userEvent.click(within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: fluxo, projeto ou design' })).getByRole('button', { name: /^Tarefa avulsa/ }));
+  const modelo = screen.getByRole('combobox', { name: 'Modelo do fluxo' });
+  expect(within(modelo).getByRole('option', { name: 'Padrão do fluxo · Claude · Opus' })).toBeInTheDocument();
+  await userEvent.selectOptions(modelo, 'codex:gpt-5');
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
+  expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toHaveTextContent('/ Tarefa avulsa · Codex · GPT-5');
+
+  const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
+  await userEvent.click(caixa); await userEvent.type(caixa, 'Faça{Enter}');
+  await waitFor(() => expect(pedidos.find(p => p.tipo === 'mensagem')?.texto).toBe('/ Tarefa avulsa\nModelo do fluxo: codex:gpt-5\nFaça'));
+
+  // Trocar para um projeto tira o modelo: ele era do fluxo. (O campo reabre com o fluxo atual, que filtra a lista.)
+  await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Fluxo, projeto ou design' }));
+  await userEvent.click(within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: fluxo, projeto ou design' })).getByRole('button', { name: /^remote-control-v3/ }));
+  expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toHaveTextContent(/^\/ projeto remote-control-v3$/);
+});
+
 it('com o dev.kit aberto pede o catálogo ao conectar, relê quando o pedido conclui e não mostra o handshake no chat', async () => {
   preparar(undefined, [{ ...maquina(), appAberto: true }]);
   let canal: ReadableStreamDefaultController<Uint8Array>;

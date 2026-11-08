@@ -269,6 +269,18 @@ public sealed class RegrasTests
         Assert.Null(ValidadorDeLote.Validar(lote, "m1", 10));
     }
 
+    // US #866: o tempo de vida das etapas e do fluxo — fora de Conhecidos, a API os descartaria como ignorados.
+    [Theory]
+    [InlineData(TiposDeEvento.EtapaConcluida, "12|a|avaliador|sucesso")]
+    [InlineData(TiposDeEvento.FluxoConcluido, "12|concluida")]
+    public void Os_tipos_do_tempo_das_etapas_sao_gravados(string tipo, string detalhe)
+    {
+        Assert.Contains(tipo, TiposDeEvento.Conhecidos);
+        Assert.DoesNotContain(tipo, TiposDeEvento.Fotos);   // cada etapa conta, não é a foto mais recente
+        var lote = new TelemetryBatchV1("v1", "m1", "1.8.0", new[] { new TelemetryEventV1("e866", tipo, "s", 1, 540_000, detalhe, Em) });
+        Assert.Null(ValidadorDeLote.Validar(lote, "m1", 10));
+    }
+
     [Fact]
     public void Impasses_e_arbitro_agregam_quantidade_tempo_desfecho_regra_e_taxa_de_correcao()
     {

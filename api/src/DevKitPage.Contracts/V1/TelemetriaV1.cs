@@ -231,6 +231,17 @@ public static class TiposDeEvento
     /// <summary>O desfecho de um turno do agente: detalhe = um de <see cref="DesfechosDoTurno"/> (os totais por dia empilham).</summary>
     public const string DesfechoDoTurno = "DesfechoDoTurno";
 
+    // ----- US #866: o tempo de vida das etapas e do fluxo. Wire v1 sem campo novo: o recorte no Detalhe, a medida no Valor. -----
+
+    /// <summary>
+    /// Uma etapa de fluxo terminou: <see cref="TelemetryEventV1.Detalhe"/> = <c>fluxo|etapa|tipo|desfecho</c> (ids e
+    /// vocabulário fixo, sem título); <see cref="TelemetryEventV1.Valor"/> = a duração em ms.
+    /// </summary>
+    public const string EtapaConcluida = "EtapaConcluida";
+
+    /// <summary>A execução de um fluxo terminou: detalhe = <c>fluxo|desfecho</c>; valor = a duração da execução em ms.</summary>
+    public const string FluxoConcluido = "FluxoConcluido";
+
     /// <summary>Os tipos que esta versão da API grava.</summary>
     public static IReadOnlySet<string> Conhecidos { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -240,6 +251,7 @@ public static class TiposDeEvento
         EntregaAvaliada, EntregaPronta, RevisaoHumana, TokensConsumidos, CustoEstimado, AgenteTrocado, ComandoNegado,
         ImpasseDetectado, ImpasseResolvido, ArbitroAgiu,
         SituacaoDaTask, PerguntaAoDev, FechamentoDaEntrega, AmostraDaMaquina, SugestaoDeImpacto, DesfechoDoTurno,
+        EtapaConcluida, FluxoConcluido,
     };
 
     /// <summary>Os tipos cujo evento é uma FOTO (US #687): a ingestão guarda o mais recente de cada chave.</summary>

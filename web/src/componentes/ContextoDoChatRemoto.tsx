@@ -2,12 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 import type { CatalogoRemoto } from '../api/remoto';
 import type { CatalogoDoChat } from './useCatalogoRemoto';
 
-export interface ContextoDoChat { fluxo: string; item: string; repositorio: string; branch: string }
-export const contextoVazio: ContextoDoChat = { fluxo: '', item: '', repositorio: '', branch: '' };
+/** `modelo` (US #867): o `cli:modelo` escolhido DENTRO do fluxo, como o branch dentro do repositório; vazio é o padrão do fluxo. */
+export interface ContextoDoChat { fluxo: string; modelo: string; item: string; repositorio: string; branch: string }
+export const contextoVazio: ContextoDoChat = { fluxo: '', modelo: '', item: '', repositorio: '', branch: '' };
 export function textoComContexto(texto: string, contexto: ContextoDoChat) {
-  const linhas = [contexto.fluxo && `/ ${contexto.fluxo}`, contexto.item && `# ${contexto.item}`,
+  const linhas = [contexto.fluxo && `/ ${contexto.fluxo}`, contexto.fluxo && contexto.modelo && `Modelo do fluxo: ${contexto.modelo}`,
+    contexto.item && `# ${contexto.item}`,
     contexto.repositorio && `@ ${contexto.repositorio}`, contexto.branch && `Branch existente: ${contexto.branch}`].filter(Boolean);
   return [...linhas, texto.trim()].join('\n');
+}
+
+/** O fluxo do catálogo com esse nome (só fluxo: projeto e design não têm modelo). */
+function fluxoDoCatalogo(catalogo: CatalogoRemoto | null, nome: string) {
+  return (catalogo?.fluxos ?? []).find(f => f.nome === nome.trim()) ?? null;
+}
+
+/** O rótulo de um `cli:modelo` pelo catálogo ("Claude · Opus"); sem ele no catálogo, o próprio valor. */
+function rotuloDoModelo(catalogo: CatalogoRemoto | null, valor: string) {
+  return (catalogo?.modelos ?? []).find(m => m.valor === valor)?.rotulo ?? valor;
 }
 
 type Atalho = '/' | '#' | '@';
@@ -54,8 +66,14 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
   const filtro = atalho ? rascunho[campo].trim().toLowerCase() : '';
   const todas = atalho ? opcoesDoAtalho(atalho, catalogo) : [];
   const opcoes = todas.filter(o => !filtro || [o.rotulo, o.detalhe, o.valor].some(t => t.toLowerCase().includes(filtro)));
+  // US #867: o modelo se escolhe DENTRO do fluxo (não há atalho próprio), e só com fluxo do catálogo e modelos dele.
+  const modelos = catalogo?.modelos ?? [];
+  const fluxoEscolhido = atalho === '/' ? fluxoDoCatalogo(catalogo, rascunho.fluxo) : null;
+  const pedeModelo = !!fluxoEscolhido && !!modelos.length;
+  // O modelo é do fluxo: o texto que não é um fluxo do catálogo (projeto, design, digitado) vai sem modelo.
+  const modeloDo = (r: ContextoDoChat) => fluxoDoCatalogo(catalogo, r.fluxo) ? r.modelo : '';
   function salvar() {
-    alterar({ ...rascunho, [campo]: rascunho[campo].trim(), branch: rascunho.branch.trim() }); abrir(null);
+    alterar({ ...rascunho, [campo]: rascunho[campo].trim(), branch: rascunho.branch.trim(), modelo: modeloDo(rascunho) }); abrir(null);
   }
   function escolher(opcao: Opcao) {
     // O repositório ainda pede o branch: a escolha preenche e o foco vai ao branch. Os outros aplicam já.
@@ -64,11 +82,20 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
       painel.current?.querySelector<HTMLInputElement>('input[aria-label="Branch existente"]')?.focus();
       return;
     }
-    alterar({ ...rascunho, [campo]: opcao.valor, branch: rascunho.branch.trim() }); abrir(null);
+    // Outro fluxo começa no padrão dele, como outro repositório começa sem branch.
+    const proximo = { ...rascunho, [campo]: opcao.valor, modelo: atalho === '/' && opcao.valor !== rascunho.fluxo ? '' : rascunho.modelo };
+    // O fluxo, com modelos no catálogo, ainda pede o modelo: a escolha preenche e o foco vai ao modelo, como o branch no @.
+    if (atalho === '/' && modelos.length && fluxoDoCatalogo(catalogo, opcao.valor)) {
+      setRascunho(proximo);
+      setTimeout(() => painel.current?.querySelector<HTMLSelectElement>('select[aria-label="Modelo do fluxo"]')?.focus());
+      return;
+    }
+    alterar({ ...proximo, branch: rascunho.branch.trim(), modelo: modeloDo(proximo) }); abrir(null);
   }
+  const padraoDoFluxo = fluxoEscolhido?.agente ? rotuloDoModelo(catalogo, fluxoEscolhido.agente) : 'o das Configurações';
   return <>
     <button type="button" disabled={desabilitado} aria-label="Trocar fluxo" aria-expanded={atalho === '/'} onClick={() => abrir(atalho === '/' ? null : '/')}>
-      / {contexto.fluxo || 'Fluxo simples · padrão'}
+      / {contexto.fluxo || 'Fluxo simples · padrão'}{contexto.fluxo && contexto.modelo && ` · ${rotuloDoModelo(catalogo, contexto.modelo)}`}
     </button>
     <button type="button" disabled={desabilitado} aria-label="# Work item" aria-expanded={atalho === '#'} onClick={() => abrir(atalho === '#' ? null : '#')}>
       # {contexto.item || 'Work item'}
@@ -97,6 +124,11 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
       {catalogo && !!todas.length && !opcoes.length && <p>Nada no catálogo com “{rascunho[campo].trim()}”: o texto vai como está.</p>}
       {atalho === '@' && <label>Branch existente<input aria-label="Branch existente" maxLength={250} value={rascunho.branch}
         onChange={e => setRascunho({ ...rascunho, branch: e.target.value })} /></label>}
+      {pedeModelo && <label>Modelo do fluxo<select aria-label="Modelo do fluxo" value={rascunho.modelo}
+        onChange={e => setRascunho({ ...rascunho, modelo: e.target.value })}>
+        <option value="">Padrão do fluxo · {padraoDoFluxo}</option>
+        {modelos.map(m => <option key={m.valor} value={m.valor}>{m.rotulo}</option>)}
+      </select></label>}
       <p>Informe o contexto do dev.kit. Deixe vazio para usar a conversa atual.</p>
       <button type="button" onClick={salvar}>Aplicar contexto</button>
       <button type="button" onClick={() => abrir(null)}>Cancelar</button>

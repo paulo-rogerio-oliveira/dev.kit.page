@@ -62,6 +62,7 @@ public static class RegrasDoCatalogo
         {
             ("workItems", catalogo.WorkItems?.Count ?? 0), ("repositorios", catalogo.Repositorios?.Count ?? 0),
             ("fluxos", catalogo.Fluxos?.Count ?? 0), ("projetos", catalogo.Projetos?.Count ?? 0), ("designs", catalogo.Designs?.Count ?? 0),
+            ("modelos", catalogo.Modelos?.Count ?? 0),
         };
         if (listas.FirstOrDefault(l => l.Quantos > RemotoV1.MaximoNoCatalogo) is { Nome: not null } cheia)
             return $"{cheia.Nome}: até {RemotoV1.MaximoNoCatalogo} entradas.";
@@ -80,6 +81,13 @@ public static class RegrasDoCatalogo
         {
             if (f is null || Invalido(f.Nome) || (f.Descricao?.Length ?? 0) > RemotoV1.TamanhoMaximoDoTexto)
                 return $"fluxos[{i}]: informe o nome (até {RemotoV1.TamanhoMaximoDoNome}) e a descrição de até {RemotoV1.TamanhoMaximoDoTexto} caracteres.";
+            if (f.Agente is not null && !AgenteValido(f.Agente))
+                return $"fluxos[{i}]: o agente padrão é cli ou cli:modelo (letras, dígitos, ponto, hífen e sublinhado; até {RemotoV1.TamanhoMaximoDoNome}).";
+        }
+        foreach (var (m, i) in (catalogo.Modelos ?? []).Select((m, i) => (m, i)))
+        {
+            if (m is null || !AgenteValido(m.Valor) || Invalido(m.Rotulo))
+                return $"modelos[{i}]: o valor é cli ou cli:modelo e o rótulo tem até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
         }
         foreach (var (p, i) in (catalogo.Projetos ?? []).Select((p, i) => (p, i)))
         {
@@ -119,6 +127,12 @@ public static class RegrasDoCatalogo
         {
             yield return ($"fluxos[{i}].nome", f.Nome);
             yield return ($"fluxos[{i}].descricao", f.Descricao);
+            yield return ($"fluxos[{i}].agente", f.Agente);
+        }
+        foreach (var (m, i) in (c.Modelos ?? []).Select((m, i) => (m, i)))
+        {
+            yield return ($"modelos[{i}].valor", m.Valor);
+            yield return ($"modelos[{i}].rotulo", m.Rotulo);
         }
         foreach (var (p, i) in (c.Projetos ?? []).Select((p, i) => (p, i)))
         {
@@ -131,6 +145,15 @@ public static class RegrasDoCatalogo
     }
 
     private static bool Invalido(string? texto) => string.IsNullOrWhiteSpace(texto) || texto.Length > RemotoV1.TamanhoMaximoDoNome;
+
+    /// <summary>
+    /// (US #867) O agente de um fluxo: <c>cli</c> ou <c>cli:modelo</c>, só com letras, dígitos, ponto, hífen, sublinhado, barra e
+    /// colchetes (<c>opus[1m]</c>, <c>z-ai/glm-4.6</c>) — ele vai ao Orquestrador como o <c>--agente</c> do devcli, e um espaço,
+    /// aspas ou barra vertical quebrariam o argumento. O dev.kit confere a MESMA forma antes de enviar (<c>CatalogoDoChatRemoto</c>).
+    /// </summary>
+    public static bool AgenteValido(string? agente)
+        => !string.IsNullOrWhiteSpace(agente) && agente.Length <= RemotoV1.TamanhoMaximoDoNome
+           && System.Text.RegularExpressions.Regex.IsMatch(agente, @"^[a-z][a-z0-9-]*(:[A-Za-z0-9._/\[\]-]+)?$");
 
     private static bool Longo(string? texto) => (texto?.Length ?? 0) > RemotoV1.TamanhoMaximoDoNome;
 }

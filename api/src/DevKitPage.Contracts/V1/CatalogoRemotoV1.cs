@@ -9,10 +9,15 @@ namespace DevKitPage.Contracts.V1;
 /// catálogo para trás. A API guarda o último por máquina, com a data, e o site o mostra também com o dev.kit fechado.
 /// </summary>
 /// <param name="ComandoId">O comando de handshake que este envio responde (vazio no envio espontâneo).</param>
+/// <param name="Modelos">
+/// (US #867) Os modelos que o dev escolhe DENTRO de um fluxo, como o branch dentro do repositório: as CLIs instaladas na
+/// máquina, com os modelos de cada uma. Campo novo e opcional — o dev.kit antigo não o manda, e o fluxo fica sem escolha.
+/// </param>
 public sealed record CatalogoRemotoV1(
     int Contrato, string MaquinaId, DateTimeOffset GeradoEm, string? ComandoId,
     IReadOnlyList<WorkItemNoCatalogoV1>? WorkItems, IReadOnlyList<RepositorioNoCatalogoV1>? Repositorios,
-    IReadOnlyList<FluxoNoCatalogoV1>? Fluxos, IReadOnlyList<ProjetoNoCatalogoV1>? Projetos, IReadOnlyList<DesignNoCatalogoV1>? Designs);
+    IReadOnlyList<FluxoNoCatalogoV1>? Fluxos, IReadOnlyList<ProjetoNoCatalogoV1>? Projetos, IReadOnlyList<DesignNoCatalogoV1>? Designs,
+    IReadOnlyList<ModeloNoCatalogoV1>? Modelos = null);
 
 /// <summary>Um work item em andamento do dev: o número que o atalho <c>#</c> leva, o título, o tipo e o estado.</summary>
 public sealed record WorkItemNoCatalogoV1(int Id, string Titulo, string? Tipo = null, string? Estado = null);
@@ -21,7 +26,14 @@ public sealed record WorkItemNoCatalogoV1(int Id, string Titulo, string? Tipo = 
 public sealed record RepositorioNoCatalogoV1(string Nome, string? BranchPadrao = null);
 
 /// <summary>Um fluxo do catálogo (salvo ou básico): o nome que o atalho <c>/</c> leva.</summary>
-public sealed record FluxoNoCatalogoV1(string Nome, string? Descricao = null);
+/// <param name="Agente">(US #867) O agente padrão do desenho (<c>cli:modelo</c>); nulo é o das Configurações da máquina.</param>
+public sealed record FluxoNoCatalogoV1(string Nome, string? Descricao = null, string? Agente = null);
+
+/// <summary>
+/// (US #867) Um modelo que o fluxo pode usar: o <see cref="Valor"/> é o <c>cli:modelo</c> que vai ao Orquestrador (o formato do
+/// <c>--agente</c> do devcli) e o <see cref="Rotulo"/>, o que o site mostra ("Claude · Opus").
+/// </summary>
+public sealed record ModeloNoCatalogoV1(string Valor, string Rotulo);
 
 /// <summary>Um projeto do Orquestrador: o slug, o nome e a situação (<see cref="ProjetosV1.Situacoes"/>).</summary>
 public sealed record ProjetoNoCatalogoV1(string Slug, string Nome, string? Situacao = null);

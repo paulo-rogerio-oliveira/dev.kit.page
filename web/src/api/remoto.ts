@@ -81,9 +81,12 @@ export interface CatalogoRemoto {
   contrato: number; maquinaId: string; geradoEm: string; comandoId: string | null;
   workItems: Array<{ id: number; titulo: string; tipo?: string | null; estado?: string | null }> | null;
   repositorios: Array<{ nome: string; branchPadrao?: string | null }> | null;
-  fluxos: Array<{ nome: string; descricao?: string | null }> | null;
+  /** `agente` (US #867): o agente padrão do desenho, `cli:modelo`; ausente é o das Configurações da máquina. */
+  fluxos: Array<{ nome: string; descricao?: string | null; agente?: string | null }> | null;
   projetos: Array<{ slug: string; nome: string; situacao?: string | null }> | null;
   designs: Array<{ nome: string; telas: number }> | null;
+  /** US #867: os modelos que o dev escolhe DENTRO de um fluxo (campo novo: o dev.kit antigo não o manda). */
+  modelos?: Array<{ valor: string; rotulo: string }> | null;
 }
 /** O último catálogo recebido da máquina, com a data em que a API o recebeu (vale também com o dev.kit fechado). */
 export interface CatalogoDaMaquina { maquinaId: string; recebidoEm: string; catalogo: CatalogoRemoto }

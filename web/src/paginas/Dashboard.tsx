@@ -30,6 +30,8 @@ export const TIPOS_DO_LOG = [
   'RevisaoHumana', 'TokensConsumidos', 'CustoEstimado', 'AgenteTrocado', 'ComandoNegado', 'ImpasseDetectado', 'ImpasseResolvido', 'ArbitroAgiu',
   // US #687: os eventos do painel de utilidade.
   'SituacaoDaTask', 'PerguntaAoDev', 'FechamentoDaEntrega', 'AmostraDaMaquina', 'SugestaoDeImpacto', 'DesfechoDoTurno',
+  // US #866: o tempo de vida das etapas e do fluxo (o valor é a duração em ms).
+  'EtapaConcluida', 'FluxoConcluido',
 ] as const;
 
 interface Dados {

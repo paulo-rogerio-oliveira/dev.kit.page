@@ -102,6 +102,33 @@ public sealed class CatalogoRemotoApiTests : IDisposable
         Assert.Equal(Gerado.AddMinutes(5), lido.Catalogo.GeradoEm);
     }
 
+    /// <summary>
+    /// (US #867) Os MODELOS que o dev escolhe dentro do fluxo e o agente padrão de cada fluxo vão e voltam com o catálogo; o
+    /// catálogo sem eles (o dev.kit antigo) continua valendo, e o valor que quebraria o <c>--agente</c> é recusado.
+    /// </summary>
+    [Fact]
+    public async Task Os_modelos_do_fluxo_vao_e_voltam_e_o_valor_invalido_e_recusado()
+    {
+        var ana = await DevAsync("ana");
+        (await ana.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat())).EnsureSuccessStatusCode();
+        var comModelos = Catalogo() with
+        {
+            Fluxos = [new FluxoNoCatalogoV1("Tarefa avulsa", "Implementação avaliada", "claude:opus"), new FluxoNoCatalogoV1("Tela")],
+            Modelos = [new ModeloNoCatalogoV1("claude:opus", "Claude · Opus"), new ModeloNoCatalogoV1("codex:gpt-5[1m]", "Codex · GPT-5")],
+        };
+        (await ana.PutAsJsonAsync("/api/remoto/catalogo", comModelos)).EnsureSuccessStatusCode();
+
+        var lido = (await ana.GetFromJsonAsync<CatalogoDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/catalogo"))!.Catalogo;
+        Assert.Equal(["claude:opus", "codex:gpt-5[1m]"], lido.Modelos!.Select(m => m.Valor));
+        Assert.Equal(["claude:opus", null], lido.Fluxos!.Select(f => f.Agente));
+
+        var quebrado = await ana.PutAsJsonAsync("/api/remoto/catalogo", Catalogo(Gerado.AddMinutes(1)) with { Modelos = [new ModeloNoCatalogoV1("claude:opus | rm", "Claude")] });
+        Assert.Equal(HttpStatusCode.BadRequest, quebrado.StatusCode);
+        Assert.Contains("modelos[0]", await quebrado.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        var semModelos = await ana.PutAsJsonAsync("/api/remoto/catalogo", Catalogo(Gerado.AddMinutes(2)));
+        Assert.Equal(HttpStatusCode.OK, semModelos.StatusCode);
+    }
+
     [Fact]
     public async Task As_recusas_sao_as_do_contrato_e_o_dado_sensivel_nao_volta_na_resposta()
     {
