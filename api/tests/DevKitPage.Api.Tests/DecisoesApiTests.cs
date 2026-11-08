@@ -86,8 +86,8 @@ public sealed class DecisoesApiTests
         await PrepararMaquina(c); await Retrato(c, Aprovacao);
         var d = await Ler(c, "aprovacao");
         var usuario = (await c.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == "admin");
+        // A liberação pede a fila (remote-control-v3, item 5); o motor a conclui.
         (await c.PutAsJsonAsync($"/api/usuarios/{usuario.Id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true))).EnsureSuccessStatusCode();
-        (await c.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null))).EnsureSuccessStatusCode();
         using (var escopo = api.Services.CreateScope())
         {
             var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();

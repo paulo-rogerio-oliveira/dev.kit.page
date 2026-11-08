@@ -88,8 +88,19 @@ public sealed record EventoDaProvisaoV1(DateTimeOffset Em, string Evento, string
 /// <summary>O recurso com a auditoria, do mais antigo ao mais novo.</summary>
 public sealed record DetalheDoRecursoV1(RecursoProvisionadoV1 Recurso, IReadOnlyList<EventoDaProvisaoV1> Eventos);
 
-/// <summary>A liberação de um recurso a um usuário pelo admin (<c>PUT /api/usuarios/{id}/recursos/{recurso}</c>).</summary>
-public sealed record LiberacaoDeRecursoV1(bool Liberado);
+/// <summary>
+/// A liberação de um recurso a um usuário pelo admin (<c>PUT /api/usuarios/{id}/recursos/{recurso}</c>). Liberar a provisão
+/// PEDE a fila do controle remoto do usuário na hora (remote-control-v3, item 5). Retirar só impede os pedidos novos: a fila
+/// fica, a não ser que o admin confirme <see cref="RemoverFila"/>.
+/// </summary>
+/// <param name="RemoverFila">Na retirada, remove também a fila ativa do usuário (a remoção é a do worker). Ignorado ao liberar.</param>
+public sealed record LiberacaoDeRecursoV1(bool Liberado, bool RemoverFila = false);
+
+/// <summary>A fila do controle remoto do usuário como o admin a vê na lista de <c>/usuarios</c> (a ativa, não removida).</summary>
+/// <param name="Nome">A conta de armazenamento no Azure.</param>
+/// <param name="Operacao">Uma de <see cref="ProvisaoV1.Operacoes"/>.</param>
+/// <param name="Estado">Um de <see cref="ProvisaoV1.Estados"/>.</param>
+public sealed record FilaDoUsuarioV1(long Id, string Nome, string Fila, string Regiao, string Operacao, string Estado);
 
 /// <summary>
 /// O contrato da provisão (<c>docs/arquitetura.md</c>, "Motor de provisão"). Campo novo é opcional; o estado novo entra

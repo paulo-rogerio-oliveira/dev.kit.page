@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { formatar } from '../formatar';
 import { renderizar } from '../testes/renderizar';
-import { API, escritas, gestaoDeUsuarios, servidor, tokenDoDev, tokenDoGestor, tokenValido, usuarios } from '../testes/servidor';
+import type { FilaDoUsuario } from '../api/tipos';
+import { API, escritas, filaPedidaNaLiberacao, gestaoDeUsuarios, servidor, tokenDoDev, tokenDoGestor, tokenValido, usuarios } from '../testes/servidor';
 
 /** A linha da tabela de um usuário (pelo login, que aparece embaixo do nome ou como o próprio nome). */
 async function linhaDe(login: string) {
@@ -57,7 +58,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Ações de admin' }));
 
     const menu = screen.getByRole('menu', { name: 'Ações de admin' });
-    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Licença', 'Editar', 'Redefinir senha']);
+    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Licença', 'Editar', 'Redefinir senha', 'Liberar a provisão']);
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
@@ -270,8 +271,11 @@ describe('Licença por usuário (US #687, proposta admin-usuarios v005)', () => 
   });
 });
 
-describe('A provisão liberada por usuário (controle remoto v2, item 4)', () => {
-  it('o painel do usuário libera a provisão, e a lista mostra o selo', async () => {
+describe('A provisão liberada por usuário (controle remoto v2, item 4; a fila na liberação, remote-control-v3 item 5)', () => {
+  const filaPronta: FilaDoUsuario = { id: 11, nome: 'dkq2x7k4m9pa', fila: 'comandos', regiao: 'brazilsouth', operacao: 'criar', estado: 'pronto' };
+  const anaLiberada = () => ({ ...usuarios[1], recursosLiberados: ['provisao' as const], fila: filaPronta });
+
+  it('o painel libera a provisão: a API pede a fila, e a lista mostra o selo com a situação dela', async () => {
     renderizar('/usuarios', tokenValido());
     expect(within(await linhaDe('ana.dev')).queryByText('Provisão')).not.toBeInTheDocument();
 
@@ -279,31 +283,83 @@ describe('A provisão liberada por usuário (controle remoto v2, item 4)', () =>
     const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
     expect(painel.getByText('Provisão no Azure')).toBeInTheDocument();
     expect(painel.getByText('Não liberada')).toBeInTheDocument();
+    expect(painel.getByText(/Liberar pede na hora a fila do controle remoto do usuário/)).toBeInTheDocument();
 
-    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], { ...usuarios[1], recursosLiberados: ['provisao'] }])));
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], { ...anaLiberada(), fila: filaPedidaNaLiberacao }])));
     await userEvent.click(painel.getByRole('button', { name: 'Liberar a provisão de ana.dev' }));
 
     await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: true } }]));
-    expect(await screen.findByText(/Provisão liberada para ana.dev/)).toBeInTheDocument();
-    expect(await within(await linhaDe('ana.dev')).findByText('Provisão')).toBeInTheDocument();
+    expect(await screen.findByText('Provisão liberada para ana.dev: a fila do controle remoto (conta dkq2novafila1) foi pedida, e o worker a cria em instantes.')).toBeInTheDocument();
+    const ana = await linhaDe('ana.dev');
+    expect(await within(ana).findByText('Provisão')).toBeInTheDocument();
+    expect(within(ana).getByText('fila pedida')).toBeInTheDocument();
     expect(painel.getByText('Liberada')).toBeInTheDocument();
+    expect(painel.getByText('dkq2novafila1')).toBeInTheDocument();
+    expect(painel.getByText('Pedida')).toBeInTheDocument();
   });
 
-  it('retirar pede confirmação e avisa que o já criado continua', async () => {
-    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], { ...usuarios[1], recursosLiberados: ['provisao'] }])));
+  it('a liberação está na própria lista: o menu ⋯ libera, sem abrir o painel', async () => {
+    renderizar('/usuarios', tokenValido());
+
+    await acao('ana.dev', 'Liberar a provisão');
+
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: true } }]));
+    expect(await screen.findByText(/Provisão liberada para ana.dev: a fila do controle remoto \(conta dkq2novafila1\) foi pedida/)).toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
+
+  it('retirar pelo menu abre a confirmação no painel; cancelar não grava, e sem marcar a fila fica', async () => {
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], anaLiberada()])));
+    renderizar('/usuarios', tokenValido());
+    expect(within(await linhaDe('ana.dev')).getByText('fila pronta')).toBeInTheDocument();
+
+    await acao('ana.dev', 'Retirar a provisão');
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    const confirmacao = within(painel.getByRole('group', { name: 'Confirmar a retirada' }));
+    expect(confirmacao.getByText(/Os pedidos novos param na hora/)).toBeInTheDocument();
+    expect(confirmacao.getByRole('checkbox')).not.toBeChecked();
+    await userEvent.click(confirmacao.getByRole('button', { name: 'Cancelar' }));
+    expect(painel.queryByRole('group', { name: 'Confirmar a retirada' })).not.toBeInTheDocument();
+    expect(gestaoDeUsuarios).toEqual([]);
+
+    await userEvent.click(painel.getByRole('button', { name: 'Retirar a provisão de ana.dev' }));
+    await userEvent.click(within(painel.getByRole('group', { name: 'Confirmar a retirada' })).getByRole('button', { name: 'Retirar a provisão' }));
+
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: false, removerFila: false } }]));
+    expect(await screen.findByText('Provisão retirada de ana.dev: a API recusa os pedidos novos, e a fila (conta dkq2x7k4m9pa) continua no Azure.')).toBeInTheDocument();
+  });
+
+  it('marcando a remoção da fila, a retirada a manda para o worker', async () => {
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([usuarios[0], anaLiberada()])));
     renderizar('/usuarios', tokenValido());
 
     await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
     const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    expect(painel.getByText('dkq2x7k4m9pa')).toBeInTheDocument();
     await userEvent.click(painel.getByRole('button', { name: 'Retirar a provisão de ana.dev' }));
-    expect(confirmar).toHaveBeenCalledWith(expect.stringMatching(/O que já foi criado continua lá/));
-    expect(gestaoDeUsuarios).toEqual([]);
+    const confirmacao = within(painel.getByRole('group', { name: 'Confirmar a retirada' }));
+    await userEvent.click(confirmacao.getByRole('checkbox', { name: /Remover também a fila dkq2x7k4m9pa do Azure/ }));
+    await userEvent.click(confirmacao.getByRole('button', { name: 'Retirar a provisão' }));
 
-    confirmar.mockReturnValue(true);
-    await userEvent.click(painel.getByRole('button', { name: 'Retirar a provisão de ana.dev' }));
-    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: false } }]));
-    expect(await screen.findByText(/Provisão retirada de ana.dev/)).toBeInTheDocument();
-    confirmar.mockRestore();
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: false, removerFila: true } }]));
+    expect(await screen.findByText('Provisão retirada de ana.dev, e a remoção da fila (conta dkq2x7k4m9pa) pedida: o worker a apaga em instantes.')).toBeInTheDocument();
+  });
+
+  it('liberado e sem fila ativa, o Pedir a fila repete a liberação; a fila que ficou depois da retirada aparece na lista', async () => {
+    servidor.use(http.get(`${API}/api/usuarios`, () => HttpResponse.json([
+      { ...usuarios[0], fila: { ...filaPronta, id: 9, nome: 'dkq1adminfila' } }, { ...anaLiberada(), fila: null },
+    ])));
+    renderizar('/usuarios', tokenValido());
+    // O admin não tem a liberação, mas a fila dele ficou no Azure (a retirada sem a remoção): a lista a mostra.
+    const admin = await linhaDe('sem nome cadastrado');
+    expect(within(admin).queryByText('Provisão')).not.toBeInTheDocument();
+    expect(within(admin).getByText('fila pronta')).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Licença de Ana Souza' }));
+    const painel = within(await screen.findByRole('complementary', { name: 'Licença de Ana Souza' }));
+    expect(painel.getByText(/Sem fila ativa/)).toBeInTheDocument();
+    await userEvent.click(painel.getByRole('button', { name: 'Pedir a fila de ana.dev' }));
+
+    await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: true } }]));
   });
 });

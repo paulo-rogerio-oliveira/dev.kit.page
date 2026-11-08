@@ -63,11 +63,13 @@ public sealed record RetratoRecebidoV1(string MaquinaId, DateTimeOffset Recebido
 
 /// <summary>
 /// Uma máquina do usuário, como o site a lista. <see cref="Conectada"/> é o heartbeat recebido há no máximo
-/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API.
+/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API. <see cref="Vinculada"/> (campo novo, item 9 do
+/// remote-control-v3) é o serviço da máquina com o client credentials ativo: o site oferece o "Desvincular".
 /// </summary>
 public sealed record MaquinaRemotaV1(
     string MaquinaId, string Nome, string VersaoDevKit, string Origem, bool AppAberto, string EstadoDoAgente,
-    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm);
+    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm,
+    bool Vinculada = false);
 
 /// <summary>O retrato mais recente de uma máquina do usuário, com a máquina.</summary>
 public sealed record RetratoDaMaquinaV1(MaquinaRemotaV1 Maquina, RetratoV1 Retrato, DateTimeOffset RecebidoEm);
@@ -143,7 +145,19 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot"];
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo];
+
+    /// <summary>
+    /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina
+    /// (<c>PUT /api/remoto/catalogo</c>, contrato seção 5): o handshake dos atalhos do chat remoto.
+    /// </summary>
+    public const string RecursoCatalogo = "catalogo-remoto";
+
+    /// <summary>O maior corpo do envio do catálogo.</summary>
+    public const int TamanhoMaximoDoCatalogo = 256 * 1024;
+
+    /// <summary>O máximo de entradas em cada lista do catálogo (o dev.kit corta as excedentes).</summary>
+    public const int MaximoNoCatalogo = 200;
 
     /// <summary>O <c>codigo</c> do 400 de contrato que esta API não conhece (o ProblemDetails leva <c>contratoAceito</c>).</summary>
     public const string CodigoContratoDesconhecido = "contrato-desconhecido";

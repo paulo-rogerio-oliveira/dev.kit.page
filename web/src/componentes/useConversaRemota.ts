@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import { lerEventosDaConversa } from '../api/eventosDaConversa';
-import type { ComandoNovo, ComandoRemoto, ConversaRemota } from '../api/remoto';
+import type { ComandoNovo, ComandoRemoto, ConversaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
 import { useSessao } from '../sessao';
 
-const vazia: ConversaRemota = { comandos: [], respostas: [], ultimoEvento: 0 };
+const vazia: ConversaRemota = { comandos: [], respostas: [], ultimoEvento: 0, falas: [] };
 function juntar<T extends { id: string }>(lista: T[], item: T) {
   return [...lista.filter(x => x.id !== item.id), item];
 }
@@ -39,7 +39,7 @@ export function useConversaRemota(maquina: string) {
         if (!inicializada) {
           const historico = await api.conversaRemota(sessao!.token, maquina, signal);
           if (signal.aborted) return;
-          setConversa(historico); cursor = historico.ultimoEvento; inicializada = true;
+          setConversa({ ...historico, falas: historico.falas ?? [] }); cursor = historico.ultimoEvento; inicializada = true;
           setCarregando(false);
         }
         const resposta = await api.eventosDaConversa(sessao!.token, maquina, cursor, signal);
@@ -53,6 +53,8 @@ export function useConversaRemota(maquina: string) {
           setConversa(atual => ({
             comandos: evento.comando ? juntar(atual.comandos, evento.comando) : atual.comandos,
             respostas: evento.resposta ? juntar(atual.respostas, evento.resposta) : atual.respostas,
+            // A fala do chat do dev.kit (o que o dev digitou no desktop e a resposta do Orquestrador a ela).
+            falas: evento.fala ? juntar(atual.falas ?? [], evento.fala) : atual.falas,
             ultimoEvento: cursor,
           }));
         });
@@ -127,10 +129,58 @@ export function useConversaRemota(maquina: string) {
     }
   }, [sessao, maquina, sair]);
 
+  /**
+   * (remote-control-v3) O HANDSHAKE dos atalhos do chat: pede à máquina o catálogo pela mesma fila. O dev.kit responde publicando
+   * o catálogo e fechando o pedido (`concluido`), que chega pelo SSE; a API devolve o pedido que ainda espera na fila em vez de
+   * empilhar outro.
+   */
+  const pedirCatalogo = useCallback(async (): Promise<{ ok: true } | { ok: false; mensagem: string }> => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };
+    const pedido: ComandoNovo = {
+      id: crypto.randomUUID(), maquinaId: maquina, tipo: 'catalogo', texto: '',
+      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+    };
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
+      if (!controller.signal.aborted) setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+      return { ok: true };
+    } catch (falha) {
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return { ok: false, mensagem: '' }; }
+      return { ok: false, mensagem: mensagemDaFalha(falha) };
+    }
+  }, [sessao, maquina, sair]);
+
+  /**
+   * (remote-control-v3, item 4) A CRIAÇÃO de projeto ou de projeto de design pela mesma fila: o formulário vai em JSON no
+   * texto, e o dev.kit responde `concluido` (o que criou) ou `recusado` (o motivo) — o desfecho chega pelo SSE. O mesmo id no
+   * reenvio (o duplo clique) devolve o comando que já existe.
+   */
+  const criar = useCallback(async (tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto, id: string)
+    : Promise<{ ok: true; comando: ComandoRemoto } | { ok: false; mensagem: string }> => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };
+    const pedido: ComandoNovo = {
+      id, maquinaId: maquina, tipo, texto: JSON.stringify(formulario),
+      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+    };
+    const revisao = revisoes.current.get(id);
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
+      // O SSE pode trazer o desfecho do dev.kit antes de o POST responder com o "na-fila": o mais novo fica.
+      if (!controller.signal.aborted && revisao === revisoes.current.get(id))
+        setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+      return { ok: true, comando };
+    } catch (falha) {
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return { ok: false, mensagem: '' }; }
+      return { ok: false, mensagem: mensagemDaFalha(falha) };
+    }
+  }, [sessao, maquina, sair]);
+
   const atual = carregadaPara === maquina;
   return {
     conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
-    carregando: carregando || !atual, enviando, enviar, acionar, recarregar: () => setTentativa(x => x + 1),
+    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, criar, recarregar: () => setTentativa(x => x + 1),
   };
 }
 

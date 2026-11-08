@@ -89,4 +89,48 @@ public sealed class RemotoTests
         var restantes = await baseDeTeste.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().MaquinasRemotas.Select(m => m.MaquinaId).ToListAsync());
         Assert.Equal(["recente"], restantes);
     }
+
+    private static CatalogoRemotoV1 Catalogo(string maquina, DateTimeOffset gerado)
+        => new(RemotoV1.Contrato, maquina, gerado, null, [new WorkItemNoCatalogoV1(812, "Handshake")], [], [], [], []);
+
+    [Fact]
+    public void Script_do_azure_sql_cria_a_tabela_do_catalogo_com_as_colunas_do_modelo()
+    {
+        var script = BaseDeTeste.ScriptDoAzureSql("CatalogoRemoto.sql");
+
+        Assert.Contains("OBJECT_ID(N'[dbo].[CatalogosRemotos]', N'U') IS NULL", script);
+        foreach (var coluna in BaseDeTeste.ColunasNoSqlServer("CatalogosRemotos"))
+            Assert.Contains(coluna, script);
+        Assert.Contains("CREATE UNIQUE INDEX [IX_CatalogosRemotos_UsuarioId_MaquinaId]", script);
+        Assert.Contains("REFERENCES [dbo].[Usuarios] ([Id]) ON DELETE CASCADE", script);
+        // A verificação do esquema na subida aponta este script quando a tabela falta no Azure SQL.
+        Assert.Equal(["CatalogoRemoto.sql"], EsquemaDoBanco.ScriptsQueTrazem("CatalogosRemotos", null));
+    }
+
+    [Fact]
+    public async Task O_catalogo_so_entra_na_maquina_do_dono_aplica_a_migracao_e_sai_na_retencao()
+    {
+        var (baseDeTeste, ana, bia) = await BaseAsync();
+        await using var _ = baseDeTeste;
+        var agora = baseDeTeste.Relogio.Agora;
+        var (aplicadas, pendente) = await baseDeTeste.ComAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<DevKitPageDb>();
+            return ((await db.Database.GetAppliedMigrationsAsync()).ToArray(), db.Database.HasPendingModelChanges());
+        });
+        Assert.Contains(aplicadas, m => m.EndsWith("_CatalogoRemoto", StringComparison.Ordinal));
+        Assert.False(pendente);
+
+        // Sem o heartbeat (a máquina de outro usuário, ou nenhuma), nada é gravado.
+        Assert.Null(await baseDeTeste.ComAsync(sp => sp.GetRequiredService<ICatalogoRemoto>().GravarAsync(ana, Catalogo("m-1", agora), default)));
+        await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IRemoto>().RegistrarHeartbeatAsync(ana, Heartbeat("m-1"), default));
+        Assert.True((await baseDeTeste.ComAsync(sp => sp.GetRequiredService<ICatalogoRemoto>().GravarAsync(ana, Catalogo("m-1", agora), default)))!.Aplicado);
+        Assert.Null(await baseDeTeste.ComAsync(sp => sp.GetRequiredService<ICatalogoRemoto>().GravarAsync(bia, Catalogo("m-1", agora), default)));
+        Assert.Null(await baseDeTeste.ComAsync(sp => sp.GetRequiredService<ICatalogoRemoto>().LerAsync(bia, "m-1", default)));
+        Assert.Equal(812, (await baseDeTeste.ComAsync(sp => sp.GetRequiredService<ICatalogoRemoto>().LerAsync(ana, "m-1", default)))!.Catalogo.WorkItems![0].Id);
+
+        baseDeTeste.Relogio.Agora = agora.AddDays(31);
+        await baseDeTeste.ComAsync(sp => sp.GetRequiredService<IExpurgoDoRemoto>().ExpurgarAsync(default));
+        Assert.Equal(0, await baseDeTeste.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().CatalogosRemotos.CountAsync()));
+    }
 }

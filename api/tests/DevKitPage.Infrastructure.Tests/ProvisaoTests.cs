@@ -286,36 +286,93 @@ public sealed class ProvisaoTests
         Assert.Contains("não terminou em 3 tentativas", desistiu.Erro, StringComparison.Ordinal);
     }
 
+    private static Task<ResultadoDaGestao<UsuarioResumo>> LiberarAsync(BaseDeTeste b, int usuario, bool liberado, bool removerFila = false, string recurso = ProvisaoV1.RecursoProvisao)
+        => b.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().LiberarRecursoAsync(usuario, recurso, liberado, removerFila, "admin", default));
+
     [Fact]
     public async Task O_admin_libera_e_retira_com_auditoria_e_a_permissao_decide_a_origem()
     {
         var (b, ana, bia) = await BaseAsync();
         await using var _ = b;
-        IGestaoDeUsuarios Gestao(IServiceProvider sp) => sp.GetRequiredService<IGestaoDeUsuarios>();
 
         Assert.False((await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().PermissaoAsync(ana, default))).Liberada);
 
-        var liberado = await b.ComAsync(sp => Gestao(sp).LiberarRecursoAsync(ana, ProvisaoV1.RecursoProvisao, true, "admin", default));
-        await b.ComAsync(sp => Gestao(sp).LiberarRecursoAsync(ana, ProvisaoV1.RecursoProvisao, true, "admin", default));
+        var liberado = await LiberarAsync(b, ana, true);
+        await LiberarAsync(b, ana, true);
         Assert.Equal([ProvisaoV1.RecursoProvisao], liberado.Valor!.RecursosLiberados);
         var permissao = await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().PermissaoAsync(ana, default));
         Assert.Equal((true, ProvisaoV1.OrigemPermissao, 1), (permissao.Liberada, permissao.Origem, permissao.MaximoDeFilas));
         Assert.False((await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().PermissaoAsync(bia, default))).Liberada);
 
-        var lista = await b.ComAsync(sp => Gestao(sp).ListarAsync(default));
+        var lista = await b.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().ListarAsync(default));
         Assert.Equal([ProvisaoV1.RecursoProvisao], lista.Single(u => u.Id == ana).RecursosLiberados);
         Assert.Empty(lista.Single(u => u.Id == bia).RecursosLiberados!);
+        Assert.Null(lista.Single(u => u.Id == bia).Fila);
 
-        var retirado = await b.ComAsync(sp => Gestao(sp).LiberarRecursoAsync(ana, ProvisaoV1.RecursoProvisao, false, "admin", default));
+        var retirado = await LiberarAsync(b, ana, false);
         Assert.Empty(retirado.Valor!.RecursosLiberados!);
         Assert.False((await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().PermissaoAsync(ana, default))).Liberada);
 
-        // Liberar duas vezes grava UMA linha de auditoria.
+        // Liberar duas vezes grava UMA linha de auditoria e pede UMA fila; retirar sem a confirmação não a remove.
         var auditoria = await b.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().EventosDaProvisao.Where(e => e.UsuarioId == ana).Select(e => e.Evento).ToListAsync());
-        Assert.Equal([ProvisaoV1.EventoLiberado, ProvisaoV1.EventoRetirado], auditoria);
+        Assert.Equal([ProvisaoV1.EventoLiberado, ProvisaoV1.EventoPedido, ProvisaoV1.EventoRetirado], auditoria);
+        Assert.Equal((ProvisaoV1.OperacaoCriar, ProvisaoV1.EstadoPedido), (retirado.Valor.Fila!.Operacao, retirado.Valor.Fila.Estado));
 
-        Assert.Equal(FalhaNaGestao.Recusada, (await b.ComAsync(sp => Gestao(sp).LiberarRecursoAsync(ana, "app-service", true, "admin", default))).Falha);
-        Assert.Equal(FalhaNaGestao.NaoEncontrado, (await b.ComAsync(sp => Gestao(sp).LiberarRecursoAsync(999, ProvisaoV1.RecursoProvisao, true, "admin", default))).Falha);
+        Assert.Equal(FalhaNaGestao.Recusada, (await LiberarAsync(b, ana, true, recurso: "app-service")).Falha);
+        Assert.Equal(FalhaNaGestao.NaoEncontrado, (await LiberarAsync(b, 999, true)).Falha);
+    }
+
+    [Fact]
+    public async Task A_liberacao_pede_a_fila_na_regiao_padrao_e_o_worker_a_cria()
+    {
+        var (b, ana, _) = await BaseAsync();
+        await using var _b = b;
+
+        var liberado = (await LiberarAsync(b, ana, true)).Valor!;
+
+        var fila = liberado.Fila!;
+        Assert.Equal((ProvisaoV1.NomeDaFila, "brazilsouth", ProvisaoV1.OperacaoCriar, ProvisaoV1.EstadoPedido), (fila.Fila, fila.Regiao, fila.Operacao, fila.Estado));
+        Assert.True(RegrasDaProvisao.ContaValida(fila.Nome));
+        var detalhe = (await DetalheAsync(b, ana, fila.Id))!;
+        Assert.Equal((ProvisaoV1.EventoPedido, "admin"), (detalhe.Eventos.Single().Evento, detalhe.Eventos.Single().Autor));
+
+        // O worker não muda: reserva e conclui a fila pedida pela liberação como a pedida pelo usuário.
+        Assert.Equal(fila.Id, (await ReservarAsync(b))!.Id);
+        Assert.True(await b.ComAsync(sp => sp.GetRequiredService<IMotorDeProvisao>().ConcluirAsync(fila.Id, "w1", new RecursoNaNuvem("/s/x", "https://x.queue"), default)));
+        var lista = await b.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().ListarAsync(default));
+        Assert.Equal(ProvisaoV1.EstadoPronto, lista.Single(u => u.Id == ana).Fila!.Estado);
+
+        // Liberar de novo (o duplo clique, o reenvio) não pede outra fila.
+        Assert.Equal(fila.Id, (await LiberarAsync(b, ana, true)).Valor!.Fila!.Id);
+        Assert.Single(await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().RecursosAsync(ana, default)));
+    }
+
+    [Fact]
+    public async Task Retirar_so_remove_a_fila_com_a_confirmacao_e_recusa_a_fila_em_criacao()
+    {
+        var (b, ana, _) = await BaseAsync();
+        await using var _b = b;
+        var fila = (await LiberarAsync(b, ana, true)).Valor!.Fila!;
+
+        // Em criação, a retirada com a remoção recusa sem mudar nada: a liberação continua.
+        var emCriacao = await LiberarAsync(b, ana, false, removerFila: true);
+        Assert.Equal(FalhaNaGestao.Conflito, emCriacao.Falha);
+        Assert.True((await b.ComAsync(sp => sp.GetRequiredService<IProvisao>().PermissaoAsync(ana, default))).Liberada);
+
+        await ReservarAsync(b);
+        await b.ComAsync(sp => sp.GetRequiredService<IMotorDeProvisao>().ConcluirAsync(fila.Id, "w1", new RecursoNaNuvem("/s/x", "https://x.queue"), default));
+
+        var retirado = (await LiberarAsync(b, ana, false, removerFila: true)).Valor!;
+        Assert.Empty(retirado.RecursosLiberados!);
+        Assert.Equal((fila.Id, ProvisaoV1.OperacaoRemover, ProvisaoV1.EstadoPedido), (retirado.Fila!.Id, retirado.Fila.Operacao, retirado.Fila.Estado));
+        var auditoria = (await DetalheAsync(b, ana, fila.Id))!.Eventos.Last();
+        Assert.Equal((ProvisaoV1.EventoRemocaoPedida, "admin"), (auditoria.Evento, auditoria.Autor));
+
+        // O worker remove: a lista não mostra mais fila, e liberar de novo pede uma nova.
+        Assert.Equal(fila.Id, (await ReservarAsync(b, "w2"))!.Id);
+        await b.ComAsync(sp => sp.GetRequiredService<IMotorDeProvisao>().ConcluirAsync(fila.Id, "w2", null, default));
+        Assert.Null((await b.ComAsync(sp => sp.GetRequiredService<IGestaoDeUsuarios>().ListarAsync(default))).Single(u => u.Id == ana).Fila);
+        Assert.NotEqual(fila.Id, (await LiberarAsync(b, ana, true)).Valor!.Fila!.Id);
     }
 
     [Fact]

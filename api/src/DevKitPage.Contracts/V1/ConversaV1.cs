@@ -10,7 +10,10 @@ namespace DevKitPage.Contracts.V1;
 /// </param>
 /// <param name="MaquinaId">A máquina de destino, uma só (o comando não vai para as outras máquinas do usuário).</param>
 /// <param name="Tipo">Um de <see cref="ConversaV1.TiposDeComando"/>.</param>
-/// <param name="Texto">A mensagem (obrigatória em <see cref="ConversaV1.ComandoMensagem"/>; vazia nos outros).</param>
+/// <param name="Texto">
+/// A mensagem (obrigatória em <see cref="ConversaV1.ComandoMensagem"/>), o formulário em JSON nos de criação
+/// (<see cref="ConversaV1.TiposDeCriacao"/>); vazia nos outros.
+/// </param>
 /// <param name="TtlSegundos">Quanto tempo o comando espera na fila; vazio é <c>Remoto:TtlPadraoSegundos</c>.</param>
 /// <param name="Dispositivo">De onde veio: <see cref="ConversaV1.DispositivoCelular"/> ou <see cref="ConversaV1.DispositivoNavegador"/>.</param>
 /// <param name="ConfirmarReinicio">O usuário confirmou reiniciar com o turno em andamento (sem isto, 409).</param>
@@ -131,8 +134,35 @@ public static class ConversaV1
     public const string ComandoLigar = "ligar";
     public const string ComandoReiniciar = "reiniciar";
 
-    /// <summary>O que o site manda: a mensagem ao Orquestrador e, ao serviço, ligar ou reiniciar o dev.kit.</summary>
-    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar];
+    /// <summary>
+    /// O HANDSHAKE do chat remoto (campo novo, contrato seção 5): o site pede o catálogo da máquina, e o dev.kit responde com o
+    /// <c>PUT /api/remoto/catalogo</c> e o <c>concluido</c>. Não abre turno do agente, então não conta no limite por hora; o
+    /// dev.kit antigo o recusa (<c>recusado</c>), e o site segue com o último catálogo e o texto livre.
+    /// </summary>
+    public const string ComandoCatalogo = "catalogo";
+
+    /// <summary>
+    /// (remote-control-v3, item 4) CRIAR um projeto do Orquestrador pelo site: o <c>texto</c> é o JSON de
+    /// <see cref="NovoProjetoRemotoV1"/>, e o dev.kit o executa pelo mesmo caminho do <c>devcli projeto --criar</c>. O projeto
+    /// nasce em rascunho: o site não aprova nem dispara. O dev.kit antigo o recusa (<c>recusado</c>), com o motivo.
+    /// </summary>
+    public const string ComandoProjeto = "projeto";
+
+    /// <summary>
+    /// (remote-control-v3, item 4) CRIAR (ou abrir) o projeto de design de um repositório pelo site: o <c>texto</c> é o JSON de
+    /// <see cref="NovoDesignRemotoV1"/>, executado pelo mesmo caminho do <c>devcli design --repo</c>. Não grava nem envia versão.
+    /// </summary>
+    public const string ComandoDesign = "design";
+
+    /// <summary>
+    /// O que o site manda: a mensagem ao Orquestrador, ao serviço ligar ou reiniciar o dev.kit, o pedido do catálogo e a criação
+    /// de projeto e de projeto de design (o novo entra no fim).
+    /// </summary>
+    public static IReadOnlyList<string> TiposDeComando { get; } =
+        [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo, ComandoProjeto, ComandoDesign];
+
+    /// <summary>Os comandos de CRIAÇÃO: o <c>texto</c> é o formulário em JSON, conferido pela API antes da fila.</summary>
+    public static IReadOnlyList<string> TiposDeCriacao { get; } = [ComandoProjeto, ComandoDesign];
 
     public const string EstadoPendente = "pendente";
     public const string EstadoNaFila = "na-fila";

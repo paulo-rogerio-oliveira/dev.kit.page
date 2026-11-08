@@ -2880,6 +2880,47 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("EntregasDoPush");
                     b.HasOne("DevKitPage.Core.AssinaturaDoPush", null).WithMany().HasForeignKey("AssinaturaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
+            modelBuilder.Entity("DevKitPage.Core.CatalogoRemoto", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Catalogo").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("GeradoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("RecebidoEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId").IsUnique(); b.HasIndex("RecebidoEmUtc");
+                    b.ToTable("CatalogosRemotos");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.ClienteDaMaquina", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("MaquinaId").HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("ChavePublica").IsRequired().HasMaxLength(200).HasColumnType("TEXT");
+                    b.Property<string>("Carimbo").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+                    b.Property<DateTime>("RegistradoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("RevogadoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("UltimoTokenEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("MaquinaId").IsUnique(); b.HasIndex("UsuarioId");
+                    b.ToTable("ClientesDaMaquina");
+                    b.HasOne("DevKitPage.Core.Maquina", "Maquina").WithMany().HasForeignKey("MaquinaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario").WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.Navigation("Maquina"); b.Navigation("Usuario");
+                });
+            modelBuilder.Entity("DevKitPage.Core.AssercaoDoCliente", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("ClienteId").HasColumnType("INTEGER");
+                    b.Property<string>("Jti").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiraEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("ClienteId", "Jti").IsUnique(); b.HasIndex("ExpiraEmUtc");
+                    b.ToTable("AssercoesDoCliente");
+                    b.HasOne("DevKitPage.Core.ClienteDaMaquina", null).WithMany().HasForeignKey("ClienteId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

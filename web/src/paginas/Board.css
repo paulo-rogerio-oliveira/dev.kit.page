@@ -49,21 +49,42 @@
 @media (prefers-color-scheme:dark) {
   .br-acionamento.br-ok {background:#1f3326}
   .br-acao.br-ligar,.br-perigo {color:#1b1e24!important}
+  .board-remoto .br-side .chip[aria-pressed='true'],.board-remoto .aba-contagem {color:#1b1e24}
 }
 .br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
 .br-mobile-state {display:none}
 .br-navegacao {display:flex; flex-direction:column; flex:1; min-height:0; min-width:0}
 .board-remoto .br-navegacao>.abas {display:none}
 .board-remoto .br-navegacao>.painel-da-aba {flex:1; min-height:0; min-width:0; display:flex; margin:0; padding:0}
-.br-main {flex:1; min-width:0; min-height:0; display:grid; grid-template-columns:300px minmax(0,1fr)}
-.br-side {border-right:1px solid var(--line); background:var(--panel); padding:12px; display:flex; flex-direction:column; gap:10px; overflow:auto; overflow-wrap:anywhere}
+/* US #858: como no Board do dev.kit, o chat ocupa a coluna principal e o painel de auxílio fica à direita. */
+.br-main {flex:1; min-width:0; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 320px}
+.br-side {border-left:1px solid var(--line); background:var(--panel); padding:12px; display:flex; flex-direction:column; gap:10px; overflow:auto; overflow-wrap:anywhere}
+.br-side>* {flex:none}
 .br-side h2 {font-size:11.5px; line-height:1.4; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px; margin:0}
+.br-side h2 .br-periodo {float:right; font-weight:400; text-transform:none; letter-spacing:0}
+.board-remoto .br-side .chips {display:flex; gap:2px; padding:3px; border:1px solid var(--line); border-radius:8px; background:var(--surface)}
+.board-remoto .br-side .chip {flex:1; min-height:28px; padding:4px 0; border:0; border-radius:6px; background:transparent; color:var(--muted); font-size:12px; font-weight:400; box-shadow:none}
+.board-remoto .br-side .chip[aria-pressed='true'] {background:var(--accent); color:#fff; font-weight:600}
+.board-remoto .br-mais {align-self:flex-start; padding:0; border:0; background:none; color:var(--accent); font-size:12px; font-weight:600}
+.board-remoto .aba-contagem {margin-left:6px; padding:0 6px; border-radius:9px; background:var(--accent); color:#fff; font-size:10.5px; font-weight:700}
 .br-card {border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--surface)}
 .br-need {border-color:var(--needline); background:var(--tint)}
 .br-need b {display:block; margin-bottom:2px}
 .br-need p {margin:0 0 8px; color:var(--muted); font-size:12px}
 .br-row {display:flex; gap:6px}
 .br-row .br-btn {flex:1}
+/* O vínculo do serviço da máquina (item 9 do remote-control-v3): verde vinculado, neutro sem vínculo, a confirmação no tom de "precisa de você". */
+.br-vinculo {border-color:color-mix(in srgb, var(--ok) 35%, var(--line)); background:color-mix(in srgb, var(--ok) 9%, var(--surface))}
+.br-vinculo b {display:flex; align-items:center; gap:6px; color:var(--ok)}
+.br-vinculo b i {width:8px; height:8px; flex:none; border-radius:50%; background:var(--ok)}
+.br-vinculo p {margin:4px 0 8px; color:var(--muted); font-size:12px; line-height:1.45}
+.br-vinculo .br-vinculo-acao {border-color:var(--accent); color:var(--accent)}
+.br-vinculo.br-vinculo-sem {border-color:var(--line); background:var(--surface)}
+.br-vinculo.br-vinculo-sem b {color:var(--ink)}
+.br-vinculo.br-vinculo-sem p {margin-bottom:0}
+.br-vinculo.br-vinculo-confirmar {border-color:var(--needline); background:var(--tint)}
+.br-vinculo.br-vinculo-confirmar b {color:var(--accent)}
+.br-vinculo [role='alert'] {color:var(--accent)}
 .br-readonly {display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:11.5px; color:var(--muted)}
 .br-readonly strong {color:var(--ink)}
 .br-note {color:var(--muted); font-size:11.5px; line-height:1.45; margin:0}
@@ -76,6 +97,35 @@
 .br-item small {display:block}
 .br-chip {font-size:11px; padding:2px 7px; border-radius:9px; background:var(--bluetint); color:var(--blue); white-space:nowrap}
 .br-chip.br-warn {background:var(--warntint); color:var(--warn)}
+/* Item 4 do remote-control-v3: abrir e criar projeto e projeto de design a partir do Board. */
+.br-secao-titulo {display:flex; align-items:center; gap:8px}
+.br-secao-titulo h2 {flex:1}
+.board-remoto .br-ver {font-size:12px; font-weight:600; color:var(--accent); text-decoration:none}
+.board-remoto .br-ver:hover {text-decoration:underline}
+.board-remoto .br-novo {min-height:28px; padding:3px 10px; border-color:var(--accent); color:var(--accent)}
+.board-remoto .br-abrir {display:block; color:inherit; text-decoration:none}
+.board-remoto .br-abrir:hover, .board-remoto .br-abrir:focus-visible {border-color:var(--accent)}
+.br-design b {display:flex; justify-content:space-between; gap:8px}
+.br-design b span {font-weight:400; color:var(--muted); font-size:12px; flex:none}
+.br-design small {color:var(--muted)}
+.br-criacao {display:flex; flex-direction:column; gap:2px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); font-size:12px; color:var(--muted)}
+.br-criacao strong {color:var(--ink)}
+.br-criacao.br-ok {border-color:color-mix(in srgb, var(--ok) 35%, var(--line)); background:color-mix(in srgb, var(--ok) 9%, var(--surface))}
+.br-criacao.br-ok strong {color:var(--ok)}
+.br-criacao.br-recusa {border-color:var(--needline); background:var(--tint)}
+.br-criacao.br-recusa strong {color:var(--accent)}
+.br-dialogo.br-form {width:min(520px,100%); max-height:calc(100vh - 32px); overflow:auto}
+.br-form label, .br-form fieldset {display:flex; flex-direction:column; gap:4px; margin:0 0 12px; font-size:12px; font-weight:600; color:var(--ink)}
+.br-form fieldset {border:1px solid var(--line); border-radius:8px; padding:8px 10px}
+.br-form legend {padding:0 4px}
+.br-form input[type='text'], .br-form textarea, .br-form select {font:inherit; font-weight:400; font-size:13px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink)}
+.br-form textarea {min-height:72px; resize:vertical}
+.br-form .br-opcao {flex-direction:row; align-items:center; gap:8px; margin:0; padding:3px 0; font-weight:400}
+.br-form .br-dica {font-weight:400; color:var(--muted); font-size:11.5px}
+.br-uso {margin:0 0 12px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--muted)}
+.br-uso .br-bar {margin:6px 0 0}
+.br-uso.br-cheio {border-color:var(--needline); background:var(--tint); color:var(--accent)}
+.br-uso.br-cheio .br-bar i {background:var(--accent)}
 .br-chat {display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--panel); overflow:auto}
 .br-chathead {padding:10px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; background:var(--surface)}
 .br-chathead small {display:block}

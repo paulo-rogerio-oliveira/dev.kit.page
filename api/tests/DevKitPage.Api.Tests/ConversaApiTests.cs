@@ -39,16 +39,18 @@ public sealed class ConversaApiTests : IDisposable
         => new(RemotoV1.Contrato, Maquina, id, comando, tipo, texto, DateTimeOffset.UtcNow);
 
     /// <summary>
-    /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera, o dev pede a fila e o motor do worker a conclui — e a
-    /// máquina já mandou o heartbeat.
+    /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera (e a liberação pede a fila, remote-control-v3 item 5) e
+    /// o motor do worker a conclui — e a máquina já mandou o heartbeat.
     /// </summary>
     private async Task<(HttpClient Admin, HttpClient Dev)> DevComFilaAsync(string login = "ana", HttpClient? admin = null)
     {
         admin ??= await _api.AdminAsync();
         var (dev, _) = await _api.UsuarioAsync(admin, login, Papeis.Dev);
         var id = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == login).Id;
-        (await admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true))).EnsureSuccessStatusCode();
-        var pedido = (await (await dev.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null))).Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
+        var liberacao = await admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true));
+        liberacao.EnsureSuccessStatusCode();
+        var fila = (await liberacao.Content.ReadFromJsonAsync<UsuarioResumo>())!.Fila!;
+        var pedido = (await dev.GetFromJsonAsync<DetalheDoRecursoV1>($"/api/provisao/recursos/{fila.Id}"))!.Recurso;
         using (var escopo = _api.Services.CreateScope())
         {
             var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();
@@ -355,6 +357,93 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(3, api.Fila.Enviadas.Count);
     }
 
+    [Fact]
+    public async Task O_handshake_do_catalogo_vai_pela_fila_nao_conta_no_limite_nao_empilha_e_fecha_com_o_catalogo_publicado()
+    {
+        using var teste = new ConversaApiTests(new ApiDeTeste(comandosPorHora: 1));
+        var api = teste._api;
+        var (_, ana) = await teste.DevComFilaAsync();
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"))).StatusCode);
+
+        // A cota das mensagens está cheia, e o handshake passa: ele não abre turno do agente.
+        var pedido = new ComandoNovoV1("h-1", Maquina, ConversaV1.ComandoCatalogo, null, null, ConversaV1.DispositivoNavegador);
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-2"))).StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(api.Fila.Enviadas.Last().Mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoCatalogo, "h-1"), (naFila.Tipo, naFila.Id));
+
+        // O Board reaberto (outro id) recebe o pedido que ainda espera na fila, sem outra mensagem nela.
+        var repetido = await ana.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "h-2" });
+        Assert.Equal(HttpStatusCode.OK, repetido.StatusCode);
+        Assert.Equal("h-1", (await repetido.Content.ReadFromJsonAsync<ComandoRemotoV1>())!.Id);
+        Assert.Equal(2, api.Fila.Enviadas.Count);
+
+        // O dev.kit confirma, publica o catálogo e fecha o pedido com o concluido.
+        var recebido = await ana.PostAsJsonAsync("/api/remoto/comandos/h-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina));
+        Assert.True((await recebido.Content.ReadFromJsonAsync<RecebimentoAceitoV1>())!.Executar);
+        var catalogo = new CatalogoRemotoV1(RemotoV1.Contrato, Maquina, DateTimeOffset.UtcNow, "h-1", [new WorkItemNoCatalogoV1(812, "Handshake do chat", "User Story", "Active")],
+            [new RepositorioNoCatalogoV1("dev.kit.page", "main")], [new FluxoNoCatalogoV1("Tarefa avulsa")], [], []);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync("/api/remoto/catalogo", catalogo)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/respostas",
+            Resposta("ok-h-1", "h-1", ConversaV1.RespostaConcluido, "Catálogo publicado."))).StatusCode);
+        Assert.Equal(ConversaV1.EstadoConcluido, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/h-1"))!.Estado);
+        var lido = (await ana.GetFromJsonAsync<CatalogoDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/catalogo"))!;
+        Assert.Equal(812, Assert.Single(lido.Catalogo.WorkItems!).Id);
+
+        // Fechado o pedido, o "Atualizar" seguinte é um handshake novo.
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "h-3" })).StatusCode);
+    }
+
+    private static ComandoNovoV1 Criacao(string id, string tipo, object formulario)
+        => new(id, Maquina, tipo, JsonSerializer.Serialize(formulario, Json), null, ConversaV1.DispositivoNavegador);
+
+    [Fact]
+    public async Task A_criacao_de_projeto_e_de_design_vai_pela_fila_com_o_formulario_e_o_desfecho_do_dev_kit_volta_ao_site()
+    {
+        var (_, ana) = await DevComFilaAsync();
+
+        // O formulário vai inteiro no texto da mensagem da fila: o dev.kit o lê do jeito que o site mandou.
+        var projeto = new NovoProjetoRemotoV1("Projetos pelo site", ["github.com/org/dev.kit.page"], "Ver e criar projetos.", CriacaoRemotaV1.NivelUsuario);
+        var envio = await ana.PostAsJsonAsync("/api/remoto/comandos", Criacao("p-1", ConversaV1.ComandoProjeto, projeto));
+        Assert.Equal(HttpStatusCode.Accepted, envio.StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoProjeto, "p-1"), (naFila.Tipo, naFila.Id));
+        var lido = JsonSerializer.Deserialize<NovoProjetoRemotoV1>(naFila.Texto, Json)!;
+        Assert.Equal(("Projetos pelo site", "github.com/org/dev.kit.page", "usuario"), (lido.Nome, Assert.Single(lido.Repositorios), lido.Nivel));
+
+        // O dev.kit cria e fecha com o concluido; o site lê o desfecho no comando e na resposta.
+        (await ana.PostAsJsonAsync("/api/remoto/comandos/p-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina))).EnsureSuccessStatusCode();
+        (await ana.PostAsJsonAsync("/api/remoto/respostas", Resposta("ok-p-1", "p-1", ConversaV1.RespostaConcluido,
+            "Projeto 'Projetos pelo site' criado (projetos-pelo-site)."))).EnsureSuccessStatusCode();
+        Assert.Equal(ConversaV1.EstadoConcluido, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/p-1"))!.Estado);
+
+        // O dev.kit ANTIGO não conhece o comando: recusa com o motivo, e o site o mostra (compatibilidade, regra #2).
+        var design = Criacao("d-1", ConversaV1.ComandoDesign, new NovoDesignRemotoV1("github.com/org/dev.kit.page"));
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", design)).StatusCode);
+        (await ana.PostAsJsonAsync("/api/remoto/comandos/d-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina))).EnsureSuccessStatusCode();
+        (await ana.PostAsJsonAsync("/api/remoto/respostas", Resposta("x-d-1", "d-1", ConversaV1.RespostaRecusado,
+            "Não executado: o tipo de comando 'design' não é conhecido por esta versão do dev.kit."))).EnsureSuccessStatusCode();
+        var conversa = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!;
+        Assert.Equal(ConversaV1.EstadoRecusado, conversa.Comandos.Single(c => c.Id == "d-1").Estado);
+        Assert.Contains("não é conhecido por esta versão", conversa.Respostas.Single(r => r.ComandoId == "d-1").Texto, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(ConversaV1.ComandoProjeto, "", "Envie o formulário")]
+    [InlineData(ConversaV1.ComandoProjeto, "{nome", "não é um JSON válido")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"","repositorios":["github.com/org/app"]}""", "nome do projeto")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":[]}""", "ao menos um repositório")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":["github.com/org/app"],"nivel":"mundo"}""", "nível")]
+    [InlineData(ConversaV1.ComandoDesign, """{"repositorio":" "}""", "repositório do catálogo")]
+    public async Task O_formulario_da_criacao_invalido_e_recusado_antes_da_fila(string tipo, string texto, string motivo)
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var resposta = await ana.PostAsJsonAsync("/api/remoto/comandos", new ComandoNovoV1("p-1", Maquina, tipo, texto));
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Contains(motivo, await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Empty(_api.Fila.Enviadas);
+    }
+
     private static FalaDoDevKitV1 Fala(string id, string autor = ConversaV1.AutorDev, string origem = ConversaV1.OrigemDesktop,
         string texto = "Como está o item 13?", DateTimeOffset? ditaEm = null, string? comando = null)
         => new(RemotoV1.Contrato, Maquina, id, autor, origem, texto, ditaEm ?? DateTimeOffset.UtcNow, comando);
@@ -372,8 +461,8 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: conserva as falas e anuncia as decisões com snapshot no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            // Recursos são aditivos: conserva as falas e as decisões com snapshot, e anuncia o catálogo do chat no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.

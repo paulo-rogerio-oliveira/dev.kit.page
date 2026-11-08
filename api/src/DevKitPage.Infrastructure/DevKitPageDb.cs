@@ -59,11 +59,16 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
     public DbSet<AssinaturaDoPush> AssinaturasDoPush => Set<AssinaturaDoPush>();
     public DbSet<EntregaDoPush> EntregasDoPush => Set<EntregaDoPush>();
+    public DbSet<CatalogoRemoto> CatalogosRemotos => Set<CatalogoRemoto>();
+    public DbSet<ClienteDaMaquina> ClientesDaMaquina => Set<ClienteDaMaquina>();
+    public DbSet<AssercaoDoCliente> AssercoesDoCliente => Set<AssercaoDoCliente>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
         ConfigurarRemoto(modelBuilder);
+        ConfigurarCatalogoRemoto(modelBuilder);
+        ConfigurarClienteDaMaquina(modelBuilder);
         ConfigurarProvisao(modelBuilder);
         ConfigurarConversa(modelBuilder);
         ConfigurarDecisoes(modelBuilder);
@@ -573,6 +578,49 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(m => m.AtualizadaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
+
+    /// <summary>
+    /// O catálogo de cada máquina (o handshake do chat remoto), por usuário. No Azure SQL a tabela vem de
+    /// api/scripts/sqlserver/CatalogoRemoto.sql. O catálogo é nvarchar(max), com o teto do contrato conferido antes.
+    /// </summary>
+    private static void ConfigurarCatalogoRemoto(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<CatalogoRemoto>(e =>
+        {
+            e.ToTable("CatalogosRemotos");
+            e.Property(c => c.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            e.HasIndex(c => new { c.UsuarioId, c.MaquinaId }).IsUnique();
+            e.HasIndex(c => c.RecebidoEmUtc);
+            e.HasOne<Usuario>().WithMany().HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+    /// <summary>
+    /// O client credentials da máquina (remote-control-v3 item 9): um cliente por máquina, com a chave pública, e os jti já
+    /// gastos. No Azure SQL as tabelas vêm de api/scripts/sqlserver/ClienteDaMaquina.sql. A máquina ou o usuário apagados levam
+    /// o vínculo.
+    /// </summary>
+    private static void ConfigurarClienteDaMaquina(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ClienteDaMaquina>(e =>
+        {
+            e.ToTable("ClientesDaMaquina");
+            e.Property(c => c.ChavePublica).HasMaxLength(Contracts.V1.ClientCredentialsV1.TamanhoMaximoDaChave);
+            e.Property(c => c.Carimbo).HasMaxLength(16);
+            e.HasIndex(c => c.MaquinaId).IsUnique();
+            e.HasIndex(c => c.UsuarioId);
+            e.HasOne(c => c.Maquina).WithMany().HasForeignKey(c => c.MaquinaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Usuario).WithMany().HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AssercaoDoCliente>(e =>
+        {
+            e.ToTable("AssercoesDoCliente");
+            e.Property(a => a.Jti).HasMaxLength(Contracts.V1.ClientCredentialsV1.TamanhoMaximoDoJti);
+            // O uso único: o mesmo jti do mesmo cliente não entra duas vezes.
+            e.HasIndex(a => new { a.ClienteId, a.Jti }).IsUnique();
+            e.HasIndex(a => a.ExpiraEmUtc);
+            e.HasOne<ClienteDaMaquina>().WithMany().HasForeignKey(a => a.ClienteId).OnDelete(DeleteBehavior.Cascade);
+        });
+    }
 
     /// <summary>
     /// A provisão no Azure: a permissão por usuário, o recurso (que é também o pedido repetível) e a auditoria. No Azure SQL as

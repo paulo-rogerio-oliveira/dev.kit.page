@@ -11,7 +11,7 @@ on:
     inputs:
       aplicar_sql:
         # Desligado por padrão: os scripts são idempotentes, mas mexem na base de produção (docs/publicacao-azure.md).
-        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push) antes do deploy'
+        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push, CatalogoRemoto, ClienteDaMaquina) antes do deploy'
         type: boolean
         default: false
 
@@ -69,10 +69,32 @@ jobs:
           name: webjob-provisao
           path: ${{ runner.temp }}/provisao
 
+  # O deploy não passa à frente da configuração: lê as app settings do App Service (só os nomes vão ao log) e falha se
+  # faltar o que a API ou o WebJob recusam na subida em Production. Sem ela verde, nem o sql nem o deploy rodam.
+  configuracao:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2353AAB0026B48099F57BC4D492309A9 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6D616D976EEB4CE39B766CB97FD48CFF }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_CA745059D6B646EDA77935884FD64538 }}
+
+      - name: Pré-checagem das app settings
+        run: bash api/scripts/azure/conferir-app-settings.sh --app devkit
+
   # Opcional e DESLIGADO por padrão: só no disparo manual com aplicar_sql. Os scripts são idempotentes e vão na ordem
   # das dependências (Conversa depois de Remoto e Provisao). A conexão é o segredo AZURE_SQL_CONNECTION_STRING, com
   # Authentication=Active Directory Default (a identidade do azure/login precisa de um usuário na base).
   sql:
+    needs: configuracao
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.aplicar_sql }}
     runs-on: ubuntu-latest
     permissions:
@@ -119,11 +141,23 @@ jobs:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
           path: api/scripts/sqlserver/Push.sql
 
+      - name: CatalogoRemoto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/CatalogoRemoto.sql
+
+      - name: ClienteDaMaquina.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ClienteDaMaquina.sql
+
   deploy:
     runs-on: ubuntu-latest
-    needs: [build, worker, sql]
-    # O sql pulado (o padrão) não segura o deploy; o sql que falhou, sim.
-    if: ${{ !cancelled() && needs.build.result == 'success' && needs.worker.result == 'success' && needs.sql.result != 'failure' }}
+    needs: [build, worker, configuracao, sql]
+    # A configuração conferida é obrigatória. O sql pulado (o padrão) não segura o deploy; o sql que falhou, sim.
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.worker.result == 'success' && needs.configuracao.result == 'success' && needs.sql.result != 'failure' }}
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout

@@ -69,11 +69,13 @@ const repositorioCurto = (chave: string) => chave.split('/').slice(-2).join('/')
  * os projetos por REPOSITÓRIO (o branch é filtro), as telas e, de cada uma, a captura | proposta | recaptura lado a lado
  * (ou uma, ou sobrepostas), com o link estável por versão e o Apagar de quem pode (o autor ou o gestor).
  */
-export function DesignCompartilhado({ token, comEmpresa, tratar }: {
+export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: {
   token: string;
   /** Sem empresa só existe o nível usuário: os chips de escopo não aparecem. */
   comEmpresa: boolean;
   tratar: (falha: unknown) => void;
+  /** (item 4 do remote-control-v3) O repositório que o Board remoto abriu: o projeto de mesma chave já vem escolhido. */
+  repositorio?: string | null;
 }) {
   const [projetos, setProjetos] = useState<ProjetoDeDesign[] | null>(null);
   const [uso, setUso] = useState<UsoDoDesign | null>(null);
@@ -98,6 +100,18 @@ export function DesignCompartilhado({ token, comEmpresa, tratar }: {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // O Board remoto abre o design pelo repositório do catálogo da máquina: o projeto de mesma chave (em qualquer escopo) já
+  // vem escolhido; o que ainda não tem versão no site é dito, e não escondido.
+  const aberto = useRef(false);
+  useEffect(() => {
+    if (!projetos || !repositorio || aberto.current) return;
+    aberto.current = true;
+    const alvo = repositorio.trim().toLowerCase();
+    const achado = projetos.find((p) => p.chave.toLowerCase() === alvo);
+    if (achado) { setEscopo(achado.nivel as Escopo); setChave(achado.chave); }
+    else setAviso(`O projeto de design de ${repositorio} ainda não tem versão no site: as telas aparecem aqui depois da primeira captura ou proposta enviada pelo dev.kit.`);
+  }, [projetos, repositorio]);
 
   const doEscopo = useMemo(() => (projetos ?? []).filter((p) => p.nivel === escopo), [projetos, escopo]);
   const projeto = doEscopo.find((p) => p.chave === chave) ?? doEscopo[0];

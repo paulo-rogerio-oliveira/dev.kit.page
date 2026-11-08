@@ -10,9 +10,10 @@ namespace DevKitPage.Api.Tests;
 
 /// <summary>
 /// A provisão pela API (<c>/api/provisao</c>): sem a liberação, TODA rota de recurso recusa (403 com o código) — a ação
-/// escondida no site não é a proteção; o admin libera e retira por usuário, e a retirada vale no pedido seguinte; o pedido é
-/// assíncrono (202) e repetível (o segundo devolve a mesma fila, 200); a região fora da lista é 400; o recurso de outro
-/// usuário é 404; e o dev não libera para si mesmo.
+/// escondida no site não é a proteção; o admin libera e retira por usuário, e a retirada vale no pedido seguinte; a liberação
+/// pede a fila na hora (remote-control-v3, item 5) e a retirada só a remove com a confirmação; o pedido é assíncrono e
+/// repetível (o segundo devolve a mesma fila, 200); a região fora da lista é 400; o recurso de outro usuário é 404; e o dev
+/// não libera para si mesmo.
 /// </summary>
 public sealed class ProvisaoApiTests : IDisposable
 {
@@ -69,44 +70,61 @@ public sealed class ProvisaoApiTests : IDisposable
         }
     }
 
+    /// <summary>A liberação pede a fila do usuário (remote-control-v3, item 5): a resposta do admin já a traz.</summary>
+    private static async Task<FilaDoUsuarioV1> FilaDaLiberacaoAsync(HttpClient admin, int id)
+    {
+        var liberacao = await LiberarAsync(admin, id);
+        Assert.Equal(HttpStatusCode.OK, liberacao.StatusCode);
+        return (await liberacao.Content.ReadFromJsonAsync<UsuarioResumo>())!.Fila!;
+    }
+
+    /// <summary>O worker (o motor, no teste) conclui o próximo pedido, que tem de ser o <paramref name="id"/>.</summary>
+    private static async Task ConcluirAsync(IServiceProvider servicos, long id, string trabalhador = "teste", RecursoNaNuvem? nuvem = null)
+    {
+        using var escopo = servicos.CreateScope();
+        var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();
+        Assert.Equal(id, (await motor.ReservarAsync(trabalhador, default))!.Id);
+        Assert.True(await motor.ConcluirAsync(id, trabalhador, nuvem ?? new RecursoNaNuvem("/s/storageAccounts/x", "https://x.queue.core.windows.net/comandos"), default));
+    }
+
     [Fact]
-    public async Task Liberada_o_pedido_e_aceito_202_e_o_repetido_devolve_a_mesma_fila_200()
+    public async Task A_liberacao_do_admin_pede_a_fila_na_hora_e_o_post_do_usuario_devolve_a_mesma_200()
     {
         var (admin, dev, id) = await AdminEDevAsync();
-        Assert.Equal(HttpStatusCode.OK, (await LiberarAsync(admin, id)).StatusCode);
+        var fila = await FilaDaLiberacaoAsync(admin, id);
 
         var permissao = (await dev.GetFromJsonAsync<PermissaoDeProvisaoV1>("/api/provisao/permissao"))!;
         Assert.Equal((true, ProvisaoV1.OrigemPermissao), (permissao.Liberada, permissao.Origem));
-        Assert.Contains(permissao.RegiaoPadrao, permissao.Regioes);
+        Assert.Equal((ProvisaoV1.NomeDaFila, permissao.RegiaoPadrao, ProvisaoV1.OperacaoCriar, ProvisaoV1.EstadoPedido), (fila.Fila, fila.Regiao, fila.Operacao, fila.Estado));
 
-        var pedido = await dev.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null));
-        Assert.Equal(HttpStatusCode.Accepted, pedido.StatusCode);
-        var recurso = (await pedido.Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
-        Assert.Equal((ProvisaoV1.TipoFila, ProvisaoV1.EstadoPedido, permissao.RegiaoPadrao), (recurso.Tipo, recurso.Estado, recurso.Regiao));
-        Assert.Equal($"/api/provisao/recursos/{recurso.Id}", pedido.Headers.Location!.OriginalString);
+        // O usuário vê a fila que o admin pediu, com a auditoria em nome do admin.
+        var lista = (await dev.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!;
+        Assert.Equal([fila.Id], lista.Select(r => r.Id));
+        var auditoria = Assert.Single((await dev.GetFromJsonAsync<DetalheDoRecursoV1>($"/api/provisao/recursos/{fila.Id}"))!.Eventos);
+        Assert.Equal((ProvisaoV1.EventoPedido, "admin"), (auditoria.Evento, auditoria.Autor));
 
+        // A rota do pedido fica (o motor), sem acesso pela tela: o pedido repetido devolve a mesma fila, 200, sem criar outra.
         var repetido = await dev.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1("eastus2"));
         Assert.Equal(HttpStatusCode.OK, repetido.StatusCode);
-        Assert.Equal(recurso.Id, (await repetido.Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!.Id);
+        Assert.Equal(fila.Id, (await repetido.Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!.Id);
 
-        var lista = (await dev.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!;
-        Assert.Equal([recurso.Id], lista.Select(r => r.Id));
-        var detalhe = (await dev.GetFromJsonAsync<DetalheDoRecursoV1>($"/api/provisao/recursos/{recurso.Id}"))!;
-        var auditoria = Assert.Single(detalhe.Eventos);
-        Assert.Equal((ProvisaoV1.EventoPedido, "ana"), (auditoria.Evento, auditoria.Autor));
+        // A lista do admin mostra a liberação e a situação da fila.
+        var doAdmin = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Id == id);
+        Assert.Equal([ProvisaoV1.RecursoProvisao], doAdmin.RecursosLiberados);
+        Assert.Equal(fila.Id, doAdmin.Fila!.Id);
     }
 
     [Fact]
     public async Task A_regiao_fora_da_lista_e_400_e_nada_e_gravado()
     {
         var (admin, dev, id) = await AdminEDevAsync();
-        await LiberarAsync(admin, id);
+        var fila = await FilaDaLiberacaoAsync(admin, id);
 
         var resposta = await dev.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1("westeurope"));
 
         Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
         Assert.Contains("regiao", await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
-        Assert.Empty((await dev.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!);
+        Assert.Equal([fila.Id], (await dev.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!.Select(r => r.Id));
     }
 
     [Fact]
@@ -115,14 +133,14 @@ public sealed class ProvisaoApiTests : IDisposable
         var (admin, ana, anaId) = await AdminEDevAsync("ana");
         var (bia, _) = await _api.UsuarioAsync(admin, "bia", Papeis.Dev);
         var biaId = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == "bia").Id;
-        await LiberarAsync(admin, anaId);
-        await LiberarAsync(admin, biaId);
-        var recurso = (await (await ana.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null))).Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
+        var recurso = await FilaDaLiberacaoAsync(admin, anaId);
+        var daBia = await FilaDaLiberacaoAsync(admin, biaId);
 
         Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync($"/api/provisao/recursos/{recurso.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await bia.DeleteAsync($"/api/provisao/recursos/{recurso.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await bia.PostAsync($"/api/provisao/recursos/{recurso.Id}/repetir", null)).StatusCode);
-        Assert.Empty((await bia.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!);
+        // Cada liberação pediu a fila do próprio usuário: a Bia só vê a dela.
+        Assert.Equal([daBia.Id], (await bia.GetFromJsonAsync<RecursoProvisionadoV1[]>("/api/provisao/recursos"))!.Select(r => r.Id));
 
         // A criação ainda não terminou: remove-se depois; e só o que falhou se repete.
         Assert.Equal(HttpStatusCode.Conflict, (await ana.DeleteAsync($"/api/provisao/recursos/{recurso.Id}")).StatusCode);
@@ -137,10 +155,33 @@ public sealed class ProvisaoApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await dev.GetAsync("/api/provisao/recursos")).StatusCode);
 
         var retirada = await LiberarAsync(admin, id, liberado: false);
-        Assert.Empty((await retirada.Content.ReadFromJsonAsync<UsuarioResumo>())!.RecursosLiberados!);
+        var resumo = (await retirada.Content.ReadFromJsonAsync<UsuarioResumo>())!;
+        Assert.Empty(resumo.RecursosLiberados!);
+        // Sem a confirmação, a fila FICA: a retirada só impede os pedidos novos.
+        Assert.Equal(ProvisaoV1.OperacaoCriar, resumo.Fila!.Operacao);
 
         Assert.Equal(HttpStatusCode.Forbidden, (await dev.GetAsync("/api/provisao/recursos")).StatusCode);
         Assert.False((await dev.GetFromJsonAsync<PermissaoDeProvisaoV1>("/api/provisao/permissao"))!.Liberada);
+    }
+
+    [Fact]
+    public async Task A_retirada_com_a_remocao_confirmada_pede_a_remocao_da_fila_e_recusa_a_fila_em_criacao()
+    {
+        var (admin, _, id) = await AdminEDevAsync();
+        var fila = await FilaDaLiberacaoAsync(admin, id);
+        Task<HttpResponseMessage> RetirarERemover() => admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/provisao", new LiberacaoDeRecursoV1(false, RemoverFila: true));
+
+        // A fila ainda em criação: 409, e nada muda (a liberação continua).
+        Assert.Equal(HttpStatusCode.Conflict, (await RetirarERemover()).StatusCode);
+        Assert.Equal([ProvisaoV1.RecursoProvisao], (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Id == id).RecursosLiberados);
+
+        await ConcluirAsync(_api.Services, fila.Id);
+        var retirada = await RetirarERemover();
+
+        Assert.Equal(HttpStatusCode.OK, retirada.StatusCode);
+        var resumo = (await retirada.Content.ReadFromJsonAsync<UsuarioResumo>())!;
+        Assert.Empty(resumo.RecursosLiberados!);
+        Assert.Equal((fila.Id, ProvisaoV1.OperacaoRemover, ProvisaoV1.EstadoPedido), (resumo.Fila!.Id, resumo.Fila.Operacao, resumo.Fila.Estado));
     }
 
     [Fact]
@@ -218,19 +259,16 @@ public sealed class ProvisaoApiTests : IDisposable
         var relogio = new RelogioDoTeste();
         using var api = _api.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
         var (admin, original, id) = await AdminEDevAsync();
-        await LiberarAsync(admin, id);
+        // A fila que a liberação pede vem antes, na ordem do worker.
+        var fila = await FilaDaLiberacaoAsync(admin, id);
+        await ConcluirAsync(api.Services, fila.Id);
         // O mesmo banco, pelo host com o relógio do teste (o TOTP depende dele).
         var dev = api.CreateClient();
         dev.DefaultRequestHeaders.Authorization = original.DefaultRequestHeaders.Authorization;
 
         var recurso = (await (await dev.PostAsJsonAsync("/api/provisao/aplicativos", new PedidoDeAplicativoV1(ProvisaoV1.TipoStaticWebApp, "site-docs", "eastus2", "Free")))
             .Content.ReadFromJsonAsync<RecursoProvisionadoV1>())!;
-        using (var escopo = api.Services.CreateScope())
-        {
-            var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();
-            Assert.Equal(recurso.Id, (await motor.ReservarAsync("teste", default))!.Id);
-            Assert.True(await motor.ConcluirAsync(recurso.Id, "teste", new RecursoNaNuvem("/s/staticSites/x", "https://x.azurestaticapps.net"), default));
-        }
+        await ConcluirAsync(api.Services, recurso.Id, nuvem: new RecursoNaNuvem("/s/staticSites/x", "https://x.azurestaticapps.net"));
 
         var delete = await dev.DeleteAsync($"/api/provisao/recursos/{recurso.Id}");
         Assert.Equal((HttpStatusCode.Forbidden, ProvisaoV1.CodigoSegundoFator), (delete.StatusCode, await CodigoAsync(delete)));

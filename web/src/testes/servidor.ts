@@ -6,7 +6,7 @@ import type {
   EstadoDoRelato, RelatoDetalhe, RelatoResumo, RelatorioDePublicacao, ReleaseDoCatalogo, RepositorioDaEmpresa, RoiResposta, UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit,
   AcessosDoDesign, PapelDeAcessoAoDesign, ProjetoDeDesign, UsoDoDesign, VersaoDeDesign, Vitrine,
   AnexoDoItem, DetalheDaLicenca, DiferencasDoItem, HistoricoDoItem, UtilidadeResposta,
-  EventoDaProvisao, PermissaoDeProvisao, RecursoProvisionado, CotaDaProvisao, TipoDoAplicativo,
+  EventoDaProvisao, FilaDoUsuario, PermissaoDeProvisao, RecursoProvisionado,
 } from '../api/tipos';
 
 /** A raiz da API nos testes (o VITE_API_URL do vite.config.ts). */
@@ -474,36 +474,10 @@ export const eventosDaFila: EventoDaProvisao[] = [
   { em: '2026-11-03T14:42:00Z', evento: 'pronto', autor: 'worker', detalhe: 'grupo, conta e fila comandos prontos' },
 ];
 
-/** A permissão com os sites e APIs (item 12): a cota de cada tipo, as regiões e os planos, e o teto do custo. */
-export const permissaoComAplicativos: PermissaoDeProvisao = {
-  ...permissaoLiberada,
-  aplicativos: [
-    { tipo: 'app-service', maximo: 2, regioes: ['brazilsouth', 'eastus2'], regiaoPadrao: 'brazilsouth',
-      planos: [{ id: 'F1', rotulo: 'F1 · Linux gratuito', custoMensal: 0 }, { id: 'B1', rotulo: 'B1 · Linux', custoMensal: 61.7 }] },
-    { tipo: 'static-web-app', maximo: 3, regioes: ['eastus2', 'westeurope'], regiaoPadrao: 'eastus2',
-      planos: [{ id: 'Free', rotulo: 'Free', custoMensal: 0 }, { id: 'Standard', rotulo: 'Standard', custoMensal: 48 }] },
-  ],
-  limiteDeCusto: 150, alertaDeCustoPercentual: 80,
+/** A fila que a liberação do admin pede (remote-control-v3, item 5), como a lista de /usuarios a vê. */
+export const filaPedidaNaLiberacao: FilaDoUsuario = {
+  id: 12, nome: 'dkq2novafila1', fila: 'comandos', regiao: 'brazilsouth', operacao: 'criar', estado: 'pedido',
 };
-
-/** O App Service pronto da Ana (B1, com o endereço). */
-export const appServicePronto = (): RecursoProvisionado => ({
-  ...filaPronta(), id: 21, tipo: 'app-service', nome: 'app-u2-api-pedidos-7f3k', fila: '', rotulo: 'api-pedidos', plano: 'B1',
-  nomeDoPlano: 'asp-u2-api-pedidos-7f3k', custoMensal: 61.7, passos: ['plano'], parcial: false, tentativas: 1,
-  endpoint: 'https://app-u2-api-pedidos-7f3k.azurewebsites.net',
-});
-
-/** O App Service que falhou DEPOIS do plano criado: a falha parcial. */
-export const appServiceParcial = (): RecursoProvisionado => ({
-  ...appServicePronto(), id: 22, nome: 'app-u2-api-relatorios-q8m2', rotulo: 'api-relatorios', nomeDoPlano: 'asp-u2-api-relatorios-q8m2',
-  estado: 'falhou', prontoEm: null, endpoint: '', parcial: true, erro: 'o Azure respondeu 409, nome em uso.',
-});
-
-/** O Static Web App ainda com o worker. */
-export const siteEmProvisao = (): RecursoProvisionado => ({
-  ...filaPronta(), id: 23, tipo: 'static-web-app', nome: 'swa-u2-site-docs-2m9q', fila: '', rotulo: 'site-docs', plano: 'Free', regiao: 'eastus2',
-  nomeDoPlano: '', custoMensal: 0, passos: [], parcial: false, estado: 'em-provisao', prontoEm: null, endpoint: '',
-});
 
 /** O estado da provisão no servidor de mentira: a permissão e os recursos (o setup os reinicia a cada teste). */
 export const provisao: { permissao: PermissaoDeProvisao; recursos: RecursoProvisionado[]; segundoFatorAtivo: boolean } = {
@@ -514,19 +488,6 @@ export function reiniciarProvisao() {
   provisao.permissao = { ...permissaoLiberada, liberada: false, origem: 'nenhuma' };
   provisao.recursos = [];
   provisao.segundoFatorAtivo = true;
-}
-
-/** A cota como a API a conta: os aplicativos não removidos, por tipo, e o custo deles contra o teto. */
-function cotaDaProvisao(): CotaDaProvisao {
-  const ativos = provisao.recursos.filter((r) => r.tipo !== 'fila' && r.estado !== 'removido');
-  const custoDoMes = Math.round(ativos.reduce((soma, r) => soma + (r.custoMensal ?? 0), 0) * 100) / 100;
-  const limite = provisao.permissao.limiteDeCusto ?? 0;
-  const alerta = provisao.permissao.alertaDeCustoPercentual ?? 80;
-  return {
-    tipos: (provisao.permissao.aplicativos ?? []).map((t) => ({ tipo: t.tipo, ativos: ativos.filter((r) => r.tipo === t.tipo).length, maximo: t.maximo })),
-    custoDoMes, limiteDeCusto: limite, alertaDeCustoPercentual: alerta,
-    alerta: limite > 0 && custoDoMes >= (limite * alerta) / 100, bloqueado: limite > 0 && custoDoMes >= limite,
-  };
 }
 
 const naoLiberada = () => HttpResponse.json({ detail: 'A provisão no Azure não está liberada para o seu usuário.', codigo: 'provisao-nao-liberada' }, { status: 403 });
@@ -919,10 +880,15 @@ export const handlersPadrao = [
     gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/bloqueio`, corpo });
     return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, bloqueado: corpo.bloqueado });
   }),
+  // Liberar pede a fila (remote-control-v3, item 5); retirar a deixa, a não ser com o removerFila (aí ela vai para a remoção).
   http.put(`${API}/api/usuarios/:id/recursos/:recurso`, async ({ params, request }) => {
-    const corpo = (await request.json()) as { liberado: boolean };
+    const corpo = (await request.json()) as { liberado: boolean; removerFila?: boolean };
     gestaoDeUsuarios.push({ metodo: 'PUT', caminho: `/api/usuarios/${params.id}/recursos/${params.recurso}`, corpo });
-    return HttpResponse.json({ ...usuarios.find((u) => String(u.id) === params.id)!, recursosLiberados: corpo.liberado ? ['provisao'] : [] });
+    const usuario = usuarios.find((u) => String(u.id) === params.id)!;
+    const fila = corpo.liberado
+      ? usuario.fila ?? filaPedidaNaLiberacao
+      : usuario.fila && corpo.removerFila ? { ...usuario.fila, operacao: 'remover' as const, estado: 'pedido' as const } : usuario.fila;
+    return HttpResponse.json({ ...usuario, recursosLiberados: corpo.liberado ? ['provisao'] : [], fila });
   }),
   // A provisão no Azure (controle remoto v2, item 4): sem a liberação, a permissão diz não e as rotas de recurso recusam.
   http.get(`${API}/api/provisao/permissao`, () => HttpResponse.json(provisao.permissao)),
@@ -931,56 +897,19 @@ export const handlersPadrao = [
     const recurso = provisao.recursos.find((r) => String(r.id) === params.id);
     return recurso ? HttpResponse.json({ recurso, eventos: eventosDaFila }) : HttpResponse.json({ detail: 'Recurso não encontrado.' }, { status: 404 });
   }),
-  http.post(`${API}/api/provisao/filas`, async ({ request }) => {
-    if (!provisao.permissao.liberada) return naoLiberada();
-    const corpo = (await request.json()) as { regiao: string };
-    escritas.push({ metodo: 'POST', caminho: '/api/provisao/filas', corpo });
-    const ativa = provisao.recursos.find((r) => r.estado !== 'removido');
-    if (ativa) return HttpResponse.json(ativa);
-    const novo: RecursoProvisionado = {
-      ...filaPronta(), id: 12, nome: 'dkq2novafila1', regiao: corpo.regiao, estado: 'pedido', tentativas: 0, endpoint: '', prontoEm: null,
-      criadoEm: '2026-11-03T15:00:00Z', atualizadoEm: '2026-11-03T15:00:00Z',
-    };
-    provisao.recursos = [novo, ...provisao.recursos];
-    return HttpResponse.json(novo, { status: 202 });
-  }),
   http.post(`${API}/api/provisao/recursos/:id/repetir`, ({ params }) => {
     escritas.push({ metodo: 'POST', caminho: `/api/provisao/recursos/${params.id}/repetir`, corpo: null });
     const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
     Object.assign(recurso, { estado: 'pedido', tentativas: 0, erro: '' });
     return HttpResponse.json(recurso, { status: 202 });
   }),
-  http.delete(`${API}/api/provisao/recursos/:id`, ({ params }) => {
-    escritas.push({ metodo: 'DELETE', caminho: `/api/provisao/recursos/${params.id}`, corpo: null });
-    const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
-    Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
-    return HttpResponse.json(recurso, { status: 202 });
-  }),
-  // Os sites e APIs (item 12): a cota, o pedido (409 com a cota cheia) e a remoção que pede o código do segundo fator.
-  http.get(`${API}/api/provisao/cota`, () => (provisao.permissao.liberada ? HttpResponse.json(cotaDaProvisao()) : naoLiberada())),
-  http.post(`${API}/api/provisao/aplicativos`, async ({ request }) => {
-    if (!provisao.permissao.liberada) return naoLiberada();
-    const corpo = (await request.json()) as { tipo: TipoDoAplicativo; nome: string; regiao: string; plano: string };
-    escritas.push({ metodo: 'POST', caminho: '/api/provisao/aplicativos', corpo });
-    const uso = cotaDaProvisao().tipos.find((t) => t.tipo === corpo.tipo)!;
-    if (uso.ativos >= uso.maximo)
-      return HttpResponse.json({ detail: `A cota de ${corpo.tipo} está cheia (${uso.ativos} de ${uso.maximo}). Remova um para criar outro.`, codigo: 'cota-cheia' }, { status: 409 });
-    const plano = provisao.permissao.aplicativos!.find((t) => t.tipo === corpo.tipo)!.planos.find((p) => p.id === corpo.plano)!;
-    const novo: RecursoProvisionado = {
-      ...siteEmProvisao(), id: 30, tipo: corpo.tipo, rotulo: corpo.nome, nome: `${corpo.tipo === 'app-service' ? 'app' : 'swa'}-u2-${corpo.nome}-n3w0`,
-      regiao: corpo.regiao, plano: plano.id, custoMensal: plano.custoMensal, estado: 'pedido',
-    };
-    provisao.recursos = [novo, ...provisao.recursos];
-    return HttpResponse.json(novo, { status: 202 });
-  }),
-  http.post(`${API}/api/provisao/recursos/:id/remover`, async ({ params, request }) => {
-    const corpo = (await request.json()) as { codigo: string };
-    escritas.push({ metodo: 'POST', caminho: `/api/provisao/recursos/${params.id}/remover`, corpo });
-    if (corpo.codigo !== '123456')
-      return HttpResponse.json({ detail: 'Código incorreto, expirado ou já utilizado. Tente novamente com um código válido.', codigo: 'segundo-fator' }, { status: 403 });
-    const recurso = provisao.recursos.find((r) => String(r.id) === params.id)!;
-    Object.assign(recurso, { operacao: 'remover', estado: 'pedido', tentativas: 0 });
-    return HttpResponse.json(recurso, { status: 202 });
+  // O catálogo dos atalhos do chat (remote-control-v3): sem catálogo, e o handshake aceito na fila — o cenário que testa o
+  // catálogo responde por conta própria.
+  http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json({ detail: 'Máquina sem catálogo, ou não é sua.' }, { status: 404 })),
+  http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+    const pedido = await request.json() as { id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string };
+    return HttpResponse.json({ ...pedido, estado: 'na-fila', criadoEm: new Date().toISOString(),
+      expiraEm: new Date(Date.now() + 900_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '' }, { status: 202 });
   }),
   http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: provisao.segundoFatorAtivo })),
   http.post(`${API}/api/remoto/segundo-fator/preparar`, async ({ request }) => {

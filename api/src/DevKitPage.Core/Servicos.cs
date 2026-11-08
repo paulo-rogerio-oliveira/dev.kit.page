@@ -221,10 +221,16 @@ public interface IGestaoDeUsuarios
 
     /// <summary>
     /// Libera ou retira um recurso (<see cref="Contracts.V1.ProvisaoV1.RecursosLiberaveis"/>) do usuário, com a linha na
-    /// auditoria da provisão. Idempotente: liberar o liberado (ou retirar o retirado) não grava nada. Retirar NÃO remove o
-    /// que o usuário já criou no Azure — só impede pedidos novos.
+    /// auditoria da provisão. Idempotente: liberar o liberado (ou retirar o retirado) não grava nada.
+    /// <para>
+    /// Liberar PEDE a fila do controle remoto do usuário na hora, na região padrão (remote-control-v3, item 5) — o usuário não
+    /// a cria mais; o pedido é o mesmo, idempotente, da provisão: a fila que já existe volta como está. Retirar NÃO remove o
+    /// que o usuário já criou no Azure — só impede pedidos novos —, a não ser que o admin confirme
+    /// <paramref name="removerFila"/>: aí a fila ativa vai para a remoção do worker. A fila ainda em criação recusa a retirada
+    /// com a remoção (conflito), sem mudar nada.
+    /// </para>
     /// </summary>
-    Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, string autor, CancellationToken ct);
+    Task<ResultadoDaGestao<UsuarioResumo>> LiberarRecursoAsync(int id, string recurso, bool liberado, bool removerFila, string autor, CancellationToken ct);
 }
 
 /// <summary>
