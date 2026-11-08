@@ -23,7 +23,7 @@
 .br-hint {flex:none}
 .br-contexto {position:absolute; bottom:calc(100% + 6px); left:0; z-index:1; width:min(360px,100%); box-sizing:border-box; padding:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 4px 20px #0002}
 .br-contexto label {display:block; color:var(--ink); font-size:12px; margin-bottom:8px}
-.br-contexto input {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
+.br-contexto input, .br-contexto select {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
 .br-contexto p {color:var(--muted); font-size:11px; margin:6px 0}
 /* O catálogo do dev.kit nos atalhos (remote-control-v3): as opções e a linha com a data e o Atualizar. */
 .br-opcoes {max-height:min(240px,40vh); overflow:auto; margin:0 0 8px; border:1px solid var(--line); border-radius:7px; background:var(--panel)}
