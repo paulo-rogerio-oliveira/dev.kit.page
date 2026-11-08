@@ -161,6 +161,8 @@ public static class RegrasDaConversa
             return "Escreva a mensagem.";
         if (texto.Length > ConversaV1.TamanhoMaximoDoTexto)
             return $"A mensagem tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
+        if (ConversaV1.TiposDeCriacao.Contains(tipo) && RegrasDaCriacaoRemota.Validar(tipo, texto) is { Length: > 0 } formulario)
+            return formulario;
         var dispositivo = RegrasDoRemoto.Normalizar(comando.Dispositivo);
         if (dispositivo.Length > 0 && !ConversaV1.Dispositivos.Contains(dispositivo))
             return $"O dispositivo é um de: {string.Join(", ", ConversaV1.Dispositivos)}.";

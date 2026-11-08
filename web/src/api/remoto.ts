@@ -57,12 +57,19 @@ export interface ComandoRemoto {
   estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
   criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
 }
+/** (remote-control-v3, item 4) Os comandos de criação pelo site: o formulário vai em JSON no texto. */
+export type TipoDeCriacao = 'projeto' | 'design';
+/** O formulário do Novo projeto (Contracts/V1/CriacaoRemotaV1.cs): os repositórios pelo nome do catálogo da máquina. */
+export interface NovoProjetoRemoto { nome: string; repositorios: string[]; definicao?: string; nivel?: 'usuario' | 'time' | 'empresa' }
+/** O formulário do Novo design: o repositório pelo nome do catálogo. */
+export interface NovoDesignRemoto { repositorio: string }
+
 /**
- * O envio: a mensagem ao Orquestrador, o Ligar/Reiniciar que o serviço da máquina executa (item 8) ou o pedido do catálogo dos
- * atalhos do chat (o handshake, remote-control-v3).
+ * O envio: a mensagem ao Orquestrador, o Ligar/Reiniciar que o serviço da máquina executa (item 8), o pedido do catálogo dos
+ * atalhos do chat (o handshake, remote-control-v3) ou a criação de projeto e de projeto de design (item 4).
  */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo'; texto: string; dispositivo: 'celular' | 'navegador';
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | TipoDeCriacao; texto: string; dispositivo: 'celular' | 'navegador';
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
 }
@@ -85,7 +92,8 @@ export interface CatalogoRemoto {
   repositorios: Array<{ nome: string; branchPadrao?: string | null }> | null;
   fluxos: Array<{ nome: string; descricao?: string | null }> | null;
   projetos: Array<{ slug: string; nome: string; situacao?: string | null }> | null;
-  designs: Array<{ nome: string; telas: number }> | null;
+  /** `repositorio` é campo novo (item 4): o dev.kit antigo não o manda. */
+  designs: Array<{ nome: string; telas: number; repositorio?: string | null }> | null;
 }
 /** O último catálogo recebido da máquina, com a data em que a API o recebeu (vale também com o dev.kit fechado). */
 export interface CatalogoDaMaquina { maquinaId: string; recebidoEm: string; catalogo: CatalogoRemoto }

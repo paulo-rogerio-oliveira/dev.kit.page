@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import type { ComandoRemoto, FalaRemota, MaquinaRemota, RespostaRemota } from '../api/remoto';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
-import { useCatalogoRemoto } from './useCatalogoRemoto';
+import type { CatalogoDoChat } from './useCatalogoRemoto';
 import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
 import { rotuloDoDia } from './filtroDeDia';
 
@@ -75,8 +75,10 @@ function semRepeticao(linhas: LinhaDoChat[]) {
  * Só a CONVERSA (remote-control-v3, item 3): as decisões e aprovações ficam no painel de decisões, com o segundo fator e o
  * SHA conferido, e os turnos automáticos e os avisos repetidos não entram.
  */
-export function ChatRemoto({ maquina, conectada, agora, conversaRemota }: {
+export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo }: {
   maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; conversaRemota: ConversaDaMaquina;
+  /** O catálogo da máquina, o MESMO do painel do Board (um handshake só por máquina). */
+  catalogo: CatalogoDoChat;
 }) {
   const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
@@ -89,12 +91,13 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota }: {
   const excedeu = textoFinal.length > 4000;
   const desabilitado = !maquina || carregando || enviando;
   const doServico = new Set(conversa.comandos.filter(c => comandosDoServico.includes(c.tipo)).map(c => c.id));
-  // O handshake dos atalhos (remote-control-v3) não é conversa: nem o pedido nem a resposta dele entram no chat.
-  const catalogo = useCatalogoRemoto({ maquina, conectada, conversa: conversaRemota });
+  // O handshake dos atalhos (remote-control-v3) e a criação de projeto e de design (item 4, o painel do Board mostra o desfecho)
+  // não são conversa: nem o pedido nem a resposta deles entram no chat.
+  const foraDoChat = new Set(conversa.comandos.filter(c => c.tipo !== 'mensagem' && !doServico.has(c.id)).map(c => c.id));
   const comandosDaConversa = new Set(conversa.comandos.map(c => c.id));
   const linhas = semRepeticao([
     ...conversa.comandos.filter(c => c.tipo === 'mensagem' || doServico.has(c.id)).map(c => ({ id: `c-${c.id}`, data: c.criadoEm, comando: c, resposta: null, fala: null })),
-    ...conversa.respostas.filter(r => !r.comandoId || !catalogo.idsDosPedidos.has(r.comandoId))
+    ...conversa.respostas.filter(r => !r.comandoId || !foraDoChat.has(r.comandoId))
       .map(r => ({ id: `r-${r.id}`, data: r.geradaEm, comando: null, resposta: r, fala: null })),
     // As falas do chat do dev.kit, na hora em que foram ditas; a de um comando do site já aparece como ele (não repete), e a
     // de um turno automático do Orquestrador não é conversa.

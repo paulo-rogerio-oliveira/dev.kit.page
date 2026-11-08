@@ -15,6 +15,8 @@ export type PedidoDoCatalogo =
   | { estado: 'recusado' | 'vencido' | 'falhou'; motivo: string };
 
 const emCurso = (c: ComandoRemoto) => c.estado === 'pendente' || c.estado === 'na-fila' || c.estado === 'entregue';
+/** Os comandos de criação pelo site (item 4): o concluido deles também traz o catálogo novo. */
+export const tiposDeCriacao: string[] = ['projeto', 'design'];
 
 /**
  * O CATÁLOGO dos atalhos do chat (remote-control-v3): o último que a máquina publicou — lido da API, então disponível também
@@ -34,8 +36,10 @@ export function useCatalogoRemoto({ maquina, conectada, conversa }: { maquina: M
   const pedidos = conversa.conversa.comandos.filter(c => c.tipo === 'catalogo')
     .sort((a, b) => Date.parse(a.criadoEm) - Date.parse(b.criadoEm));
   const ultimo = pedidos.at(-1);
-  // Cada pedido concluído (pelo SSE, ou no histórico) relê o catálogo que o dev.kit acabou de publicar.
-  const concluidos = pedidos.filter(c => c.estado === 'concluido').map(c => c.id).join(',');
+  // Cada pedido concluído (pelo SSE, ou no histórico) relê o catálogo que o dev.kit acabou de publicar — também a criação de
+  // projeto e de design (item 4), que o dev.kit republica antes do concluido.
+  const concluidos = conversa.conversa.comandos.filter(c => (c.tipo === 'catalogo' || tiposDeCriacao.includes(c.tipo)) && c.estado === 'concluido')
+    .map(c => c.id).join(',');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,8 +95,6 @@ export function useCatalogoRemoto({ maquina, conectada, conversa }: { maquina: M
   return {
     catalogo, carregado, erro: carregado ? lido.erro : '', falhaNoPedido, pedido, atualizar,
     podeAtualizar: !!id && conectada && !enviando && !aguardando,
-    /** Os pedidos do handshake: o chat não os mostra, nem as respostas deles. */
-    idsDosPedidos: new Set(pedidos.map(c => c.id)),
   };
 }
 

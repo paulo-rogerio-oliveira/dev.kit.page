@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
+import type { CatalogoRemoto, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
 import type { DecisaoPendente, PendenciaRemota, ResponderDecisao } from '../api/remoto';
 import { BotaoDeDetalhes, CartaoDaDecisao, OrigemDaPendencia, RevisaoDaDecisao, type AoDecidir } from '../componentes/DecisoesRemotas';
 import { useSessao } from '../sessao';
@@ -13,6 +13,8 @@ import { filtrarPorDia, periodoDaUrl, periodosDoDia, type PeriodoDoDia } from '.
 import { ChatRemoto } from '../componentes/ChatRemoto';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
 import { useConversaRemota } from '../componentes/useConversaRemota';
+import { useCatalogoRemoto } from '../componentes/useCatalogoRemoto';
+import { DesfechoDaCriacao, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
@@ -48,9 +50,10 @@ function PendenciaSemDados({ pendencia: p }: { pendencia: PendenciaRemota }) {
   </section>;
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard }) {
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
+  const [todosOsDesigns, setTodosOsDesigns] = useState(false);
   const [todasAsExecucoes, setTodasAsExecucoes] = useState(false);
   const projetos = retrato?.projetos ?? [];
   const recebidas = retrato?.fluxos ?? [];
@@ -65,20 +68,37 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     })}
     {!retrato?.pendencias?.length && <p className="br-note">Nenhuma pendência recebida.</p>}
     <p className="br-note">Confira os detalhes antes de decidir. O texto do chat nunca aprova.</p>
-    <h2>Projetos{projetos.length > 0 && ` · ${projetos.length}`}</h2>
+    {/* (item 4) Os projetos abrem a página Projetos no projeto, e o Novo projeto cria pelo dev.kit da máquina. */}
+    <div className="br-secao-titulo"><h2>Projetos{projetos.length > 0 && ` · ${projetos.length}`}</h2>
+      <Link className="br-ver" to="/projetos">Ver todos</Link>
+      <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('projeto')}>+ Novo projeto</button></div>
     {(todosOsProjetos ? projetos : projetos.slice(0, primeirasEntradas)).map(p => {
       const itens = p.itens ?? [];
       const integrados = itens.filter(i => i.situacao === 'integrado').length;
       const rodando = itens.filter(i => i.situacao === 'rodando').length;
       const ondas = Math.max(p.ondaAtual, ...itens.map(i => i.onda));
-      return <section className="br-card br-proj" key={p.slug}>
+      return <Link className="br-card br-proj br-abrir" key={p.slug} to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
         <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
         <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
         <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
-      </section>;
+      </Link>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
     {!projetos.length && <p className="br-note">Nenhum projeto recebido.</p>}
+    <DesfechoDaCriacao criacao={criacao} />
+    {/* Os projetos de design vêm do catálogo da máquina (o handshake): abrem o Design compartilhado no repositório. */}
+    <div className="br-secao-titulo"><h2>Design{designs.length > 0 && ` · ${designs.length}`}</h2>
+      <Link className="br-ver" to="/design">Ver todos</Link>
+      <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('design')}>+ Novo design</button></div>
+    {(todosOsDesigns ? designs : designs.slice(0, primeirasEntradas)).map(d => {
+      const destino = d.repositorio ? `/design?repositorio=${encodeURIComponent(d.repositorio)}` : '/design';
+      return <Link className="br-card br-design br-abrir" key={d.nome} to={destino} aria-label={`Abrir o design de ${d.nome}`}>
+        <b>{d.nome}<span>{d.telas === 1 ? '1 tela' : `${d.telas} telas`}</span></b><small>Abrir no Design</small>
+      </Link>;
+    })}
+    <VerMais total={designs.length} todos={todosOsDesigns} alternar={() => setTodosOsDesigns(t => !t)} />
+    {!designs.length && <p className="br-note">Nenhum projeto de design no catálogo da máquina.</p>}
+    <p className="br-note">Criar pelo site vira um pedido na fila: o dev.kit executa como o devcli e devolve o resultado aqui. Aprovar e disparar continuam no dev.kit.</p>
     <h2>Executando · {execucoes.length}<span className="br-periodo"> {periodosDoDia.find(p => p.valor === periodo)!.rotulo.toLowerCase()}</span></h2>
     {!!execucoes.length && <section className="br-card">{(todasAsExecucoes ? execucoes : execucoes.slice(0, primeirasEntradas)).map(f => <div className="br-item" key={f.id}>
       <div><span>{f.nome}</span>{f.etapa && <small>{f.etapa}{f.agente ? ` · ${f.agente}` : ''}</small>}</div>
@@ -246,6 +266,10 @@ export function Board() {
   // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
   const conversa = useConversaRemota(selecionada);
   const controle = useControleDoDevKit({ maquina, conectada, conversa: conversa.conversa, acionar: conversa.acionar, agora });
+  // (item 4) O catálogo da máquina (o handshake) é UM para o chat e o painel: os atalhos, os designs e os formulários.
+  const catalogo = useCatalogoRemoto({ maquina, conectada, conversa });
+  const criacao = useCriacaoRemota({ maquina, conversa, agora });
+  const doCatalogo = catalogo.catalogo?.catalogo ?? null;
 
   return <div className="board-remoto" data-aba={aba}>
     <header className="br-top">
@@ -266,7 +290,7 @@ export function Board() {
     <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board', contagem: foto?.retrato?.pendencias?.length }]} ativa={aba} aoMudar={id => mudarParametro('aba', id)}>
     {/* Como no Board do dev.kit: o chat na coluna principal e o painel de auxílio à direita, na mesma ordem de leitura. */}
     <main className="br-main">
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} />
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} catalogo={catalogo} />
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
         <Chips rotulo="Filtro de dia" opcoes={periodosDoDia} valor={periodo} aoMudar={valor => mudarParametro('dia', valor)} />
@@ -275,7 +299,8 @@ export function Board() {
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
-        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
+        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
+          designs={doCatalogo?.designs ?? []} criacao={criacao} />}
         {/* A chave é própria: o ConteudoDoBoard, irmão dele, já usa a da máquina. */}
         {maquina && <VinculoDoServico key={`vinculo-${selecionada}`} maquina={maquina} desvincular={desvincular} />}
         <HistoricoDeAvisos avisos={avisos} />
@@ -283,6 +308,8 @@ export function Board() {
       </aside>
     </main>
     </Abas></div>
+    {criacao.aberta === 'projeto' && <NovoProjetoNoBoard key={`projeto-${selecionada}`} criacao={criacao} catalogo={doCatalogo} recebidoEm={catalogo.catalogo?.recebidoEm ?? null} />}
+    {criacao.aberta === 'design' && <NovoDesignNoBoard key={`design-${selecionada}`} criacao={criacao} catalogo={doCatalogo} />}
     <AvisosDoBoard avisos={avisos} encerrar={encerrar} />
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
     <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>

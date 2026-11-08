@@ -394,6 +394,56 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "h-3" })).StatusCode);
     }
 
+    private static ComandoNovoV1 Criacao(string id, string tipo, object formulario)
+        => new(id, Maquina, tipo, JsonSerializer.Serialize(formulario, Json), null, ConversaV1.DispositivoNavegador);
+
+    [Fact]
+    public async Task A_criacao_de_projeto_e_de_design_vai_pela_fila_com_o_formulario_e_o_desfecho_do_dev_kit_volta_ao_site()
+    {
+        var (_, ana) = await DevComFilaAsync();
+
+        // O formulário vai inteiro no texto da mensagem da fila: o dev.kit o lê do jeito que o site mandou.
+        var projeto = new NovoProjetoRemotoV1("Projetos pelo site", ["github.com/org/dev.kit.page"], "Ver e criar projetos.", CriacaoRemotaV1.NivelUsuario);
+        var envio = await ana.PostAsJsonAsync("/api/remoto/comandos", Criacao("p-1", ConversaV1.ComandoProjeto, projeto));
+        Assert.Equal(HttpStatusCode.Accepted, envio.StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoProjeto, "p-1"), (naFila.Tipo, naFila.Id));
+        var lido = JsonSerializer.Deserialize<NovoProjetoRemotoV1>(naFila.Texto, Json)!;
+        Assert.Equal(("Projetos pelo site", "github.com/org/dev.kit.page", "usuario"), (lido.Nome, Assert.Single(lido.Repositorios), lido.Nivel));
+
+        // O dev.kit cria e fecha com o concluido; o site lê o desfecho no comando e na resposta.
+        (await ana.PostAsJsonAsync("/api/remoto/comandos/p-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina))).EnsureSuccessStatusCode();
+        (await ana.PostAsJsonAsync("/api/remoto/respostas", Resposta("ok-p-1", "p-1", ConversaV1.RespostaConcluido,
+            "Projeto 'Projetos pelo site' criado (projetos-pelo-site)."))).EnsureSuccessStatusCode();
+        Assert.Equal(ConversaV1.EstadoConcluido, (await ana.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/p-1"))!.Estado);
+
+        // O dev.kit ANTIGO não conhece o comando: recusa com o motivo, e o site o mostra (compatibilidade, regra #2).
+        var design = Criacao("d-1", ConversaV1.ComandoDesign, new NovoDesignRemotoV1("github.com/org/dev.kit.page"));
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", design)).StatusCode);
+        (await ana.PostAsJsonAsync("/api/remoto/comandos/d-1/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina))).EnsureSuccessStatusCode();
+        (await ana.PostAsJsonAsync("/api/remoto/respostas", Resposta("x-d-1", "d-1", ConversaV1.RespostaRecusado,
+            "Não executado: o tipo de comando 'design' não é conhecido por esta versão do dev.kit."))).EnsureSuccessStatusCode();
+        var conversa = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!;
+        Assert.Equal(ConversaV1.EstadoRecusado, conversa.Comandos.Single(c => c.Id == "d-1").Estado);
+        Assert.Contains("não é conhecido por esta versão", conversa.Respostas.Single(r => r.ComandoId == "d-1").Texto, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(ConversaV1.ComandoProjeto, "", "Envie o formulário")]
+    [InlineData(ConversaV1.ComandoProjeto, "{nome", "não é um JSON válido")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"","repositorios":["github.com/org/app"]}""", "nome do projeto")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":[]}""", "ao menos um repositório")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"nome":"Novo","repositorios":["github.com/org/app"],"nivel":"mundo"}""", "nível")]
+    [InlineData(ConversaV1.ComandoDesign, """{"repositorio":" "}""", "repositório do catálogo")]
+    public async Task O_formulario_da_criacao_invalido_e_recusado_antes_da_fila(string tipo, string texto, string motivo)
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var resposta = await ana.PostAsJsonAsync("/api/remoto/comandos", new ComandoNovoV1("p-1", Maquina, tipo, texto));
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Contains(motivo, await resposta.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Empty(_api.Fila.Enviadas);
+    }
+
     private static FalaDoDevKitV1 Fala(string id, string autor = ConversaV1.AutorDev, string origem = ConversaV1.OrigemDesktop,
         string texto = "Como está o item 13?", DateTimeOffset? ditaEm = null, string? comando = null)
         => new(RemotoV1.Contrato, Maquina, id, autor, origem, texto, ditaEm ?? DateTimeOffset.UtcNow, comando);

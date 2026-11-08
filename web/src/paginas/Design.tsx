@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ProjetoDeDesign } from '../api/tipos';
 import { branchCurto, DesignCompartilhado, falhaDoDesign, ImagemDaVersao } from '../componentes/DesignCompartilhado';
@@ -29,6 +29,8 @@ export function Design() {
   const { sessao } = useSessao();
   const [erro, setErro] = useState('');
   const tratar = useTratar(setErro);
+  // (item 4 do remote-control-v3) O Board remoto abre o design pelo repositório do catálogo da máquina.
+  const [consulta] = useSearchParams();
   return (
     <div className="pagina">
       <Topo secao="design">
@@ -37,7 +39,7 @@ export function Design() {
       </Topo>
       <Pagina rotulo={sessao!.empresa ?? 'Design'} titulo="Design" subtitulo="As capturas e as propostas de tela do dev.kit, por repositório.">
         {erro && <p className="erro" role="alert">{erro}</p>}
-        <DesignCompartilhado token={sessao!.token} comEmpresa={Boolean(sessao!.empresa)} tratar={tratar} />
+        <DesignCompartilhado token={sessao!.token} comEmpresa={Boolean(sessao!.empresa)} tratar={tratar} repositorio={consulta.get('repositorio')} />
       </Pagina>
     </div>
   );
