@@ -7,7 +7,7 @@ import './DecisoesRemotas.css';
 export type AoDecidir = (decisao: DecisaoPendente, pedido: ResponderDecisao) => Promise<RespostaDaDecisao>;
 
 export function RegistroDaDecisao({ resposta }: { resposta: RespostaDaDecisao }) {
-  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'autorizar' ? 'Autorização' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
+  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'autorizar' ? 'Autorização' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}{resposta.dispositivo ? ` · pelo ${resposta.dispositivo}` : ''}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
 }
 
 /** O projeto e o item da pendência, e o tipo dela: a linha do cartão recolhido do painel. */

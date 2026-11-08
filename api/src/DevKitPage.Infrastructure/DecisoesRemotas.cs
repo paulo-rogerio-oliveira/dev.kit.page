@@ -53,6 +53,9 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
         var foto = await remoto.RetratoAsync(usuario, maquina, ct);
         var p = foto?.Retrato.Pendencias?.SingleOrDefault(p => p.Id == pendencia);
         if (p is null) return new(null, "Pendência não encontrada, ou não é sua.", 404);
+        // (controle-v4, item 3) O dispositivo é opcional; o que veio fora da lista é recusado antes de qualquer gravação.
+        var dispositivo = RegrasDaDecisao.Dispositivo(pedido.Dispositivo, out var dispositivoInvalido);
+        if (dispositivoInvalido is not null) return new(null, dispositivoInvalido, 400);
         var hash = RegrasDaDecisao.SnapshotId(p);
         if (pedido.SnapshotId != hash) return new(null, "O snapshot mudou. Volte ao Board e revise as novas evidências.");
         if (!foto!.Maquina.Conectada) return new(null, "Máquina desconectada. Atualize o retrato antes de decidir.");
@@ -94,7 +97,7 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
             UsuarioId = usuario, MaquinaId = maquina, PendenciaId = pendencia, SnapshotId = hash,
             Acao = pedido.Acao, Opcao = p.Tipo == RemotoV1.PendenciaPergunta ? pedido.Opcao : null,
             Origem = p.Snapshot?.Origem, Destino = p.Snapshot?.Destino, Sha = p.Snapshot?.Sha ?? p.Escopo?.Sha,
-            EmUtc = relogio.GetUtcNow().UtcDateTime, SegundoFator = aprovar,
+            EmUtc = relogio.GetUtcNow().UtcDateTime, SegundoFator = aprovar, Dispositivo = dispositivo,
         };
         db.RespostasDasDecisoes.Add(resposta);
         await db.SaveChangesAsync(ct);
@@ -127,5 +130,5 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
     private bool Expirou(RespostaDaDecisao r) => r.EmUtc <= relogio.GetUtcNow().UtcDateTime.AddMinutes(-5);
     private RespostaDaDecisaoV1 Ler(RespostaDaDecisao r)
         => new(r.Id, r.MaquinaId, r.PendenciaId, r.SnapshotId, r.Acao, r.Opcao, r.Origem, r.Destino, r.Sha, DevKitPageDb.Utc(r.EmUtc), r.SegundoFator,
-            r.Estado == "registrada" && Expirou(r) ? "vencida" : r.Estado);
+            r.Estado == "registrada" && Expirou(r) ? "vencida" : r.Estado, r.Dispositivo);
 }

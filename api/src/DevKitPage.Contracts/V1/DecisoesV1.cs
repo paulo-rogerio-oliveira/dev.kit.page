@@ -14,7 +14,11 @@ public sealed record CapturaDaDecisaoV1(string Titulo, string Url);
 public sealed record DecisaoPendenteV1(PendenciaNoRetratoV1 Pendencia, string SnapshotId, string? Bloqueio, RespostaDaDecisaoV1? Resposta, bool Dispensada = false);
 
 /// <param name="SnapshotId">O snapshot revisado; dispensável só no <see cref="DecisoesV1.AcaoDispensar"/> e no <see cref="DecisoesV1.AcaoRestaurar"/>.</param>
-public sealed record ResponderDecisaoV1(string SnapshotId, string Acao, string? Opcao = null, string? Codigo = null);
+/// <param name="Dispositivo">
+/// (controle-v4, item 3; campo novo e opcional, regra #2) De onde o dev decidiu: <see cref="ConversaV1.DispositivoCelular"/> ou
+/// <see cref="ConversaV1.DispositivoNavegador"/>. Sem ele, a decisão vale como antes e a resposta vai sem o dispositivo.
+/// </param>
+public sealed record ResponderDecisaoV1(string SnapshotId, string Acao, string? Opcao = null, string? Codigo = null, string? Dispositivo = null);
 
 /// <summary>A dispensa de uma pendência no site: ela some do painel (ou volta, na restauração). Não é decisão nem auditoria da task.</summary>
 public sealed record DispensaDaPendenciaV1(string MaquinaId, string PendenciaId, bool Dispensada, DateTimeOffset Em);
@@ -55,8 +59,13 @@ public static class DecisoesV1
 /// o SHA quando o ato é sobre um commit, os itens listados e o comando exato.
 /// </summary>
 public sealed record EscopoDaAutorizacaoV1(string Ato, string Alvo, string? Sha = null, IReadOnlyList<string>? Itens = null, string? Comando = null);
+/// <param name="Dispositivo">
+/// (controle-v4, item 3; campo novo e opcional, regra #2) O dispositivo da decisão (<c>celular</c> ou <c>navegador</c>), para a
+/// auditoria da máquina; nulo na decisão gravada antes do campo ou mandada sem ele. Fica no fim: o dev.kit antigo o ignora.
+/// </param>
 public sealed record RespostaDaDecisaoV1(long Id, string MaquinaId, string PendenciaId, string SnapshotId,
-    string Acao, string? Opcao, string? Origem, string? Destino, string? Sha, DateTimeOffset Em, bool SegundoFator, string Estado);
+    string Acao, string? Opcao, string? Origem, string? Destino, string? Sha, DateTimeOffset Em, bool SegundoFator, string Estado,
+    string? Dispositivo = null);
 public sealed record PrepararAutenticadorV1(string Senha);
 public sealed record ConfirmarAutenticadorV1(string Codigo);
 public sealed record AutenticadorPreparadoV1(string Chave, string Uri, DateTimeOffset ExpiraEm);

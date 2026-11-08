@@ -420,7 +420,8 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 Numa base Azure SQL que já existe, o controle remoto precisa de oito scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros; o `CatalogoRemoto.sql` e o
-`ClienteDaMaquina.sql`, das `Maquinas` e dos `Usuarios` que já existem; o `BoardRemoto.sql`, do `Conversa.sql`):
+`ClienteDaMaquina.sql`, das `Maquinas` e dos `Usuarios` que já existem; o `BoardRemoto.sql`, do `Conversa.sql` e do
+`Decisoes.sql`):
 
 1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
 2. `Provisao.sql` — as permissões, os recursos provisionados e os eventos (rode de novo a cada versão: só acrescenta).
@@ -431,8 +432,9 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 7. `ClienteDaMaquina.sql` — o client credentials da máquina (o cliente e os jti gastos das asserções; remote-control-v3,
    item 9).
 8. `BoardRemoto.sql` — as correções do board remoto (07/11/2026): a tabela `PendenciasDispensadas` (o × dos cards) e as
-   colunas `ComandosRemotos.Contexto` (o fluxo, o agente e os parâmetros do chat) e `FalasRemotas.Anexos` (as imagens das
-   falas). Sem ele, a API nova não grava a fala nem o comando nessas tabelas, e a verificação do esquema na subida o aponta.
+   colunas `ComandosRemotos.Contexto` (o fluxo, o agente e os parâmetros do chat), `FalasRemotas.Anexos` (as imagens das
+   falas) e `RespostasDasDecisoes.Dispositivo` (o celular ou o navegador da decisão; controle-v4, item 3). Sem ele, a API
+   nova não grava a fala, o comando nem a decisão nessas tabelas, e a verificação do esquema na subida o aponta.
 
 **O que o remote-control-v3 acrescenta ao banco** são só os passos 6 e 7 (as tabelas `CatalogosRemotos`,
 `ClientesDaMaquina` e `AssercoesDoCliente`). Os itens 4 (ver e criar projeto e design pelo site) e 5 (a fila criada pela
