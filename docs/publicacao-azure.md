@@ -419,15 +419,24 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 ### Scripts SQL do controle remoto, na ordem
 
 Numa base Azure SQL que já existe, o controle remoto precisa de sete scripts de `api/scripts/sqlserver/`, todos
-idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros):
+idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros; os dois últimos, das `Maquinas` e
+dos `Usuarios` que já existem):
 
 1. `Remoto.sql` — as máquinas e os retratos (o heartbeat).
 2. `Provisao.sql` — as permissões, os recursos provisionados e os eventos (rode de novo a cada versão: só acrescenta).
 3. `Conversa.sql` — os comandos, as respostas, os eventos e as falas.
 4. `Decisoes.sql` — as decisões remotas e o segundo fator.
 5. `Push.sql` — as assinaturas e as entregas do push do board.
-6. `CatalogoRemoto.sql` — o último catálogo de cada máquina (o handshake dos atalhos do chat).
-7. `ClienteDaMaquina.sql` — o client credentials da máquina (o cliente e os jti gastos das asserções).
+6. `CatalogoRemoto.sql` — o último catálogo de cada máquina (o handshake dos atalhos do chat; remote-control-v3, item 1).
+7. `ClienteDaMaquina.sql` — o client credentials da máquina (o cliente e os jti gastos das asserções; remote-control-v3,
+   item 9).
+
+**O que o remote-control-v3 acrescenta ao banco** são só os passos 6 e 7 (as tabelas `CatalogosRemotos`,
+`ClientesDaMaquina` e `AssercoesDoCliente`). Os itens 4 (ver e criar projeto e design pelo site) e 5 (a fila criada pela
+liberação do admin e os Sites no Azure fora do site) **não têm script**: os comandos novos (`catalogo`, `projeto`,
+`design`) cabem na coluna `ComandosRemotos.Tipo` (`nvarchar(20)`, do `Conversa.sql`), e a fila pedida na liberação é a
+mesma linha de `RecursosProvisionados` do `Provisao.sql`. Os testes `PublicacaoDoControleRemotoTests` conferem que esta
+lista e o job `sql` do workflow têm os mesmos scripts, na mesma ordem, e que as tabelas novas vêm deles.
 
 ```bash
 for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina; do
@@ -436,11 +445,54 @@ done
 ```
 
 O workflow da `main` também os aplica, **desligado por padrão**: *Actions → Build and deploy… → Run workflow* com
-**aplicar_sql** marcado roda o job `sql` (um passo por script, na ordem acima) antes do deploy, e um script que falha
-segura o deploy. Ele usa o segredo do repositório `AZURE_SQL_CONNECTION_STRING`
+**aplicar_sql** marcado roda o job `sql` (um passo por script, na ordem acima) depois da pré-checagem das app settings
+(seção seguinte) e antes do deploy, e um script que falha segura o deploy. Ele usa o segredo do repositório `AZURE_SQL_CONNECTION_STRING`
 (`Server=tcp:<servidor>.database.windows.net;Database=<base>;Authentication=Active Directory Default;Encrypt=True`) e o
 login do `azure/login` — a identidade do workflow precisa de um usuário na base com `db_ddladmin`, `db_datareader` e
 `db_datawriter`. O `/health` sem `Degraded` confirma que nenhum falta.
+
+### Pré-checagem das app settings (o deploy não passa à frente da configuração)
+
+Publicar código que exige configuração nova num App Service sem ela derruba a API (o 403 "stopped" com `ProtecaoDeDados
+não configurada` no log de arranque). Por isso o workflow da `main` tem o job **`configuracao`**: ele faz o `azure/login`,
+lê as app settings e as connection strings do App Service `devkit` e roda `api/scripts/azure/conferir-app-settings.sh`.
+Com uma **FALTA**, o job falha e **nem o `sql` nem o `deploy` rodam**; corrigida a setting, *Re-run* do workflow. O
+script só lê, e o log tem só os **nomes** (nenhum valor, nem o das settings que não são segredo). A identidade do
+`azure/login` já pode lê-las: é a mesma que publica (`Microsoft.Web/sites/config/list/action`).
+
+O que **segura** o deploy (a API ou o WebJob da provisão recusam subir em Production, ou sobem quebrados):
+
+| Setting | A falta |
+|---|---|
+| `Jwt__Segredo` | Ausente, ou com menos de 32 caracteres (a referência `@Microsoft.KeyVault(...)` vale). |
+| `Banco__Provider` | Ausente ou diferente de `SqlServer`/`Sqlite`: a API cairia no SQLite em `wwwroot`, somente leitura. |
+| `ConnectionStrings__DevKitPage` | Nem a app setting nem a connection string `DevKitPage` do App Service. |
+| `Cors__Origens__0` | Ausente, ou com a barra no fim (o CORS não casa). |
+| `ProtecaoDeDados__Blob` ou `ProtecaoDeDados__Pasta` | Nenhum dos dois; o `Blob` ou a `ChaveDoCofre` que não são `https://`. |
+| `Remoto__Fila` · `Provisao__Provedor` | `simulado` (ou outro valor que não `azure`). Ausentes valem `azure`. |
+| `Provisao__AssinaturaId` · `Provisao__Grupo` | Ausentes com o provedor `azure`: o WebJob não sobe. |
+| `ClienteDaMaquina__*` | Presentes e fora da faixa: `Habilitado` true/false; `ValidadeDoTokenMinutos` 1–60; `ValidadeMaximaDaAssercaoSegundos` 30–600; `ToleranciaDoRelogioSegundos` 0–300. |
+
+O que só **avisa** (o deploy segue; o recurso fica degradado): `Licencas__ChavePrivada` (o `/health` fica `Degraded`),
+as três `Push__*`, o `REPO_KEY`, o `Provisao__IdentidadeClientId` vazio (o worker usa a identidade do sistema) e o
+`ASPNETCORE_ENVIRONMENT` diferente de `Production`.
+
+**App settings novas do remote-control-v3:** só a seção opcional `ClienteDaMaquina__*` (item 9, tabela da seção "Client
+credentials da máquina"), com padrões seguros. Os itens 1, 4 e 5 não pedem configuração nova.
+
+Antes de mesclar na `main`, rode a mesma conferência da sua máquina (o `az login` na assinatura do dev.kit):
+
+```bash
+bash api/scripts/azure/conferir-app-settings.sh --app devkit [--grupo <grupo do App Service>]
+```
+
+Saída 0 com `Resultado: configuração conferida … — o deploy segue.`; saída 1 com uma linha `FALTA  <setting>: <o que
+fazer>` por pendência. Sem o `az` (ou para conferir um arquivo), `--settings <arquivo>` lê `nome<TAB>valor` por linha e
+`--conexoes <arquivo>` um nome de connection string por linha.
+
+O **Static Web App** também confere antes de publicar: o passo *Pré-checagem do build* do workflow
+`azure-static-web-apps-black-forest-00e9a2410.yml` falha sem a variável do repositório `VITE_API_URL` (`https://…`), em
+vez de publicar uma web que não chama a API.
 
 ### Push do board (as chaves VAPID)
 
@@ -531,31 +583,62 @@ Access Administrator nele). Com o key ring em `ProtecaoDeDados__Pasta` (o caso d
 `--conta-keyring` e `--cofre`. Os testes do script (`InfraDoControleRemotoTests`) rodam a simulação e conferem que nada fica
 no escopo da assinatura.
 
-### Ativação do controle remoto — roteiro e checklist
+### Ativação do controle remoto (remote-control-v3) — roteiro e checklist
 
-Na ordem, depois de mesclar na `main`:
+O roteiro é do desenvolvedor, no Azure real; nada dele roda pelo agente. **Na ordem**, com o branch do projeto mesclado
+na `main`:
 
-1. **Banco**: os cinco scripts acima (ou o workflow com `aplicar_sql`) e, se ainda não rodaram nesta base, os do acesso
-   aos projetos (`DesignAcesso.sql` e depois `AcessoAosProjetos.sql`, na seção acima) — a mesma publicação leva a API deles.
+1. **Settings**: `bash api/scripts/azure/conferir-app-settings.sh --app devkit` até sair `o deploy segue` (seção
+   "Pré-checagem das app settings"). A variável do repositório `VITE_API_URL` definida (o Static Web App).
 2. **Azure**: `infra-controle-remoto.sh --dry-run … --grupo-clientes devkit-clients`, conferir, e rodar de verdade (grava o
-   `Provisao__Grupo`; sem ele o WebJob não sobe).
-3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service.
-4. **Publicar**: o workflow da `main` (a API e o WebJob `provisao` no mesmo pacote) e reiniciar o App Service.
-5. **dev.kit**: publicar o pacote com a renovação pela máquina e, em cada máquina, entrar uma vez no app (é o login que
-   pede a renovação) e reinstalar o serviço na conta do desenvolvedor (Configurações → Serviço de agendamento).
+   `Provisao__Grupo`; sem ele o WebJob não sobe). Numa base que já tem o controle remoto v2, é só conferir: rodar de novo
+   não muda nada.
+3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service (se ainda não estão).
+4. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** marcado — `configuracao` → `sql` (os
+   sete scripts, na ordem da seção "Scripts SQL do controle remoto") → `deploy` (a API e o WebJob `provisao` no mesmo
+   pacote). O push na `main` já publica; o disparo manual é o que aplica o SQL. Se os scripts já foram aplicados à mão
+   (`sqlcmd`), o push basta. **Não** reinicie nem mude settings durante o deploy (as DLLs corrompidas do 500 `Bad IL
+   range`).
+5. **Site**: o workflow do Static Web App roda no mesmo push da `main` (ou *Run workflow* nele, para republicar sem
+   commit): *Pré-checagem do build* → *Build And Deploy*.
+6. **dev.kit**: o pacote com o handshake (item 1), a criação de projeto e design (item 4) e o client credentials (item 9);
+   em cada máquina, entrar uma vez no app (o login registra o cliente da máquina) e reinstalar o serviço na conta do
+   desenvolvedor (Configurações → Serviço de agendamento).
 
-Checklist verificável:
+Checklist verificável (`<api>` é a URL da API, `<site>` a do Static Web App, `$TOKEN` o JWT de um dev logado — o
+`token` do `POST /api/auth/login` — e `<maquinaId>` o de `GET /api/remoto/maquinas`):
 
-- [ ] `GET /health` responde `Healthy` — nenhum `Degraded` (esquema, licenças).
-- [ ] O WebJob `provisao` aparece *Running* em *WebJobs*, e o log dele (*WebJobs → Logs*) mostra a varredura sem erro de
-      identidade ou de assinatura.
-- [ ] O admin libera a provisão de um usuário (`/usuarios`, menu ⋯ ou Recursos liberados) e a fila dele, pedida na
-      liberação (remote-control-v3, item 5), fica **pronta** — a `/conta` do usuário só mostra a situação; o grupo
-      `devkit-clients` tem a conta de Storage com a fila `comandos` e a tag `devkit-usuario` dele, e nenhum grupo novo
-      apareceu na assinatura.
+- [ ] **`/health` Healthy.** `curl -s https://<api>/health` responde `Healthy`. `Degraded` é um script ou uma setting
+      faltando: o log da subida diz qual (`Esquema do banco incompleto: … (CatalogoRemoto.sql)`), e o check `licencas`
+      aponta o `Licencas__ChavePrivada`.
+- [ ] **O handshake respondendo.** Com o dev.kit ABERTO na máquina, no `/board` → chat → um atalho (`/`, `#` ou `@`) →
+      **Atualizar**: a lista de work items, repositórios e fluxos se preenche e a data do catálogo passa a ser a de agora.
+      Pela API: `curl -s -X POST https://<api>/api/remoto/comandos -H "Authorization: Bearer $TOKEN" -H "Content-Type:
+      application/json" -d '{"maquinaId":"<maquinaId>","tipo":"catalogo"}'` responde **202** (ou **200**, o pedido que já
+      estava na fila) — a API antiga responderia **400** —, e em segundos `curl -s
+      https://<api>/api/remoto/maquinas/<maquinaId>/catalogo -H "Authorization: Bearer $TOKEN"` traz o `recebidoEm` de
+      agora. Sem o dev.kit aberto o pedido fica `na-fila` (espera o app abrir), e o site mostra o último catálogo com a data.
+- [ ] **A fila criada ao liberar o usuário.** O admin, em `/usuarios`, menu ⋯ do usuário → **Liberar a provisão**: a
+      mensagem diz "a fila do controle remoto (conta dkq…) foi pedida" e o selo **Provisão** aparece na linha, sem o
+      usuário fazer nada. Em poucos minutos (o WebJob varre a cada 10 s; o Azure cria a conta de Storage) `GET /api/usuarios` (admin) traz a `fila` dele com
+      `estado: "pronto"`; `az storage account list -g devkit-clients --query "[?tags.\"devkit-usuario\"=='<id do usuário>'].name" -o tsv`
+      lista a conta; a `/conta` do usuário mostra só a situação da **Fila do controle remoto** (sem região, sem Criar a
+      fila, sem Remover); nenhum grupo novo apareceu na assinatura.
+- [ ] **O chat sem aprovação.** Com uma decisão pendente na máquina, no `/board`: a decisão aparece só no painel à direita
+      (Decisões, com o segundo fator); o chat mostra só a conversa — nenhum cartão nem botão Aprovar/Recusar dentro dele,
+      e os turnos automáticos do Orquestrador (avisos, retratos, gatilhos) não entram.
+- [ ] **Sites no Azure fora do site.** A `/conta` não tem a seção "Sites e APIs no Azure" (nem em lugar nenhum do site);
+      os motores ficam: `POST /api/provisao/aplicativos` e o worker de aplicativos seguem na API para os fluxos e as skills
+      do dev.kit (`docs/arquitetura.md`).
+- [ ] **O site novo publicado.** O workflow do Static Web App do commit mesclado está verde, e
+      `curl -sI https://<site>/board` traz `Cache-Control: no-cache` (o navegador revalida a página a cada visita e pega o
+      `index.html` novo); um `/assets/*.js` do HTML traz `max-age=31536000, immutable`. Um recarregamento comum no `/board`
+      já mostra o painel à direita, o filtro de dia e os atalhos com Atualizar.
+- [ ] **O worker.** O WebJob `provisao` aparece *Running* em *WebJobs*, e o log dele (*WebJobs → Logs*) mostra a varredura
+      sem erro de identidade ou de assinatura.
+- [ ] **O serviço sem o app.** Com o dev.kit FECHADO, a máquina continua *online* no site, o cartão **Vínculo do serviço**
+      do `/board` diz **Serviço vinculado**, e o Ligar chega.
 - [ ] `GET /api/remoto/push` (com o login) responde `disponivel: true`; o board assinado recebe o aviso de uma pendência nova.
-- [ ] Com o dev.kit FECHADO por mais de uma hora, a máquina continua *online* no site e o Ligar chega (o log do serviço,
-      `logs\scheduler-*.log`, mostra "sessão renovada pela máquina").
 
 ## Web
 
@@ -565,6 +648,12 @@ canonical e da imagem do Open Graph). O fallback de rotas para `index.html` (rot
 `/login`, `/dashboard`) já vai no build, pelo [`web/public/staticwebapp.config.json`](../web/public/staticwebapp.config.json)
 — sem ele, recarregar o `/dashboard` dá 404. As mídias da landing (`web/public/midia`) vão no próprio
 build — estão no repositório, sem LFS.
+
+**O site novo chega ao navegador** pelo mesmo arquivo: a página e as rotas do React saem com `Cache-Control: no-cache`
+(`globalHeaders`: o navegador revalida o `index.html` a cada visita, e uma publicação nova aparece no primeiro
+recarregamento, sem o index antigo apontando para assets que a publicação apagou), e os `/assets/*` — com o hash no nome
+— com `max-age=31536000, immutable`. O `board-sw.js` continua `no-cache` e não guarda nada no cache. O teste
+`web/src/staticWebApp.test.ts` confere os três.
 
 O Node do build sai do `engines` do `web/package.json` (`>=22`, como o README e o CI): o Vite 7 não compila
 em Node anterior ao 20.19.

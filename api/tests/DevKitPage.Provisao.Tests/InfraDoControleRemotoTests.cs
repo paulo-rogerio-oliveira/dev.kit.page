@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace DevKitPage.Provisao.Tests;
@@ -12,40 +11,8 @@ public sealed class InfraDoControleRemotoTests
 {
     private const string Assinatura = "82ba9ad4-40bb-4bfe-91e3-1a4ba1edf95a";
 
-    private static string Script()
-    {
-        for (var pasta = new DirectoryInfo(AppContext.BaseDirectory); pasta is not null; pasta = pasta.Parent)
-        {
-            var script = Path.Combine(pasta.FullName, "scripts", "azure", "infra-controle-remoto.sh");
-            if (File.Exists(script))
-                return script.Replace('\\', '/');
-        }
-        throw new FileNotFoundException("api/scripts/azure/infra-controle-remoto.sh não foi achado acima da pasta dos testes.");
-    }
-
-    /// <summary>O bash: o do Git no Windows (o do System32 é o do WSL), o do PATH no CI.</summary>
-    private static string Bash()
-    {
-        if (!OperatingSystem.IsWindows())
-            return "bash";
-        var git = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
-        Assert.True(File.Exists(git), $"O teste do script precisa do Git Bash em {git}.");
-        return git;
-    }
-
-    private static async Task<(int Saida, string Texto)> RodarAsync(params string[] argumentos)
-    {
-        var inicio = new ProcessStartInfo(Bash()) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        inicio.ArgumentList.Add(Script());
-        foreach (var argumento in argumentos)
-            inicio.ArgumentList.Add(argumento);
-        using var processo = Process.Start(inicio)!;
-        var saida = processo.StandardOutput.ReadToEndAsync();
-        var erro = processo.StandardError.ReadToEndAsync();
-        using var limite = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        await processo.WaitForExitAsync(limite.Token);
-        return (processo.ExitCode, await saida + await erro);
-    }
+    private static Task<(int Saida, string Texto)> RodarAsync(params string[] argumentos)
+        => ScriptsDoRepositorio.RodarAsync("api/scripts/azure/infra-controle-remoto.sh", argumentos);
 
     [Fact]
     public async Task A_simulacao_poe_tudo_no_grupo_dos_clientes_e_nada_no_escopo_da_assinatura()
