@@ -462,7 +462,7 @@ public sealed class ConversaApiTests : IDisposable
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
             // Recursos são aditivos: conserva as falas e as decisões com snapshot, e anuncia o catálogo do chat no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.

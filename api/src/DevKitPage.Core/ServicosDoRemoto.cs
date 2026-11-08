@@ -134,6 +134,8 @@ public static partial class RegrasDoRemoto
                 return $"pendencias[{i}]: o item é positivo.";
             if (RegrasDaDecisao.Validar(pendencia.Snapshot) is { } erroSnapshot)
                 return erroSnapshot;
+            if (pendencia.Tipo == RemotoV1.PendenciaAutorizacao && RegrasDaDecisao.ValidarEscopo(pendencia.Escopo) is { } erroEscopo)
+                return $"pendencias[{i}]: {erroEscopo}";
         }
 
         return string.Empty;
@@ -190,6 +192,13 @@ public static partial class RegrasDoRemoto
             yield return ($"pendencias[{i}].fluxo", p.Fluxo);
             foreach (var (opcao, j) in (p.Opcoes ?? []).Select((o, j) => (o, j)))
                 yield return ($"pendencias[{i}].opcoes[{j}]", opcao);
+            if (p.Escopo is { } escopo)
+            {
+                yield return ($"pendencias[{i}].escopo.alvo", escopo.Alvo);
+                yield return ($"pendencias[{i}].escopo.comando", escopo.Comando);
+                foreach (var (item, j) in (escopo.Itens ?? []).Select((x, j) => (x, j)))
+                    yield return ($"pendencias[{i}].escopo.itens[{j}]", item);
+            }
             if (p.Snapshot is { } s)
             {
                 yield return ($"pendencias[{i}].snapshot.origem", s.Origem);

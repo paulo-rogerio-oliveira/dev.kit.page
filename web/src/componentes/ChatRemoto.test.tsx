@@ -466,7 +466,7 @@ it('o dev.kit antigo recusa o handshake: o chat avisa para atualizar, não mostr
   await abrir();
   expect(await screen.findByRole('alert')).toHaveTextContent(/não é conhecido por esta versão do dev.kit. Atualize o dev.kit desta máquina/);
   expect(within(screen.getByRole('log')).queryByText(/Não executado/)).not.toBeInTheDocument();
-  expect(screen.getByTitle(/Atalhos sem catálogo/)).toHaveTextContent('sem catálogo');
+  expect(screen.getByRole('button', { name: 'Atualizar catálogo do dev.kit' })).toHaveAttribute('title', expect.stringContaining('Atalhos sem catálogo'));
   await act(() => new Promise(resolve => setTimeout(resolve, 100)));
   expect(pedidos).toHaveLength(0);
 
@@ -574,6 +574,18 @@ it('a fala com a versão de design mostra a miniatura, abre o modal e a imagem q
   expect(await within(modal).findByRole('img', { name: 'chat-remoto v016 · Proposta' })).toHaveAttribute('src', 'blob:teste');
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('o ↻ do catálogo fica no cabeçalho do Orquestrador, com a idade na dica, e a caixa começa com 3 linhas', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoComFluxo())));
+  await abrir();
+  const orquestrador = screen.getByRole('region', { name: 'Orquestrador' });
+  const cabecalho = within(orquestrador.querySelector('header')!);
+  await waitFor(() => expect(cabecalho.getByRole('button', { name: 'Atualizar catálogo do dev.kit' })).toHaveAttribute('title', expect.stringContaining('atualizado agora há pouco')));
+  // Nada de faixa do catálogo embaixo da caixa: o compositor só tem os atalhos, a dica e o envio.
+  expect(within(orquestrador.querySelector('form')!).queryByRole('button', { name: 'Atualizar catálogo do dev.kit' })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Mensagem ao Orquestrador')).toHaveAttribute('rows', '3');
 });
 
 it('no teclado do celular o atalho abre pelo caractere digitado, sem o nome da tecla, e a dica do ⓘ traz os atalhos', async () => {

@@ -32,9 +32,29 @@ public static class DecisoesV1
     /// <summary>Traz de volta o card dispensado.</summary>
     public const string AcaoRestaurar = "restaurar";
 
+    /// <summary>
+    /// (ajuste 9) A AUTORIZAÇÃO da pendência <see cref="RemotoV1.PendenciaAutorizacao"/>: exige o segundo fator, como o aprovar,
+    /// e vale só para o escopo revisado (o id do snapshot inclui o escopo).
+    /// </summary>
+    public const string AcaoAutorizar = "autorizar";
+
     /// <summary>As ações aceitas no <c>POST .../decisoes/{pendencia}</c> (a nova entra no fim).</summary>
-    public static IReadOnlyList<string> Acoes { get; } = [AcaoResponder, AcaoAprovar, AcaoAjuste, AcaoDispensar, AcaoRestaurar];
+    public static IReadOnlyList<string> Acoes { get; } = [AcaoResponder, AcaoAprovar, AcaoAjuste, AcaoDispensar, AcaoRestaurar, AcaoAutorizar];
+
+    public const string AtoConcluirProjeto = "concluir-projeto";
+    public const string AtoIntegrarItem = "integrar-item";
+    public const string AtoArquivarTasks = "arquivar-tasks";
+    public const string AtoExecutarComando = "executar-comando";
+
+    /// <summary>Os atos de uma autorização (o escopo do que o site autoriza).</summary>
+    public static IReadOnlyList<string> AtosDaAutorizacao { get; } = [AtoConcluirProjeto, AtoIntegrarItem, AtoArquivarTasks, AtoExecutarComando];
 }
+
+/// <summary>
+/// (ajuste 9) O ESCOPO EXATO de uma autorização: o ato (<see cref="DecisoesV1.AtosDaAutorizacao"/>), o alvo (o projeto, a task),
+/// o SHA quando o ato é sobre um commit, os itens listados e o comando exato.
+/// </summary>
+public sealed record EscopoDaAutorizacaoV1(string Ato, string Alvo, string? Sha = null, IReadOnlyList<string>? Itens = null, string? Comando = null);
 public sealed record RespostaDaDecisaoV1(long Id, string MaquinaId, string PendenciaId, string SnapshotId,
     string Acao, string? Opcao, string? Origem, string? Destino, string? Sha, DateTimeOffset Em, bool SegundoFator, string Estado);
 public sealed record PrepararAutenticadorV1(string Senha);

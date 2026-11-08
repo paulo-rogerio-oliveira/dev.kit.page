@@ -22,7 +22,7 @@ public static class EndpointsDasDecisoes
                 if (pedido!.Acao is DecisoesV1.AcaoDispensar or DecisoesV1.AcaoRestaurar)
                     return pendencia.Length > 64 ? Results.Problem("Pendência inválida.", statusCode: 400)
                         : Resultado(await decisoes.DispensarAsync(usuario, maquina, pendencia, pedido.Acao == DecisoesV1.AcaoDispensar, ct));
-                if (pedido.SnapshotId is not { Length: 64 } || pedido.Acao is not (DecisoesV1.AcaoResponder or DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAjuste)
+                if (pedido.SnapshotId is not { Length: 64 } || pedido.Acao is not (DecisoesV1.AcaoResponder or DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAjuste or DecisoesV1.AcaoAutorizar)
                     || pedido.Opcao?.Length > 200 || pedido.Codigo?.Length > 6)
                     return Results.Problem("Resposta inválida.", statusCode: 400);
                 return Resultado(await decisoes.ResponderAsync(usuario, maquina, pendencia, pedido, ct));

@@ -343,6 +343,18 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
 - **Dispensar** (`POST .../decisoes/{pendencia}` com `{ "acao": "dispensar" }` ou `"restaurar"`): só no site, por usuário,
   máquina e pendência; não vai à máquina e não decide nada. `GET .../decisoes` deixa as dispensadas de fora (o push também);
   `?dispensadas=true` as traz marcadas. A dispensa de uma pendência que saiu do retrato é apagada na próxima dispensa.
+- **Projetos (ajuste 8):** o dev.kit publica `fechando` quando todos os itens do projeto estão integrados (a situação derivada);
+  `concluido` continua exigindo o fechamento confirmado. O painel do Board lista só os em andamento, e o "Mostrar concluídos"
+  traz os `fechando` e os `concluido`.
+- **Execuções (ajuste 7):** a sessão de gatilho (avaliador, fechamento) ociosa — sem turno e sem pendência real — não entra em
+  `fluxos`; em turno, entra agrupada sob a task que a disparou. O Fechamento que integrou com sucesso conclui a própria task, os
+  avaliadores da mesma dona e a dona (nada é apagado).
+- **Autorização (ajuste 9):** com o recurso `decisoes-autorizar` no heartbeat, o dev.kit publica a pendência `tipo: "autorizacao"`
+  com o `escopo` exato (`ato` = `concluir-projeto`, `integrar-item`, `arquivar-tasks` ou `executar-comando`; `alvo`, `sha`?,
+  `itens`?, `comando`?). O site responde `acao: "autorizar"` com o código TOTP — o mesmo segundo fator e a mesma auditoria do
+  `aprovar` —, ou `ajuste` para recusar. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
+  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez) e
+  `concluir-projeto` (em fechamento, sem o fechamento confirmado); `integrar-item` segue pelo `aprovar` do snapshot.
 - **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto` e `FalasRemotas.Anexos` vêm de
   `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
 

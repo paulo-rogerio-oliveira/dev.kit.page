@@ -15,6 +15,8 @@
 .board-remoto .br-secao-titulo .chips {flex:none}
 .board-remoto .br-secao-titulo .chip {flex:none; padding:4px 8px; font-size:11px; white-space:nowrap}
 .board-remoto .br-secao-titulo h2 {min-width:0}
+.board-remoto .br-side .br-interruptor {display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:6px; margin:0; font-size:12px; font-weight:400; color:var(--muted); cursor:pointer; align-self:flex-start}
+.board-remoto .br-side .br-interruptor input {width:auto; height:auto; min-height:0; margin:0; padding:0; accent-color:var(--accent)}
 .br-design-card {display:flex; flex-direction:column; gap:6px}
 .br-design-card .br-miniatura {width:100%; height:120px}
 /* US #858: o cartão do painel nasce recolhido (título, origem, tipo e a ação principal). */

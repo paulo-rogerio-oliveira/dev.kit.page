@@ -51,6 +51,9 @@ function PendenciaSemDados({ pendencia: p, dispensada, dispensar }: { pendencia:
   </section>;
 }
 
+/** O projeto que já saiu do andamento: concluído ou em fechamento (todos os itens integrados, ajuste 8). */
+function projetoTerminando(situacao: string) { return situacao === 'concluido' || situacao === 'fechando'; }
+
 /** As pendências do retrato que o dev fechou no site (correções do board remoto): a decisão marcada ou a dispensa local. */
 function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[], locais: Map<string, boolean>) {
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
@@ -63,7 +66,11 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
   const [todasAsExecucoes, setTodasAsExecucoes] = useState(false);
   const [vistas, setVistas] = useState<'pendentes' | 'dispensadas'>('pendentes');
   const [ampliada, setAmpliada] = useState<{ titulo: string; link: string } | null>(null);
-  const projetos = retrato?.projetos ?? [];
+  // (ajuste 8) O painel lista os projetos em andamento; o "Mostrar concluídos" traz os concluídos e os em fechamento.
+  const [comConcluidos, setComConcluidos] = useState(false);
+  const todosOsRecebidos = retrato?.projetos ?? [];
+  const terminando = todosOsRecebidos.filter(p => projetoTerminando(p.situacao)).length;
+  const projetos = comConcluidos ? todosOsRecebidos : todosOsRecebidos.filter(p => !projetoTerminando(p.situacao));
   const recebidas = retrato?.fluxos ?? [];
   // O filtro de dia vale para as execuções; as pendências nunca são escondidas por data — só a que o dev fechou no site.
   const execucoes = filtrarPorDia(recebidas, periodo, agora);
@@ -95,11 +102,16 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
       return <Link className="br-card br-proj br-abrir" key={p.slug} to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
         <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
         <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
-        <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
+        <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
       </Link>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
-    {!projetos.length && <p className="br-note">Nenhum projeto recebido.</p>}
+    {(terminando > 0 || comConcluidos) && <label className="br-interruptor">
+      <input type="checkbox" checked={comConcluidos} onChange={e => setComConcluidos(e.target.checked)} />
+      Mostrar concluídos{terminando > 0 && ` (${terminando})`}
+    </label>}
+    {!todosOsRecebidos.length && <p className="br-note">Nenhum projeto recebido.</p>}
+    {!!todosOsRecebidos.length && !projetos.length && <p className="br-note">Nenhum projeto em andamento.</p>}
     <DesfechoDaCriacao criacao={criacao} />
     {/* Os projetos de design vêm do catálogo da máquina (o handshake): abrem o Design compartilhado no repositório. */}
     <div className="br-secao-titulo"><h2>Design{designs.length > 0 && ` · ${designs.length}`}</h2>

@@ -65,8 +65,14 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
             anterior.Estado = "vencida";
             await db.SaveChangesAsync(ct);
         }
-        var aprovar = pedido.Acao == "aprovar";
-        if (p.Tipo == RemotoV1.PendenciaPergunta)
+        // (ajuste 9) O autorizar exige o segundo fator, como o aprovar; o escopo está no id do snapshot conferido acima.
+        var aprovar = pedido.Acao is DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAutorizar;
+        if (p.Tipo == RemotoV1.PendenciaAutorizacao)
+        {
+            if (pedido.Acao is not (DecisoesV1.AcaoAutorizar or DecisoesV1.AcaoAjuste)) return new(null, "Escolha autorizar ou recusar.", 400);
+            if (pedido.Acao == DecisoesV1.AcaoAutorizar && RegrasDaDecisao.Bloqueio(p) is { } bloqueio) return new(null, bloqueio);
+        }
+        else if (p.Tipo == RemotoV1.PendenciaPergunta)
         {
             if (pedido.Acao != "responder" || pedido.Opcao is null || !(p.Opcoes ?? []).Contains(pedido.Opcao, StringComparer.Ordinal))
                 return new(null, "Escolha um dos botões da pergunta.", 400);
@@ -87,7 +93,7 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
         {
             UsuarioId = usuario, MaquinaId = maquina, PendenciaId = pendencia, SnapshotId = hash,
             Acao = pedido.Acao, Opcao = p.Tipo == RemotoV1.PendenciaPergunta ? pedido.Opcao : null,
-            Origem = p.Snapshot?.Origem, Destino = p.Snapshot?.Destino, Sha = p.Snapshot?.Sha,
+            Origem = p.Snapshot?.Origem, Destino = p.Snapshot?.Destino, Sha = p.Snapshot?.Sha ?? p.Escopo?.Sha,
             EmUtc = relogio.GetUtcNow().UtcDateTime, SegundoFator = aprovar,
         };
         db.RespostasDasDecisoes.Add(resposta);
@@ -112,7 +118,7 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
         // A dispensa é só do painel: a autorização já dada continua valendo para a máquina.
         var pendentes = await PendentesAsync(usuario, maquina, ct, incluirDispensadas: true);
         var atual = pendentes?.SingleOrDefault(p => p.Pendencia.Id == r.PendenciaId);
-        var valida = atual?.SnapshotId == r.SnapshotId && (r.Acao != "aprovar" || atual.Bloqueio is null)
+        var valida = atual?.SnapshotId == r.SnapshotId && (r.Acao is not (DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAutorizar) || atual.Bloqueio is null)
             && r.EmUtc > relogio.GetUtcNow().UtcDateTime.AddMinutes(-5);
         r.Estado = valida ? "recebida" : "vencida";
         await db.SaveChangesAsync(ct); await transacao.CommitAsync(ct);

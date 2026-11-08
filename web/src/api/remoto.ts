@@ -37,6 +37,12 @@ export interface PendenciaRemota {
   id: string; tipo: string; titulo: string; pergunta?: string | null; opcoes?: string[] | null;
   jaTentei?: string | null; projeto?: string | null; item?: number | null; fluxo?: string | null;
   snapshot?: SnapshotDaDecisao | null;
+  /** (ajuste 9) O escopo exato da autorização (tipo `autorizacao`): o que o segundo fator autoriza, e nada além. */
+  escopo?: EscopoDaAutorizacao | null;
+}
+export interface EscopoDaAutorizacao {
+  ato: 'concluir-projeto' | 'integrar-item' | 'arquivar-tasks' | 'executar-comando' | string;
+  alvo: string; sha?: string | null; itens?: string[] | null; comando?: string | null;
 }
 export interface SnapshotDaDecisao {
   origem: string; destino: string; sha: string;
@@ -50,7 +56,7 @@ export interface RespostaDaDecisao {
 }
 /** `dispensada` é campo novo (correções do board remoto): o card fechado no site, só com `?dispensadas=true`. */
 export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null; dispensada?: boolean }
-export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste'; opcao?: string; codigo?: string }
+export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string }
 /** A dispensa do card (Contracts/V1/DecisoesV1.cs): só no site, a task da máquina não muda. */
 export interface DispensaDaPendencia { maquinaId: string; pendenciaId: string; dispensada: boolean; em: string }
 

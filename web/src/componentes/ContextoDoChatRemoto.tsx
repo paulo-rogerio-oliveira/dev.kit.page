@@ -260,8 +260,8 @@ function idade(data: string, agora: number) {
 }
 
 /**
- * O catálogo no compositor (proposta chat-remoto v016): o ↻ que pede o catálogo (o handshake) e a idade dele ao lado — a data
- * completa na dica, e o pedido em curso ou a recusa embaixo, quando houver.
+ * O catálogo no CABEÇALHO do Orquestrador (complemento do ajuste 5, 19:01): o ↻ ao lado do Reiniciar pede o catálogo (o
+ * handshake), e a idade dele vai na dica — nada de faixa embaixo da caixa. O estado fica também para o leitor de tela.
  */
 export function EstadoDoCatalogo({ estado, appAberto, agora }: { estado: CatalogoDoChat; appAberto: boolean; agora: number }) {
   const { catalogo, carregado, pedido, atualizar, podeAtualizar } = estado;
@@ -269,14 +269,14 @@ export function EstadoDoCatalogo({ estado, appAberto, agora }: { estado: Catalog
   const completo = !carregado ? 'Carregando o catálogo do dev.kit…'
     : catalogo ? `Catálogo do dev.kit · atualizado ${idade(catalogo.recebidoEm, agora)} (${quando(catalogo.recebidoEm)})${appAberto ? '' : ' · dev.kit fechado: último catálogo recebido'}`
     : 'Atalhos sem catálogo: o dev.kit desta máquina ainda não enviou work items, repositórios e fluxos.';
+  const aguardando = pedido.estado === 'aguardando' ? ` · atualização pedida às ${hora(pedido.desde)}${appAberto ? ', aguardando o dev.kit' : ': o dev.kit responde quando abrir'}` : '';
   return <>
-    <button type="button" className={`br-icone${atualizando ? ' br-girando' : ''}`} disabled={!podeAtualizar} aria-label="Atualizar catálogo do dev.kit"
-      title={podeAtualizar ? 'Pede ao dev.kit os work items, repositórios, fluxos, projetos e designs de agora' : 'Disponível com a máquina conectada e sem outro pedido em curso'}
-      onClick={() => void atualizar()}>↻</button>
-    <small className="br-catalogo-idade" role="status" title={completo}>
-      {!carregado ? 'catálogo…' : catalogo ? <time dateTime={catalogo.recebidoEm}>catálogo {idade(catalogo.recebidoEm, agora)}</time> : 'sem catálogo'}
-      {pedido.estado === 'aguardando' && <span className="br-oculto"> · atualização pedida às {hora(pedido.desde)}{appAberto ? ', aguardando o dev.kit' : ': o dev.kit responde quando abrir'}</span>}
-    </small>
+    <button type="button" className={`br-btn br-icone-cabecalho${atualizando ? ' br-girando' : ''}`} disabled={!podeAtualizar} aria-label="Atualizar catálogo do dev.kit"
+      title={`${completo}${aguardando}. ${podeAtualizar ? 'Clique para pedir ao dev.kit os work items, repositórios, fluxos, projetos e designs de agora.' : 'Atualizar fica disponível com a máquina conectada e sem outro pedido em curso.'}`}
+      onClick={() => void atualizar()}><span aria-hidden="true">↻</span></button>
+    <span className="br-oculto" role="status">
+      {!carregado ? 'catálogo…' : catalogo ? <time dateTime={catalogo.recebidoEm}>catálogo {idade(catalogo.recebidoEm, agora)}</time> : 'sem catálogo'}{aguardando}
+    </span>
   </>;
 }
 

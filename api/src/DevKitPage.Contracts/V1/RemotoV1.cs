@@ -46,10 +46,16 @@ public sealed record FluxoNoRetratoV1(
 /// <see cref="Pergunta"/>, <see cref="Opcoes"/> e <see cref="JaTentei"/> —, que as decisões remotas (fase 3 da proposta) mostram
 /// como botões. O <see cref="Id"/> é estável: é por ele que a resposta volta.
 /// </summary>
+/// <param name="Escopo">
+/// (campo novo, correções do board remoto, ajuste 9) O escopo exato da AUTORIZAÇÃO (tipo <see cref="RemotoV1.PendenciaAutorizacao"/>).
+/// Ausente nas outras pendências — e fora do JSON, para o id do snapshot (o resumo da pendência serializada) não mudar.
+/// </param>
 public sealed record PendenciaNoRetratoV1(
     string Id, string Tipo, string Titulo, string? Pergunta = null, IReadOnlyList<string>? Opcoes = null, string? JaTentei = null,
     string? Projeto = null, int? Item = null, string? Fluxo = null, DateTimeOffset? CriadaEm = null,
-    SnapshotDaDecisaoV1? Snapshot = null);
+    SnapshotDaDecisaoV1? Snapshot = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    EscopoDaAutorizacaoV1? Escopo = null);
 
 /// <summary>
 /// A resposta do heartbeat: quando a API o recebeu, de quanto em quanto tempo o próximo é esperado e os
@@ -126,8 +132,14 @@ public static class RemotoV1
     public const string PendenciaAprovacao = "aprovacao";
     public const string PendenciaFalha = "falha";
 
-    /// <summary>Os tipos de pendência.</summary>
-    public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha];
+    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o segundo fator.</summary>
+    public const string PendenciaAutorizacao = "autorizacao";
+
+    /// <summary>Os tipos de pendência (o novo entra no fim; o dev.kit só o publica com <see cref="RecursoDecisoesAutorizar"/>).</summary>
+    public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha, PendenciaAutorizacao];
+
+    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o segundo fator.</summary>
+    public const string RecursoDecisoesAutorizar = "decisoes-autorizar";
 
     public const string SensivelSegredo = "segredo";
     public const string SensivelEmail = "email";
@@ -145,7 +157,7 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo];
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar];
 
     /// <summary>
     /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina

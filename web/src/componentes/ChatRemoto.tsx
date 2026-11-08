@@ -126,6 +126,14 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
       .map(f => ({ id: `f-${f.id}`, data: f.ditaEm, comando: null, resposta: null, fala: f })),
   ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id)));
   const ultima = linhas.at(-1)?.id;
+  // (complemento do ajuste 5) A caixa começa com 3 linhas e cresce sozinha até 8; depois rola. As mensagens ficam com o resto.
+  useEffect(() => {
+    const area = caixa.current;
+    if (!area) return;
+    area.style.height = 'auto';
+    const linha = parseFloat(getComputedStyle(area).lineHeight) || 18;
+    area.style.height = `${Math.min(Math.max(area.scrollHeight, linha * 3), linha * 8)}px`;
+  }, [texto]);
   // A rolagem fica na última mensagem: na mensagem nova e quando a área do chat muda de altura (um aviso que entra ou sai).
   useEffect(() => {
     if (pertoDoFim.current && mensagens.current) mensagens.current.scrollTop = mensagens.current.scrollHeight;
@@ -164,6 +172,8 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
       <span className="br-selo" title="Conversa e consulta com login. Texto do chat nunca aprova: as decisões são auditadas no painel.">
         <span className="br-desktop-state">Texto do chat não aprova</span><span className="br-mobile-state">Chat não aprova · decisões auditadas</span>
       </span>
+      {/* O ↻ do catálogo ao lado do Reiniciar, com a idade na dica (complemento do ajuste 5). */}
+      {maquina && <EstadoDoCatalogo estado={catalogo} appAberto={conectada && maquina.appAberto} agora={agora} />}
       {acoes}
     </header>
     {maquina && (!conectada || !maquina.appAberto) && <div className="br-chat-aviso" role="status">
@@ -201,7 +211,7 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>
       {/* Os atalhos vão no texto de exemplo e na dica do ⓘ (proposta chat-remoto v016), não mais num rodapé embaixo do chat. */}
       <textarea ref={caixa} aria-label="Mensagem ao Orquestrador" disabled={desabilitado} placeholder="Peça ou pergunte ao Orquestrador — / fluxo · # work item · @ repositório"
-        value={texto} maxLength={4000} rows={2} onChange={e => {
+        value={texto} maxLength={4000} rows={3} onChange={e => {
           // O teclado do celular não diz a tecla (key "Unidentified"): o atalho é o caractere que entrou na caixa vazia.
           if (!texto && e.target.value.length === 1 && abrirAtalho(e.target.value)) return;
           setTexto(e.target.value); if (faltando.length) setFaltando([]);
@@ -213,7 +223,6 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
       <div className="br-bottom">
         <ContextoDoChatRemoto contexto={contexto} alterar={c => { setContexto(c); setFaltando([]); }} atalho={atalho} abrir={setAtalho} desabilitado={desabilitado}
           catalogo={doCatalogo} />
-        {maquina && <EstadoDoCatalogo estado={catalogo} appAberto={conectada && maquina.appAberto} agora={agora} />}
         <DicaDoCompositor />
         <span className="br-spacer" /><button type="submit" className="br-send" disabled={desabilitado || !texto.trim() || excedeu} aria-label="Enviar mensagem">{enviando ? '…' : '➤'}</button>
       </div>

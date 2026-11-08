@@ -111,6 +111,50 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
+    public async Task Autorizar_exige_o_segundo_fator_vale_so_para_o_escopo_revisado_e_vai_a_maquina_como_o_aprovar()
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var c = await original.AdminAsync();
+        var autenticado = api.CreateClient(); autenticado.DefaultRequestHeaders.Authorization = c.DefaultRequestHeaders.Authorization; c = autenticado;
+        var pedido = new PendenciaNoRetratoV1("pendencia-comando", RemotoV1.PendenciaAutorizacao, "#515 Implementar",
+            "Autorizar o comando bloqueado uma vez?", Escopo: new EscopoDaAutorizacaoV1(DecisoesV1.AtoExecutarComando, "#515 Implementar", Comando: "dotnet test"));
+        var batimento = await c.PostAsJsonAsync("/api/remoto/heartbeat", new HeartbeatV1(1, "notebook", "Notebook", "130", "servico", true, "ativo", false));
+        Assert.Contains(RemotoV1.RecursoDecisoesAutorizar, (await batimento.Content.ReadFromJsonAsync<HeartbeatRecebidoV1>())!.Recursos!);
+        await Retrato(c, pedido);
+        var d = await Ler(c, "pendencia-comando");
+        Assert.Null(d.Bloqueio);
+        Assert.Equal("dotnet test", d.Pendencia.Escopo!.Comando);
+
+        // Sem o código (ou com o autenticador desligado), nada é autorizado; responder e aprovar não valem para a autorização.
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAprovar, Codigo: "123456"))).StatusCode);
+        var chave = await Ativar(c, relogio);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: "000000"))).StatusCode);
+
+        // O escopo mudou depois da revisão (outro comando): a autorização revisada não vale para ele.
+        await Retrato(c, pedido with { Escopo = pedido.Escopo! with { Comando = "rm -rf build" } });
+        relogio.Avancar();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/pendencia-comando",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+
+        // Com o escopo de agora e o código válido, a autorização é gravada com o segundo fator e a máquina a consome uma vez.
+        await Retrato(c, pedido);
+        relogio.Avancar();
+        var r = await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)));
+        r.EnsureSuccessStatusCode();
+        var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.Equal((DecisoesV1.AcaoAutorizar, true), (autorizacao.Acao, autorizacao.SegundoFator));
+        Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+
+        // A pendência de autorização sem escopo não entra no retrato.
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsJsonAsync("/api/remoto/retrato",
+            new RetratoV1(1, "notebook", DateTimeOffset.UtcNow, [], [], [pedido with { Escopo = null }]))).StatusCode);
+    }
+
+    [Fact]
     public async Task Mensagem_aprovo_nao_autoriza_e_aprovacao_exige_codigo_valido_nao_reutilizado()
     {
         using var original = new ApiDeTeste(); var relogio = new Relogio();

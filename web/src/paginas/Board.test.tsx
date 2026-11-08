@@ -166,6 +166,27 @@ describe('Board remoto', () => {
     expect(board.getByRole('region', { name: 'Integrar o item 20 no projeto?' })).toBeInTheDocument();
   });
 
+  it('o painel de projetos lista os em andamento, e o Mostrar concluídos traz os em fechamento e os concluídos', async () => {
+    responder();
+    const item = (numero: number, situacao: string) => ({ numero, titulo: `Item ${numero}`, onda: 1, situacao });
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => {
+      const r = retrato();
+      return HttpResponse.json({ ...r, retrato: { ...r.retrato, projetos: [
+        { slug: 'andando', nome: 'Projeto em andamento', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'integrado'), item(2, 'rodando')] },
+        { slug: 'fechando', nome: 'Projeto em fechamento', ondaAtual: 1, situacao: 'fechando', itens: [item(1, 'integrado')] },
+        { slug: 'feito', nome: 'Projeto concluído', ondaAtual: 1, situacao: 'concluido', itens: [item(1, 'integrado')] },
+      ] } });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    expect(await board.findByRole('link', { name: 'Abrir Projeto em andamento' })).toBeInTheDocument();
+    expect(board.queryByRole('link', { name: 'Abrir Projeto em fechamento' })).not.toBeInTheDocument();
+    expect(board.queryByRole('link', { name: 'Abrir Projeto concluído' })).not.toBeInTheDocument();
+    await userEvent.click(board.getByRole('checkbox', { name: /Mostrar concluídos \(2\)/ }));
+    expect(board.getByRole('link', { name: 'Abrir Projeto em fechamento' })).toHaveTextContent('em fechamento · todos os itens integrados');
+    expect(board.getByRole('link', { name: 'Abrir Projeto concluído' })).toHaveTextContent('incorporado ao projeto');
+  });
+
   it('a decisão já dispensada vem marcada da API e fica fora da contagem', async () => {
     responder();
     servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ request }) => {
@@ -196,6 +217,31 @@ describe('Board remoto', () => {
     await userEvent.click(within(modal).getByRole('button', { name: 'Fechar' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(board.getByRole('link', { name: 'Abrir o design de dev.kit.page' })).toBeInTheDocument();
+  });
+
+  it('a autorização mostra o escopo exato e só sai com o segundo fator, como autorizar', async () => {
+    responder();
+    let recebido: unknown;
+    const escopo = { ato: 'executar-comando', alvo: '#515 Implementar', comando: 'dotnet test tests/App.Tests' };
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'autorizacao', titulo: 'Comando bloqueado', escopo }, snapshotId: 'c'.repeat(64), bloqueio: null, resposta: null }])),
+      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 2, acao: 'autorizar', em: new Date().toISOString(), segundoFator: true, estado: 'registrada' }); }),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    expect(await board.findByText('Autorização')).toBeInTheDocument();
+    await userEvent.click(board.getByRole('button', { name: 'Autorizar' }));
+    const escopoNaTela = within(await screen.findByLabelText('Escopo da autorização'));
+    expect(escopoNaTela.getByText('Executar o comando')).toBeInTheDocument();
+    expect(escopoNaTela.getByText('dotnet test tests/App.Tests')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Autorizar com segundo fator' }));
+    const confirmar = screen.getByRole('button', { name: 'Confirmar e autorizar' });
+    expect(confirmar).toBeDisabled();
+    expect(recebido).toBeUndefined();
+    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
+    await userEvent.click(confirmar);
+    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'autorizar', codigo: '123456' }));
   });
 
   it('revisa evidências e exige seis dígitos antes de confirmar o SHA', async () => {
