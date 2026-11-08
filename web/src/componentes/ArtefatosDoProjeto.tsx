@@ -36,8 +36,14 @@ function repositorioCurto(repositorio: string) {
   return repositorio.replace(/\.git$/i, '').split(/[/:]/).filter(Boolean).at(-1) ?? repositorio;
 }
 
-function megabytes(bytes: number) {
-  return `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: bytes >= 1048576 ? 1 : 0 })} MB`;
+/**
+ * O tamanho do pacote no card. (controle-v4, item 5) Abaixo de 1 MB ele saía "0 MB" — o pacote pequeno parecia vazio —, e
+ * agora sai em KB (ou em bytes, abaixo de 1 KB).
+ */
+export function tamanhoDoArtefato(bytes: number) {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1048576) return `${(bytes / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
+  return `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })} MB`;
 }
 
 function prazo(expiraEm: string, agora: number) {
@@ -65,7 +71,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
         aria-label={`${preview ? 'Abrir o preview' : 'Baixar o pacote'} de ${alvo}`}>
         <span className={`br-chip${preview ? ' br-chip-preview' : ''}`}>{preview ? 'preview' : 'pacote .NET'}</span>
         <span>{alvo}</span>
-        <small><b>{preview ? 'Abrir preview' : 'Baixar'}</b> · {preview ? `ambiente ${a.ambiente}` : `${megabytes(a.tamanho)} · ${a.expiraEm ? prazo(a.expiraEm, agora) : 'sem prazo'}`}</small>
+        <small><b>{preview ? 'Abrir preview' : 'Baixar'}</b> · {preview ? `ambiente ${a.ambiente}` : `${tamanhoDoArtefato(a.tamanho)} · ${a.expiraEm ? prazo(a.expiraEm, agora) : 'sem prazo'}`}</small>
       </a>;
     })}
     <p className="br-artefatos-aviso">{artefatos.length

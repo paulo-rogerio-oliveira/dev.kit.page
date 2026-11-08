@@ -1,0 +1,254 @@
+{
+  "contrato": 1,
+  "maquinaId": "maquina-de-teste-controle-v4",
+  "geradoEm": "2026-11-08T23:36:16.9753934+00:00",
+  "projetos": [
+    {
+      "slug": "controle-v4",
+      "nome": "controle-v4",
+      "situacao": "aprovado",
+      "ondaAtual": 4,
+      "itens": [
+        {
+          "numero": 1,
+          "titulo": "Testes da restaura\u00E7\u00E3o",
+          "situacao": "integrado",
+          "onda": 1
+        },
+        {
+          "numero": 2,
+          "titulo": "Gerar artefato no projeto",
+          "situacao": "integrado",
+          "onda": 2
+        },
+        {
+          "numero": 3,
+          "titulo": "Autoriza\u00E7\u00E3o pelo site",
+          "situacao": "integrado",
+          "onda": 2
+        },
+        {
+          "numero": 4,
+          "titulo": "Publica\u00E7\u00E3o e roteiro de ativa\u00E7\u00E3o",
+          "situacao": "integrado",
+          "onda": 3
+        },
+        {
+          "numero": 5,
+          "titulo": "Evid\u00EAncias ponta a ponta",
+          "situacao": "rodando",
+          "onda": 4
+        },
+        {
+          "numero": 6,
+          "titulo": "Vari\u00E1veis e segredos",
+          "situacao": "integrado",
+          "onda": 1
+        }
+      ]
+    },
+    {
+      "slug": "remote-control-v3",
+      "nome": "remote-control-v3",
+      "situacao": "fechando",
+      "ondaAtual": 2,
+      "itens": [
+        {
+          "numero": 1,
+          "titulo": "Fila",
+          "situacao": "integrado",
+          "onda": 1
+        },
+        {
+          "numero": 2,
+          "titulo": "Chat",
+          "situacao": "integrado",
+          "onda": 2
+        }
+      ]
+    },
+    {
+      "slug": "board-v5",
+      "nome": "board-v5",
+      "situacao": "concluido",
+      "ondaAtual": 1,
+      "itens": [
+        {
+          "numero": 1,
+          "titulo": "Board",
+          "situacao": "integrado",
+          "onda": 1
+        }
+      ]
+    }
+  ],
+  "fluxos": [
+    {
+      "id": "exec-8e326b5afb7f1432",
+      "nome": "#821 Corre\u00E7\u00F5es do board remoto",
+      "etapa": "Implementa\u00E7\u00E3o",
+      "situacao": "decidir",
+      "projeto": null,
+      "item": null,
+      "agente": "claude",
+      "desdeEm": "2026-11-08T22:56:16.9753934+00:00"
+    },
+    {
+      "id": "exec-a6ca389130d3dcd8",
+      "nome": "Disparo do devcli",
+      "etapa": "Implementa\u00E7\u00E3o",
+      "situacao": "decidir",
+      "projeto": null,
+      "item": null,
+      "agente": "claude",
+      "desdeEm": "2026-11-08T22:56:16.9753934+00:00"
+    },
+    {
+      "id": "exec-c2c3457b60653166",
+      "nome": "Projeto controle-v4 \u00B7 item 4",
+      "etapa": "Implementa\u00E7\u00E3o",
+      "situacao": "decidir",
+      "projeto": "controle-v4",
+      "item": 4,
+      "agente": "claude",
+      "desdeEm": "2026-11-08T22:56:16.9753934+00:00"
+    },
+    {
+      "id": "exec-093048d3f16f824d",
+      "nome": "Projeto controle-v4 \u00B7 item 5",
+      "etapa": "Implementa\u00E7\u00E3o",
+      "situacao": "executando",
+      "projeto": "controle-v4",
+      "item": 5,
+      "agente": "claude",
+      "desdeEm": "2026-11-08T22:56:16.9753934+00:00"
+    },
+    {
+      "id": "exec-e4a70ed053c433dc",
+      "nome": "Avaliador da tarefa avulsa (em turno)",
+      "etapa": "Avalia\u00E7\u00E3o",
+      "situacao": "executando",
+      "projeto": null,
+      "item": null,
+      "agente": "claude",
+      "desdeEm": "2026-11-08T22:56:16.9753934+00:00"
+    }
+  ],
+  "pendencias": [
+    {
+      "id": "aprovacao-ec4573a4e7621b6e",
+      "tipo": "aprovacao",
+      "titulo": "Projeto controle-v4 \u00B7 item 4",
+      "pergunta": "Autorizar a integra\u00E7\u00E3o do snapshot do item 4 no projeto controle-v4?",
+      "opcoes": null,
+      "jaTentei": null,
+      "projeto": "controle-v4",
+      "item": 4,
+      "fluxo": "exec-c2c3457b60653166",
+      "criadaEm": "2026-11-08T23:21:16.9753934+00:00",
+      "snapshot": {
+        "origem": "feature/dev/projeto-controle-v4-item-4",
+        "destino": "feature/dev/projeto-controle-v4",
+        "sha": "2412df94c1b7a0e5d3f6a8b9c0d1e2f3a4b5c6d7",
+        "notas": [
+          {
+            "avaliador": "Avaliador da tarefa avulsa",
+            "nota": 94,
+            "minima": 90
+          }
+        ],
+        "testesAprovados": 212,
+        "testesFalhos": 0,
+        "regressaoConcluida": true,
+        "arquivos": 9,
+        "commits": 3,
+        "alteracoes": "3 commit(s) e 9 arquivo(s).",
+        "capturas": [
+          {
+            "titulo": "chat-remoto \u00B7 v016 proposta",
+            "url": "/api/design/1/chat-remoto/v16"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pendencia-dbb13956dec37258",
+      "tipo": "autorizacao",
+      "titulo": "#821 Corre\u00E7\u00F5es do board remoto",
+      "pergunta": "Autorizar o dev.kit a executar o comando bloqueado UMA vez nesta task?",
+      "opcoes": null,
+      "jaTentei": null,
+      "projeto": null,
+      "item": null,
+      "fluxo": "exec-8e326b5afb7f1432",
+      "criadaEm": "2026-11-08T23:33:16.9753934+00:00",
+      "snapshot": null,
+      "escopo": {
+        "ato": "executar-comando",
+        "alvo": "#821 Corre\u00E7\u00F5es do board remoto",
+        "sha": null,
+        "itens": null,
+        "comando": "dotnet test tests/GitKit.Core.Tests/GitKit.Core.Tests.csproj"
+      }
+    },
+    {
+      "id": "pendencia-4a882053d9aa32bd",
+      "tipo": "pergunta",
+      "titulo": "Disparo do devcli",
+      "pergunta": "Seguir com o Fechamento agora?",
+      "opcoes": [
+        "Seguir",
+        "Aguardar"
+      ],
+      "jaTentei": "conferir a regress\u00E3o do SHA do item.",
+      "projeto": null,
+      "item": null,
+      "fluxo": "exec-a6ca389130d3dcd8",
+      "criadaEm": "2026-11-08T23:33:16.9753934+00:00",
+      "snapshot": null
+    },
+    {
+      "id": "autorizacao-274defb02e8c096e",
+      "tipo": "autorizacao",
+      "titulo": "Concluir o projeto remote-control-v3",
+      "pergunta": "Todas as ondas est\u00E3o integradas, e o fechamento ainda n\u00E3o est\u00E1 confirmado no di\u00E1rio de PRs. Autorizar a conclus\u00E3o do projeto mesmo assim?",
+      "opcoes": null,
+      "jaTentei": null,
+      "projeto": "remote-control-v3",
+      "item": null,
+      "fluxo": null,
+      "criadaEm": "2026-11-08T23:16:16.9753934+00:00",
+      "snapshot": null,
+      "escopo": {
+        "ato": "concluir-projeto",
+        "alvo": "remote-control-v3",
+        "sha": null,
+        "itens": null,
+        "comando": null
+      }
+    },
+    {
+      "id": "autorizacao-4da74a26d10c7bf5",
+      "tipo": "autorizacao",
+      "titulo": "Arquivar 2 task(s) pedidas pelo Orquestrador",
+      "pergunta": "O Orquestrador pede para arquivar: #901, #902. As tasks saem dos Processos e continuam consult\u00E1veis (a pasta n\u00E3o \u00E9 apagada; devcli sessao --reabrir as traz de volta). Autorizar o arquivamento?",
+      "opcoes": null,
+      "jaTentei": null,
+      "projeto": null,
+      "item": null,
+      "fluxo": null,
+      "criadaEm": null,
+      "snapshot": null,
+      "escopo": {
+        "ato": "arquivar-tasks",
+        "alvo": "Orquestrador",
+        "sha": null,
+        "itens": [
+          "#901",
+          "#902"
+        ],
+        "comando": "devcli sessao --acao arquivar --alvo #901,#902 --motivo \u0022gatilhos antigos j\u00E1 integrados\u0022 --aplicar"
+      }
+    }
+  ]
+}
