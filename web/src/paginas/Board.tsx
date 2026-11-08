@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
-import type { DecisaoPendente, PendenciaRemota, ResponderDecisao } from '../api/remoto';
+import { dispositivoAtual, type DecisaoPendente, type PendenciaRemota, type ResponderDecisao } from '../api/remoto';
 import { BotaoDeDetalhes, BotaoDeDispensar, CartaoDaDecisao, OrigemDaPendencia, RevisaoDaDecisao, type AoDecidir, type AoDispensar } from '../componentes/DecisoesRemotas';
 import { ImagemAmpliada, MiniaturaDoDesign } from '../componentes/AnexosDoChat';
 import { useSessao } from '../sessao';
@@ -273,7 +273,8 @@ export function Board() {
   async function decidir(d: DecisaoPendente, pedido: ResponderDecisao) {
     const atual = geracao.current;
     try {
-      const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, pedido);
+      // (controle-v4, item 3) A decisão leva o dispositivo: a máquina o registra na auditoria do que executar.
+      const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, { ...pedido, dispositivo: dispositivoAtual() });
       if (atual === geracao.current)
         setDecisoes(lista => lista.map(item => item.pendencia.id === d.pendencia.id && item.snapshotId === d.snapshotId ? { ...item, resposta } : item));
       return resposta;

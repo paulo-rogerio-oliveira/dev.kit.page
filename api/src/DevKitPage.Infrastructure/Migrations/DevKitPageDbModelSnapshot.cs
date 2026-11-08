@@ -2852,6 +2852,7 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime>("EmUtc").HasColumnType("TEXT");
                     b.Property<bool>("SegundoFator").HasColumnType("INTEGER");
                     b.Property<string>("Estado").IsRequired().HasMaxLength(20).HasColumnType("TEXT");
+                    b.Property<string>("Dispositivo").HasMaxLength(20).HasColumnType("TEXT");
                     b.HasKey("Id");
                     b.HasIndex("UsuarioId", "MaquinaId", "PendenciaId", "SnapshotId").IsUnique().HasFilter("[Estado] <> 'vencida'");
                     b.HasIndex("UsuarioId", "MaquinaId", "Estado");

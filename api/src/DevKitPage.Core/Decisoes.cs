@@ -58,6 +58,9 @@ public sealed class RespostaDaDecisao
     public DateTime EmUtc { get; set; }
     public bool SegundoFator { get; set; }
     public string Estado { get; set; } = "registrada";
+
+    /// <summary>(controle-v4, item 3) Um de <c>ConversaV1.Dispositivos</c>, ou nulo quando o site não o mandou.</summary>
+    public string? Dispositivo { get; set; }
 }
 
 /// <summary>
@@ -116,6 +119,17 @@ public static class RegrasDaDecisao
         if (e.Ato == DecisoesV1.AtoExecutarComando && (string.IsNullOrWhiteSpace(e.Comando) || e.Comando.Length > RemotoV1.TamanhoMaximoDoTexto))
             return "Autorizar o comando exige o comando exato.";
         return null;
+    }
+
+    /// <summary>
+    /// (controle-v4, item 3) O dispositivo da decisão, normalizado: nulo quando não veio (o campo é opcional); o texto da
+    /// recusa no <paramref name="erro"/> quando veio e não é um de <see cref="ConversaV1.Dispositivos"/>.
+    /// </summary>
+    public static string? Dispositivo(string? dispositivo, out string? erro)
+    {
+        var valor = RegrasDoRemoto.Normalizar(dispositivo);
+        erro = valor.Length > 0 && !ConversaV1.Dispositivos.Contains(valor) ? $"O dispositivo é um de: {string.Join(", ", ConversaV1.Dispositivos)}." : null;
+        return valor.Length > 0 && erro is null ? valor : null;
     }
 
     public static bool UrlSegura(string? url)
