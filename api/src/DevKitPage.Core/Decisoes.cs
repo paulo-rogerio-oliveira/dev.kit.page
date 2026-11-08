@@ -9,7 +9,17 @@ namespace DevKitPage.Core;
 
 public interface IDecisoesRemotas
 {
-    Task<IReadOnlyList<DecisaoPendenteV1>?> PendentesAsync(int usuario, string maquina, CancellationToken ct);
+    /// <summary>
+    /// As pendências do retrato com o snapshot e a resposta. As DISPENSADAS no site ficam de fora (o push e o painel não as
+    /// mostram), salvo com <paramref name="incluirDispensadas"/>, que as traz marcadas.
+    /// </summary>
+    Task<IReadOnlyList<DecisaoPendenteV1>?> PendentesAsync(int usuario, string maquina, CancellationToken ct, bool incluirDispensadas = false);
+
+    /// <summary>
+    /// (correções do board remoto) Fecha o card da pendência no site — ou o traz de volta, com <paramref name="dispensar"/>
+    /// falso. Só no site: nada vai à máquina, e a task não muda. A pendência que não está no retrato é 404.
+    /// </summary>
+    Task<ResultadoDaDecisao<DispensaDaPendenciaV1>> DispensarAsync(int usuario, string maquina, string pendencia, bool dispensar, CancellationToken ct);
     Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ResponderAsync(int usuario, string maquina, string pendencia, ResponderDecisaoV1 pedido, CancellationToken ct);
     Task<IReadOnlyList<RespostaDaDecisaoV1>> RespostasAsync(int usuario, string maquina, CancellationToken ct);
     Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ReceberAsync(int usuario, string maquina, long id, CancellationToken ct);
@@ -48,6 +58,19 @@ public sealed class RespostaDaDecisao
     public DateTime EmUtc { get; set; }
     public bool SegundoFator { get; set; }
     public string Estado { get; set; } = "registrada";
+}
+
+/// <summary>
+/// (correções do board remoto) Um card que o dev fechou no site: por usuário, máquina e pendência. Não é decisão nem
+/// auditoria — a task da máquina não muda; o card volta pelo filtro "Dispensadas".
+/// </summary>
+public sealed class PendenciaDispensada
+{
+    public long Id { get; set; }
+    public int UsuarioId { get; set; }
+    public string MaquinaId { get; set; } = string.Empty;
+    public string PendenciaId { get; set; } = string.Empty;
+    public DateTime DispensadaEmUtc { get; set; }
 }
 
 public static class RegrasDaDecisao

@@ -39,7 +39,16 @@ public sealed class ComandoRemoto
     public DateTime? EntregueEmUtc { get; set; }
     public DateTime? ConcluidoEmUtc { get; set; }
     public DateTime AtualizadoEmUtc { get; set; }
+
+    /// <summary>
+    /// (correções do board remoto) O fluxo, o agente e os parâmetros escolhidos no chat, em JSON (<c>ContextoDoComando</c>);
+    /// vazio sem fluxo. Gravado para o reenvio do comando que falhou na fila levar o mesmo contexto.
+    /// </summary>
+    public string Contexto { get; set; } = string.Empty;
 }
+
+/// <summary>O contexto do fluxo de um comando (<see cref="ComandoRemoto.Contexto"/>), como a API o grava.</summary>
+public sealed record ContextoDoComando(long? Fluxo, string? Agente, IReadOnlyDictionary<string, string>? Parametros);
 
 /// <summary>
 /// Uma resposta do dev.kit, recebida por HTTPS. Única por (<see cref="UsuarioId"/>, <see cref="MaquinaId"/>,
@@ -92,6 +101,9 @@ public sealed class FalaRemota
     public DateTime DitaEmUtc { get; set; }
 
     public DateTime RecebidaEmUtc { get; set; }
+
+    /// <summary>(correções do board remoto) As imagens da fala (<c>AnexoDaFalaV1[]</c>) em JSON; vazio sem imagem.</summary>
+    public string Anexos { get; set; } = string.Empty;
 }
 
 /// <summary>

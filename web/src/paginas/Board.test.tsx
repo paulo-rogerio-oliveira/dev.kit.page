@@ -101,10 +101,18 @@ describe('Board remoto', () => {
       expect(screen.getByText(/Implementação · codex/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
       await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
-      // (item 8) Com o dev.kit aberto e a máquina conectada, o Reiniciar vai ao serviço — sem clique, nada é escrito.
-      expect(screen.getByRole('button', { name: 'Reiniciar dev.kit' })).toBeEnabled();
+      // (item 8) Com o dev.kit aberto e a máquina conectada, o Reiniciar vai ao serviço — sem clique, nada é escrito. Ele mora
+      // no cabeçalho do Orquestrador, com o selo do chat (proposta chat-remoto v016): o topo fica só com o estado da máquina, e
+      // o rodapé saiu — o "Ligar e Reiniciar…" é a dica do botão.
+      const orquestrador = within(screen.getByRole('region', { name: 'Orquestrador' }));
+      expect(orquestrador.getByRole('button', { name: 'Reiniciar dev.kit' })).toBeEnabled();
+      expect(orquestrador.getByRole('button', { name: 'Reiniciar dev.kit' })).toHaveAttribute('title', expect.stringContaining('Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.'));
+      expect(document.querySelector('.br-top button')).toBeNull();
+      expect(orquestrador.getByText('Texto do chat não aprova')).toBeInTheDocument();
+      expect(orquestrador.getByText('Chat não aprova · decisões auditadas')).toBeInTheDocument();
+      expect(document.querySelector('footer')).toBeNull();
       expect(screen.getByRole('button', { name: 'Trocar fluxo' })).toBeEnabled();
-      expect(screen.getByText('Mesma conversa do Board do dev.kit')).toBeInTheDocument();
+      expect(orquestrador.getByText('Mesma conversa do Board do dev.kit')).toBeInTheDocument();
       expect(chamadas.length).toBeGreaterThan(0);
       expect(chamadas.every(r => r.headers.has('Authorization'))).toBe(true);
       // (remote-control-v3) A única escrita sem clique é o handshake do catálogo dos atalhos: ele pede, não executa nada.
@@ -133,6 +141,63 @@ describe('Board remoto', () => {
     expect(board.queryByRole('button', { name: 'Aguardar' })).not.toBeInTheDocument();
   });
 
+  it('o × dispensa o card só no site, o filtro Dispensadas o traz de volta e o Restaurar o devolve', async () => {
+    responder();
+    const pedidos: Array<{ pendencia: string; corpo: unknown }> = [];
+    servidor.use(http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request, params }) => {
+      const corpo = await request.json() as { acao: string };
+      pedidos.push({ pendencia: String(params.pendencia), corpo });
+      return HttpResponse.json({ maquinaId: 'notebook', pendenciaId: String(params.pendencia), dispensada: corpo.acao === 'dispensar', em: new Date().toISOString() });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Dispensar Integrar o item 20 no projeto?' }));
+    await waitFor(() => expect(board.queryByRole('region', { name: 'Integrar o item 20 no projeto?' })).not.toBeInTheDocument());
+    expect(pedidos).toEqual([{ pendencia: 'p1', corpo: { acao: 'dispensar' } }]);
+    expect(board.getByRole('heading', { name: 'Precisa de você · 0' })).toBeInTheDocument();
+    expect(board.getByText(/as outras foram dispensadas no site/)).toBeInTheDocument();
+
+    await userEvent.click(within(board.getByRole('group', { name: 'Filtro das pendências' })).getByRole('button', { name: /Dispensadas/ }));
+    const cartao = within(board.getByRole('region', { name: 'Integrar o item 20 no projeto?' }));
+    await userEvent.click(cartao.getByRole('button', { name: 'Restaurar' }));
+    expect(pedidos.at(-1)).toEqual({ pendencia: 'p1', corpo: { acao: 'restaurar' } });
+    await userEvent.click(within(board.getByRole('group', { name: 'Filtro das pendências' })).getByRole('button', { name: 'Pendentes' }));
+    expect(board.getByRole('heading', { name: 'Precisa de você · 1' })).toBeInTheDocument();
+    expect(board.getByRole('region', { name: 'Integrar o item 20 no projeto?' })).toBeInTheDocument();
+  });
+
+  it('a decisão já dispensada vem marcada da API e fica fora da contagem', async () => {
+    responder();
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ request }) => {
+      expect(new URL(request.url).searchParams.get('dispensadas')).toBe('true');
+      return HttpResponse.json(retrato().retrato.pendencias!.map(p => ({ pendencia: p, snapshotId: 'a'.repeat(64), bloqueio: null, resposta: null, dispensada: true })));
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    expect(await board.findByRole('heading', { name: 'Precisa de você · 0' })).toBeInTheDocument();
+    expect(board.queryByRole('region', { name: 'Integrar o item 20 no projeto?' })).not.toBeInTheDocument();
+    expect(within(board.getByRole('group', { name: 'Filtro das pendências' })).getByRole('button', { name: /Dispensadas/ })).toHaveTextContent('Dispensadas 1');
+  });
+
+  it('o card de Design mostra a miniatura da última versão e o clique abre o modal', async () => {
+    responder();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), c => c.charCodeAt(0));
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json({ maquinaId: 'notebook', recebidoEm: new Date().toISOString(), catalogo: {
+        contrato: 1, maquinaId: 'notebook', geradoEm: new Date().toISOString(), comandoId: null, workItems: [], repositorios: [], fluxos: [], projetos: [],
+        designs: [{ nome: 'dev.kit.page', telas: 2, repositorio: 'github.com/empresa/dev.kit.page', miniatura: '/api/design/dev-kit-page/chat-remoto/v16' }] } })),
+      http.get(`${API}/api/design/dev-kit-page/chat-remoto/v16`, () => new HttpResponse(png, { headers: { 'Content-Type': 'image/png' } })),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Ampliar dev.kit.page · última versão' }));
+    const modal = await screen.findByRole('dialog', { name: 'dev.kit.page · última versão' });
+    expect(await within(modal).findByRole('img', { name: 'dev.kit.page · última versão' })).toHaveAttribute('src', 'blob:teste');
+    await userEvent.click(within(modal).getByRole('button', { name: 'Fechar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(board.getByRole('link', { name: 'Abrir o design de dev.kit.page' })).toBeInTheDocument();
+  });
+
   it('revisa evidências e exige seis dígitos antes de confirmar o SHA', async () => {
     responder();
     const snapshot = { origem: 'feature/item-9', destino: 'feature/projeto', sha: 'a'.repeat(40), notas: [{ avaliador: 'Código', nota: 96, minima: 90 }], testesAprovados: 128, testesFalhos: 0, regressaoConcluida: true, arquivos: 4, commits: 2, alteracoes: '+ decisão', capturas: [] };
@@ -146,7 +211,7 @@ describe('Board remoto', () => {
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
     await board.findByRole('button', { name: 'Decidir' });
     const cartao = within(board.getByRole('region', { name: 'Integrar?' }));
-    expect(cartao.getAllByRole('button').map(b => b.textContent)).toEqual(['Ver detalhes', 'Decidir']);
+    expect(cartao.getAllByRole('button').map(b => b.textContent)).toEqual(['×', 'Ver detalhes', 'Decidir']);
     expect(cartao.getByText('Nota 96 · regressão sem falhas')).toBeInTheDocument();
     await userEvent.click(cartao.getByRole('button', { name: 'Decidir' }));
     expect(await screen.findByText(snapshot.origem)).toBeInTheDocument();

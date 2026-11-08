@@ -11,7 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { Projeto } from './projetos';
-import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
+import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
@@ -139,8 +139,13 @@ export const api = {
     requisitar(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, metodo: 'DELETE' }),
   destinoDoPush: (token: string, id: string, signal?: AbortSignal) =>
     chamar<{ maquinaId: string; pendenciaId: string; snapshotId: string }>(`/api/remoto/push/entregas/${encodeURIComponent(id)}`, { token, signal }),
+  /** As decisões com as dispensadas no site marcadas (o filtro "Dispensadas" do painel as traz de volta). */
   decisoesRemotas: (token: string, maquina: string, signal?: AbortSignal) =>
-    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes`, { token, signal }),
+    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes?dispensadas=true`, { token, signal }),
+  /** Fecha o card no site (ou o traz de volta): não vai à máquina e não decide nada. */
+  dispensarDecisao: (token: string, maquina: string, pendencia: string, dispensar: boolean) =>
+    chamar<DispensaDaPendencia>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`,
+      { token, metodo: 'POST', corpo: { acao: dispensar ? 'dispensar' : 'restaurar' } }),
   responderDecisao: (token: string, maquina: string, pendencia: string, corpo: ResponderDecisao) =>
     chamar<RespostaDaDecisao>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`, { token, metodo: 'POST', corpo }),
   estadoDoSegundoFator: (token: string, signal?: AbortSignal) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator', { token, signal }),

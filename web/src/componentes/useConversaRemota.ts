@@ -70,7 +70,11 @@ export function useConversaRemota(maquina: string) {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [maquina, sessao, sair, tentativa]);
 
-  const enviar = useCallback(async (texto: string, reenvio?: ComandoRemoto) => {
+  /**
+   * A mensagem ao Orquestrador. `fluxo` (correções do board remoto) leva o fluxo escolhido no `/`, o agente e os parâmetros em
+   * campos próprios; o texto continua com eles escritos, para o dev.kit antigo.
+   */
+  const enviar = useCallback(async (texto: string, reenvio?: ComandoRemoto, fluxo?: FluxoDaMensagem) => {
     const controller = ciclo.current;
     if (!sessao || !maquina || ocupado.current || !controller || controller.signal.aborted) return false;
     const pedido: ComandoNovo = reenvio ? {
@@ -79,6 +83,7 @@ export function useConversaRemota(maquina: string) {
     } : pendente.current?.texto === texto ? pendente.current : {
       id: crypto.randomUUID(), maquinaId: maquina, tipo: 'mensagem', texto,
       dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      ...(fluxo ? { fluxo: fluxo.fluxo, ...(fluxo.agente ? { agente: fluxo.agente } : {}), ...(Object.keys(fluxo.parametros).length ? { parametros: fluxo.parametros } : {}) } : {}),
     };
     if (!reenvio) pendente.current = pedido;
     ocupado.current = true; setEnviando(true); setFalhaNoEnvio('');
@@ -183,6 +188,9 @@ export function useConversaRemota(maquina: string) {
     carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, criar, recarregar: () => setTentativa(x => x + 1),
   };
 }
+
+/** O fluxo do catálogo escolhido para a mensagem: o id, o agente `cli:modelo` (vazio, o padrão) e os parâmetros preenchidos. */
+export interface FluxoDaMensagem { fluxo: number; agente: string; parametros: Record<string, string> }
 
 /** O envio do Ligar/Reiniciar: aceito pela API (o desfecho vem do serviço depois), ou recusado com o motivo. */
 export type DesfechoDoAcionamento = { ok: true } | { ok: false; turnoEmAndamento: boolean; mensagem: string };

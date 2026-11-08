@@ -1,10 +1,27 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ComandoRemoto, FalaRemota, MaquinaRemota, RespostaRemota } from '../api/remoto';
 import type { ConversaDaMaquina } from './useConversaRemota';
-import { ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, textoComContexto } from './ContextoDoChatRemoto';
+import { AvisosDoCatalogo, ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, fluxoDaMensagem, parametrosFaltando, textoComContexto } from './ContextoDoChatRemoto';
 import type { CatalogoDoChat } from './useCatalogoRemoto';
 import { comandosDoServico, rotuloDoComando } from './ControleDoDevKit';
 import { rotuloDoDia } from './filtroDeDia';
+import { AnexosDaFala, semMarcadores } from './AnexosDoChat';
+
+/** Os atalhos e as teclas do compositor: a dica do ⓘ (proposta chat-remoto v016), no lugar do texto que ficava embaixo do chat. */
+export const dicaDoCompositor = ['Enter envia · Shift+Enter quebra linha', '/ fluxo, projeto ou design · # work item · @ repositório',
+  'Ligar e Reiniciar rodam pelo serviço na máquina'];
+
+/** O ⓘ do compositor: a dica abre no foco, no passar do mouse e no toque (o celular não tem hover). */
+function DicaDoCompositor() {
+  const [aberta, setAberta] = useState(false);
+  return <span className="br-dica">
+    <button type="button" className="br-icone" aria-label="Atalhos do chat" aria-describedby="br-dica-do-chat" aria-expanded={aberta}
+      onClick={() => setAberta(a => !a)} onBlur={() => setAberta(false)}>ⓘ</button>
+    <span id="br-dica-do-chat" role="tooltip" className={`br-dica-texto${aberta ? ' br-dica-aberta' : ''}`}>
+      {dicaDoCompositor.map(l => <span key={l}>{l}</span>)}
+    </span>
+  </span>;
+}
 
 function hora(data: string) { return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
 function dataCompleta(data: string) { return new Date(data).toLocaleString('pt-BR'); }
@@ -75,15 +92,19 @@ function semRepeticao(linhas: LinhaDoChat[]) {
  * Só a CONVERSA (remote-control-v3, item 3): as decisões e aprovações ficam no painel de decisões, com o segundo fator e o
  * SHA conferido, e os turnos automáticos e os avisos repetidos não entram.
  */
-export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo }: {
+export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo, acoes }: {
   maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; conversaRemota: ConversaDaMaquina;
   /** O catálogo da máquina, o MESMO do painel do Board (um handshake só por máquina). */
   catalogo: CatalogoDoChat;
+  /** As ações do cabeçalho do Orquestrador (o Ligar/Reiniciar do dev.kit, proposta chat-remoto v016). */
+  acoes?: ReactNode;
 }) {
   const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
   const [contexto, setContexto] = useState(contextoVazio);
   const [atalho, setAtalho] = useState<'/' | '#' | '@' | null>(null);
+  const [faltando, setFaltando] = useState<string[]>([]);
+  const doCatalogo = catalogo.catalogo?.catalogo ?? null;
   const mensagens = useRef<HTMLDivElement>(null);
   const caixa = useRef<HTMLTextAreaElement>(null);
   const pertoDoFim = useRef(true);
@@ -118,7 +139,17 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
   }, []);
   async function submeter() {
     if (desabilitado || excedeu || !texto.trim()) return;
-    if (await enviar(textoFinal)) { setTexto(''); caixa.current?.focus(); pertoDoFim.current = true; }
+    // O fluxo do catálogo com parâmetro obrigatório vazio não sai: o chip dele fica marcado e o aviso diz qual falta.
+    const falta = parametrosFaltando(contexto, doCatalogo);
+    setFaltando(falta);
+    if (falta.length) return;
+    if (await enviar(textoFinal, undefined, fluxoDaMensagem(contexto))) { setTexto(''); caixa.current?.focus(); pertoDoFim.current = true; }
+  }
+  /** O atalho digitado na caixa vazia: a tecla (o teclado físico) ou o caractere que entrou (o teclado do celular, sem `key`). */
+  function abrirAtalho(tecla: string) {
+    if (!['/', '#', '@'].includes(tecla)) return false;
+    setAtalho(tecla as '/' | '#' | '@');
+    return true;
   }
   async function reenviar(comando: ComandoRemoto) {
     if (await enviar(comando.texto, comando)) {
@@ -127,8 +158,14 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
     }
   }
   return <section className="br-chat" aria-label="Orquestrador">
-    <header className="br-chathead"><span className="br-logo">O</span><div><b>Orquestrador</b><small>Mesma conversa do Board do dev.kit</small></div></header>
-    <div className="br-chat-aviso br-chat-seguranca">Conversa e consulta com login. Texto do chat nunca aprova.</div>
+    {/* Proposta chat-remoto v016: o aviso é um selo do cabeçalho, e o Ligar/Reiniciar mora aqui (o topo fica com o estado da máquina). */}
+    <header className="br-chathead"><span className="br-logo">O</span><div><b>Orquestrador</b><small>Mesma conversa do Board do dev.kit</small></div>
+      <span className="br-spacer" />
+      <span className="br-selo" title="Conversa e consulta com login. Texto do chat nunca aprova: as decisões são auditadas no painel.">
+        <span className="br-desktop-state">Texto do chat não aprova</span><span className="br-mobile-state">Chat não aprova · decisões auditadas</span>
+      </span>
+      {acoes}
+    </header>
     {maquina && (!conectada || !maquina.appAberto) && <div className="br-chat-aviso" role="status">
       <strong>○ dev.kit fora do ar</strong><span>Enviado não significa entregue. Aguarda a conexão até o prazo vencer.</span>
     </div>}
@@ -144,6 +181,8 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
       {linhas.map((linha, indice) => {
         const { comando, fala } = linha;
         const estado = comando ? estadoDo(comando, agora) : null;
+        // As imagens do Orquestrador: os anexos da fala (o link do design) e o marcador cru que o texto ainda traga.
+        const dito = semMarcadores(comando ? (doServico.has(comando.id) ? rotuloDoComando(comando.tipo) : comando.texto) : fala ? fala.texto : linha.resposta?.texto ?? '');
         const doDev = !!comando || fala?.autor === 'dev';
         const novoDia = indice === 0 || new Date(linha.data).toDateString() !== new Date(linhas[indice - 1].data).toDateString();
         return <Fragment key={linha.id}>
@@ -151,7 +190,8 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
           <article className={`br-msg${doDev ? ' br-voce' : ''}`}>
           <div className="br-meta"><span>{autorDaLinha(linha, doServico)} · <time dateTime={linha.data} title={dataCompleta(linha.data)}>{hora(linha.data)}</time></span>
             {estado && <strong className={estado[2] ? 'br-entregue' : 'br-espera'}>{estado[0]}</strong>}</div>
-          <p>{comando ? (doServico.has(comando.id) ? rotuloDoComando(comando.tipo) : comando.texto) : fala ? fala.texto : linha.resposta?.texto} {estado?.[1] && <span className="br-msg-status">{estado[1]}</span>}</p>
+          <p>{dito.texto} {estado?.[1] && <span className="br-msg-status">{estado[1]}</span>}</p>
+          <AnexosDaFala anexos={fala?.anexos ?? []} soltos={dito.removidos} />
           {comando?.estado === 'falhou' && comando.tipo === 'mensagem' && <button className="br-btn" disabled={enviando} onClick={() => void reenviar(comando)}>Tentar envio novamente</button>}
           </article>
         </Fragment>;
@@ -159,21 +199,28 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>
-      <textarea ref={caixa} aria-label="Mensagem ao Orquestrador" disabled={desabilitado} placeholder="Peça ou pergunte ao Orquestrador" value={texto}
-        maxLength={4000} rows={2} onChange={e => setTexto(e.target.value)} onKeyDown={e => {
+      {/* Os atalhos vão no texto de exemplo e na dica do ⓘ (proposta chat-remoto v016), não mais num rodapé embaixo do chat. */}
+      <textarea ref={caixa} aria-label="Mensagem ao Orquestrador" disabled={desabilitado} placeholder="Peça ou pergunte ao Orquestrador — / fluxo · # work item · @ repositório"
+        value={texto} maxLength={4000} rows={2} onChange={e => {
+          // O teclado do celular não diz a tecla (key "Unidentified"): o atalho é o caractere que entrou na caixa vazia.
+          if (!texto && e.target.value.length === 1 && abrirAtalho(e.target.value)) return;
+          setTexto(e.target.value); if (faltando.length) setFaltando([]);
+        }} onKeyDown={e => {
           if (e.nativeEvent.isComposing) return;
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submeter(); }
-          if (!texto && ['/', '#', '@'].includes(e.key)) { e.preventDefault(); setAtalho(e.key as '/' | '#' | '@'); }
+          if (!texto && abrirAtalho(e.key)) e.preventDefault();
         }} />
       <div className="br-bottom">
-        <ContextoDoChatRemoto contexto={contexto} alterar={setContexto} atalho={atalho} abrir={setAtalho} desabilitado={desabilitado}
-          catalogo={catalogo.catalogo?.catalogo ?? null} />
+        <ContextoDoChatRemoto contexto={contexto} alterar={c => { setContexto(c); setFaltando([]); }} atalho={atalho} abrir={setAtalho} desabilitado={desabilitado}
+          catalogo={doCatalogo} />
+        {maquina && <EstadoDoCatalogo estado={catalogo} appAberto={conectada && maquina.appAberto} agora={agora} />}
+        <DicaDoCompositor />
         <span className="br-spacer" /><button type="submit" className="br-send" disabled={desabilitado || !texto.trim() || excedeu} aria-label="Enviar mensagem">{enviando ? '…' : '➤'}</button>
       </div>
       {contexto.branch && <div className="br-branch">Branch existente · {contexto.branch}</div>}
       {excedeu && <p className="br-note" role="alert">Texto e contexto excedem o limite de 4000 caracteres.</p>}
+      {!!faltando.length && <p className="br-note br-falta" role="alert">Preencha antes de enviar: {faltando.join(', ')}.</p>}
     </form>
-    {maquina && <EstadoDoCatalogo estado={catalogo} appAberto={conectada && maquina.appAberto} agora={agora} />}
-    <p className="br-hint">/ fluxo, projeto ou design · # work item · @ repositório<br />Enter envia · Shift+Enter quebra linha</p>
+    {maquina && <div className="br-catalogo"><AvisosDoCatalogo estado={catalogo} /></div>}
   </section>;
 }

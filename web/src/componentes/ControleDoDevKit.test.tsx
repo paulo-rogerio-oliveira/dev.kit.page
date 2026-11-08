@@ -41,9 +41,10 @@ function preparar(m: MaquinaRemota, conversa: ConversaRemota = { comandos: [], r
 }
 async function abrir(rotulo: string) {
   renderizar('/board', tokenDoDev());
-  const botao = await screen.findByRole('button', { name: rotulo });
-  await waitFor(() => expect(botao).toBeEnabled());
-  return botao;
+  // O botão mora no cabeçalho do Orquestrador (proposta chat-remoto v016): o chat remonta ao escolher a máquina, então vale o
+  // botão de agora, e não o primeiro que apareceu.
+  await waitFor(() => expect(screen.getByRole('button', { name: rotulo })).toBeEnabled());
+  return screen.getByRole('button', { name: rotulo });
 }
 
 describe('Ligar e Reiniciar o dev.kit pelo site (item 8)', () => {
@@ -131,8 +132,8 @@ describe('Ligar e Reiniciar o dev.kit pelo site (item 8)', () => {
     preparar(maquina({ conectada: false, ultimoHeartbeatEm: new Date(Date.now() - 600000).toISOString() }));
     renderizar('/board', tokenDoDev());
 
-    const botao = await screen.findByRole('button', { name: 'Ligar dev.kit' });
     expect((await screen.findAllByText(/Máquina desconectada/)).length).toBeGreaterThan(0);
+    const botao = screen.getByRole('button', { name: 'Ligar dev.kit' });
     expect(botao).toBeDisabled();
     expect(botao).toHaveAttribute('title', expect.stringContaining('serviço do dev.kit precisa estar de pé'));
   });

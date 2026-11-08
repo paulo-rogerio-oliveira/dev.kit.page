@@ -614,6 +614,66 @@ public sealed class ConversaApiTests : IDisposable
     }
 
     [Fact]
+    public async Task O_fluxo_o_agente_e_os_parametros_do_chat_vao_na_mensagem_da_fila_e_o_reenvio_os_repete()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var comFluxo = Mensagem("c-1", "/ Implementar\n# 42\nFaça o item 42") with
+        {
+            Fluxo = 7, Agente = "claude:opus", Parametros = new Dictionary<string, string> { ["REVISOR"] = "Pessoa Revisora", ["AMBIENTE"] = "homologação" },
+        };
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", comFluxo)).StatusCode);
+        var mensagem = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal((7L, "claude:opus", "Pessoa Revisora", "homologação"),
+            (mensagem.Fluxo, mensagem.Agente, mensagem.Parametros!["REVISOR"], mensagem.Parametros["AMBIENTE"]));
+
+        // A mensagem sem fluxo sai como antes: sem os campos novos (o dev.kit antigo a lê igual).
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-2"))).StatusCode);
+        var semFluxo = _api.Fila.Enviadas.Last().Mensagem;
+        Assert.DoesNotContain("\"fluxo\"", semFluxo, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"parametros\"", semFluxo, StringComparison.Ordinal);
+
+        // As recusas antes da fila: o agente fora do formato, o parâmetro sem o {NOME}, o fluxo em outro tipo e o dado sensível.
+        foreach (var (pedido, trecho) in new (ComandoNovoV1, string)[]
+        {
+            (Mensagem("c-3") with { Fluxo = 7, Agente = "Claude Opus" }, "cli:modelo"),
+            (Mensagem("c-4") with { Fluxo = 7, Parametros = new Dictionary<string, string> { ["revisor"] = "x" } }, "MAIÚSCULAS"),
+            (Mensagem("c-5") with { Agente = "claude" }, "Escolha o fluxo"),
+            (new ComandoNovoV1("c-6", Maquina, ConversaV1.ComandoLigar, Fluxo: 7), "só na mensagem"),
+        })
+        {
+            var recusa = await ana.PostAsJsonAsync("/api/remoto/comandos", pedido);
+            Assert.Equal(HttpStatusCode.BadRequest, recusa.StatusCode);
+            Assert.Contains(trecho, await recusa.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+        var sensivel = await ana.PostAsJsonAsync("/api/remoto/comandos",
+            Mensagem("c-7") with { Fluxo = 7, Parametros = new Dictionary<string, string> { ["REVISOR"] = "ana@empresa.com.br" } });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, sensivel.StatusCode);
+        Assert.Equal(2, _api.Fila.Enviadas.Count);
+    }
+
+    [Fact]
+    public async Task A_fala_com_imagens_volta_com_os_anexos_e_o_link_que_nao_e_do_design_e_recusado()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var anexos = new AnexoDaFalaV1[]
+        {
+            new("chat-remoto v016 · Proposta", "/api/design/dev-kit-page/chat-remoto/v16"),
+            new("chat-remoto v017 · Proposta", Aviso: "A imagem não chegou ao site: o teto de versões do plano foi atingido."),
+        };
+        var fala = Fala("f-1", ConversaV1.AutorOrquestrador, texto: "Versão de design gravada: chat-remoto v016 (Proposta).") with { Anexos = anexos };
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", fala)).StatusCode);
+        // O reenvio igual não duplica; com outros anexos, é outra fala com o mesmo id (409).
+        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", fala)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", fala with { Anexos = anexos[..1] })).StatusCode);
+
+        var lida = Assert.Single((await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!.Falas);
+        Assert.Equal(anexos, lida.Anexos);
+
+        foreach (var anexo in new AnexoDaFalaV1[] { new("x", "https://outro.site/imagem.png"), new("x", "/api/design/../segredo"), new("x") })
+            Assert.Equal(HttpStatusCode.BadRequest, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("f-2") with { Anexos = [anexo] })).StatusCode);
+    }
+
+    [Fact]
     public void A_api_nao_sobe_em_production_com_a_fila_simulada()
     {
         using var api = new ApiDeTeste(ambiente: "Production");

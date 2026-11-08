@@ -24,6 +24,7 @@ BEGIN
         [EntregueEmUtc] datetime2 NULL,
         [ConcluidoEmUtc] datetime2 NULL,
         [AtualizadoEmUtc] datetime2 NOT NULL,
+        [Contexto] nvarchar(max) NOT NULL DEFAULT N'',
         CONSTRAINT [PK_ComandosRemotos] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_ComandosRemotos_Usuarios_UsuarioId] FOREIGN KEY ([UsuarioId]) REFERENCES [dbo].[Usuarios] ([Id]) ON DELETE CASCADE
     );
@@ -120,6 +121,7 @@ BEGIN
         [ComandoId] nvarchar(64) NOT NULL,
         [DitaEmUtc] datetime2 NOT NULL,
         [RecebidaEmUtc] datetime2 NOT NULL,
+        [Anexos] nvarchar(max) NOT NULL DEFAULT N'',
         CONSTRAINT [PK_FalasRemotas] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_FalasRemotas_Usuarios_UsuarioId] FOREIGN KEY ([UsuarioId]) REFERENCES [dbo].[Usuarios] ([Id]) ON DELETE CASCADE
     );

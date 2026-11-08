@@ -57,6 +57,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<EventoDaConversa> EventosDaConversa => Set<EventoDaConversa>();
     public DbSet<AutenticadorDoUsuario> Autenticadores => Set<AutenticadorDoUsuario>();
     public DbSet<RespostaDaDecisao> RespostasDasDecisoes => Set<RespostaDaDecisao>();
+    public DbSet<PendenciaDispensada> PendenciasDispensadas => Set<PendenciaDispensada>();
     public DbSet<AssinaturaDoPush> AssinaturasDoPush => Set<AssinaturaDoPush>();
     public DbSet<EntregaDoPush> EntregasDoPush => Set<EntregaDoPush>();
     public DbSet<CatalogoRemoto> CatalogosRemotos => Set<CatalogoRemoto>();
@@ -698,6 +699,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(c => c.Dispositivo).HasMaxLength(20);
             e.Property(c => c.Estado).HasMaxLength(20);
             e.Property(c => c.Erro).HasMaxLength(RegrasDaProvisao.TamanhoMaximoDoErro);
+            // (correções do board remoto) O fluxo escolhido no chat; no Azure SQL a coluna vem de api/scripts/sqlserver/BoardRemoto.sql.
+            e.Property(c => c.Contexto).HasDefaultValue("");
             // O id viaja na fila: único por usuário, e o reenvio com ele devolve o mesmo comando.
             e.HasIndex(c => new { c.UsuarioId, c.ComandoId }).IsUnique();
             // O histórico por máquina e o limite por hora.
@@ -732,6 +735,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(f => f.Origem).HasMaxLength(20);
             e.Property(f => f.Texto).HasMaxLength(Contracts.V1.ConversaV1.TamanhoMaximoDoTexto);
             e.Property(f => f.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
+            // (correções do board remoto) As imagens da fala; no Azure SQL a coluna vem de api/scripts/sqlserver/BoardRemoto.sql.
+            e.Property(f => f.Anexos).HasDefaultValue("");
             // O reenvio do dev.kit não duplica a fala.
             e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.FalaId }).IsUnique();
             // O histórico por máquina, na ordem em que foram ditas.
@@ -771,6 +776,15 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.PendenciaId, r.SnapshotId }).IsUnique().HasFilter("[Estado] <> 'vencida'");
             e.HasIndex(r => new { r.UsuarioId, r.MaquinaId, r.Estado });
             e.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // (correções do board remoto) Os cards fechados no site; no Azure SQL a tabela vem de api/scripts/sqlserver/BoardRemoto.sql.
+        modelBuilder.Entity<PendenciaDispensada>(e =>
+        {
+            e.ToTable("PendenciasDispensadas");
+            e.Property(d => d.MaquinaId).HasMaxLength(64); e.Property(d => d.PendenciaId).HasMaxLength(64);
+            e.HasIndex(d => new { d.UsuarioId, d.MaquinaId, d.PendenciaId }).IsUnique();
+            e.HasOne<Usuario>().WithMany().HasForeignKey(d => d.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

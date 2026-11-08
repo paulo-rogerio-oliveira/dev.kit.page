@@ -59,6 +59,41 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
+    public async Task Dispensar_fecha_o_card_so_no_site_o_filtro_traz_de_volta_e_restaurar_devolve()
+    {
+        using var api = new ApiDeTeste(); var c = await api.AdminAsync();
+        await PrepararMaquina(c); await Retrato(c, Pergunta, Aprovacao);
+        var dispensa = await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar });
+        dispensa.EnsureSuccessStatusCode();
+        var lida = (await dispensa.Content.ReadFromJsonAsync<DispensaDaPendenciaV1>())!;
+        Assert.Equal(("pergunta", true), (lida.PendenciaId, lida.Dispensada));
+        // O duplo clique não grava duas.
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar })).EnsureSuccessStatusCode();
+
+        Assert.Equal(["aprovacao"], (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Select(d => d.Pendencia.Id));
+        var todas = (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota + "?dispensadas=true"))!;
+        Assert.Equal([("pergunta", true), ("aprovacao", false)], todas.Select(d => (d.Pendencia.Id, d.Dispensada)));
+        // Nada foi decidido nem vai à máquina.
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+        Assert.Null(todas[0].Resposta);
+
+        // Outro usuário não dispensa a pendência da máquina alheia, e a pendência que não existe é 404.
+        var (outro, _) = await api.UsuarioAsync(c, "outro", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.NotFound, (await outro.PostAsJsonAsync(Rota + "/aprovacao", new { acao = DecisoesV1.AcaoDispensar })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync(Rota + "/inexistente", new { acao = DecisoesV1.AcaoDispensar })).StatusCode);
+
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoRestaurar })).EnsureSuccessStatusCode();
+        Assert.Equal(["pergunta", "aprovacao"], (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Select(d => d.Pendencia.Id));
+
+        // A pendência que sai do retrato leva a dispensa junto: se voltar, volta visível.
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar })).EnsureSuccessStatusCode();
+        await Retrato(c, Aprovacao);
+        (await c.PostAsJsonAsync(Rota + "/aprovacao", new { acao = DecisoesV1.AcaoRestaurar })).EnsureSuccessStatusCode();
+        await Retrato(c, Pergunta, Aprovacao);
+        Assert.Equal(2, (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Length);
+    }
+
+    [Fact]
     public async Task Pergunta_aceita_so_opcao_do_snapshot_audita_e_consumo_nao_repete()
     {
         using var api = new ApiDeTeste(); var c = await api.AdminAsync();

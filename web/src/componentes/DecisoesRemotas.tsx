@@ -16,6 +16,27 @@ export function OrigemDaPendencia({ pendencia: p }: { pendencia: PendenciaRemota
   return <p className="br-origem">{origem && <span>{origem}</span>}<span className={`br-tipo${p.tipo === 'aprovacao' ? ' br-tipo-aprovacao' : ''}`}>{p.tipo === 'aprovacao' ? 'Aprovação' : 'Pergunta'}</span></p>;
 }
 
+/**
+ * (correções do board remoto) O × que fecha o card no SITE — ou o Restaurar, no filtro "Dispensadas". Não decide nada e não
+ * vai à máquina: a task continua como está.
+ */
+export type AoDispensar = (pendencia: PendenciaRemota, dispensar: boolean) => Promise<void>;
+export function BotaoDeDispensar({ pendencia, dispensada, dispensar }: { pendencia: PendenciaRemota; dispensada: boolean; dispensar: AoDispensar }) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+  async function clicar() {
+    setEnviando(true); setErro('');
+    try { await dispensar(pendencia, !dispensada); } catch (e) { setErro(mensagemDaFalha(e)); } finally { setEnviando(false); }
+  }
+  return <>
+    {dispensada
+      ? <button type="button" className="br-btn br-restaurar" disabled={enviando} onClick={() => void clicar()}>Restaurar</button>
+      : <button type="button" className="br-fechar" disabled={enviando} aria-label={`Dispensar ${pendencia.titulo}`}
+        title="Fechar este card no site (a task no dev.kit não muda)" onClick={() => void clicar()}>×</button>}
+    {erro && <p role="alert" className="br-note">{erro}</p>}
+  </>;
+}
+
 /** O Ver detalhes do cartão recolhido (US #858): o painel mostra o título e a ação principal, e o resto sob pedido. */
 export function BotaoDeDetalhes({ aberto, alternar, controla, principal = false }: { aberto: boolean; alternar: () => void; controla: string; principal?: boolean }) {
   return <button className={`br-btn${principal && !aberto ? ' br-primary' : ''}`} aria-expanded={aberto} aria-controls={controla} onClick={alternar}>{aberto ? 'Ocultar detalhes' : 'Ver detalhes'}</button>;
@@ -25,8 +46,10 @@ export function BotaoDeDetalhes({ aberto, alternar, controla, principal = false 
  * O cartão da decisão no PAINEL de decisões, o único lugar dela (remote-control-v3, item 3: o chat não renderiza aprovação).
  * A aprovação abre a revisão, com o segundo fator e o SHA conferido; a pergunta responde com a opção, auditada.
  */
-export function CartaoDaDecisao({ decisao: d, destacada = false, desabilitado, decidir, revisar }: {
+export function CartaoDaDecisao({ decisao: d, destacada = false, desabilitado, decidir, revisar, dispensar }: {
   decisao: DecisaoPendente; destacada?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+  /** O × do card (correções do board remoto); ausente, o card não fecha. */
+  dispensar?: AoDispensar;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
@@ -50,8 +73,8 @@ export function CartaoDaDecisao({ decisao: d, destacada = false, desabilitado, d
     : p.jaTentei;
   const pendente = !registro || registro.estado === 'vencida';
   const detalhes = `${idDoCartao}-detalhes`;
-  return <section id={idDoCartao} tabIndex={-1} className="br-card br-decisao-card br-need br-compacta" aria-label={p.titulo}>
-    <div className="br-decisao-titulo"><b>{p.titulo}</b></div>
+  return <section id={idDoCartao} tabIndex={-1} className={`br-card br-decisao-card br-need br-compacta${d.dispensada ? ' br-dispensada' : ''}`} aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b>{dispensar && <BotaoDeDispensar pendencia={p} dispensada={!!d.dispensada} dispensar={dispensar} />}</div>
     <OrigemDaPendencia pendencia={p} />
     {p.tipo === 'aprovacao' && resumo && <p>{resumo}</p>}
     {registro && <RegistroDaDecisao resposta={registro} />}

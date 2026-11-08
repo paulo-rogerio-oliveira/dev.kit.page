@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { transferableAbortController } from 'node:util';
@@ -370,7 +370,8 @@ it('com o dev.kit fechado carrega os atalhos do último catálogo, mostra a data
     }),
   );
   await abrir();
-  expect(await screen.findByText(/dev.kit fechado: último catálogo recebido/)).toBeInTheDocument();
+  // (proposta chat-remoto v016) A idade do catálogo fica ao lado do ↻; a data completa e o "dev.kit fechado" vão na dica.
+  expect(await screen.findByTitle(/dev.kit fechado: último catálogo recebido/)).toBeInTheDocument();
   expect(screen.getByText(/há 2 dias/)).toHaveAttribute('dateTime', doisDias);
 
   // / : os fluxos, os projetos e os designs do catálogo; a escolha aplica e fecha.
@@ -390,12 +391,15 @@ it('com o dev.kit fechado carrega os atalhos do último catálogo, mostra a data
   await userEvent.click(itens.getByRole('button', { name: /#812 · Handshake do chat remoto/ }));
   expect(screen.getByRole('button', { name: '# Work item' })).toHaveTextContent('# 812');
 
-  // @ : a escolha preenche e o branch ainda é informado antes de aplicar.
+  // @ : o repositório aparece pelo NOME (o último segmento); a escolha preenche e o branch ainda é informado antes de aplicar.
   await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
-  await userEvent.click(within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' })).getByRole('button', { name: 'github.com/empresa/git.kit' }));
-  expect(screen.getByRole('textbox', { name: 'Repositório' })).toHaveValue('github.com/empresa/git.kit');
+  const repositorios = within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' }));
+  expect(repositorios.getAllByRole('button').map(b => b.querySelector('span')?.textContent)).toEqual(['dev.kit.page', 'git.kit']);
+  await userEvent.click(repositorios.getByRole('button', { name: 'git.kit' }));
+  expect(screen.getByRole('textbox', { name: 'Repositório' })).toHaveValue('git.kit');
   await userEvent.type(screen.getByRole('textbox', { name: 'Branch existente' }), 'feature/item-1');
   await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
+  expect(screen.getByRole('button', { name: '@ Repositório' })).toHaveTextContent('@ git.kit ▾');
 
   const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
   await userEvent.click(caixa); await userEvent.type(caixa, 'Mostre{Enter}');
@@ -437,8 +441,8 @@ it('com o dev.kit aberto pede o catálogo ao conectar, relê quando o pedido con
     }),
   );
   await abrir();
-  expect(await screen.findByText(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument();
-  expect(screen.getByText(/agora há pouco/)).toBeInTheDocument();
+  expect(await screen.findByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument();
+  expect(screen.getByText(/catálogo agora há pouco/)).toBeInTheDocument();
   expect(pedidos).toHaveLength(1);
   expect(pedidos[0]).toMatchObject({ maquinaId: 'notebook', tipo: 'catalogo', texto: '' });
   expect(within(screen.getByRole('log')).queryByText(/Catálogo do chat atualizado/)).not.toBeInTheDocument();
@@ -462,7 +466,7 @@ it('o dev.kit antigo recusa o handshake: o chat avisa para atualizar, não mostr
   await abrir();
   expect(await screen.findByRole('alert')).toHaveTextContent(/não é conhecido por esta versão do dev.kit. Atualize o dev.kit desta máquina/);
   expect(within(screen.getByRole('log')).queryByText(/Não executado/)).not.toBeInTheDocument();
-  expect(screen.getByText(/Atalhos sem catálogo/)).toBeInTheDocument();
+  expect(screen.getByTitle(/Atalhos sem catálogo/)).toHaveTextContent('sem catálogo');
   await act(() => new Promise(resolve => setTimeout(resolve, 100)));
   expect(pedidos).toHaveLength(0);
 
@@ -470,4 +474,123 @@ it('o dev.kit antigo recusa o handshake: o chat avisa para atualizar, não mostr
   await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
   expect(screen.getByText(/Sem catálogo do dev.kit desta máquina/)).toBeInTheDocument();
   expect(screen.queryByRole('group', { name: /Do catálogo do dev.kit/ })).not.toBeInTheDocument();
+});
+
+// ----- Correções do board remoto (07/11): o fluxo com modelo e parâmetros, as imagens e o atalho no celular -----
+
+function catalogoComFluxo(): CatalogoDaMaquina {
+  const base = catalogo();
+  return { ...base, catalogo: { ...base.catalogo,
+    repositorios: [{ nome: 'github.com/empresa/app' }, { nome: 'dev.azure.com/outra/app' }, { nome: 'github.com/empresa/git.kit' }],
+    fluxos: [{ nome: 'Implementar com revisor', descricao: 'Com revisão', id: 7, agentePadrao: 'claude:opus', parametros: [
+      { nome: 'REVISOR', rotulo: 'Revisor', tipo: 'texto', usuario: true, obrigatorio: true },
+      { nome: 'AMBIENTE', tipo: 'lista', opcoes: ['homologação', 'produção'], obrigatorio: true, padrao: 'homologação' },
+      { nome: 'NOTIFICAR', tipo: 'sim-nao', obrigatorio: false },
+    ] }],
+    agentes: ['claude', 'claude:opus', 'kiro:auto'], membros: ['Pessoa Revisora', 'Pessoa Dev'] } };
+}
+
+it('o fluxo do catálogo traz os chips de modelo e de parâmetros, valida o obrigatório e manda os campos', async () => {
+  preparar();
+  const pedidos: ComandoNovo[] = [];
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoComFluxo())),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      const pedido = await request.json() as ComandoNovo; pedidos.push(pedido); return HttpResponse.json({ ...comando(), ...pedido }, { status: 202 });
+    }),
+  );
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
+  await userEvent.click(screen.getByRole('button', { name: /^Implementar com revisor/ }));
+  // O primeiro chip é o MODELO, com o agente padrão do fluxo; depois um por parâmetro, com o padrão já aplicado.
+  expect(screen.getByRole('button', { name: 'Modelo do fluxo' })).toHaveTextContent('claude:opus');
+  expect(screen.getByRole('button', { name: 'Parâmetro AMBIENTE' })).toHaveTextContent('AMBIENTE: homologação');
+  expect(screen.getByRole('button', { name: 'Parâmetro Revisor' })).toHaveTextContent('Revisor: obrigatório');
+  expect(screen.getByRole('button', { name: 'Parâmetro NOTIFICAR' })).toHaveTextContent('NOTIFICAR: opcional');
+
+  // O obrigatório vazio segura o envio.
+  const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
+  await userEvent.type(caixa, 'Implemente o item{Enter}');
+  expect(await screen.findByText('Preencha antes de enviar: Revisor.')).toBeInTheDocument();
+  expect(pedidos.filter(p => p.tipo === 'mensagem')).toHaveLength(0);
+
+  // O usuário do board: a busca filtra os membros do time, como o seletor de work item.
+  await userEvent.click(screen.getByRole('button', { name: 'Parâmetro Revisor' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Revisor' }), 'revis');
+  const membros = within(screen.getByRole('group', { name: 'Membros do time' }));
+  expect(membros.queryByRole('button', { name: 'Pessoa Dev' })).not.toBeInTheDocument();
+  await userEvent.click(membros.getByRole('button', { name: 'Pessoa Revisora' }));
+  // O modelo troca pelos agentes da máquina; a lista fechada só aceita as opções.
+  await userEvent.click(screen.getByRole('button', { name: 'Modelo do fluxo' }));
+  await userEvent.click(within(screen.getByRole('group', { name: 'Agentes da máquina' })).getByRole('button', { name: 'kiro:auto' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Parâmetro AMBIENTE' }));
+  expect(screen.queryByRole('textbox', { name: 'AMBIENTE' })).not.toBeInTheDocument();
+  await userEvent.click(within(screen.getByRole('group', { name: 'Opções de AMBIENTE' })).getByRole('button', { name: 'produção' }));
+
+  await userEvent.click(caixa); await userEvent.keyboard('{Enter}');
+  await waitFor(() => expect(pedidos.filter(p => p.tipo === 'mensagem')).toHaveLength(1));
+  const enviado = pedidos.find(p => p.tipo === 'mensagem')!;
+  expect(enviado).toMatchObject({ fluxo: 7, agente: 'kiro:auto', parametros: { REVISOR: 'Pessoa Revisora', AMBIENTE: 'produção' } });
+  // O texto continua com o contexto escrito, para o dev.kit antigo.
+  expect(enviado.texto).toBe('/ Implementar com revisor\nModelo: kiro:auto\nParâmetro AMBIENTE: produção\nParâmetro REVISOR: Pessoa Revisora\nImplemente o item');
+});
+
+it('o seletor de repositório mostra só o nome, o dono no repetido, filtra pelo nome e manda o valor completo', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoComFluxo())));
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  const grupo = () => within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' }));
+  expect(grupo().getAllByRole('button').map(b => b.textContent)).toEqual(['app empresa', 'app outra', 'git.kit']);
+  // O filtro casa pelo nome: o host do repositório não traz todos de volta.
+  await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'github');
+  expect(screen.getByText(/Nada no catálogo com “github”/)).toBeInTheDocument();
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Repositório' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'git.k');
+  expect(grupo().getAllByRole('button').map(b => b.textContent)).toEqual(['git.kit']);
+});
+
+it('a fala com a versão de design mostra a miniatura, abre o modal e a imagem que não chegou vira aviso', async () => {
+  const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), c => c.charCodeAt(0));
+  preparar({ comandos: [], respostas: [], ultimoEvento: 10, falas: [
+    fala('orquestrador', 'Versão de design gravada: chat-remoto v016 (Proposta).', new Date(Date.now() - 60000), { id: 'dv-1', anexos: [
+      { titulo: 'chat-remoto v016 · Proposta', url: '/api/design/dev-kit-page/chat-remoto/v16' },
+      { titulo: 'chat-remoto v017 · Proposta', aviso: 'o teto de versões do plano foi atingido.' },
+    ] }),
+    // O dev.kit antigo: o marcador cru não vira caminho no site.
+    fala('orquestrador', 'Proposta pronta: [GITKIT:IMAGEM]<caminho>[/GITKIT:IMAGEM]', new Date(Date.now() - 30000)),
+  ] });
+  servidor.use(http.get(`${API}/api/design/dev-kit-page/chat-remoto/v16`, () => new HttpResponse(png, { headers: { 'Content-Type': 'image/png' } })));
+  await abrir();
+  const log = within(screen.getByRole('log'));
+  expect(log.getByText('⚠ chat-remoto v017 · Proposta: o teto de versões do plano foi atingido.')).toBeInTheDocument();
+  expect(log.getByText('Proposta pronta:')).toBeInTheDocument();
+  expect(log.queryByText(/GITKIT/)).not.toBeInTheDocument();
+  expect(log.getByText('⚠ A imagem citada fica só no dev.kit desta máquina.')).toBeInTheDocument();
+  await userEvent.click(log.getByRole('button', { name: 'Ampliar chat-remoto v016 · Proposta' }));
+  const modal = await screen.findByRole('dialog', { name: 'chat-remoto v016 · Proposta' });
+  expect(await within(modal).findByRole('img', { name: 'chat-remoto v016 · Proposta' })).toHaveAttribute('src', 'blob:teste');
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('no teclado do celular o atalho abre pelo caractere digitado, sem o nome da tecla, e a dica do ⓘ traz os atalhos', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoComFluxo())));
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  const caixa = screen.getByLabelText('Mensagem ao Orquestrador');
+  expect(caixa).toHaveAttribute('placeholder', 'Peça ou pergunte ao Orquestrador — / fluxo · # work item · @ repositório');
+  // O Android manda "Unidentified" no keydown: só o input diz que entrou um "@".
+  fireEvent.change(caixa, { target: { value: '@' } });
+  expect(await screen.findByRole('dialog', { name: 'Repositório' })).toBeInTheDocument();
+  expect(within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' })).getAllByRole('button')).toHaveLength(3);
+  expect(caixa).toHaveValue('');
+  await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+  await userEvent.click(screen.getByRole('button', { name: 'Atalhos do chat' }));
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Enter envia · Shift+Enter quebra linha');
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Ligar e Reiniciar rodam pelo serviço na máquina');
 });

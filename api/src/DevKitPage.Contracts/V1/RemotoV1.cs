@@ -159,6 +159,16 @@ public static class RemotoV1
     /// <summary>O máximo de entradas em cada lista do catálogo (o dev.kit corta as excedentes).</summary>
     public const int MaximoNoCatalogo = 200;
 
+    public const string ParametroTexto = "texto";
+    public const string ParametroLista = "lista";
+    public const string ParametroSimNao = "sim-nao";
+
+    /// <summary>Os tipos de parâmetro de um fluxo do catálogo (<see cref="ParametroDoFluxoV1.Tipo"/>): o campo que o chat mostra.</summary>
+    public static IReadOnlyList<string> TiposDeParametro { get; } = [ParametroTexto, ParametroLista, ParametroSimNao];
+
+    /// <summary>Quantos parâmetros um fluxo do catálogo declara, no máximo.</summary>
+    public const int MaximoDeParametrosDoFluxo = 30;
+
     /// <summary>O <c>codigo</c> do 400 de contrato que esta API não conhece (o ProblemDetails leva <c>contratoAceito</c>).</summary>
     public const string CodigoContratoDesconhecido = "contrato-desconhecido";
 

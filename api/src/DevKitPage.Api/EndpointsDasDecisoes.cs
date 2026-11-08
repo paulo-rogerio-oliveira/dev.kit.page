@@ -9,15 +9,21 @@ public static class EndpointsDasDecisoes
     public static void MapearDecisoes(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/remoto").WithTags("Decisões remotas").RequireRateLimiting(LimiteDeTaxa.PoliticaDaConversa);
-        grupo.MapGet("/maquinas/{maquina}/decisoes", (string maquina, ClaimsPrincipal quem, IDecisoesRemotas decisoes, CancellationToken ct)
+        // (correções do board remoto) ?dispensadas=true traz também os cards fechados no site, marcados — o filtro "Dispensadas".
+        grupo.MapGet("/maquinas/{maquina}/decisoes", (string maquina, bool? dispensadas, ClaimsPrincipal quem, IDecisoesRemotas decisoes, CancellationToken ct)
             => EndpointsDoRemoto.ComUsuario(quem, async usuario =>
-                await decisoes.PendentesAsync(usuario, maquina, ct) is { } lista ? Results.Ok(lista) : Results.NotFound()));
+                await decisoes.PendentesAsync(usuario, maquina, ct, dispensadas == true) is { } lista ? Results.Ok(lista) : Results.NotFound()));
         grupo.MapPost("/maquinas/{maquina}/decisoes/{pendencia}", (string maquina, string pendencia, HttpContext http, ClaimsPrincipal quem, IDecisoesRemotas decisoes, CancellationToken ct)
             => EndpointsDoRemoto.ComUsuario(quem, async usuario =>
             {
                 var (pedido, recusa) = await CorpoJson.LerAsync<ResponderDecisaoV1>(http.Request, 4096, ct);
                 if (recusa is not null) return recusa;
-                if (pedido!.SnapshotId is not { Length: 64 } || pedido.Acao is not ("responder" or "aprovar" or "ajuste") || pedido.Opcao?.Length > 200 || pedido.Codigo?.Length > 6)
+                // Dispensar e restaurar são só do site: não pedem snapshot nem vão à máquina.
+                if (pedido!.Acao is DecisoesV1.AcaoDispensar or DecisoesV1.AcaoRestaurar)
+                    return pendencia.Length > 64 ? Results.Problem("Pendência inválida.", statusCode: 400)
+                        : Resultado(await decisoes.DispensarAsync(usuario, maquina, pendencia, pedido.Acao == DecisoesV1.AcaoDispensar, ct));
+                if (pedido.SnapshotId is not { Length: 64 } || pedido.Acao is not (DecisoesV1.AcaoResponder or DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAjuste)
+                    || pedido.Opcao?.Length > 200 || pedido.Codigo?.Length > 6)
                     return Results.Problem("Resposta inválida.", statusCode: 400);
                 return Resultado(await decisoes.ResponderAsync(usuario, maquina, pendencia, pedido, ct));
             }));
