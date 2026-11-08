@@ -327,6 +327,37 @@ caminho do `devcli` e responde `concluido` (com o slug ou o projeto de design) o
 - **Compatibilidade:** o dev.kit antigo não conhece `projeto` nem `design` e os recusa (`recusado`, "não é conhecido por esta
   versão do dev.kit"); a API antiga recusa o tipo com **400**. O site mostra as duas recusas no formulário.
 
+### 5.2 Correções do board remoto (07/11/2026)
+
+Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes (regra de impacto #2).
+
+| Onde | Campo | O que é |
+|---|---|---|
+| `ComandoNovoV1` e `MensagemDaFilaV1` | `fluxo` (id), `agente` (`cli` ou `cli:modelo`), `parametros` (`{ NOME: valor }`) | O fluxo escolhido no `/` do chat, com o chip de modelo e os de parâmetro. Só na `mensagem`; `agente` e `parametros` só com `fluxo`. O texto continua com o contexto escrito (`Modelo: …`, `Parâmetro NOME: …`). O dev.kit monta `devcli processo-iniciar --fluxo <id> --param NOME=valor --agente cli:modelo`, validado pelo próprio `processo-iniciar` (simulação). A mensagem sem fluxo sai sem esses campos. |
+| `CatalogoRemotoV1.fluxos[]` | `id`, `parametros` (`nome`, `rotulo`, `tipo` = `texto`/`lista`/`sim-nao`, `opcoes`, `usuario`, `obrigatorio`, `padrao`), `agentePadrao` | O que os chips do fluxo pedem. |
+| `CatalogoRemotoV1` | `agentes`, `membros` | Os `cli:modelo` da máquina e os membros do time (o parâmetro de usuário). Até 200 cada. |
+| `DesignNoCatalogoV1` | `miniatura` | O link da última versão enviada (`/api/design/...`): a miniatura do card de Design do painel. |
+| `FalaDoDevKitV1` / `FalaRemotaV1` | `anexos` (`titulo`, `url`?, `aviso`?) | As imagens da fala: o dev.kit traduz o `[GITKIT:DESIGN]`/`[GITKIT:IMAGEM]` no link estável da versão ANTES de sanitizar. Sem link (o teto do plano, o envio pendente), vai o `aviso`. Até 10. O site mostra a miniatura e abre o modal. |
+| `DecisaoPendenteV1` | `dispensada` | O card fechado no site. |
+
+- **Dispensar** (`POST .../decisoes/{pendencia}` com `{ "acao": "dispensar" }` ou `"restaurar"`): só no site, por usuário,
+  máquina e pendência; não vai à máquina e não decide nada. `GET .../decisoes` deixa as dispensadas de fora (o push também);
+  `?dispensadas=true` as traz marcadas. A dispensa de uma pendência que saiu do retrato é apagada na próxima dispensa.
+- **Projetos (ajuste 8):** o dev.kit publica `fechando` quando todos os itens do projeto estão integrados (a situação derivada);
+  `concluido` continua exigindo o fechamento confirmado. O painel do Board lista só os em andamento, e o "Mostrar concluídos"
+  traz os `fechando` e os `concluido`.
+- **Execuções (ajuste 7):** a sessão de gatilho (avaliador, fechamento) ociosa — sem turno e sem pendência real — não entra em
+  `fluxos`; em turno, entra agrupada sob a task que a disparou. O Fechamento que integrou com sucesso conclui a própria task, os
+  avaliadores da mesma dona e a dona (nada é apagado).
+- **Autorização (ajuste 9):** com o recurso `decisoes-autorizar` no heartbeat, o dev.kit publica a pendência `tipo: "autorizacao"`
+  com o `escopo` exato (`ato` = `concluir-projeto`, `integrar-item`, `arquivar-tasks` ou `executar-comando`; `alvo`, `sha`?,
+  `itens`?, `comando`?). O site responde `acao: "autorizar"` com o código TOTP — o mesmo segundo fator e a mesma auditoria do
+  `aprovar` —, ou `ajuste` para recusar. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
+  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez) e
+  `concluir-projeto` (em fechamento, sem o fechamento confirmado); `integrar-item` segue pelo `aprovar` do snapshot.
+- **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto` e `FalasRemotas.Anexos` vêm de
+  `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
+
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no

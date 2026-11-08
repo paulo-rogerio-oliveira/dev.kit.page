@@ -142,10 +142,8 @@
 .br-bottom {display:flex; gap:6px; align-items:center; flex-wrap:wrap}
 .br-bottom button {font-size:11px; padding:3px 7px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--soft)}
 .br-bottom .br-send {min-width:32px; height:32px; border:0; border-radius:50%; padding:0; font-size:16px}
-.br-hint {font-size:11px; line-height:1.5; color:var(--muted); text-align:center; margin:0 12px 10px}
 .br-pwa {display:none; font-size:11px; color:var(--muted); padding:10px 12px; border-top:1px solid var(--line); background:var(--surface); flex:none}
 .br-pwa strong {color:var(--ink)}
-.br-footer {font-size:10.5px; color:var(--muted); text-align:center; padding:0 10px 9px; background:var(--surface); flex:none}
 @media (max-width:700px) {
   .br-top {height:auto; min-height:0; padding:14px 16px 10px; flex-wrap:wrap; gap:0 8px; align-items:center}
   .br-top>b {font-size:16px}
@@ -171,7 +169,6 @@
   .br-indisponivel {padding:20px 16px}
   .br-indisponivel h1 {font-size:16px}
   .br-composer {margin:8px 10px}
-  .br-hint {margin-bottom:12px}
   .br-note {font-size:11px}
   .br-need p {font-size:11.5px}
   .br-pwa {display:block}

@@ -320,6 +320,18 @@ function CartaoDaVersao({ token, coluna, destaque, aoApagar, tratar }: {
 
 /** A imagem da versão: baixada com o token (a rota é autenticada) e mostrada por um blob: URL. */
 export function ImagemDaVersao({ token, versao, tratar }: { token: string; versao: VersaoDeDesign; tratar: (falha: unknown) => void }) {
+  return <ImagemDoDesign token={token} link={versao.link} tratar={tratar} largura={versao.largura} altura={versao.altura}
+    alt={`${tresDigitos(versao.numero)} ${versao.tipo} (${versao.largura}x${versao.altura})`} />;
+}
+
+/**
+ * A imagem de uma versão pelo LINK da API de design (`/api/design/...`), baixada com o token e mostrada por um blob: URL —
+ * a mesma da comparação, reusada pela miniatura e pelo modal do chat do Board (correções do board remoto). A que não abre vira
+ * o aviso "Imagem indisponível", nunca um link quebrado.
+ */
+export function ImagemDoDesign({ token, link, alt, tratar, largura, altura, className = 'design-imagem' }: {
+  token: string; link: string; alt: string; tratar: (falha: unknown) => void; largura?: number; altura?: number; className?: string;
+}) {
   const [url, setUrl] = useState('');
   const [falhou, setFalhou] = useState(false);
 
@@ -327,7 +339,7 @@ export function ImagemDaVersao({ token, versao, tratar }: { token: string; versa
     let vivo = true;
     let criada = '';
     setFalhou(false);
-    api.imagemDeDesign(token, versao.link).then((blob) => {
+    api.imagemDeDesign(token, link).then((blob) => {
       if (!vivo) return;
       criada = URL.createObjectURL(blob);
       setUrl(criada);
@@ -340,13 +352,12 @@ export function ImagemDaVersao({ token, versao, tratar }: { token: string; versa
       vivo = false;
       if (criada) URL.revokeObjectURL(criada);
     };
-  }, [token, versao.link, tratar]);
+  }, [token, link, tratar]);
 
-  const alt = `${tresDigitos(versao.numero)} ${versao.tipo} (${versao.largura}x${versao.altura})`;
-  if (falhou) return <p className="design-imagem design-imagem-falhou" role="img" aria-label={alt}>Imagem indisponível</p>;
+  if (falhou) return <p className={`${className} design-imagem-falhou`} role="img" aria-label={alt}>Imagem indisponível</p>;
   return url
-    ? <img className="design-imagem" src={url} alt={alt} width={versao.largura} height={versao.altura} />
-    : <span className="design-imagem design-imagem-carregando" role="img" aria-label={`${alt} — carregando`} />;
+    ? <img className={className} src={url} alt={alt} width={largura} height={altura} />
+    : <span className={`${className} design-imagem-carregando`} role="img" aria-label={`${alt} — carregando`} />;
 }
 
 /** Sobrepor: a de antes embaixo e a proposta (ou a recaptura) por cima, com a opacidade no controle deslizante. */

@@ -77,8 +77,10 @@ export function BotaoDoDevKit({ controle }: { controle: Controle }) {
   const cancelar = useRef<HTMLButtonElement>(null);
   useEffect(() => { if (controle.confirmando) cancelar.current?.focus(); }, [controle.confirmando]);
   return <>
-    <button className={`br-btn br-acao${controle.tipo === 'ligar' ? ' br-ligar' : ''}`} disabled={controle.desabilitado} title={controle.motivo} onClick={controle.clicar}>
-      {controle.tipo === 'ligar' ? 'Ligar dev.kit' : 'Reiniciar dev.kit'}
+    {/* A dica leva o que era o rodapé do Board (proposta chat-remoto v016): quem executa é o serviço da máquina. */}
+    <button className={`br-btn br-acao${controle.tipo === 'ligar' ? ' br-ligar' : ''}`} disabled={controle.desabilitado}
+      title={`${controle.motivo} Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.`} onClick={controle.clicar}>
+      <span aria-hidden="true">↻</span>{controle.tipo === 'ligar' ? 'Ligar dev.kit' : 'Reiniciar dev.kit'}
     </button>
     {controle.confirmando && <div className="br-dialogo-fundo" onKeyDown={e => { if (e.key === 'Escape') controle.cancelar(); }}>
       <div className="br-dialogo" role="dialog" aria-modal="true" aria-labelledby="br-dialogo-titulo">

@@ -37,6 +37,12 @@ export interface PendenciaRemota {
   id: string; tipo: string; titulo: string; pergunta?: string | null; opcoes?: string[] | null;
   jaTentei?: string | null; projeto?: string | null; item?: number | null; fluxo?: string | null;
   snapshot?: SnapshotDaDecisao | null;
+  /** (ajuste 9) O escopo exato da autorização (tipo `autorizacao`): o que o segundo fator autoriza, e nada além. */
+  escopo?: EscopoDaAutorizacao | null;
+}
+export interface EscopoDaAutorizacao {
+  ato: 'concluir-projeto' | 'integrar-item' | 'arquivar-tasks' | 'executar-comando' | string;
+  alvo: string; sha?: string | null; itens?: string[] | null; comando?: string | null;
 }
 export interface SnapshotDaDecisao {
   origem: string; destino: string; sha: string;
@@ -48,8 +54,11 @@ export interface RespostaDaDecisao {
   id: number; maquinaId: string; pendenciaId: string; snapshotId: string; acao: string; opcao: string | null;
   origem: string | null; destino: string | null; sha: string | null; em: string; segundoFator: boolean; estado: string;
 }
-export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null }
-export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste'; opcao?: string; codigo?: string }
+/** `dispensada` é campo novo (correções do board remoto): o card fechado no site, só com `?dispensadas=true`. */
+export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null; dispensada?: boolean }
+export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string }
+/** A dispensa do card (Contracts/V1/DecisoesV1.cs): só no site, a task da máquina não muda. */
+export interface DispensaDaPendencia { maquinaId: string; pendenciaId: string; dispensada: boolean; em: string }
 
 /** Conversa v1: o estado é confirmado pela API, nunca inferido do heartbeat. */
 export interface ComandoRemoto {
@@ -72,7 +81,11 @@ export interface ComandoNovo {
   id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | TipoDeCriacao; texto: string; dispositivo: 'celular' | 'navegador';
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
+  /** (correções do board remoto) O fluxo do catálogo escolhido no `/`, o agente `cli:modelo` e os parâmetros dele. */
+  fluxo?: number; agente?: string; parametros?: Record<string, string>;
 }
+/** Uma imagem da fala: o link da API de design, ou o aviso do porquê ela não está no site. */
+export interface AnexoDaFala { titulo: string; url?: string | null; aviso?: string | null }
 export interface RespostaRemota {
   id: string; maquinaId: string; comandoId: string | null; tipo: string; texto: string; geradaEm: string; recebidaEm: string;
 }
@@ -80,6 +93,8 @@ export interface RespostaRemota {
 export interface FalaRemota {
   id: string; maquinaId: string; autor: 'dev' | 'orquestrador' | string; origem: 'desktop' | 'remoto' | string; texto: string;
   comandoId: string | null; ditaEm: string; recebidaEm: string;
+  /** Campo novo: as imagens citadas na fala (a versão de design gravada). */
+  anexos?: AnexoDaFala[] | null;
 }
 export interface ConversaRemota {
   /** `falas` é campo novo do contrato v1: a API antiga não o manda. */
@@ -90,10 +105,22 @@ export interface CatalogoRemoto {
   contrato: number; maquinaId: string; geradoEm: string; comandoId: string | null;
   workItems: Array<{ id: number; titulo: string; tipo?: string | null; estado?: string | null }> | null;
   repositorios: Array<{ nome: string; branchPadrao?: string | null }> | null;
-  fluxos: Array<{ nome: string; descricao?: string | null }> | null;
+  /** `id`, `parametros` e `agentePadrao` são campos novos (correções do board remoto): o dev.kit antigo não os manda. */
+  fluxos: Array<FluxoDoCatalogo> | null;
   projetos: Array<{ slug: string; nome: string; situacao?: string | null }> | null;
-  /** `repositorio` é campo novo (item 4): o dev.kit antigo não o manda. */
-  designs: Array<{ nome: string; telas: number; repositorio?: string | null }> | null;
+  /** `repositorio` é campo novo (item 4) e `miniatura` (o link da última versão no site), das correções do board remoto. */
+  designs: Array<{ nome: string; telas: number; repositorio?: string | null; miniatura?: string | null }> | null;
+  /** Campos novos: os agentes `cli` ou `cli:modelo` da máquina e os membros do time (o parâmetro de usuário). */
+  agentes?: string[] | null;
+  membros?: string[] | null;
+}
+export interface FluxoDoCatalogo {
+  nome: string; descricao?: string | null; id?: number | null; parametros?: ParametroDoFluxo[] | null; agentePadrao?: string | null;
+}
+/** Um parâmetro do fluxo: o `{NOME}`, o tipo do campo, as opções, a marca de usuário do board, se é obrigatório e o padrão. */
+export interface ParametroDoFluxo {
+  nome: string; rotulo?: string | null; tipo: 'texto' | 'lista' | 'sim-nao' | string; opcoes?: string[] | null; usuario?: boolean;
+  obrigatorio?: boolean; padrao?: string | null;
 }
 /** O último catálogo recebido da máquina, com a data em que a API o recebeu (vale também com o dev.kit fechado). */
 export interface CatalogoDaMaquina { maquinaId: string; recebidoEm: string; catalogo: CatalogoRemoto }

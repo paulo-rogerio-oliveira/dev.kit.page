@@ -9,7 +9,17 @@ namespace DevKitPage.Core;
 
 public interface IDecisoesRemotas
 {
-    Task<IReadOnlyList<DecisaoPendenteV1>?> PendentesAsync(int usuario, string maquina, CancellationToken ct);
+    /// <summary>
+    /// As pendências do retrato com o snapshot e a resposta. As DISPENSADAS no site ficam de fora (o push e o painel não as
+    /// mostram), salvo com <paramref name="incluirDispensadas"/>, que as traz marcadas.
+    /// </summary>
+    Task<IReadOnlyList<DecisaoPendenteV1>?> PendentesAsync(int usuario, string maquina, CancellationToken ct, bool incluirDispensadas = false);
+
+    /// <summary>
+    /// (correções do board remoto) Fecha o card da pendência no site — ou o traz de volta, com <paramref name="dispensar"/>
+    /// falso. Só no site: nada vai à máquina, e a task não muda. A pendência que não está no retrato é 404.
+    /// </summary>
+    Task<ResultadoDaDecisao<DispensaDaPendenciaV1>> DispensarAsync(int usuario, string maquina, string pendencia, bool dispensar, CancellationToken ct);
     Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ResponderAsync(int usuario, string maquina, string pendencia, ResponderDecisaoV1 pedido, CancellationToken ct);
     Task<IReadOnlyList<RespostaDaDecisaoV1>> RespostasAsync(int usuario, string maquina, CancellationToken ct);
     Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ReceberAsync(int usuario, string maquina, long id, CancellationToken ct);
@@ -50,6 +60,19 @@ public sealed class RespostaDaDecisao
     public string Estado { get; set; } = "registrada";
 }
 
+/// <summary>
+/// (correções do board remoto) Um card que o dev fechou no site: por usuário, máquina e pendência. Não é decisão nem
+/// auditoria — a task da máquina não muda; o card volta pelo filtro "Dispensadas".
+/// </summary>
+public sealed class PendenciaDispensada
+{
+    public long Id { get; set; }
+    public int UsuarioId { get; set; }
+    public string MaquinaId { get; set; } = string.Empty;
+    public string PendenciaId { get; set; } = string.Empty;
+    public DateTime DispensadaEmUtc { get; set; }
+}
+
 public static class RegrasDaDecisao
 {
     public static string SnapshotId(PendenciaNoRetratoV1 pendencia)
@@ -57,6 +80,7 @@ public static class RegrasDaDecisao
 
     public static string? Bloqueio(PendenciaNoRetratoV1 p)
     {
+        if (p.Tipo == RemotoV1.PendenciaAutorizacao) return ValidarEscopo(p.Escopo);
         if (p.Tipo != RemotoV1.PendenciaAprovacao) return null;
         var s = p.Snapshot;
         if (s is null) return "A máquina ainda não enviou as evidências deste snapshot.";
@@ -74,6 +98,23 @@ public static class RegrasDaDecisao
         if (s.Notas is null || s.Notas.Count > 20 || s.Notas.Any(n => n is null || string.IsNullOrWhiteSpace(n.Avaliador) || n.Avaliador.Length > 200 || n.Nota is < 0 or > 100 || n.Minima is < 1 or > 100)) return "Snapshot: notas inválidas.";
         if (s.TestesAprovados < 0 || s.TestesFalhos < 0 || s.Arquivos < 0 || s.Commits < 0 || s.Alteracoes is null || s.Alteracoes.Length > 16000) return "Snapshot: contagens ou alterações inválidas.";
         if (s.Capturas is null || s.Capturas.Count > 20 || s.Capturas.Any(c => c is null || string.IsNullOrWhiteSpace(c.Titulo) || c.Titulo.Length > 200 || !UrlSegura(c.Url))) return "Snapshot: capturas precisam de título e URL HTTPS ou caminho da API de design.";
+        return null;
+    }
+
+    /// <summary>
+    /// (ajuste 9) O escopo da autorização: o ato conhecido, o alvo, o SHA de 40 hexadecimais no <c>integrar-item</c>, os itens
+    /// (até 50) no <c>arquivar-tasks</c> e o comando no <c>executar-comando</c>. Sem escopo válido, não há autorização.
+    /// </summary>
+    public static string? ValidarEscopo(EscopoDaAutorizacaoV1? e)
+    {
+        if (e is null || !DecisoesV1.AtosDaAutorizacao.Contains(e.Ato) || string.IsNullOrWhiteSpace(e.Alvo) || e.Alvo.Length > RemotoV1.TamanhoMaximoDoNome)
+            return "Autorização sem escopo válido: o dev.kit precisa dizer o ato e o alvo exatos.";
+        if (e.Ato == DecisoesV1.AtoIntegrarItem && (e.Sha is not { Length: 40 } sha || !sha.All(Uri.IsHexDigit)))
+            return "Autorizar a integração exige o SHA de 40 dígitos hexadecimais.";
+        if (e.Ato == DecisoesV1.AtoArquivarTasks && (e.Itens is not { Count: > 0 and <= 50 } || e.Itens.Any(i => string.IsNullOrWhiteSpace(i) || i.Length > RemotoV1.TamanhoMaximoDoNome)))
+            return "Autorizar o arquivamento exige a lista das tasks (até 50).";
+        if (e.Ato == DecisoesV1.AtoExecutarComando && (string.IsNullOrWhiteSpace(e.Comando) || e.Comando.Length > RemotoV1.TamanhoMaximoDoTexto))
+            return "Autorizar o comando exige o comando exato.";
         return null;
     }
 

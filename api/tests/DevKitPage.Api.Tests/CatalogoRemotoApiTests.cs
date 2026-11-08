@@ -103,6 +103,42 @@ public sealed class CatalogoRemotoApiTests : IDisposable
     }
 
     [Fact]
+    public async Task O_fluxo_leva_id_parametros_e_agente_padrao_e_as_listas_de_agentes_membros_e_a_miniatura_voltam()
+    {
+        var ana = await DevAsync("ana");
+        (await ana.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat())).EnsureSuccessStatusCode();
+        var fluxo = new FluxoNoCatalogoV1("Implementar", "Com revisor", 7,
+            [
+                new ParametroDoFluxoV1("REVISOR", "Revisor", RemotoV1.ParametroTexto, Usuario: true, Obrigatorio: false),
+                new ParametroDoFluxoV1("AMBIENTE", null, RemotoV1.ParametroLista, ["homologação", "produção"], Padrao: "homologação"),
+            ], "claude:opus");
+        var catalogo = Catalogo() with
+        {
+            Fluxos = [fluxo], Agentes = ["claude", "claude:opus", "kiro:auto"], Membros = ["Pessoa Revisora", "Pessoa Dev"],
+            Designs = [new DesignNoCatalogoV1("dev.kit.page · board", 3, "github.com/empresa/dev.kit.page", "/api/design/dev-kit-page/chat-remoto/v16")],
+        };
+        (await ana.PutAsJsonAsync("/api/remoto/catalogo", catalogo)).EnsureSuccessStatusCode();
+
+        var lido = (await ana.GetFromJsonAsync<CatalogoDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/catalogo"))!.Catalogo;
+        var f = Assert.Single(lido.Fluxos!);
+        Assert.Equal((7L, "claude:opus"), (f.Id, f.AgentePadrao));
+        Assert.Equal([("REVISOR", true, false), ("AMBIENTE", false, true)], f.Parametros!.Select(p => (p.Nome, p.Usuario, p.Obrigatorio)));
+        Assert.Equal(["claude", "claude:opus", "kiro:auto"], lido.Agentes);
+        Assert.Equal(["Pessoa Revisora", "Pessoa Dev"], lido.Membros);
+        Assert.Equal("/api/design/dev-kit-page/chat-remoto/v16", Assert.Single(lido.Designs!).Miniatura);
+
+        // O tipo desconhecido, o nome fora do {NOME}, a miniatura fora do design e a lista acima do teto são recusados.
+        foreach (var errado in new[]
+        {
+            catalogo with { Fluxos = [fluxo with { Parametros = [new ParametroDoFluxoV1("REVISOR", Tipo: "data")] }] },
+            catalogo with { Fluxos = [fluxo with { Parametros = [new ParametroDoFluxoV1("revisor")] }] },
+            catalogo with { Designs = [new DesignNoCatalogoV1("x", 1, Miniatura: "https://outro.site/x.png")] },
+            catalogo with { Membros = Enumerable.Range(1, RemotoV1.MaximoNoCatalogo + 1).Select(i => $"Pessoa {i}").ToArray() },
+        })
+            Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/api/remoto/catalogo", errado)).StatusCode);
+    }
+
+    [Fact]
     public async Task As_recusas_sao_as_do_contrato_e_o_dado_sensivel_nao_volta_na_resposta()
     {
         var ana = await DevAsync("ana");

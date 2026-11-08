@@ -15,12 +15,12 @@
 .br-espera {color:var(--warn)}
 .br-msg-status {color:var(--muted); font-size:11px}
 .br-composer-ativo {border-color:var(--violet); flex:none; position:relative}
-.br-composer-ativo textarea {color:var(--ink); height:28px; max-height:100px; overflow:auto}
+/* (complemento do ajuste 5) A área de edição começa com 3 linhas e cresce até 8 (o ChatRemoto ajusta a altura); depois rola. */
+.br-composer-ativo textarea {color:var(--ink); line-height:1.45; height:calc(3 * 1.45em); min-height:calc(3 * 1.45em); max-height:calc(8 * 1.45em); overflow:auto; font-size:13px}
 .br-composer-ativo .br-bottom button {color:var(--violet); background:var(--surface)}
 .br-composer-ativo .br-bottom .br-send {color:var(--surface); background:var(--violet)}
 .br-composer-ativo .br-bottom button:disabled {color:var(--soft); background:var(--panel)}
 .br-branch {font-size:10.5px; color:var(--muted); margin-top:5px; overflow-wrap:anywhere}
-.br-hint {flex:none}
 .br-contexto {position:absolute; bottom:calc(100% + 6px); left:0; z-index:1; width:min(360px,100%); box-sizing:border-box; padding:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 4px 20px #0002}
 .br-contexto label {display:block; color:var(--ink); font-size:12px; margin-bottom:8px}
 .br-contexto input {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
@@ -36,7 +36,48 @@
 .br-catalogo p {margin:0; overflow-wrap:anywhere}
 .br-catalogo .br-btn {font-size:11px; padding:3px 10px}
 .br-catalogo .br-catalogo-aviso {flex-basis:100%; color:var(--warn)}
+.br-catalogo:empty {display:none}
+/* Proposta chat-remoto v016 (correções do board remoto): o selo e o Ligar/Reiniciar no cabeçalho, o ↻ e o ⓘ no compositor. */
+.br-chathead>div {min-width:0}
+.br-selo {flex:none; font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:12px; padding:2px 9px; background:var(--panel); white-space:nowrap}
+.br-chathead .br-acao {min-height:32px; gap:6px}
+.br-composer-ativo .br-bottom .br-icone {width:26px; height:26px; min-width:26px; padding:0; border-radius:50%; display:grid; place-items:center; font-size:13px; line-height:1}
+.br-girando {animation:br-girar 1s linear infinite}
+@keyframes br-girar {to {transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce) {.br-girando {animation:none}}
+.br-chathead .br-icone-cabecalho {flex:none; width:34px; min-width:34px; padding:0; font-size:16px!important; color:var(--muted)}
+.br-chathead .br-icone-cabecalho:not(:disabled):hover {color:var(--accent); border-color:var(--accent)}
+@media(max-width:700px) {.br-chathead .br-icone-cabecalho {width:30px; min-width:30px; min-height:30px; order:3} .br-chathead .br-acao {order:4} .br-chathead .br-selo {order:5} .br-chathead .br-spacer {flex-basis:100%; height:0}}
+.br-oculto {position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.br-dica {position:relative; display:inline-flex}
+.br-dica-texto {display:none; position:absolute; z-index:3; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); width:max-content; max-width:280px; padding:8px 10px; border-radius:6px; background:#1d2129; color:#fff; font-size:11px; line-height:1.45; box-shadow:0 4px 14px #0003; text-align:left}
+.br-dica-texto span {display:block}
+.br-dica:hover .br-dica-texto,.br-dica:focus-within .br-dica-texto,.br-dica-texto.br-dica-aberta {display:block}
+.br-composer-ativo .br-bottom .br-chip-fluxo {color:var(--ink); background:var(--violettint); border-color:var(--violettint)}
+.br-composer-ativo .br-bottom .br-chip-fluxo.br-chip-falta {color:var(--accent); background:var(--tint); border-color:var(--needline)}
+.br-falta {color:var(--accent); margin-top:6px}
+/* As imagens das falas (correções do board remoto): a miniatura abre o modal; a que não chegou é o aviso. */
+.br-anexos {display:flex; flex-direction:column; gap:6px; margin-top:8px}
+.br-miniaturas {display:flex; flex-wrap:wrap; gap:8px}
+.board-remoto .br-miniatura {padding:0; border:1px solid var(--line); border-radius:8px; background:var(--panel); overflow:hidden; cursor:zoom-in; width:220px; max-width:100%; height:138px}
+.br-miniatura-img {display:block; width:100%; height:100%; object-fit:cover; object-position:top left}
+.br-miniatura-img.design-imagem-falhou {display:grid; place-items:center; margin:0; font-size:11px; color:var(--muted)}
+.br-anexo-aviso {font-size:11.5px!important; color:var(--warn)!important; margin:0!important}
+.br-dialogo.br-dialogo-imagem {width:min(1180px,100%); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; gap:10px}
+.br-dialogo-imagem .br-row {justify-content:space-between; align-items:center; margin:0}
+.br-dialogo-imagem h2 {margin:0}
+.br-imagem-ampliada {display:block; max-width:100%; max-height:calc(100dvh - 120px); object-fit:contain; margin:0 auto; border:1px solid var(--line); border-radius:6px}
 @media(max-width:700px) {
+  .br-chathead {flex-wrap:wrap; gap:6px 10px}
+  .br-selo {order:5; font-size:10px; padding:1px 7px}
+  .br-chathead .br-acao {margin-left:0}
+  /* (ajuste 6) No celular o painel do atalho é uma folha FIXA no alto: dentro do chat (overflow escondido) e com o teclado aberto,
+     a lista ficava cortada acima do compositor — o seletor parecia não listar nada. */
+  .br-contexto {position:fixed; top:8px; left:8px; right:8px; bottom:auto; width:auto; max-height:calc(100dvh - 16px); overflow:auto; z-index:25; box-shadow:0 10px 40px #0005}
+  .br-opcoes {max-height:min(320px,45dvh)}
+  .br-composer-ativo .br-contexto .br-opcao {padding:9px 10px; font-size:13px}
+  .br-dica-texto {left:auto; right:-40px; transform:none}
+  .board-remoto .br-miniatura {width:100%; height:150px}
   .br-catalogo {font-size:10px; margin:0 10px 4px}
   .br-catalogo .br-btn {font-size:10px; padding:2px 8px}
   .br-chat-aviso {display:block; padding:7px 12px; font-size:11.5px}
@@ -49,10 +90,9 @@
   .br-msg p {font-size:11.5px; line-height:1.35; margin-top:3px}
   .br-msg-status {font-size:10px}
   .br-composer-ativo {margin:7px 10px 6px; padding:8px}
-  .br-composer-ativo textarea {height:24px; min-height:24px; font-size:11.5px}
+  .br-composer-ativo textarea {font-size:12.5px}
   .br-bottom {gap:4px}
   .br-bottom button {font-size:10px; padding:3px 6px}
   .br-bottom .br-send {height:29px; min-width:29px; font-size:15px}
   .br-branch {font-size:9px; line-height:1.25; margin-top:4px}
-  .br-hint {font-size:10px; line-height:1.35; margin-bottom:8px}
 }

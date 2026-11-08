@@ -240,6 +240,12 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime?>("ConcluidoEmUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Contexto")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
 
@@ -618,6 +624,12 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Anexos")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
 
                     b.Property<string>("Autor")
                         .IsRequired()
@@ -2845,6 +2857,18 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("UsuarioId", "MaquinaId", "Estado");
                     b.ToTable("RespostasDasDecisoes");
                     b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.PendenciaDispensada", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("PendenciaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<DateTime>("DispensadaEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId", "PendenciaId").IsUnique();
+                    b.ToTable("PendenciasDispensadas");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
             modelBuilder.Entity("DevKitPage.Core.AssinaturaDoPush", b =>
                 {

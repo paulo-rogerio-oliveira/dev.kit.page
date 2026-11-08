@@ -62,6 +62,7 @@ public static class RegrasDoCatalogo
         {
             ("workItems", catalogo.WorkItems?.Count ?? 0), ("repositorios", catalogo.Repositorios?.Count ?? 0),
             ("fluxos", catalogo.Fluxos?.Count ?? 0), ("projetos", catalogo.Projetos?.Count ?? 0), ("designs", catalogo.Designs?.Count ?? 0),
+            ("agentes", catalogo.Agentes?.Count ?? 0), ("membros", catalogo.Membros?.Count ?? 0),
         };
         if (listas.FirstOrDefault(l => l.Quantos > RemotoV1.MaximoNoCatalogo) is { Nome: not null } cheia)
             return $"{cheia.Nome}: até {RemotoV1.MaximoNoCatalogo} entradas.";
@@ -80,7 +81,21 @@ public static class RegrasDoCatalogo
         {
             if (f is null || Invalido(f.Nome) || (f.Descricao?.Length ?? 0) > RemotoV1.TamanhoMaximoDoTexto)
                 return $"fluxos[{i}]: informe o nome (até {RemotoV1.TamanhoMaximoDoNome}) e a descrição de até {RemotoV1.TamanhoMaximoDoTexto} caracteres.";
+            if (f.Id is <= 0 || Longo(f.AgentePadrao))
+                return $"fluxos[{i}]: o id é positivo e o agente padrão tem até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
+            if ((f.Parametros?.Count ?? 0) > RemotoV1.MaximoDeParametrosDoFluxo)
+                return $"fluxos[{i}].parametros: até {RemotoV1.MaximoDeParametrosDoFluxo}.";
+            foreach (var (p, j) in (f.Parametros ?? []).Select((p, j) => (p, j)))
+            {
+                if (p is null || !RegrasDaConversa.NomeDeParametroValido(p.Nome) || Longo(p.Rotulo) || Longo(p.Padrao)
+                    || !RemotoV1.TiposDeParametro.Contains(p.Tipo) || (p.Opcoes?.Count ?? 0) > RemotoV1.MaximoNoCatalogo
+                    || (p.Opcoes ?? []).Any(o => Invalido(o)))
+                    return $"fluxos[{i}].parametros[{j}]: o nome em MAIÚSCULAS (letras, dígitos e _), o tipo um de {string.Join(", ", RemotoV1.TiposDeParametro)} "
+                           + $"e rótulo, padrão e opções de até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
+            }
         }
+        if ((catalogo.Agentes ?? []).Any(Invalido) || (catalogo.Membros ?? []).Any(Invalido))
+            return $"agentes e membros: textos não vazios de até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
         foreach (var (p, i) in (catalogo.Projetos ?? []).Select((p, i) => (p, i)))
         {
             if (p is null || !RegrasDosProjetos.SlugValido(p.Slug))
@@ -92,6 +107,8 @@ public static class RegrasDoCatalogo
         {
             if (d is null || Invalido(d.Nome) || d.Telas < 0 || Longo(d.Repositorio))
                 return $"designs[{i}]: informe o nome e o repositório (até {RemotoV1.TamanhoMaximoDoNome} caracteres) e as telas, não negativas.";
+            if (d.Miniatura is not null && !RegrasDaConversa.LinkDeDesignValido(d.Miniatura))
+                return $"designs[{i}].miniatura: o link da API de design (/api/design/...).";
         }
         return string.Empty;
     }
@@ -119,7 +136,19 @@ public static class RegrasDoCatalogo
         {
             yield return ($"fluxos[{i}].nome", f.Nome);
             yield return ($"fluxos[{i}].descricao", f.Descricao);
+            yield return ($"fluxos[{i}].agentePadrao", f.AgentePadrao);
+            foreach (var (p, j) in (f.Parametros ?? []).Select((p, j) => (p, j)))
+            {
+                yield return ($"fluxos[{i}].parametros[{j}].rotulo", p.Rotulo);
+                yield return ($"fluxos[{i}].parametros[{j}].padrao", p.Padrao);
+                foreach (var (o, k) in (p.Opcoes ?? []).Select((o, k) => (o, k)))
+                    yield return ($"fluxos[{i}].parametros[{j}].opcoes[{k}]", o);
+            }
         }
+        foreach (var (a, i) in (c.Agentes ?? []).Select((a, i) => (a, i)))
+            yield return ($"agentes[{i}]", a);
+        foreach (var (m, i) in (c.Membros ?? []).Select((m, i) => (m, i)))
+            yield return ($"membros[{i}]", m);
         foreach (var (p, i) in (c.Projetos ?? []).Select((p, i) => (p, i)))
         {
             yield return ($"projetos[{i}].slug", p.Slug);
