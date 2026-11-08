@@ -155,6 +155,46 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
+    public async Task O_dispositivo_da_decisao_vem_na_resposta_no_consumo_e_e_opcional()
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var c = await original.AdminAsync();
+        var autenticado = api.CreateClient(); autenticado.DefaultRequestHeaders.Authorization = c.DefaultRequestHeaders.Authorization; c = autenticado;
+        var arquivar = new PendenciaNoRetratoV1("autorizacao-arquivar", RemotoV1.PendenciaAutorizacao, "Arquivar 2 task(s) pedidas pelo Orquestrador",
+            "O Orquestrador pede para arquivar: #901, #902. Autorizar o arquivamento?",
+            Escopo: new EscopoDaAutorizacaoV1(DecisoesV1.AtoArquivarTasks, "Orquestrador", Itens: ["#901", "#902"],
+                Comando: "devcli sessao --acao arquivar --alvo #901,#902 --aplicar"));
+        await PrepararMaquina(c); await Retrato(c, arquivar, Pergunta);
+        var d = await Ler(c, "autorizacao-arquivar");
+        Assert.Null(d.Bloqueio);
+        var chave = await Ativar(c, relogio);
+
+        // Fora da lista, recusa sem gravar nada (nem gastar o código).
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: "tablet"))).StatusCode);
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+
+        // O celular (com caixa e espaço, normalizado) vem na resposta, na caixa de saída da máquina e no consumo único.
+        var r = await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: " Celular "));
+        r.EnsureSuccessStatusCode();
+        var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.Equal((DecisoesV1.AcaoAutorizar, true, ConversaV1.DispositivoCelular), (autorizacao.Acao, autorizacao.SegundoFator, autorizacao.Dispositivo));
+        Assert.Contains("\"dispositivo\":\"celular\"", await r.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(ConversaV1.DispositivoCelular, Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!).Dispositivo);
+        Assert.Equal(ConversaV1.DispositivoCelular, (await Ler(c, "autorizacao-arquivar")).Resposta!.Dispositivo);
+        var recebida = await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null);
+        Assert.Equal(ConversaV1.DispositivoCelular, (await recebida.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.Dispositivo);
+
+        // Sem o campo (o site antigo), a decisão vale como antes e a resposta vai sem o dispositivo.
+        var p = await Ler(c, "pergunta");
+        var semDispositivo = await c.PostAsJsonAsync(Rota + "/pergunta", new { snapshotId = p.SnapshotId, acao = "responder", opcao = "Manter" });
+        semDispositivo.EnsureSuccessStatusCode();
+        Assert.Null((await semDispositivo.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.Dispositivo);
+    }
+
+    [Fact]
     public async Task Mensagem_aprovo_nao_autoriza_e_aprovacao_exige_codigo_valido_nao_reutilizado()
     {
         using var original = new ApiDeTeste(); var relogio = new Relogio();

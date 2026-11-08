@@ -53,10 +53,23 @@ export interface SnapshotDaDecisao {
 export interface RespostaDaDecisao {
   id: number; maquinaId: string; pendenciaId: string; snapshotId: string; acao: string; opcao: string | null;
   origem: string | null; destino: string | null; sha: string | null; em: string; segundoFator: boolean; estado: string;
+  /** (controle-v4, item 3) Campo novo e opcional: de onde o dev decidiu; nulo na decisão gravada antes. */
+  dispositivo?: Dispositivo | null;
 }
 /** `dispensada` é campo novo (correções do board remoto): o card fechado no site, só com `?dispensadas=true`. */
 export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null; dispensada?: boolean }
-export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string }
+export interface ResponderDecisao {
+  snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string;
+  /** (controle-v4, item 3) O dispositivo da decisão, que a máquina leva à auditoria. */
+  dispositivo?: Dispositivo;
+}
+
+/** De onde o site manda: o comando da conversa e a decisão (ConversaV1.Dispositivos). */
+export type Dispositivo = 'celular' | 'navegador';
+/** O dispositivo deste acesso: a tela estreita do Board é a do celular. */
+export function dispositivoAtual(): Dispositivo {
+  return window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador';
+}
 /** A dispensa do card (Contracts/V1/DecisoesV1.cs): só no site, a task da máquina não muda. */
 export interface DispensaDaPendencia { maquinaId: string; pendenciaId: string; dispensada: boolean; em: string }
 
@@ -78,7 +91,7 @@ export interface NovoDesignRemoto { repositorio: string }
  * atalhos do chat (o handshake, remote-control-v3) ou a criação de projeto e de projeto de design (item 4).
  */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | TipoDeCriacao; texto: string; dispositivo: 'celular' | 'navegador';
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | TipoDeCriacao; texto: string; dispositivo: Dispositivo;
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
   /** (correções do board remoto) O fluxo do catálogo escolhido no `/`, o agente `cli:modelo` e os parâmetros dele. */

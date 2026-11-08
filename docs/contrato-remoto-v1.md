@@ -347,6 +347,7 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
 | `DesignNoCatalogoV1` | `miniatura` | O link da última versão enviada (`/api/design/...`): a miniatura do card de Design do painel. |
 | `FalaDoDevKitV1` / `FalaRemotaV1` | `anexos` (`titulo`, `url`?, `aviso`?) | As imagens da fala: o dev.kit traduz o `[GITKIT:DESIGN]`/`[GITKIT:IMAGEM]` no link estável da versão ANTES de sanitizar. Sem link (o teto do plano, o envio pendente), vai o `aviso`. Até 10. O site mostra a miniatura e abre o modal. |
 | `DecisaoPendenteV1` | `dispensada` | O card fechado no site. |
+| `ResponderDecisaoV1` e `RespostaDaDecisaoV1` | `dispositivo` (`celular` ou `navegador`) | (controle-v4, item 3) De onde o dev decidiu. O site o manda no `POST .../decisoes/{pendencia}`; fora da lista é **400**, sem gravar. A resposta, a caixa de saída (`GET .../decisoes/respostas`) e o consumo único (`.../recebida`) o devolvem, e o dev.kit o leva à auditoria ("pelo celular"). Sem ele (o site antigo, a decisão gravada antes), vai nulo. |
 
 - **Dispensar** (`POST .../decisoes/{pendencia}` com `{ "acao": "dispensar" }` ou `"restaurar"`): só no site, por usuário,
   máquina e pendência; não vai à máquina e não decide nada. `GET .../decisoes` deixa as dispensadas de fora (o push também);
@@ -361,10 +362,14 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
   com o `escopo` exato (`ato` = `concluir-projeto`, `integrar-item`, `arquivar-tasks` ou `executar-comando`; `alvo`, `sha`?,
   `itens`?, `comando`?). O site responde `acao: "autorizar"` com o código TOTP — o mesmo segundo fator e a mesma auditoria do
   `aprovar` —, ou `ajuste` para recusar. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
-  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez) e
-  `concluir-projeto` (em fechamento, sem o fechamento confirmado); `integrar-item` segue pelo `aprovar` do snapshot.
-- **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto` e `FalasRemotas.Anexos` vêm de
-  `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
+  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez),
+  `concluir-projeto` (em fechamento, sem o fechamento confirmado) e (controle-v4, item 3) `arquivar-tasks`: o pedido do
+  Orquestrador `devcli sessao --acao arquivar --alvo a,b --aplicar`, pendente na sessão dele, vira o cartão com `alvo` =
+  `Orquestrador`, `itens` = as tasks e `comando` = o pedido exato; autorizado, o dev.kit arquiva pelo mesmo caminho do
+  Arquivar do card (nenhuma pasta é apagada), com a origem site, a decisão, o dispositivo e o horário na conversa de cada task.
+  `integrar-item` segue pelo `aprovar` do snapshot.
+- **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto`, `FalasRemotas.Anexos` e
+  `RespostasDasDecisoes.Dispositivo` vêm de `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
 
 ## Retenção
 

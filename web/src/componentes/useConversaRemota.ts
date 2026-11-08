@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import { lerEventosDaConversa } from '../api/eventosDaConversa';
-import type { ComandoNovo, ComandoRemoto, ConversaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
+import {
+  dispositivoAtual, type ComandoNovo, type ComandoRemoto, type ConversaRemota, type NovoDesignRemoto, type NovoProjetoRemoto, type TipoDeCriacao,
+} from '../api/remoto';
 import type { AcaoNoProjetoRemoto } from '../api/projetos';
 import { useSessao } from '../sessao';
 
@@ -83,7 +85,7 @@ export function useConversaRemota(maquina: string) {
       dispositivo: reenvio.dispositivo === 'celular' ? 'celular' : 'navegador',
     } : pendente.current?.texto === texto ? pendente.current : {
       id: crypto.randomUUID(), maquinaId: maquina, tipo: 'mensagem', texto,
-      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      dispositivo: dispositivoAtual(),
       ...(fluxo ? { fluxo: fluxo.fluxo, ...(fluxo.agente ? { agente: fluxo.agente } : {}), ...(Object.keys(fluxo.parametros).length ? { parametros: fluxo.parametros } : {}) } : {}),
     };
     if (!reenvio) pendente.current = pedido;
@@ -120,7 +122,7 @@ export function useConversaRemota(maquina: string) {
     if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, turnoEmAndamento: false, mensagem: 'Nenhuma máquina selecionada.' };
     const pedido: ComandoNovo = {
       id: crypto.randomUUID(), maquinaId: maquina, tipo, texto: '',
-      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      dispositivo: dispositivoAtual(),
       ...(tipo === 'reiniciar' && confirmarReinicio ? { confirmarReinicio: true } : {}),
     };
     try {
@@ -145,7 +147,7 @@ export function useConversaRemota(maquina: string) {
     if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };
     const pedido: ComandoNovo = {
       id: crypto.randomUUID(), maquinaId: maquina, tipo: 'catalogo', texto: '',
-      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      dispositivo: dispositivoAtual(),
     };
     try {
       const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
@@ -168,7 +170,7 @@ export function useConversaRemota(maquina: string) {
     if (!sessao || !maquina || !controller || controller.signal.aborted) return { ok: false, mensagem: 'Nenhuma máquina selecionada.' };
     const pedido: ComandoNovo = {
       id, maquinaId: maquina, tipo, texto: JSON.stringify(formulario),
-      dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      dispositivo: dispositivoAtual(),
     };
     const revisao = revisoes.current.get(id);
     try {

@@ -1,16 +1,22 @@
 -- As correções do board remoto (07/11/2026) no Azure SQL: os cards dispensados no site, o contexto do fluxo do comando (o
--- fluxo, o agente e os parâmetros escolhidos no chat) e as imagens das falas do Orquestrador.
+-- fluxo, o agente e os parâmetros escolhidos no chat), as imagens das falas do Orquestrador e (controle-v4, item 3, 08/11) o
+-- dispositivo da decisão.
 --
 -- Por que um script: com Banco:Provider=SqlServer a API sobe com EnsureCreated, que cria o esquema só numa base VAZIA —
 -- numa base que já existe ele não cria tabela nem coluna nova. Este script é idempotente (pode rodar de novo sem efeito) e
--- espelha a migration BoardRemoto do SQLite. Rode-o ANTES de publicar a versão da API com a ação "dispensar" das decisões;
--- sem ele, a verificação do esquema na subida aponta a tabela, as colunas e este script.
+-- espelha as migrations BoardRemoto e DispositivoDaDecisao do SQLite. Rode-o ANTES de publicar a versão da API com a ação
+-- "dispensar" das decisões; sem ele, a verificação do esquema na subida aponta a tabela, as colunas e este script.
 --
 -- Pré-checagem (regra #28): esta versão não traz configuração nova (appsettings) — nada a conferir além das tabelas
--- Usuarios, ComandosRemotos e FalasRemotas, que já existem desde os scripts Usuarios.sql e Conversa.sql.
+-- Usuarios, ComandosRemotos e FalasRemotas, que já existem desde os scripts Usuarios.sql e Conversa.sql, e da
+-- RespostasDasDecisoes, do Decisoes.sql.
 
 IF OBJECT_ID(N'[dbo].[Usuarios]', N'U') IS NULL OR OBJECT_ID(N'[dbo].[ComandosRemotos]', N'U') IS NULL OR OBJECT_ID(N'[dbo].[FalasRemotas]', N'U') IS NULL
     THROW 50001, N'Rode antes Usuarios.sql e Conversa.sql: faltam as tabelas Usuarios, ComandosRemotos ou FalasRemotas.', 1;
+GO
+
+IF OBJECT_ID(N'[dbo].[RespostasDasDecisoes]', N'U') IS NULL
+    THROW 50001, N'Rode antes Decisoes.sql: falta a tabela RespostasDasDecisoes.', 1;
 GO
 
 IF OBJECT_ID(N'[dbo].[PendenciasDispensadas]', N'U') IS NULL
@@ -40,4 +46,9 @@ GO
 -- As imagens da fala (o link da API de design, ou o aviso de que a imagem não chegou), em JSON.
 IF COL_LENGTH(N'[dbo].[FalasRemotas]', N'Anexos') IS NULL
     ALTER TABLE [dbo].[FalasRemotas] ADD [Anexos] nvarchar(max) NOT NULL CONSTRAINT [DF_FalasRemotas_Anexos] DEFAULT N'';
+GO
+
+-- (controle-v4, item 3) O dispositivo da decisão (celular ou navegador), opcional: a decisão gravada antes fica nula.
+IF COL_LENGTH(N'[dbo].[RespostasDasDecisoes]', N'Dispositivo') IS NULL
+    ALTER TABLE [dbo].[RespostasDasDecisoes] ADD [Dispositivo] nvarchar(20) NULL;
 GO
