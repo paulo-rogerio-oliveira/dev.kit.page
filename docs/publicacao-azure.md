@@ -192,6 +192,12 @@ az webapp restart -g <grupo> -n devkit
 (falta a chave) a **401** (a API pede a chave da máquina), e o `/health` deixa de ficar `Degraded`. Trocar a semente
 exige um par novo, a pública nova no `LicencaAssinada.ChavePublicaDeProducao` do git.kit e um pacote novo do dev.kit.
 
+### Relatos dos usuários (US #602)
+
+Rode também `api/scripts/sqlserver/Us602.sql` (idempotente): cria `Relatos`, os defeitos, sugestões e dúvidas que os
+usuários mandam pelo dev.kit, com o estado e a resposta de quem administra. Sem ela, `/api/relatos` e a tela `/relatos`
+respondem 500. Nenhuma configuração nova.
+
 ### Catálogos nomeados (US #461)
 
 Rode também `api/scripts/sqlserver/Us461.sql` (idempotente): cria `Catalogos` (com o registro do básico),
@@ -267,7 +273,10 @@ O link é uma SAS de serviço do blob, só leitura, só HTTPS e com prazo — le
 isso a connection string precisa da chave (`AccountKey`). Nada é publicado em produção: o site guarda o zip e a URL do
 ambiente de **preview** do Static Web App. A retenção apaga o zip vencido a cada novo registro do projeto; para o zip de um
 projeto apagado, configure no Storage a política de ciclo de vida (*Lifecycle management*) do contêiner `artefatos`
-apagando blobs com mais de 7 dias.
+apagando blobs com mais de 7 dias. **App Service no Windows:** o IIS da plataforma corta o corpo da requisição em ~28,6 MB
+(`requestFiltering`, `maxAllowedContentLength` padrão de 30.000.000 bytes) antes de chegar à API, que só então aplica o
+teto dela; ali, use `Artefatos__TamanhoMaximoMb=28` ou menos, ou publique um `web.config` com o limite maior. No Linux e
+no Container Apps vale o teto da API.
 
 ### Como saber que falta um script (bug do painel Uso, 26/10)
 
@@ -459,7 +468,17 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 liberação do admin e os Sites no Azure fora do site) **não têm script**: os comandos novos (`catalogo`, `projeto`,
 `design`) cabem na coluna `ComandosRemotos.Tipo` (`nvarchar(20)`, do `Conversa.sql`), e a fila pedida na liberação é a
 mesma linha de `RecursosProvisionados` do `Provisao.sql`. Os testes `PublicacaoDoControleRemotoTests` conferem que esta
-lista e o job `sql` do workflow têm os mesmos scripts, na mesma ordem, e que as tabelas novas vêm deles.
+lista e o job `sql` do workflow têm os mesmos scripts, na mesma ordem, e que as tabelas e colunas novas vêm deles.
+
+**Todo script NOVO da pasta vai no job `sql`.** Os vinte anteriores ao controle remoto (`PedidosDeDemonstracao.sql` a
+`AcessoAosProjetos.sql`, cada um na seção da sua US, acima) ficam fora: foram aplicados uma vez, à mão, e reaplicá-los a
+cada deploy não é seguro (o `AcessoAosProjetos.sql` retira a tabela que o `DesignAcesso.sql` cria). Essa lista é
+congelada no teste `Todo_script_da_pasta_vai_no_job_sql_salvo_os_anteriores_ao_controle_remoto`: um `.sql` novo em
+`api/scripts/sqlserver` que não esteja no job reprova o teste — e o CI — com o nome dele, antes de chegar à `main`.
+
+**O que o controle-v4 acrescenta ao banco** são os passos 8 e 9: o `BoardRemoto.sql` (as correções de 07/11 e, do item 3,
+`RespostasDasDecisoes.Dispositivo`) e o `ArtefatosDosProjetos.sql` (item 2). Os itens 1 (testes) e 6 (as variáveis de
+ambiente nas Configurações) são do git.kit e não mudam o banco nem a API.
 
 ```bash
 for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos; do
@@ -495,13 +514,23 @@ O que **segura** o deploy (a API ou o WebJob da provisão recusam subir em Produ
 | `Remoto__Fila` · `Provisao__Provedor` | `simulado` (ou outro valor que não `azure`). Ausentes valem `azure`. |
 | `Provisao__AssinaturaId` · `Provisao__Grupo` | Ausentes com o provedor `azure`: o WebJob não sobe. |
 | `ClienteDaMaquina__*` | Presentes e fora da faixa: `Habilitado` true/false; `ValidadeDoTokenMinutos` 1–60; `ValidadeMaximaDaAssercaoSegundos` 30–600; `ToleranciaDoRelogioSegundos` 0–300. |
+| `Artefatos__Armazem` (ou, sem ele, `Design__Armazem`) | Outro valor que não `blob` ou `disco`: o zip do artefato iria para o disco sem aviso. |
+| `Artefatos__ConexaoDoBlob` (ou, sem ela, `Design__ConexaoDoBlob`) | Com o armazém `blob`: ausente, ou sem a `AccountKey` (a SAS do link de download é assinada com ela). A referência ao Key Vault vale (o conteúdo não se confere daqui). |
+| `Artefatos__TamanhoMaximoMb` · `RetencaoDias` · `LinkHoras` · `MaximoPorProjeto` | Presentes e não inteiros: as rotas dos artefatos respondem 500 ao ler a configuração. |
 
 O que só **avisa** (o deploy segue; o recurso fica degradado): `Licencas__ChavePrivada` (o `/health` fica `Degraded`),
-as três `Push__*`, o `REPO_KEY`, o `Provisao__IdentidadeClientId` vazio (o worker usa a identidade do sistema) e o
-`ASPNETCORE_ENVIRONMENT` diferente de `Production`.
+as três `Push__*`, o `REPO_KEY`, o `Provisao__IdentidadeClientId` vazio (o worker usa a identidade do sistema), o
+`ASPNETCORE_ENVIRONMENT` diferente de `Production`, o armazém dos artefatos em **disco** sem um `Artefatos__Pasta`
+absoluto (a pasta padrão cai em `wwwroot`, somente leitura no deploy por pacote) e os números `Artefatos__*` abaixo de 1
+(a API usa 1).
 
 **App settings novas do remote-control-v3:** só a seção opcional `ClienteDaMaquina__*` (item 9, tabela da seção "Client
 credentials da máquina"), com padrões seguros. Os itens 1, 4 e 5 não pedem configuração nova.
+
+**App settings novas do controle-v4:** só a seção opcional `Artefatos__*` (item 2, seção "Artefatos do projeto"), que
+herda do design o armazém e a conexão. Para o recurso funcionar em produção basta o que o design já pede —
+`Design__Armazem=blob` e `Design__ConexaoDoBlob` com a `AccountKey` —, e a pré-checagem acima segura o deploy quando o
+blob está declarado sem a conexão que assina o link. As correções de 07/11 e o item 3 não pedem configuração nova.
 
 Antes de mesclar na `main`, rode a mesma conferência da sua máquina (o `az login` na assinatura do dev.kit):
 
@@ -668,6 +697,62 @@ Checklist verificável (`<api>` é a URL da API, `<site>` a do Static Web App, `
 - [ ] **O serviço sem o app.** Com o dev.kit FECHADO, a máquina continua *online* no site, o cartão **Vínculo do serviço**
       do `/board` diz **Serviço vinculado**, e o Ligar chega.
 - [ ] `GET /api/remoto/push` (com o login) responde `disponivel: true`; o board assinado recebe o aviso de uma pendência nova.
+
+### Ativação do controle-v4 — roteiro e checklist
+
+O roteiro é do desenvolvedor, no Azure real; nada dele roda pelo agente. Ele parte do remote-control-v3 já ativo (seção
+anterior) e traz ao ar as correções do board remoto de 07/11, o "Gerar artefato" (item 2) e a autorização pelo site com o
+dispositivo e o cartão de arquivar tasks (item 3). **Na ordem**, com o branch do projeto mesclado na `main`:
+
+1. **Settings**: `bash api/scripts/azure/conferir-app-settings.sh --app devkit` até sair `o deploy segue`, **sem** o aviso
+   `Design__Armazem`/`Artefatos__Armazem` (o armazém dos artefatos em `blob`, com a conexão que tem a `AccountKey`). No
+   App Service Windows, `Artefatos__TamanhoMaximoMb=28` ou menos (seção "Artefatos do projeto").
+2. **Storage**: nada a criar à mão — o contêiner PRIVADO `artefatos` nasce na primeira gravação, na conta do design (ou na
+   do `Artefatos__ConexaoDoBlob`). Configure o ciclo de vida dele (*Lifecycle management*: blobs com mais de 7 dias, ou do
+   `Artefatos__RetencaoDias`).
+3. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** — `configuracao` → `sql` (os nove
+   scripts; os do controle-v4 são o passo 8, `BoardRemoto.sql`, e o 9, `ArtefatosDosProjetos.sql`) → `deploy`. À mão, o
+   mesmo com `sqlcmd … -i api/scripts/sqlserver/BoardRemoto.sql` e depois `-i api/scripts/sqlserver/ArtefatosDosProjetos.sql`,
+   **antes** do deploy da API (o segundo recusa sem o `Us693.sql`, com a mensagem dizendo qual rodar).
+4. **Site**: o workflow do Static Web App do mesmo push (o card do projeto com **Gerar artefato**, o cartão de arquivar tasks
+   e a decisão que manda o dispositivo).
+5. **dev.kit**: só depois da API (a Rule de impacto 5), o pacote do dev.kit do branch do projeto no git.kit — o que executa a
+   ação `artefato` e oferece a autorização `arquivar-tasks`. O dev.kit antigo recusa a ação com o motivo, sem quebrar.
+
+Checklist verificável (`<api>`, `<site>`, `$TOKEN` e `<maquinaId>` como na seção anterior; `<projetoId>` é o `id` de um
+projeto de TESTE em que o dev é editor, de `GET /api/projetos`):
+
+- [ ] **O esquema completo.** `curl -s https://<api>/health` responde `Healthy`, e no *Query editor* da base
+      `SELECT OBJECT_ID(N'dbo.PendenciasDispensadas') AS Dispensadas, OBJECT_ID(N'dbo.ArtefatosDosProjetos') AS Artefatos,
+      COL_LENGTH(N'dbo.ComandosRemotos', N'Contexto') AS Contexto, COL_LENGTH(N'dbo.FalasRemotas', N'Anexos') AS Anexos,
+      COL_LENGTH(N'dbo.RespostasDasDecisoes', N'Dispositivo') AS Dispositivo` não traz nenhum `NULL`.
+- [ ] **Os scripts idempotentes.** No job `sql`, os passos `BoardRemoto.sql` e `ArtefatosDosProjetos.sql` verdes; um
+      segundo *Run workflow* com **aplicar_sql** fica verde de novo e a consulta acima devolve os mesmos valores.
+- [ ] **Os artefatos listados.** `curl -s https://<api>/api/projetos/artefatos -H "Authorization: Bearer $TOKEN"` responde
+      **200** com uma lista (vazia antes do primeiro artefato); o **500** é o `ArtefatosDosProjetos.sql` faltando.
+- [ ] **O preview guardado, nunca produção.** `curl -s -X POST https://<api>/api/projetos/<projetoId>/artefatos -H
+      "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"repositorio":"dev.kit.page","sha":"0f3c534",
+      "url":"https://<preview>.azurestaticapps.net/","ambiente":"preview"}'` responde **201** com o `link` igual à `url`; com
+      `"ambiente":"production"`, **400**.
+- [ ] **O pacote com o link assinado.** Com um `teste.zip` pequeno: `curl -s -X POST
+      https://<api>/api/projetos/<projetoId>/artefatos -H "Authorization: Bearer $TOKEN" -F arquivo=@teste.zip -F
+      repositorio=dev.kit.page -F sha=0f3c534 -F hash=$(sha256sum teste.zip | cut -d' ' -f1)` responde **201** com o `link`
+      `https://<conta>.blob.core.windows.net/artefatos/projetos/<projetoId>/….zip?…&sig=…` e o `expiraEm`; `curl -sI "<link>"`
+      responde **200** com `Content-Disposition: attachment`, e o mesmo endereço **sem** a consulta (`?…`) é recusado (o
+      contêiner é privado). Com outro `hash`, **400**; com um zip acima do teto, **413**.
+- [ ] **Gerar artefato pelo site.** No `/board` do desktop e do celular, com o dev.kit novo aberto, o card do projeto →
+      **Gerar artefato**: o comando `projeto` com `acao: artefato` vai à fila, e o card mostra o link quando o dev.kit termina
+      (**Baixar**, com o prazo, ou **Abrir preview**).
+- [ ] **O dispositivo na decisão.** Uma decisão aprovada pelo celular aparece no registro do Board como "pelo celular";
+      `GET https://<api>/api/remoto/maquinas/<maquinaId>/decisoes/respostas` traz `"dispositivo":"celular"`, e o valor fora da
+      lista no `POST …/decisoes/<pendencia>` é **400**.
+- [ ] **O cartão de arquivar tasks.** O pedido do Orquestrador `devcli sessao --acao arquivar --alvo <a>,<b> --aplicar`
+      vira, no painel de Decisões do `/board`, o cartão com as tasks e o **Autorizar** com o segundo fator; autorizado, as tasks
+      aparecem arquivadas no dev.kit (nenhuma pasta apagada), com a origem site e o dispositivo na conversa.
+- [ ] **As correções de 07/11.** O **×** de um card de decisão o tira do painel (e do push) e o filtro das dispensadas o
+      traz de volta (`GET …/decisoes?dispensadas=true` com `dispensada: true`); um comando do chat com fluxo e parâmetros
+      grava o `Contexto` (o reenvio do que falhou leva o mesmo fluxo); a fala do Orquestrador com imagem mostra a miniatura e
+      abre o modal.
 
 ## Web
 
