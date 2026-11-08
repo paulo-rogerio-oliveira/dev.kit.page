@@ -8,10 +8,12 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+  # Republicar o site da main sem commit novo (o roteiro de ativação, docs/publicacao-azure.md).
+  workflow_dispatch:
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
@@ -19,6 +21,15 @@ jobs:
         with:
           submodules: true
           lfs: false
+      # O site não passa à frente da configuração: sem a URL da API no build, ele publicaria uma web que não chama nada.
+      - name: Pré-checagem do build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          case "$VITE_API_URL" in
+            https://?*) echo "VITE_API_URL conferida." ;;
+            *) echo "::error title=VITE_API_URL::defina a variável do repositório VITE_API_URL com a URL https da API (Settings → Secrets and variables → Actions → Variables)"; exit 1 ;;
+          esac
       - name: Build And Deploy
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1

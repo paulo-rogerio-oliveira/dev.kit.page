@@ -9,6 +9,10 @@
     ".mp4": "video/mp4"
   },
   "routes": [
-    { "route": "/board-sw.js", "headers": { "Cache-Control": "no-cache" } }
-  ]
+    { "route": "/board-sw.js", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/assets/*", "headers": { "Cache-Control": "public, max-age=31536000, immutable" } }
+  ],
+  "globalHeaders": {
+    "Cache-Control": "no-cache"
+  }
 }
