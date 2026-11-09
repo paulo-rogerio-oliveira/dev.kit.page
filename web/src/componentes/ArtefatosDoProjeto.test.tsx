@@ -9,7 +9,8 @@ describe('tamanho do pacote no card de artefatos', () => {
     [1023, '1023 bytes'],
     [1024, '1 KB'],
     [12_800, '12,5 KB'],
-    [1048575, '1.024 KB'],
+    [1_048_524, '1.023,9 KB'],
+    [1048575, '1,0 MB'],
     [1048576, '1,0 MB'],
     [43_200_000, '41,2 MB'],
   ])('%i bytes → %s', (bytes, esperado) => {

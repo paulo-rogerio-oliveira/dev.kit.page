@@ -42,7 +42,8 @@ function repositorioCurto(repositorio: string) {
  */
 export function tamanhoDoArtefato(bytes: number) {
   if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1048576) return `${(bytes / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
+  // O arredondado a 1 KB do teto já é 1 MB: 1.048.575 bytes saem "1,0 MB", e não "1.024 KB".
+  if (Math.round(bytes / 102.4) < 10240) return `${(bytes / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KB`;
   return `${(bytes / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })} MB`;
 }
 
