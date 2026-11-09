@@ -658,6 +658,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     {
         modelBuilder.Entity<ComandoRemoto>(e =>
         {
+            e.Property(c => c.ConversaId).HasMaxLength(64).HasDefaultValue("");
             e.ToTable("ComandosRemotos");
             e.Property(c => c.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
             e.Property(c => c.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
@@ -678,6 +679,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
 
         modelBuilder.Entity<RespostaRemota>(e =>
         {
+            e.Property(r => r.ConversaId).HasMaxLength(64).HasDefaultValue("");
             e.ToTable("RespostasRemotas");
             e.Property(r => r.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
             e.Property(r => r.RespostaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
@@ -693,6 +695,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
 
         modelBuilder.Entity<FalaRemota>(e =>
         {
+            e.Property(f => f.ConversaId).HasMaxLength(64).HasDefaultValue("");
             e.ToTable("FalasRemotas");
             e.Property(f => f.MaquinaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
             e.Property(f => f.FalaId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);

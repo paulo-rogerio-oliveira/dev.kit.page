@@ -16,7 +16,7 @@ namespace DevKitPage.Contracts.V1;
 /// <param name="ConfirmarReinicio">O usuário confirmou reiniciar com o turno em andamento (sem isto, 409).</param>
 public sealed record ComandoNovoV1(
     string? Id, string MaquinaId, string Tipo, string? Texto = null, int? TtlSegundos = null, string? Dispositivo = null,
-    bool ConfirmarReinicio = false);
+    bool ConfirmarReinicio = false, string? ConversaId = null);
 
 /// <summary>
 /// Um comando como o site e o dev.kit o leem. O estado (<see cref="ConversaV1.EstadosDoComando"/>) diz onde ele está:
@@ -25,7 +25,7 @@ public sealed record ComandoNovoV1(
 /// </summary>
 public sealed record ComandoRemotoV1(
     string Id, string MaquinaId, string Tipo, string Texto, string Dispositivo, string Estado, DateTimeOffset CriadoEm,
-    DateTimeOffset ExpiraEm, DateTimeOffset? EntregueEm, DateTimeOffset? ConcluidoEm, string Erro);
+    DateTimeOffset ExpiraEm, DateTimeOffset? EntregueEm, DateTimeOffset? ConcluidoEm, string Erro, string? ConversaId = null);
 
 /// <summary>
 /// A MENSAGEM que vai na fila do usuário (o JSON do <c>MessageText</c>, em Base64). A fila é só transporte: a mensagem lida
@@ -40,7 +40,7 @@ public sealed record ComandoRemotoV1(
 /// </param>
 public sealed record MensagemDaFilaV1(
     int Contrato, string Id, string MaquinaId, string Tipo, string Texto, string Origem, string Dispositivo, DateTimeOffset CriadoEm,
-    DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false);
+    DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false, string? ConversaId = null);
 
 /// <summary>O pedido da SAS da fila pelo serviço da máquina (<c>POST /api/remoto/fila/sas</c>).</summary>
 public sealed record PedidoDeSasV1(int Contrato, string MaquinaId);
@@ -75,7 +75,8 @@ public sealed record RespostaDoDevKitV1(
 
 /// <summary>Uma resposta guardada, como o site a lê.</summary>
 public sealed record RespostaRemotaV1(
-    string Id, string MaquinaId, string? ComandoId, string Tipo, string Texto, DateTimeOffset GeradaEm, DateTimeOffset RecebidaEm);
+    string Id, string MaquinaId, string? ComandoId, string Tipo, string Texto, DateTimeOffset GeradaEm, DateTimeOffset RecebidaEm,
+    string? ConversaId = null);
 
 /// <summary>A resposta do envio do dev.kit: <see cref="Repetida"/> é o reenvio de uma já gravada.</summary>
 public sealed record RespostaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
@@ -95,11 +96,13 @@ public sealed record RespostaRecebidaV1(string Id, bool Repetida, DateTimeOffset
 /// ao comando e não mostrá-la duas vezes.
 /// </param>
 public sealed record FalaDoDevKitV1(
-    int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null);
+    int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null,
+    string? ConversaId = null);
 
 /// <summary>Uma fala guardada, como o site a lê.</summary>
 public sealed record FalaRemotaV1(
-    string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm);
+    string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm,
+    string? ConversaId = null);
 
 /// <summary>A resposta do envio da fala: <see cref="Repetida"/> é o reenvio de uma já gravada.</summary>
 public sealed record FalaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
@@ -138,8 +141,11 @@ public static class ConversaV1
     /// </summary>
     public const string ComandoCatalogo = "catalogo";
 
+    public const string ComandoConversaTask = "conversa-task";
+    public const string ComandoMensagemTask = "mensagem-task";
+
     /// <summary>O que o site manda: a mensagem ao Orquestrador, ao serviço ligar ou reiniciar o dev.kit, e o pedido do catálogo.</summary>
-    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo];
+    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo, ComandoConversaTask, ComandoMensagemTask];
 
     public const string EstadoPendente = "pendente";
     public const string EstadoNaFila = "na-fila";
@@ -177,9 +183,10 @@ public static class ConversaV1
 
     public const string AutorOrquestrador = "orquestrador";
     public const string AutorDev = "dev";
+    public const string AutorAgente = "agente";
 
     /// <summary>Quem falou no chat do dev.kit: o Orquestrador ou o desenvolvedor.</summary>
-    public static IReadOnlyList<string> AutoresDaFala { get; } = [AutorOrquestrador, AutorDev];
+    public static IReadOnlyList<string> AutoresDaFala { get; } = [AutorOrquestrador, AutorDev, AutorAgente];
 
     /// <summary>A fala escrita no chat do próprio dev.kit, na máquina.</summary>
     public const string OrigemDesktop = "desktop";

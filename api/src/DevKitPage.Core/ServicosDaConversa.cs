@@ -24,7 +24,7 @@ public interface IConversaRemota
     Task<ComandoRemotoV1?> ComandoAsync(int usuarioId, string comandoId, CancellationToken ct);
 
     /// <summary>O histórico com a máquina e o último evento; nulo quando a máquina não é do usuário.</summary>
-    Task<ConversaDaMaquinaV1?> ConversaAsync(int usuarioId, string maquinaId, CancellationToken ct);
+    Task<ConversaDaMaquinaV1?> ConversaAsync(int usuarioId, string maquinaId, CancellationToken ct, string conversaId = "");
 
     /// <summary>Os eventos do usuário depois de <paramref name="depoisDe"/> (de uma máquina, ou de todas), os mais antigos primeiro.</summary>
     Task<IReadOnlyList<EventoDaConversaV1>> EventosAsync(int usuarioId, string? maquinaId, long depoisDe, int maximo, CancellationToken ct);
@@ -144,6 +144,11 @@ public static class RegrasDaConversa
     /// <summary>O id do comando e da resposta: letras, dígitos e hífen, até 64 (o GUID do site ou do dev.kit) — a regra do id da máquina.</summary>
     public static bool IdValido(string? id) => RegrasDoRemoto.MaquinaIdValido(id);
 
+    /// <summary>Canal opaco de uma task: não aceita sessão local, caminho, prefixo ou nome de work item.</summary>
+    public static bool ConversaTaskValida(string? id)
+        => id is { Length: 37 } && id.StartsWith("task-", StringComparison.Ordinal)
+            && id.AsSpan(5).IndexOfAnyExcept("0123456789abcdef") < 0;
+
     /// <summary>O problema do comando, ou vazio quando ele vale.</summary>
     public static string Validar(ComandoNovoV1? comando, OpcoesDoRemoto opcoes)
     {
@@ -157,7 +162,10 @@ public static class RegrasDaConversa
         if (!ConversaV1.TiposDeComando.Contains(tipo))
             return $"O tipo é um de: {string.Join(", ", ConversaV1.TiposDeComando)}.";
         var texto = (comando.Texto ?? string.Empty).Trim();
-        if (tipo == ConversaV1.ComandoMensagem && texto.Length == 0)
+        var daTask = tipo is ConversaV1.ComandoConversaTask or ConversaV1.ComandoMensagemTask;
+        if (daTask ? !ConversaTaskValida(comando.ConversaId) : !string.IsNullOrEmpty(comando.ConversaId))
+            return "Informe o canal da task somente nos comandos de conversa da task.";
+        if (tipo is ConversaV1.ComandoMensagem or ConversaV1.ComandoMensagemTask && texto.Length == 0)
             return "Escreva a mensagem.";
         if (texto.Length > ConversaV1.TamanhoMaximoDoTexto)
             return $"A mensagem tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
@@ -200,6 +208,12 @@ public static class RegrasDaConversa
     {
         if (fala is null)
             return "Envie a fala.";
+        if (!string.IsNullOrEmpty(fala.ConversaId) && !ConversaTaskValida(fala.ConversaId))
+            return "O canal da task é inválido.";
+        var autor = RegrasDoRemoto.Normalizar(fala.Autor);
+        if (autor == ConversaV1.AutorAgente && string.IsNullOrEmpty(fala.ConversaId)
+            || autor == ConversaV1.AutorOrquestrador && !string.IsNullOrEmpty(fala.ConversaId))
+            return "O autor deve corresponder à conversa da task ou do Orquestrador.";
         if (!RegrasDoRemoto.MaquinaIdValido(fala.MaquinaId))
             return $"O maquinaId usa letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
         if (!IdValido(fala.Id))

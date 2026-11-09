@@ -6,6 +6,7 @@ namespace DevKitPage.Core;
 /// </summary>
 public sealed class ComandoRemoto
 {
+    public string ConversaId { get; set; } = string.Empty;
     public long Id { get; set; }
 
     /// <summary>O dono: só ele lê, e só a máquina dele recebe.</summary>
@@ -47,6 +48,7 @@ public sealed class ComandoRemoto
 /// </summary>
 public sealed class RespostaRemota
 {
+    public string ConversaId { get; set; } = string.Empty;
     public long Id { get; set; }
     public int UsuarioId { get; set; }
     public string MaquinaId { get; set; } = string.Empty;
@@ -72,6 +74,7 @@ public sealed class RespostaRemota
 /// </summary>
 public sealed class FalaRemota
 {
+    public string ConversaId { get; set; } = string.Empty;
     public long Id { get; set; }
     public int UsuarioId { get; set; }
     public string MaquinaId { get; set; } = string.Empty;

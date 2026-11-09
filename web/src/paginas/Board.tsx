@@ -11,6 +11,7 @@ import { Abas } from '../componentes/Abas';
 import { Chips } from '../componentes/Chips';
 import { filtrarPorDia, periodoDaUrl, periodosDoDia, type PeriodoDoDia } from '../componentes/filtroDeDia';
 import { ChatRemoto } from '../componentes/ChatRemoto';
+import { ChatDaTaskRemota, type TaskDaConversa } from '../componentes/ChatDaTaskRemota';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
 import { useConversaRemota } from '../componentes/useConversaRemota';
 import './Board.css';
@@ -47,7 +48,7 @@ function PendenciaSemDados({ pendencia: p }: { pendencia: PendenciaRemota }) {
   </section>;
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, conversar }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; conversar: (task: TaskDaConversa) => void }) {
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todasAsExecucoes, setTodasAsExecucoes] = useState(false);
@@ -81,7 +82,10 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     <h2>Executando · {execucoes.length}<span className="br-periodo"> {periodosDoDia.find(p => p.valor === periodo)!.rotulo.toLowerCase()}</span></h2>
     {!!execucoes.length && <section className="br-card">{(todasAsExecucoes ? execucoes : execucoes.slice(0, primeirasEntradas)).map(f => <div className="br-item" key={f.id}>
       <div><span>{f.nome}</span>{f.etapa && <small>{f.etapa}{f.agente ? ` · ${f.agente}` : ''}</small>}</div>
-      <span className={`br-chip${f.situacao === 'fila' || f.situacao === 'na-fila' ? ' br-warn' : ''}`}>{f.situacao === 'fila' || f.situacao === 'na-fila' ? 'na fila' : f.situacao}</span>
+      <div className="br-exec-acoes"><span className={`br-chip${f.situacao === 'fila' || f.situacao === 'na-fila' ? ' br-warn' : ''}`}>{f.situacao === 'fila' || f.situacao === 'na-fila' ? 'na fila' : f.situacao}</span>
+        {f.conversaId && /^task-[a-f0-9]{32}$/.test(f.conversaId) && <button type="button" className="br-btn"
+          aria-label={`Conversar com o agente de ${f.nome}`} onClick={() => conversar({ conversaId: f.conversaId!, nome: f.nome, agente: f.agente, etapa: f.etapa })}>Conversar com o agente</button>}
+      </div>
     </div>)}</section>}
     <VerMais total={execucoes.length} todos={todasAsExecucoes} alternar={() => setTodasAsExecucoes(t => !t)} />
     {!execucoes.length && <p className="br-note">{recebidas.length ? 'Nenhuma execução neste período.' : 'Nenhuma execução recebida.'}</p>}
@@ -102,6 +106,8 @@ export function Board() {
   function mudarParametro(nome: string, valor: string) { const p = new URLSearchParams(parametros); p.set(nome, valor); setParametros(p, { replace: true }); }
   const [maquinas, setMaquinas] = useState<MaquinaRemota[]>([]);
   const [selecionada, setSelecionada] = useState('');
+  const [taskDaConversa, setTaskDaConversa] = useState<TaskDaConversa | null>(null);
+  useEffect(() => setTaskDaConversa(null), [selecionada]);
   const [foto, setFoto] = useState<RetratoDaMaquina | null>(null);
   const [decisoes, setDecisoes] = useState<DecisaoPendente[]>([]);
   const [revisao, setRevisao] = useState<DecisaoPendente | null>(null);
@@ -253,7 +259,12 @@ export function Board() {
     <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board', contagem: foto?.retrato?.pendencias?.length }]} ativa={aba} aoMudar={id => mudarParametro('aba', id)}>
     {/* Como no Board do dev.kit: o chat na coluna principal e o painel de auxílio à direita, na mesma ordem de leitura. */}
     <main className="br-main">
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
+      {taskDaConversa ? <ChatDaTaskRemota key={`${selecionada}-${taskDaConversa.conversaId}`} task={taskDaConversa} maquina={maquina} conectada={conectada} agora={agora}
+        emExecucao={!!foto?.retrato?.fluxos?.some(f => f.conversaId === taskDaConversa.conversaId)} voltar={() => setTaskDaConversa(null)} />
+        : null}
+      <div className="br-conversa-orquestrador" hidden={!!taskDaConversa}>
+        <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
+      </div>
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
         <Chips rotulo="Filtro de dia" opcoes={periodosDoDia} valor={periodo} aoMudar={valor => mudarParametro('dia', valor)} />
@@ -262,7 +273,8 @@ export function Board() {
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
-        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
+        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
+          conversar={task => { setTaskDaConversa(task); mudarParametro('aba', 'chat'); }} />}
         <HistoricoDeAvisos avisos={avisos} />
         <NotificacoesDoBoard />
       </aside>

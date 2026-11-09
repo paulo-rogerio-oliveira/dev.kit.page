@@ -29,6 +29,22 @@ public sealed class RegrasDaConversaTests
         Assert.Empty(RegrasDaConversa.Validar(Comando(id: "9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d", dispositivo: "Celular", ttl: 60), Opcoes));
     }
 
+    [Fact]
+    public void A_conversa_da_task_exige_canal_opaco_e_autor_compativel()
+    {
+        var canal = "task-" + new string('a', 32);
+        var mensagem = Comando(ConversaV1.ComandoMensagemTask) with { ConversaId = canal };
+        Assert.Empty(RegrasDaConversa.Validar(mensagem, Opcoes));
+        Assert.Empty(RegrasDaConversa.Validar(mensagem with { Tipo = ConversaV1.ComandoConversaTask, Texto = "" }, Opcoes));
+        Assert.NotEmpty(RegrasDaConversa.Validar(mensagem with { ConversaId = "sessao-local" }, Opcoes));
+        Assert.NotEmpty(RegrasDaConversa.Validar(mensagem with { ConversaId = null }, Opcoes));
+        Assert.NotEmpty(RegrasDaConversa.Validar(mensagem with { Tipo = ConversaV1.ComandoMensagem }, Opcoes));
+        Assert.Contains("Escreva", RegrasDaConversa.Validar(mensagem with { Texto = " " }, Opcoes));
+        Assert.Empty(RegrasDaConversa.Validar(Fala(" Agente ") with { ConversaId = canal }));
+        Assert.NotEmpty(RegrasDaConversa.Validar(Fala("AGENTE")));
+        Assert.NotEmpty(RegrasDaConversa.Validar(Fala("Orquestrador") with { ConversaId = canal }));
+    }
+
     [Theory]
     [InlineData("apagar-tudo", "Oi", null, null, "tipo")]
     [InlineData(ConversaV1.ComandoMensagem, "   ", null, null, "Escreva")]
@@ -93,7 +109,9 @@ public sealed class RegrasDaConversaTests
         Assert.Equal("falas-do-desktop", RemotoV1.RecursoFalasDoDesktop);
         Assert.Contains(RemotoV1.RecursoFalasDoDesktop, RemotoV1.RecursosDaApi);
         Assert.Equal([ConversaV1.EventoComando, ConversaV1.EventoResposta, ConversaV1.EventoFala], ConversaV1.TiposDeEvento);
-        Assert.Equal(["orquestrador", "dev"], ConversaV1.AutoresDaFala);
+        Assert.Equal(["orquestrador", "dev", "agente"], ConversaV1.AutoresDaFala);
+        Assert.Equal(["mensagem", "ligar", "reiniciar", "catalogo", "conversa-task", "mensagem-task"], ConversaV1.TiposDeComando);
+        Assert.Contains("conversas-das-tasks", RemotoV1.RecursosDaApi);
         Assert.Equal(["desktop", "remoto"], ConversaV1.OrigensDaFala);
     }
 

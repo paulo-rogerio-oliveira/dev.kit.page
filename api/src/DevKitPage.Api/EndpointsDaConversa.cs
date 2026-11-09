@@ -53,9 +53,11 @@ public static class EndpointsDaConversa
                     ? Results.Ok(comando)
                     : Results.Problem("Comando não encontrado.", statusCode: StatusCodes.Status404NotFound)));
 
-        grupo.MapGet("/maquinas/{maquinaId}/conversa", (string maquinaId, ClaimsPrincipal quem, IConversaRemota conversa, CancellationToken ct)
+        grupo.MapGet("/maquinas/{maquinaId}/conversa", (string maquinaId, string? conversaId, ClaimsPrincipal quem, IConversaRemota conversa, CancellationToken ct)
             => EndpointsDoRemoto.ComUsuario(quem, async usuario =>
-                RegrasDoRemoto.MaquinaIdValido(maquinaId) && await conversa.ConversaAsync(usuario, maquinaId, ct) is { } historico
+                RegrasDoRemoto.MaquinaIdValido(maquinaId)
+                    && (string.IsNullOrEmpty(conversaId) || RegrasDaConversa.ConversaTaskValida(conversaId))
+                    && await conversa.ConversaAsync(usuario, maquinaId, ct, conversaId ?? "") is { } historico
                     ? Results.Ok(historico)
                     : Results.Problem("Máquina não encontrada, ou não é sua.", statusCode: StatusCodes.Status404NotFound)));
 

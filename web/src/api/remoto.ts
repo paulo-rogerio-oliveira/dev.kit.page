@@ -25,7 +25,7 @@ export interface RetratoDaMaquina {
     }> | null;
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;
-      projeto?: string | null; item?: number | null; agente?: string | null; desdeEm?: string | null;
+      projeto?: string | null; item?: number | null; agente?: string | null; desdeEm?: string | null; conversaId?: string | null;
     }> | null;
     pendencias: PendenciaRemota[] | null;
   };
@@ -51,6 +51,7 @@ export interface ResponderDecisao { snapshotId: string; acao: 'responder' | 'apr
 
 /** Conversa v1: o estado é confirmado pela API, nunca inferido do heartbeat. */
 export interface ComandoRemoto {
+  conversaId?: string | null;
   id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string;
   estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
   criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
@@ -60,15 +61,18 @@ export interface ComandoRemoto {
  * atalhos do chat (o handshake, remote-control-v3).
  */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo'; texto: string; dispositivo: 'celular' | 'navegador';
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | 'conversa-task' | 'mensagem-task'; texto: string; dispositivo: 'celular' | 'navegador';
+  conversaId?: string;
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
 }
 export interface RespostaRemota {
+  conversaId?: string | null;
   id: string; maquinaId: string; comandoId: string | null; tipo: string; texto: string; geradaEm: string; recebidaEm: string;
 }
 /** A fala do chat do dev.kit (o recurso `falas-do-desktop`): quem falou e onde a fala nasceu. */
 export interface FalaRemota {
+  conversaId?: string | null;
   id: string; maquinaId: string; autor: 'dev' | 'orquestrador' | string; origem: 'desktop' | 'remoto' | string; texto: string;
   comandoId: string | null; ditaEm: string; recebidaEm: string;
 }

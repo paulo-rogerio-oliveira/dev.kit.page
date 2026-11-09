@@ -25,10 +25,11 @@ public sealed class ConversaRemota(
         var id = string.IsNullOrEmpty(pedido.Id) ? Guid.NewGuid().ToString("N") : pedido.Id;
         var tipo = RegrasDoRemoto.Normalizar(pedido.Tipo);
         var texto = (pedido.Texto ?? string.Empty).Trim();
+        var canal = pedido.ConversaId ?? string.Empty;
 
         var existente = await db.ComandosRemotos.AsNoTracking().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
         if (existente is not null)
-            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
+            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct, canal);
 
         var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == pedido.MaquinaId, ct);
         if (maquina is null)
@@ -42,8 +43,8 @@ public sealed class ConversaRemota(
 
         // O handshake (o pedido do catálogo) ainda na fila serve a quem pede de novo: o site que reabre o Board e o duplo
         // "Atualizar" não empilham pedidos que o dev.kit responderia todos com o mesmo catálogo.
-        if (tipo == ConversaV1.ComandoCatalogo && await db.ComandosRemotos.AsNoTracking()
-                .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == pedido.MaquinaId && c.Tipo == ConversaV1.ComandoCatalogo
+        if (tipo is ConversaV1.ComandoCatalogo or ConversaV1.ComandoConversaTask && await db.ComandosRemotos.AsNoTracking()
+                .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == pedido.MaquinaId && c.Tipo == tipo && c.ConversaId == canal
                             && (c.Estado == ConversaV1.EstadoPendente || c.Estado == ConversaV1.EstadoNaFila) && c.ExpiraEmUtc > agora)
                 .OrderByDescending(c => c.CriadoEmUtc).FirstOrDefaultAsync(ct) is { } aguardando)
             return new(new ComandoAceito(Leitura(aguardando), Novo: false));
@@ -51,9 +52,10 @@ public sealed class ConversaRemota(
         // O limite por hora é de quem pode abrir turno do agente: o handshake não abre, e não conta nem é barrado por ele.
         var inicioDaJanela = agora.AddHours(-1);
         var naJanela = await db.ComandosRemotos.AsNoTracking()
-            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela && c.Tipo != ConversaV1.ComandoCatalogo)
+            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela
+                && c.Tipo != ConversaV1.ComandoCatalogo && c.Tipo != ConversaV1.ComandoConversaTask)
             .Select(c => c.CriadoEmUtc).ToListAsync(ct);
-        if (tipo != ConversaV1.ComandoCatalogo && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
+        if (tipo is not (ConversaV1.ComandoCatalogo or ConversaV1.ComandoConversaTask) && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
         {
             var espera = RegrasDaConversa.TenteEm(naJanela.Min(), agora);
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.Limite,
@@ -67,6 +69,7 @@ public sealed class ConversaRemota(
             UsuarioId = usuarioId,
             ComandoId = id,
             MaquinaId = pedido.MaquinaId,
+            ConversaId = canal,
             Tipo = tipo,
             Texto = texto,
             Dispositivo = dispositivo.Length == 0 ? ConversaV1.DispositivoNavegador : dispositivo,
@@ -86,7 +89,7 @@ public sealed class ConversaRemota(
             // Dois envios com o mesmo id ao mesmo tempo: o índice único deixa um; o outro devolve o que ficou.
             db.ChangeTracker.Clear();
             var vencedor = await db.ComandosRemotos.AsNoTracking().FirstAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
-            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
+            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct, canal);
         }
 
         return await EnfileirarAsync(comando, filaDoUsuario, novo: true, pedido.ConfirmarReinicio, ct);
@@ -98,9 +101,9 @@ public sealed class ConversaRemota(
     /// ela não é gravada, só levada na mensagem da fila.
     /// </summary>
     private async Task<ResultadoDaConversa<ComandoAceito>> ReenviarAsync(
-        ComandoRemoto existente, string maquinaId, string tipo, string texto, bool confirmarReinicio, CancellationToken ct)
+        ComandoRemoto existente, string maquinaId, string tipo, string texto, bool confirmarReinicio, CancellationToken ct, string conversaId)
     {
-        if (existente.MaquinaId != maquinaId || existente.Tipo != tipo || existente.Texto != texto)
+        if (existente.MaquinaId != maquinaId || existente.Tipo != tipo || existente.Texto != texto || existente.ConversaId != conversaId)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outro comando seu. Mande o comando novo com outro id.");
         if (existente.Estado != ConversaV1.EstadoFalhou)
             return new(new ComandoAceito(Leitura(existente), Novo: false));
@@ -121,7 +124,7 @@ public sealed class ConversaRemota(
         var agora = relogio.GetUtcNow().UtcDateTime;
         var mensagem = JsonSerializer.Serialize(new MensagemDaFilaV1(RemotoV1.Contrato, comando.ComandoId, comando.MaquinaId, comando.Tipo, comando.Texto,
             ConversaV1.OrigemRemoto, comando.Dispositivo, DevKitPageDb.Utc(comando.CriadoEmUtc), DevKitPageDb.Utc(comando.ExpiraEmUtc),
-            comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio), Json);
+            comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio, comando.ConversaId.Length > 0 ? comando.ConversaId : null), Json);
         string? erro = null;
         try
         {
@@ -154,19 +157,19 @@ public sealed class ConversaRemota(
         return comando is null ? null : Leitura(comando);
     }
 
-    public async Task<ConversaDaMaquinaV1?> ConversaAsync(int usuarioId, string maquinaId, CancellationToken ct)
+    public async Task<ConversaDaMaquinaV1?> ConversaAsync(int usuarioId, string maquinaId, CancellationToken ct, string conversaId = "")
     {
         if (!await db.MaquinasRemotas.AsNoTracking().AnyAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == maquinaId, ct))
             return null;
         await ExpirarVencidosAsync(usuarioId, ct);
         // O último evento ANTES do histórico: o que mudar entre as duas leituras chega de novo pelo SSE (o site junta pelo id).
         var ultimo = await db.EventosDaConversa.AsNoTracking().Where(e => e.UsuarioId == usuarioId).MaxAsync(e => (long?)e.Id, ct) ?? 0;
-        var comandos = await db.ComandosRemotos.AsNoTracking().Where(c => c.UsuarioId == usuarioId && c.MaquinaId == maquinaId)
+        var comandos = await db.ComandosRemotos.AsNoTracking().Where(c => c.UsuarioId == usuarioId && c.MaquinaId == maquinaId && c.ConversaId == conversaId)
             .OrderByDescending(c => c.CriadoEmUtc).ThenByDescending(c => c.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
-        var respostas = await db.RespostasRemotas.AsNoTracking().Where(r => r.UsuarioId == usuarioId && r.MaquinaId == maquinaId)
+        var respostas = await db.RespostasRemotas.AsNoTracking().Where(r => r.UsuarioId == usuarioId && r.MaquinaId == maquinaId && r.ConversaId == conversaId)
             .OrderByDescending(r => r.RecebidaEmUtc).ThenByDescending(r => r.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         // As falas na ordem em que foram ditas: a que chega atrasada (o reenvio do dev.kit) entra no lugar dela.
-        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId)
+        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId && f.ConversaId == conversaId)
             .OrderByDescending(f => f.DitaEmUtc).ThenByDescending(f => f.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         return new ConversaDaMaquinaV1(
             comandos.AsEnumerable().Reverse().Select(Leitura).ToArray(),
@@ -256,6 +259,7 @@ public sealed class ConversaRemota(
             UsuarioId = usuarioId,
             MaquinaId = maquinaId,
             RespostaId = resposta.Id,
+            ConversaId = comando?.ConversaId ?? string.Empty,
             ComandoId = comandoId,
             Tipo = tipo,
             Texto = (resposta.Texto ?? string.Empty).Trim(),
@@ -301,6 +305,7 @@ public sealed class ConversaRemota(
             UsuarioId = usuarioId,
             MaquinaId = maquinaId,
             FalaId = fala.Id,
+            ConversaId = fala.ConversaId ?? string.Empty,
             Autor = RegrasDoRemoto.Normalizar(fala.Autor),
             Origem = RegrasDoRemoto.Normalizar(fala.Origem),
             Texto = (fala.Texto ?? string.Empty).Trim(),
@@ -317,6 +322,8 @@ public sealed class ConversaRemota(
                 return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.NaoEncontrado, "Comando não encontrado.");
             if (comando.MaquinaId != maquinaId)
                 return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.OutraMaquina, "Este comando é de outra máquina sua.");
+            if (comando.ConversaId != linha.ConversaId)
+                return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.IdEmUso, "A fala é de outra conversa.");
         }
 
         var agora = relogio.GetUtcNow().UtcDateTime;
@@ -346,7 +353,8 @@ public sealed class ConversaRemota(
             .FirstOrDefaultAsync(f => f.UsuarioId == nova.UsuarioId && f.MaquinaId == nova.MaquinaId && f.FalaId == nova.FalaId, ct);
         if (gravada is null)
             return null;
-        if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId)
+        if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId
+            || gravada.ConversaId != nova.ConversaId)
             return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outra fala desta máquina. Mande a fala nova com outro id.");
         return new(new FalaRecebidaV1(gravada.FalaId, Repetida: true, DevKitPageDb.Utc(gravada.RecebidaEmUtc)));
     }
@@ -417,14 +425,15 @@ public sealed class ConversaRemota(
         => new(c.ComandoId, c.MaquinaId, c.Tipo, c.Texto, c.Dispositivo, c.Estado, DevKitPageDb.Utc(c.CriadoEmUtc), DevKitPageDb.Utc(c.ExpiraEmUtc),
             c.EntregueEmUtc is { } entregue ? DevKitPageDb.Utc(entregue) : null,
             c.ConcluidoEmUtc is { } concluido ? DevKitPageDb.Utc(concluido) : null,
-            c.Erro);
+            c.Erro, c.ConversaId.Length > 0 ? c.ConversaId : null);
 
     internal static RespostaRemotaV1 Leitura(RespostaRemota r)
-        => new(r.RespostaId, r.MaquinaId, r.ComandoId.Length == 0 ? null : r.ComandoId, r.Tipo, r.Texto, DevKitPageDb.Utc(r.GeradaEmUtc), DevKitPageDb.Utc(r.RecebidaEmUtc));
+        => new(r.RespostaId, r.MaquinaId, r.ComandoId.Length == 0 ? null : r.ComandoId, r.Tipo, r.Texto, DevKitPageDb.Utc(r.GeradaEmUtc), DevKitPageDb.Utc(r.RecebidaEmUtc),
+            r.ConversaId.Length > 0 ? r.ConversaId : null);
 
     internal static FalaRemotaV1 Leitura(FalaRemota f)
         => new(f.FalaId, f.MaquinaId, f.Autor, f.Origem, f.Texto, f.ComandoId.Length == 0 ? null : f.ComandoId, DevKitPageDb.Utc(f.DitaEmUtc),
-            DevKitPageDb.Utc(f.RecebidaEmUtc));
+            DevKitPageDb.Utc(f.RecebidaEmUtc), f.ConversaId.Length > 0 ? f.ConversaId : null);
 }
 
 /// <summary>A retenção da conversa (<see cref="OpcoesDoRemoto.RetencaoDaConversaDias"/>): o comando, a resposta, a fala e o evento, pela data deles.</summary>

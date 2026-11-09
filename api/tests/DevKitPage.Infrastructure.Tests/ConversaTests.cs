@@ -42,6 +42,77 @@ public sealed class ConversaTests
     private const string Maquina = "3f2b9c0e5d7a";
     private const string OutraMaquina = "9a8b7c6d5e4f";
 
+    [Fact]
+    public async Task A_task_tem_historico_proprio_e_a_fila_e_o_sse_conservam_o_canal()
+    {
+        var (b, fila, ana, bia) = await BaseAsync();
+        await using var descarte = b;
+        var canal = "task-" + new string('a', 32);
+        var outro = "task-" + new string('b', 32);
+        await EnviarAsync(b, ana, Mensagem("orq"));
+        await FalarAsync(b, ana, "fala-orq", ConversaV1.AutorOrquestrador);
+        var pedido = Mensagem("task-msg") with { Tipo = ConversaV1.ComandoMensagemTask, ConversaId = canal };
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await EnviarAsync(b, ana, pedido)).Falha);
+        var transporte = JsonSerializer.Deserialize<MensagemDaFilaV1>(fila.Enviadas.Last().Mensagem, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal((ConversaV1.ComandoMensagemTask, canal), (transporte.Tipo, transporte.ConversaId));
+        await ReceberAsync(b, ana, pedido.Id!);
+        await ResponderAsync(b, ana, "ack-task", pedido.Id, ConversaV1.RespostaConcluido, "Mensagem registrada.");
+        await b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().FalarAsync(ana,
+            new FalaDoDevKitV1(RemotoV1.Contrato, Maquina, "fala-task", ConversaV1.AutorAgente, ConversaV1.OrigemDesktop,
+                "Estou conferindo os testes.", b.Relogio.Agora, ConversaId: canal), default));
+
+        var historico = (await b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().ConversaAsync(ana, Maquina, default, canal)))!;
+        Assert.Equal(pedido.Id, Assert.Single(historico.Comandos).Id);
+        Assert.Equal(canal, Assert.Single(historico.Respostas).ConversaId);
+        Assert.Equal("fala-task", Assert.Single(historico.Falas).Id);
+        var orquestrador = (await ConversaAsync(b, ana))!;
+        Assert.Equal("orq", Assert.Single(orquestrador.Comandos).Id);
+        Assert.Equal("fala-orq", Assert.Single(orquestrador.Falas).Id);
+        Assert.Empty(orquestrador.Respostas);
+        var vazio = (await b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().ConversaAsync(ana, Maquina, default, outro)))!;
+        Assert.Empty(vazio.Comandos);
+        Assert.Empty(vazio.Falas);
+        Assert.Null(await b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().ConversaAsync(bia, Maquina, default, canal)));
+        Assert.Contains(await EventosAsync(b, ana), e => e.Fala?.ConversaId == canal);
+    }
+
+    [Fact]
+    public async Task Reenvio_da_mensagem_nao_troca_a_task_e_abertura_pendente_nao_duplica_nem_gasta_limite()
+    {
+        var (b, fila, ana, _) = await BaseAsync(comandosPorHora: 1);
+        await using var descarte = b;
+        var canal = "task-" + new string('a', 32);
+        var outro = "task-" + new string('b', 32);
+        var mensagem = Mensagem("task-msg") with { Tipo = ConversaV1.ComandoMensagemTask, ConversaId = canal };
+        await EnviarAsync(b, ana, mensagem);
+        Assert.False((await EnviarAsync(b, ana, mensagem)).Valor!.Novo);
+        Assert.Equal(FalhaNaConversa.IdEmUso, (await EnviarAsync(b, ana, mensagem with { ConversaId = outro })).Falha);
+        var abertura = mensagem with { Id = "abrir", Tipo = ConversaV1.ComandoConversaTask, Texto = "" };
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await EnviarAsync(b, ana, abertura)).Falha);
+        Assert.Equal("abrir", (await EnviarAsync(b, ana, abertura with { Id = "renovar" })).Valor!.Comando.Id);
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await EnviarAsync(b, ana, abertura with { Id = "outra", ConversaId = outro })).Falha);
+        Assert.Equal(3, fila.Enviadas.Count);
+        Assert.Equal(FalhaNaConversa.Limite, (await EnviarAsync(b, ana, mensagem with { Id = "nova" })).Falha);
+    }
+
+    [Fact]
+    public async Task Uma_fala_nao_pode_ser_reutilizada_em_outro_canal_nem_ligada_a_comando_de_outra_task()
+    {
+        var (b, _, ana, _) = await BaseAsync();
+        await using var descarte = b;
+        var canal = "task-" + new string('a', 32);
+        var outro = "task-" + new string('b', 32);
+        await EnviarAsync(b, ana, Mensagem("task-msg") with { Tipo = ConversaV1.ComandoMensagemTask, ConversaId = canal });
+        var fala = new FalaDoDevKitV1(RemotoV1.Contrato, Maquina, "f-task", ConversaV1.AutorAgente,
+            ConversaV1.OrigemDesktop, "Conferido.", b.Relogio.Agora, ConversaId: canal);
+        Task<ResultadoDaConversa<FalaRecebidaV1>> Publicar(FalaDoDevKitV1 f)
+            => b.ComAsync(sp => sp.GetRequiredService<IConversaRemota>().FalarAsync(ana, f, default));
+        Assert.Equal(FalhaNaConversa.Nenhuma, (await Publicar(fala)).Falha);
+        Assert.True((await Publicar(fala)).Valor!.Repetida);
+        Assert.Equal(FalhaNaConversa.IdEmUso, (await Publicar(fala with { ConversaId = outro })).Falha);
+        Assert.Equal(FalhaNaConversa.IdEmUso, (await Publicar(fala with { Id = "f-outra", ConversaId = outro, ComandoId = "task-msg" })).Falha);
+    }
+
     private static async Task<(BaseDeTeste Base, FilaDeTeste Fila, int Ana, int Bia)> BaseAsync(int comandosPorHora = 30)
     {
         var fila = new FilaDeTeste();

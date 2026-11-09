@@ -39,7 +39,7 @@ public sealed record ItemNoRetratoV1(int Numero, string Titulo, string Situacao,
 /// </summary>
 public sealed record FluxoNoRetratoV1(
     string Id, string Nome, string Etapa, string Situacao, string? Projeto = null, int? Item = null, string? Agente = null,
-    DateTimeOffset? DesdeEm = null);
+    DateTimeOffset? DesdeEm = null, string? ConversaId = null);
 
 /// <summary>
 /// Uma PENDÊNCIA do dev (o que espera decisão). A pergunta leva os MESMOS campos do <c>[GITKIT:PERGUNTA]</c> —
@@ -143,7 +143,9 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo];
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoConversasDasTasks];
+
+    public const string RecursoConversasDasTasks = "conversas-das-tasks";
 
     /// <summary>
     /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina

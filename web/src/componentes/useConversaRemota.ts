@@ -9,10 +9,11 @@ function juntar<T extends { id: string }>(lista: T[], item: T) {
   return [...lista.filter(x => x.id !== item.id), item];
 }
 
-export function useConversaRemota(maquina: string) {
+export function useConversaRemota(maquina: string, conversaId = '') {
   const { sessao, sair } = useSessao();
   const [conversa, setConversa] = useState(vazia);
   const [erro, setErro] = useState('');
+  const [erroDaAbertura, setErroDaAbertura] = useState('');
   const [falhaNoEnvio, setFalhaNoEnvio] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -23,6 +24,7 @@ export function useConversaRemota(maquina: string) {
   const ocupado = useRef(false);
   const revisoes = useRef(new Map<string, number>());
   const pendente = useRef<ComandoNovo | null>(null);
+  const chave = `${maquina}:${conversaId}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -31,13 +33,16 @@ export function useConversaRemota(maquina: string) {
     let timer: number;
     let cursor = 0;
     let inicializada = false;
-    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio(''); setCarregadaPara(maquina);
+    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio(''); setCarregadaPara(chave);
+    setErroDaAbertura('');
+    if (pendente.current && (pendente.current.maquinaId !== maquina || (pendente.current.conversaId ?? '') !== conversaId))
+      pendente.current = null;
     revisoes.current.clear(); ocupado.current = false; setEnviando(false);
     if (!sessao || !maquina) { setCarregando(false); return () => controller.abort(); }
     async function atualizar() {
       try {
         if (!inicializada) {
-          const historico = await api.conversaRemota(sessao!.token, maquina, signal);
+          const historico = await api.conversaRemota(sessao!.token, maquina, signal, conversaId);
           if (signal.aborted) return;
           setConversa({ ...historico, falas: historico.falas ?? [] }); cursor = historico.ultimoEvento; inicializada = true;
           setCarregando(false);
@@ -49,6 +54,8 @@ export function useConversaRemota(maquina: string) {
           if (signal.aborted || evento.id <= cursor) return;
           cursor = evento.id;
           if (evento.maquinaId !== maquina) return;
+          const canal = evento.comando?.conversaId ?? evento.resposta?.conversaId ?? evento.fala?.conversaId ?? '';
+          if (canal !== conversaId) return;
           if (evento.comando) revisoes.current.set(evento.comando.id, evento.id);
           setConversa(atual => ({
             comandos: evento.comando ? juntar(atual.comandos, evento.comando) : atual.comandos,
@@ -68,16 +75,17 @@ export function useConversaRemota(maquina: string) {
     }
     void atualizar();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [maquina, sessao, sair, tentativa]);
+  }, [maquina, conversaId, chave, sessao, sair, tentativa]);
 
   const enviar = useCallback(async (texto: string, reenvio?: ComandoRemoto) => {
     const controller = ciclo.current;
     if (!sessao || !maquina || ocupado.current || !controller || controller.signal.aborted) return false;
+    const tipo = conversaId ? 'mensagem-task' : 'mensagem';
     const pedido: ComandoNovo = reenvio ? {
-      id: reenvio.id, maquinaId: maquina, tipo: 'mensagem', texto: reenvio.texto,
+      id: reenvio.id, maquinaId: maquina, tipo, texto: reenvio.texto, ...(conversaId ? { conversaId } : {}),
       dispositivo: reenvio.dispositivo === 'celular' ? 'celular' : 'navegador',
-    } : pendente.current?.texto === texto ? pendente.current : {
-      id: crypto.randomUUID(), maquinaId: maquina, tipo: 'mensagem', texto,
+    } : pendente.current?.texto === texto && pendente.current.maquinaId === maquina && (pendente.current.conversaId ?? '') === conversaId ? pendente.current : {
+      id: crypto.randomUUID(), maquinaId: maquina, tipo, texto, ...(conversaId ? { conversaId } : {}),
       dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
     };
     if (!reenvio) pendente.current = pedido;
@@ -102,7 +110,26 @@ export function useConversaRemota(maquina: string) {
     } finally {
       if (!controller.signal.aborted) { ocupado.current = false; setEnviando(false); }
     }
-  }, [sessao, maquina, sair]);
+  }, [sessao, maquina, conversaId, sair]);
+
+  /** Abre/renova por dez minutos o espelho da task; não abre turno do agente. */
+  const pedirConversa = useCallback(async () => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !conversaId || !controller || controller.signal.aborted) return;
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, {
+        id: crypto.randomUUID(), maquinaId: maquina, tipo: 'conversa-task', conversaId, texto: '',
+        dispositivo: window.matchMedia('(max-width:700px)').matches ? 'celular' : 'navegador',
+      }, controller.signal);
+      if (!controller.signal.aborted) setErroDaAbertura('');
+      if (!controller.signal.aborted && !revisoes.current.has(comando.id))
+        setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+    } catch (falha) {
+      if (controller.signal.aborted) return;
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return; }
+      setErroDaAbertura(`Não foi possível abrir ou atualizar a conversa da task. ${mensagemDaFalha(falha)}`);
+    }
+  }, [sessao, maquina, conversaId, sair]);
 
   /**
    * (item 8) LIGAR ou REINICIAR o dev.kit: o comando vai ao serviço da máquina pela mesma fila, e o desfecho chega pela
@@ -151,10 +178,10 @@ export function useConversaRemota(maquina: string) {
     }
   }, [sessao, maquina, sair]);
 
-  const atual = carregadaPara === maquina;
+  const atual = carregadaPara === chave;
   return {
-    conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
-    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, recarregar: () => setTentativa(x => x + 1),
+    conversa: atual ? conversa : vazia, erro: atual ? erro : '', erroDaAbertura: atual ? erroDaAbertura : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
+    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, pedirConversa, recarregar: () => setTentativa(x => x + 1),
   };
 }
 

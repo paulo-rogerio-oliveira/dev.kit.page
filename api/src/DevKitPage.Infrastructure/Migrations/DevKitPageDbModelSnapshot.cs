@@ -240,6 +240,12 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime?>("ConcluidoEmUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ConversaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
 
@@ -628,6 +634,12 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("ConversaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
 
                     b.Property<DateTime>("DitaEmUtc")
                         .HasColumnType("TEXT");
@@ -1816,6 +1828,12 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("ConversaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
 
                     b.Property<DateTime>("GeradaEmUtc")
                         .HasColumnType("TEXT");

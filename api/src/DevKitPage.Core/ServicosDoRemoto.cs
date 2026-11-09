@@ -109,6 +109,8 @@ public static partial class RegrasDoRemoto
                 return $"fluxos[{i}]: informe o nome; nome, etapa, situação, projeto e agente têm até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
             if (fluxo.Item is <= 0)
                 return $"fluxos[{i}]: o item é positivo.";
+            if (!string.IsNullOrEmpty(fluxo.ConversaId) && !RegrasDaConversa.ConversaTaskValida(fluxo.ConversaId))
+                return $"fluxos[{i}]: o canal da conversa da task é inválido.";
         }
 
         var pendencias = retrato.Pendencias ?? [];

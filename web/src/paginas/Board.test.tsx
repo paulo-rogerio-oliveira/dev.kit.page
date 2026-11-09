@@ -4,7 +4,7 @@ import { delay, http, HttpResponse } from 'msw';
 import { transferableAbortController } from 'node:util';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenDoDev } from '../testes/servidor';
-import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
+import type { ComandoNovo, EventoDaConversa, FalaRemota, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
 import { destinoDa } from '../sessao';
 
 // O fetch do Node exige o AbortSignal do próprio Node, em vez do construtor do jsdom.
@@ -38,6 +38,103 @@ function responder(lista = [maquina()]) {
 }
 
 describe('Board remoto', () => {
+  describe('conversa com o agente da task', () => {
+    const canal = 'task-' + 'a'.repeat(32);
+    const outroCanal = 'task-' + 'b'.repeat(32);
+    function prepararTask() {
+      responder([maquina(), maquina('outra')]);
+      const pedidos: ComandoNovo[] = [];
+      const hora = new Date().toISOString();
+      const fala = (id: string, texto: string, conversaId?: string): FalaRemota => ({
+        id, maquinaId: 'notebook', texto, conversaId, autor: conversaId ? 'agente' : 'orquestrador', origem: 'desktop',
+        ditaEm: hora, recebidaEm: hora, comandoId: null,
+      });
+      servidor.use(
+        http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => {
+          const foto = retrato(maquina(String(params.id)));
+          foto.retrato.fluxos = [
+            { ...foto.retrato.fluxos![0], conversaId: canal },
+            { id: 'f2', nome: 'Outra task', etapa: 'Teste', situacao: 'rodando', agente: 'claude', conversaId: outroCanal },
+          ];
+          return HttpResponse.json(foto);
+        }),
+        http.get(`${API}/api/remoto/maquinas/:id/conversa`, ({ request }) => {
+          const task = new URL(request.url).searchParams.get('conversaId');
+          return HttpResponse.json({ comandos: [], respostas: [], ultimoEvento: 10,
+            falas: [task ? fala('task-historico', `Histórico ${task === canal ? 'Codex' : 'Claude'}`, task) : fala('orq', 'Histórico do Orquestrador')] });
+        }),
+        http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+          const pedido = await request.json() as ComandoNovo;
+          pedidos.push(pedido);
+          return HttpResponse.json({ ...pedido, estado: 'na-fila', criadoEm: hora, expiraEm: new Date(Date.now() + 600_000).toISOString(),
+            entregueEm: null, concluidoEm: null, erro: '' }, { status: 202 });
+        }),
+      );
+      return { pedidos, fala };
+    }
+
+    it('abre pelo card, recebe somente as falas da task e envia para o canal escolhido sem perder o rascunho do Orquestrador', async () => {
+      const { pedidos, fala } = prepararTask();
+      const eventos: EventoDaConversa[] = [
+        { id: 11, tipo: 'fala', maquinaId: 'notebook', comando: null, resposta: null, em: new Date().toISOString(), fala: fala('f-outra', 'Resposta de outra task', outroCanal) },
+        { id: 12, tipo: 'fala', maquinaId: 'notebook', comando: null, resposta: null, em: new Date().toISOString(), fala: fala('f-certa', 'Resposta nova do Codex', canal) },
+      ];
+      servidor.use(http.get(`${API}/api/remoto/conversa/eventos`, () => new HttpResponse(
+        eventos.map(e => `id: ${e.id}\nevent: fala\ndata: ${JSON.stringify(e)}\n\n`).join(''),
+        { headers: { 'Content-Type': 'text/event-stream' } })));
+      renderizar('/board?aba=chat', tokenDoDev());
+      await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
+      await userEvent.type(screen.getByLabelText('Mensagem ao Orquestrador'), 'rascunho que deve ficar');
+      await userEvent.click(await screen.findByRole('button', { name: 'Conversar com o agente de Item 20 · layout do plano' }));
+      const chat = within(screen.getByRole('region', { name: 'Conversa com o agente de Item 20 · layout do plano' }));
+      expect(await chat.findByText('Histórico Codex')).toBeInTheDocument();
+      expect(await chat.findByText('Resposta nova do Codex')).toBeInTheDocument();
+      expect(chat.queryByText('Resposta de outra task')).not.toBeInTheDocument();
+      expect(chat.queryByText('Histórico do Orquestrador')).not.toBeInTheDocument();
+      await waitFor(() => expect(pedidos.some(p => p.tipo === 'conversa-task')).toBe(true));
+      expect(pedidos.find(p => p.tipo === 'conversa-task')).toMatchObject({ conversaId: canal, maquinaId: 'notebook', texto: '' });
+      expect(pedidos.some(p => ['mensagem', 'mensagem-task', 'reiniciar', 'ligar'].includes(p.tipo))).toBe(false);
+      await userEvent.type(chat.getByLabelText('Mensagem ao agente da task'), 'Como está a implementação?');
+      await userEvent.click(chat.getByRole('button', { name: 'Enviar mensagem ao agente' }));
+      await waitFor(() => expect(chat.getByLabelText('Mensagem ao agente da task')).toHaveValue(''));
+      expect(pedidos.filter(p => p.tipo === 'mensagem-task')).toEqual([expect.objectContaining({
+        conversaId: canal, maquinaId: 'notebook', texto: 'Como está a implementação?',
+      })]);
+      await userEvent.click(chat.getByRole('button', { name: 'Voltar ao Orquestrador' }));
+      expect(screen.getByLabelText('Mensagem ao Orquestrador')).toHaveValue('rascunho que deve ficar');
+      expect(screen.getByText('Histórico do Orquestrador')).toBeVisible();
+      expect(screen.queryByText('Histórico Codex')).not.toBeInTheDocument();
+      expect(screen.queryByText('Resposta nova do Codex')).not.toBeInTheDocument();
+    });
+
+    it('troca de agente e de máquina sem levar o canal ou o rascunho da task anterior', async () => {
+      const { pedidos } = prepararTask();
+      renderizar('/board', tokenDoDev());
+      await userEvent.click(await screen.findByRole('button', { name: 'Conversar com o agente de Item 20 · layout do plano' }));
+      await screen.findByText('Histórico Codex');
+      await userEvent.type(screen.getByLabelText('Mensagem ao agente da task'), 'rascunho do Codex');
+      await userEvent.click(screen.getByRole('button', { name: 'Conversar com o agente de Outra task' }));
+      await screen.findByText('Histórico Claude');
+      expect(screen.getByLabelText('Mensagem ao agente da task')).toHaveValue('');
+      expect(screen.queryByText('Histórico Codex')).not.toBeInTheDocument();
+      await userEvent.type(screen.getByLabelText('Mensagem ao agente da task'), 'Pergunta ao Claude');
+      await userEvent.click(screen.getByRole('button', { name: 'Enviar mensagem ao agente' }));
+      await waitFor(() => expect(pedidos.some(p => p.tipo === 'mensagem-task')).toBe(true));
+      expect(pedidos.find(p => p.tipo === 'mensagem-task')).toMatchObject({ conversaId: outroCanal, texto: 'Pergunta ao Claude' });
+      await userEvent.selectOptions(screen.getByLabelText('Máquina'), 'outra');
+      await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeVisible());
+      expect(screen.queryByLabelText('Mensagem ao agente da task')).not.toBeInTheDocument();
+      expect(screen.queryByText('Histórico Claude')).not.toBeInTheDocument();
+    });
+
+    it('o card de uma versão antiga sem canal não oferece um destino de conversa inventado', async () => {
+      responder();
+      renderizar('/board', tokenDoDev());
+      await screen.findByText('Item 20 · layout do plano');
+      expect(screen.queryByRole('button', { name: /Conversar com o agente/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('preserva a notificação após login e recusa destino externo', () => {
     expect(destinoDa(tokenDoDev(), '/board?notificacao=' + 'a'.repeat(32))).toBe('/board?notificacao=' + 'a'.repeat(32));
     expect(destinoDa(tokenDoDev(), '//evil.test/board')).toBe('/conta');

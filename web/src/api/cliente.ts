@@ -148,8 +148,8 @@ export const api = {
   confirmarSegundoFator: (token: string, codigo: string) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator/confirmar', { token, metodo: 'POST', corpo: { codigo } }),
   capturaDaDecisao: async (token: string, caminho: string, signal: AbortSignal) =>
     (await requisitar(caminho, { token, signal, aceita: 'image/png' })).blob(),
-  conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
-    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
+  conversaRemota: (token: string, maquina: string, signal?: AbortSignal, conversaId = '') =>
+    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa${conversaId ? `?conversaId=${encodeURIComponent(conversaId)}` : ''}`, { token, signal }),
   /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
   enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
     chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),

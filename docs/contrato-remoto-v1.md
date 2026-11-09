@@ -276,6 +276,32 @@ regras em `api/src/DevKitPage.Core/CatalogoDoRemoto.cs`.
   versão"); o site guarda o último catálogo que tiver e deixa o texto livre nos atalhos. A API antiga recusa o tipo com
   **400** e não anuncia o recurso: o dev.kit novo não publica nela.
 
+## 6. Conversa com o agente de uma task em execução
+
+O recurso `conversas-das-tasks`, anunciado pela API no heartbeat, habilita o espelho das conversas das tasks.
+Cada fluxo do retrato pode trazer `conversaId`: `task-` seguido dos primeiros 32 caracteres hexadecimais do SHA-256
+do id local da sessão atual. O identificador é opaco: não contém caminho, id de sessão nem credencial. Um retrato antigo
+sem esse campo continua válido; o site só oferece **Conversar com o agente** quando recebe o canal.
+
+- **Abrir ou renovar:** `POST /api/remoto/comandos` com `tipo: "conversa-task"`, `maquinaId`, `conversaId` e texto vazio.
+  Não abre turno, não conta no limite por hora e reutiliza o pedido pendente da mesma máquina e canal. O desktop assina
+  o espelho por dez minutos; o site renova a cada minuto enquanto a conversa está aberta e a task está no retrato.
+- **Enviar:** o mesmo POST, com `tipo: "mensagem-task"`, `conversaId` e texto obrigatório até 4000 caracteres.
+  O recebimento segue os estados e o TTL da seção 4. A mensagem entra na fila normal da task e aguarda a vez se o agente
+  está em um turno. O id do comando impede duplicação, inclusive numa retomada do desktop. A confirmação `concluido`
+  significa mensagem registrada para o agente; a resposta do agente vem como fala.
+- **Ler:** `GET /api/remoto/maquinas/{maquinaId}/conversa?conversaId={canal}` filtra comandos, respostas e falas daquele
+  canal. Sem o parâmetro, retorna a conversa do Orquestrador. Falas e eventos trazem `conversaId` opcional; a resposta
+  herda o canal do comando. O SSE continua por máquina: o cliente avança o cursor de todos os eventos e só exibe os do
+  canal escolhido. Trocar a etapa do fluxo não troca a conversa já aberta.
+- **Falas:** `POST /api/remoto/conversa/falas` aceita `autor: "agente"` com `conversaId` obrigatório e `autor: "dev"`
+  com canal opcional. O autor `orquestrador` usa o canal vazio. Mantêm-se sanitização, isolamento por usuário/máquina,
+  limites e idempotência. Reutilizar um id com outro canal ou ligar a fala ao comando de outra conversa é **409**.
+- **Recusas:** canal inválido ou ausente nos tipos da task é **400**; canal local inválido na leitura é **404**. A task
+  inexistente, arquivada, encerrada ou correspondente ao Orquestrador é recusada pelo desktop, sem redirecionamento.
+  Uma assinatura já aberta pode publicar a última fala depois do término. A API antiga recusa os tipos novos;
+  o desktop antigo também os recusa como desconhecidos. Texto do chat não aprova portões do fluxo.
+
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no
@@ -286,5 +312,6 @@ depois de `Remoto:RetencaoDaConversaDias` (padrão 30), pela data de cada linha.
 
 A tabela `MaquinasRemotas` vem de `api/scripts/sqlserver/Remoto.sql`, e as da conversa (`ComandosRemotos`,
 `RespostasRemotas`, `EventosDaConversa`, `FalasRemotas`), de `api/scripts/sqlserver/Conversa.sql` — idempotentes; rode-os antes
-de publicar a API. Numa base que já tem a conversa do item 5, rodar de novo o `Conversa.sql` só cria `FalasRemotas`. O
+de publicar a API. Numa base existente, `Conversa.sql` também acrescenta `ConversaId` às três tabelas de histórico,
+com valor vazio para preservar a conversa do Orquestrador. A migração SQLite é aditiva e mantém os mesmos dados. O
 catálogo (seção 5) vem de `api/scripts/sqlserver/CatalogoRemoto.sql` (`CatalogosRemotos`), também idempotente.

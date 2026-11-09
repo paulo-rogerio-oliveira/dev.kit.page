@@ -12,6 +12,7 @@ BEGIN
         [Id] bigint NOT NULL IDENTITY,
         [UsuarioId] int NOT NULL,
         [ComandoId] nvarchar(64) NOT NULL,
+        [ConversaId] nvarchar(64) NOT NULL DEFAULT N'',
         [MaquinaId] nvarchar(64) NOT NULL,
         [Tipo] nvarchar(20) NOT NULL,
         [Texto] nvarchar(4000) NOT NULL,
@@ -56,6 +57,7 @@ BEGIN
         [UsuarioId] int NOT NULL,
         [MaquinaId] nvarchar(64) NOT NULL,
         [RespostaId] nvarchar(64) NOT NULL,
+        [ConversaId] nvarchar(64) NOT NULL DEFAULT N'',
         [ComandoId] nvarchar(64) NOT NULL,
         [Tipo] nvarchar(20) NOT NULL,
         [Texto] nvarchar(4000) NOT NULL,
@@ -114,6 +116,7 @@ BEGIN
         [UsuarioId] int NOT NULL,
         [MaquinaId] nvarchar(64) NOT NULL,
         [FalaId] nvarchar(64) NOT NULL,
+        [ConversaId] nvarchar(64) NOT NULL DEFAULT N'',
         [Autor] nvarchar(20) NOT NULL,
         [Origem] nvarchar(20) NOT NULL,
         [Texto] nvarchar(4000) NOT NULL,
@@ -127,6 +130,17 @@ END;
 GO
 
 -- O reenvio do dev.kit não duplica a fala.
+-- Bases existentes conservam o histórico do Orquestrador no canal vazio.
+IF COL_LENGTH(N'dbo.ComandosRemotos', N'ConversaId') IS NULL
+    ALTER TABLE [dbo].[ComandosRemotos] ADD [ConversaId] nvarchar(64) NOT NULL CONSTRAINT [DF_ComandosRemotos_ConversaId] DEFAULT N'';
+GO
+IF COL_LENGTH(N'dbo.RespostasRemotas', N'ConversaId') IS NULL
+    ALTER TABLE [dbo].[RespostasRemotas] ADD [ConversaId] nvarchar(64) NOT NULL CONSTRAINT [DF_RespostasRemotas_ConversaId] DEFAULT N'';
+GO
+IF COL_LENGTH(N'dbo.FalasRemotas', N'ConversaId') IS NULL
+    ALTER TABLE [dbo].[FalasRemotas] ADD [ConversaId] nvarchar(64) NOT NULL CONSTRAINT [DF_FalasRemotas_ConversaId] DEFAULT N'';
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FalasRemotas_UsuarioId_MaquinaId_FalaId' AND object_id = OBJECT_ID(N'[dbo].[FalasRemotas]'))
     CREATE UNIQUE INDEX [IX_FalasRemotas_UsuarioId_MaquinaId_FalaId] ON [dbo].[FalasRemotas] ([UsuarioId], [MaquinaId], [FalaId]);
 GO

@@ -38,6 +38,51 @@ public sealed class ConversaApiTests : IDisposable
     private static RespostaDoDevKitV1 Resposta(string id, string? comando, string tipo = ConversaV1.RespostaMensagem, string texto = "O item 5 está em implementação.")
         => new(RemotoV1.Contrato, Maquina, id, comando, tipo, texto, DateTimeOffset.UtcNow);
 
+    [Fact]
+    public async Task A_conversa_da_task_abre_e_responde_no_canal_sem_misturar_o_orquestrador()
+    {
+        var (admin, dev) = await DevComFilaAsync();
+        var canal = "task-" + new string('a', 32);
+        var outro = "task-" + new string('b', 32);
+        var pedido = Mensagem("c-task", "Como está a task?") with { Tipo = ConversaV1.ComandoMensagemTask, ConversaId = canal };
+        var envio = await dev.PostAsJsonAsync("/api/remoto/comandos", pedido);
+        Assert.Equal(HttpStatusCode.Accepted, envio.StatusCode);
+        Assert.Equal(canal, (await envio.Content.ReadFromJsonAsync<ComandoRemotoV1>())!.ConversaId);
+        Assert.Equal(HttpStatusCode.OK, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { ConversaId = outro })).StatusCode);
+        (await dev.PostAsJsonAsync("/api/remoto/comandos/c-task/recebido", new RecebimentoV1(RemotoV1.Contrato, Maquina))).EnsureSuccessStatusCode();
+        (await dev.PostAsJsonAsync("/api/remoto/respostas", Resposta("r-task", pedido.Id, ConversaV1.RespostaConcluido, "Mensagem registrada."))).EnsureSuccessStatusCode();
+        var fala = new FalaDoDevKitV1(RemotoV1.Contrato, Maquina, "f-task", ConversaV1.AutorAgente, ConversaV1.OrigemDesktop,
+            "Estou executando os testes.", DateTimeOffset.UtcNow, ConversaId: canal);
+        (await dev.PostAsJsonAsync("/api/remoto/conversa/falas", fala)).EnsureSuccessStatusCode();
+
+        var historico = (await dev.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa?conversaId={canal}"))!;
+        Assert.Equal(pedido.Id, Assert.Single(historico.Comandos).Id);
+        Assert.Equal(canal, Assert.Single(historico.Respostas).ConversaId);
+        Assert.Equal(fala.Texto, Assert.Single(historico.Falas).Texto);
+        var orquestrador = (await dev.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!;
+        Assert.Empty(orquestrador.Comandos);
+        Assert.Empty(orquestrador.Respostas);
+        Assert.Empty(orquestrador.Falas);
+        var (outraPessoa, _) = await _api.UsuarioAsync(admin, "bia", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.NotFound, (await outraPessoa.GetAsync($"/api/remoto/maquinas/{Maquina}/conversa?conversaId={canal}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Canal_local_ou_autor_de_outra_conversa_sao_recusados_antes_de_gravar()
+    {
+        var (_, dev) = await DevComFilaAsync();
+        var canal = "task-" + new string('a', 32);
+        var pedido = Mensagem("c-task") with { Tipo = ConversaV1.ComandoMensagemTask };
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { ConversaId = "sessao-local" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await dev.GetAsync($"/api/remoto/maquinas/{Maquina}/conversa?conversaId=sessao-local")).StatusCode);
+        var fala = new FalaDoDevKitV1(RemotoV1.Contrato, Maquina, "f-task", "AGENTE", ConversaV1.OrigemDesktop, "Conferido.", DateTimeOffset.UtcNow);
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/conversa/falas", fala)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/conversa/falas", fala with { Autor = "Orquestrador", ConversaId = canal })).StatusCode);
+        Assert.Empty(_api.Fila.Enviadas);
+    }
+
     /// <summary>
     /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera, o dev pede a fila e o motor do worker a conclui — e a
     /// máquina já mandou o heartbeat.
@@ -409,8 +454,9 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: conserva as falas e as decisões com snapshot, e anuncia o catálogo do chat no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            // Recursos são aditivos: os três anteriores mantêm a ordem e a conversa das tasks entra no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", "conversas-das-tasks"],
+                json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.
