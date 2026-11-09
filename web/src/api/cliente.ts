@@ -8,11 +8,11 @@ import type {
   UsuarioDaEmpresa, UsuarioEditado, UsuarioNovo, UsuarioResumo, VersaoDoDevKit, Vitrine,
   AnexoDoItem, DefinicaoDeLicenca, DetalheDaLicenca, DiferencasDoItem, EmpresaEditada, EscopoDoItem, HistoricoDoItem, PreviaDeLicenca, TipoDeItem,
   UtilidadeResposta, AssinanteDoItem,
-  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado, CotaDaProvisao, TipoDoAplicativo,
+  DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
-import type { Projeto } from './projetos';
-import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from './remoto';
-import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota } from './remoto';
+import type { ArtefatosDoProjeto, Projeto } from './projetos';
+import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
+import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
 /** A raiz da API, por variável de ambiente (VITE_API_URL); vazia é a mesma origem. */
 export const baseDaApi = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
@@ -139,8 +139,13 @@ export const api = {
     requisitar(`/api/remoto/push/assinaturas/${encodeURIComponent(id)}`, { token, metodo: 'DELETE' }),
   destinoDoPush: (token: string, id: string, signal?: AbortSignal) =>
     chamar<{ maquinaId: string; pendenciaId: string; snapshotId: string }>(`/api/remoto/push/entregas/${encodeURIComponent(id)}`, { token, signal }),
+  /** As decisões com as dispensadas no site marcadas (o filtro "Dispensadas" do painel as traz de volta). */
   decisoesRemotas: (token: string, maquina: string, signal?: AbortSignal) =>
-    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes`, { token, signal }),
+    chamar<DecisaoPendente[]>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes?dispensadas=true`, { token, signal }),
+  /** Fecha o card no site (ou o traz de volta): não vai à máquina e não decide nada. */
+  dispensarDecisao: (token: string, maquina: string, pendencia: string, dispensar: boolean) =>
+    chamar<DispensaDaPendencia>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`,
+      { token, metodo: 'POST', corpo: { acao: dispensar ? 'dispensar' : 'restaurar' } }),
   responderDecisao: (token: string, maquina: string, pendencia: string, corpo: ResponderDecisao) =>
     chamar<RespostaDaDecisao>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/decisoes/${encodeURIComponent(pendencia)}`, { token, metodo: 'POST', corpo }),
   estadoDoSegundoFator: (token: string, signal?: AbortSignal) => chamar<{ ativo: boolean }>('/api/remoto/segundo-fator', { token, signal }),
@@ -157,10 +162,18 @@ export const api = {
     requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
   maquinasRemotas: (token: string, signal?: AbortSignal) =>
     chamar<MaquinaRemota[]>('/api/remoto/maquinas', { token, signal }),
+  /** O "Desvincular": revoga o client credentials do serviço da máquina (204); o token dela deixa de valer na hora. */
+  desvincularMaquina: (token: string, maquina: string) =>
+    chamar<void>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/vinculo`, { metodo: 'DELETE', token }),
   retratoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<RetratoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/retrato`, { token, signal }),
+  /** O último catálogo dos atalhos do chat (o handshake); 404 enquanto a máquina não mandou nenhum. */
+  catalogoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
+    chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
+  /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
+  artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 
@@ -452,33 +465,20 @@ export const api = {
   redefinirSenha: (token: string, id: number) =>
     chamar<UsuarioComSenha>(`/api/usuarios/${id}/senha`, { metodo: 'POST', token }),
 
-  liberarRecurso: (token: string, id: number, recurso: RecursoLiberavel, liberado: boolean) =>
-    chamar<UsuarioResumo>(`/api/usuarios/${id}/recursos/${recurso}`, { metodo: 'PUT', corpo: { liberado }, token }),
+  // Liberar a provisão pede a fila do usuário na hora; retirar só a remove com `removerFila` (remote-control-v3, item 5).
+  liberarRecurso: (token: string, id: number, recurso: RecursoLiberavel, liberado: boolean, removerFila = false) =>
+    chamar<UsuarioResumo>(`/api/usuarios/${id}/recursos/${recurso}`, { metodo: 'PUT', corpo: liberado ? { liberado } : { liberado, removerFila }, token }),
 
-  // A provisão no Azure (controle remoto v2, item 4): a permissão decide se a ação aparece; o resto, sem ela, é 403.
+  // A provisão no Azure (controle remoto v2, item 4): a permissão decide se a seção aparece; o resto, sem ela, é 403. O
+  // pedido da fila (POST /filas) e os aplicativos (item 12) ficam na API, sem acesso pela tela (remote-control-v3, item 5).
   permissaoDeProvisao: (token: string) => chamar<PermissaoDeProvisao>('/api/provisao/permissao', { token }),
 
   recursosProvisionados: (token: string) => chamar<RecursoProvisionado[]>('/api/provisao/recursos', { token }),
 
   detalheDoRecurso: (token: string, id: number) => chamar<DetalheDoRecurso>(`/api/provisao/recursos/${id}`, { token }),
 
-  pedirFila: (token: string, regiao: string) =>
-    chamar<RecursoProvisionado>('/api/provisao/filas', { metodo: 'POST', corpo: { regiao }, token }),
-
   repetirProvisao: (token: string, id: number) =>
     chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/repetir`, { metodo: 'POST', token }),
-
-  removerRecurso: (token: string, id: number) =>
-    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}`, { metodo: 'DELETE', token }),
-
-  // O App Service e o Static Web App (item 12): a cota e o custo, o pedido e a remoção com o segundo fator.
-  cotaDaProvisao: (token: string) => chamar<CotaDaProvisao>('/api/provisao/cota', { token }),
-
-  pedirAplicativo: (token: string, pedido: { tipo: TipoDoAplicativo; nome: string; regiao: string; plano: string }) =>
-    chamar<RecursoProvisionado>('/api/provisao/aplicativos', { metodo: 'POST', corpo: pedido, token }),
-
-  removerComSegundoFator: (token: string, id: number, codigo: string) =>
-    chamar<RecursoProvisionado>(`/api/provisao/recursos/${id}/remover`, { metodo: 'POST', corpo: { codigo }, token }),
 
   // ----- US #687 -----
 

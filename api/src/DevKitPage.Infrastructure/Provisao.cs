@@ -168,7 +168,7 @@ public sealed class Provisao(DevKitPageDb db, TimeProvider relogio, IOptions<Opc
         Vaga = vaga,
         Nome = nome,
         Regiao = regiao,
-        GrupoDeRecursos = RegrasDaProvisao.NomeDoGrupo(cfg.PrefixoDoGrupo, usuarioId),
+        GrupoDeRecursos = RegrasDaProvisao.GrupoDoRecurso(cfg, usuarioId),
         Operacao = ProvisaoV1.OperacaoCriar,
         Estado = ProvisaoV1.EstadoPedido,
         CriadoEmUtc = agora,

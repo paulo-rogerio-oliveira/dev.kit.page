@@ -240,6 +240,12 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime?>("ConcluidoEmUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Contexto")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("CriadoEmUtc")
                         .HasColumnType("TEXT");
 
@@ -619,6 +625,12 @@ namespace DevKitPage.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Anexos")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Autor")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -897,6 +909,74 @@ namespace DevKitPage.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("ItensDeCatalogo", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ArtefatoDoProjeto", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Ambiente")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AutorId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Chave")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CriadoEmUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NomeDoArquivo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ProjetoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Repositorio")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RetidoAteUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Sha")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Tamanho")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjetoId", "CriadoEmUtc");
+
+                    b.ToTable("ArtefatosDosProjetos", (string)null);
                 });
 
             modelBuilder.Entity("DevKitPage.Core.ItemDeProjetoCompartilhado", b =>
@@ -2478,6 +2558,17 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Navigation("Empresa");
                 });
 
+            modelBuilder.Entity("DevKitPage.Core.ArtefatoDoProjeto", b =>
+                {
+                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "Projeto")
+                        .WithMany()
+                        .HasForeignKey("ProjetoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Projeto");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.ItemDeProjetoCompartilhado", b =>
                 {
                     b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "Projeto")
@@ -2840,11 +2931,24 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime>("EmUtc").HasColumnType("TEXT");
                     b.Property<bool>("SegundoFator").HasColumnType("INTEGER");
                     b.Property<string>("Estado").IsRequired().HasMaxLength(20).HasColumnType("TEXT");
+                    b.Property<string>("Dispositivo").HasMaxLength(20).HasColumnType("TEXT");
                     b.HasKey("Id");
                     b.HasIndex("UsuarioId", "MaquinaId", "PendenciaId", "SnapshotId").IsUnique().HasFilter("[Estado] <> 'vencida'");
                     b.HasIndex("UsuarioId", "MaquinaId", "Estado");
                     b.ToTable("RespostasDasDecisoes");
                     b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Restrict).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.PendenciaDispensada", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("PendenciaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<DateTime>("DispensadaEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId", "PendenciaId").IsUnique();
+                    b.ToTable("PendenciasDispensadas");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
             modelBuilder.Entity("DevKitPage.Core.AssinaturaDoPush", b =>
                 {
@@ -2879,6 +2983,47 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasIndex("Estado", "ProximaTentativaUtc"); b.HasIndex("CriadaEmUtc");
                     b.ToTable("EntregasDoPush");
                     b.HasOne("DevKitPage.Core.AssinaturaDoPush", null).WithMany().HasForeignKey("AssinaturaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.CatalogoRemoto", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("MaquinaId").IsRequired().HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Catalogo").IsRequired().HasColumnType("TEXT");
+                    b.Property<DateTime>("GeradoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime>("RecebidoEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("UsuarioId", "MaquinaId").IsUnique(); b.HasIndex("RecebidoEmUtc");
+                    b.ToTable("CatalogosRemotos");
+                    b.HasOne("DevKitPage.Core.Usuario", null).WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+            modelBuilder.Entity("DevKitPage.Core.ClienteDaMaquina", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("MaquinaId").HasColumnType("INTEGER");
+                    b.Property<int>("UsuarioId").HasColumnType("INTEGER");
+                    b.Property<string>("ChavePublica").IsRequired().HasMaxLength(200).HasColumnType("TEXT");
+                    b.Property<string>("Carimbo").IsRequired().HasMaxLength(16).HasColumnType("TEXT");
+                    b.Property<DateTime>("RegistradoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("RevogadoEmUtc").HasColumnType("TEXT");
+                    b.Property<DateTime?>("UltimoTokenEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("MaquinaId").IsUnique(); b.HasIndex("UsuarioId");
+                    b.ToTable("ClientesDaMaquina");
+                    b.HasOne("DevKitPage.Core.Maquina", "Maquina").WithMany().HasForeignKey("MaquinaId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("DevKitPage.Core.Usuario", "Usuario").WithMany().HasForeignKey("UsuarioId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.Navigation("Maquina"); b.Navigation("Usuario");
+                });
+            modelBuilder.Entity("DevKitPage.Core.AssercaoDoCliente", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<int>("ClienteId").HasColumnType("INTEGER");
+                    b.Property<string>("Jti").IsRequired().HasMaxLength(128).HasColumnType("TEXT");
+                    b.Property<DateTime>("ExpiraEmUtc").HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("ClienteId", "Jti").IsUnique(); b.HasIndex("ExpiraEmUtc");
+                    b.ToTable("AssercoesDoCliente");
+                    b.HasOne("DevKitPage.Core.ClienteDaMaquina", null).WithMany().HasForeignKey("ClienteId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
 #pragma warning restore 612, 618
         }

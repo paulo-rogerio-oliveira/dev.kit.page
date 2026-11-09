@@ -59,6 +59,41 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
+    public async Task Dispensar_fecha_o_card_so_no_site_o_filtro_traz_de_volta_e_restaurar_devolve()
+    {
+        using var api = new ApiDeTeste(); var c = await api.AdminAsync();
+        await PrepararMaquina(c); await Retrato(c, Pergunta, Aprovacao);
+        var dispensa = await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar });
+        dispensa.EnsureSuccessStatusCode();
+        var lida = (await dispensa.Content.ReadFromJsonAsync<DispensaDaPendenciaV1>())!;
+        Assert.Equal(("pergunta", true), (lida.PendenciaId, lida.Dispensada));
+        // O duplo clique não grava duas.
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar })).EnsureSuccessStatusCode();
+
+        Assert.Equal(["aprovacao"], (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Select(d => d.Pendencia.Id));
+        var todas = (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota + "?dispensadas=true"))!;
+        Assert.Equal([("pergunta", true), ("aprovacao", false)], todas.Select(d => (d.Pendencia.Id, d.Dispensada)));
+        // Nada foi decidido nem vai à máquina.
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+        Assert.Null(todas[0].Resposta);
+
+        // Outro usuário não dispensa a pendência da máquina alheia, e a pendência que não existe é 404.
+        var (outro, _) = await api.UsuarioAsync(c, "outro", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.NotFound, (await outro.PostAsJsonAsync(Rota + "/aprovacao", new { acao = DecisoesV1.AcaoDispensar })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync(Rota + "/inexistente", new { acao = DecisoesV1.AcaoDispensar })).StatusCode);
+
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoRestaurar })).EnsureSuccessStatusCode();
+        Assert.Equal(["pergunta", "aprovacao"], (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Select(d => d.Pendencia.Id));
+
+        // A pendência que sai do retrato leva a dispensa junto: se voltar, volta visível.
+        (await c.PostAsJsonAsync(Rota + "/pergunta", new { acao = DecisoesV1.AcaoDispensar })).EnsureSuccessStatusCode();
+        await Retrato(c, Aprovacao);
+        (await c.PostAsJsonAsync(Rota + "/aprovacao", new { acao = DecisoesV1.AcaoRestaurar })).EnsureSuccessStatusCode();
+        await Retrato(c, Pergunta, Aprovacao);
+        Assert.Equal(2, (await c.GetFromJsonAsync<DecisaoPendenteV1[]>(Rota))!.Length);
+    }
+
+    [Fact]
     public async Task Pergunta_aceita_so_opcao_do_snapshot_audita_e_consumo_nao_repete()
     {
         using var api = new ApiDeTeste(); var c = await api.AdminAsync();
@@ -76,6 +111,90 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
+    public async Task Autorizar_exige_o_segundo_fator_vale_so_para_o_escopo_revisado_e_vai_a_maquina_como_o_aprovar()
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var c = await original.AdminAsync();
+        var autenticado = api.CreateClient(); autenticado.DefaultRequestHeaders.Authorization = c.DefaultRequestHeaders.Authorization; c = autenticado;
+        var pedido = new PendenciaNoRetratoV1("pendencia-comando", RemotoV1.PendenciaAutorizacao, "#515 Implementar",
+            "Autorizar o comando bloqueado uma vez?", Escopo: new EscopoDaAutorizacaoV1(DecisoesV1.AtoExecutarComando, "#515 Implementar", Comando: "dotnet test"));
+        var batimento = await c.PostAsJsonAsync("/api/remoto/heartbeat", new HeartbeatV1(1, "notebook", "Notebook", "130", "servico", true, "ativo", false));
+        Assert.Contains(RemotoV1.RecursoDecisoesAutorizar, (await batimento.Content.ReadFromJsonAsync<HeartbeatRecebidoV1>())!.Recursos!);
+        await Retrato(c, pedido);
+        var d = await Ler(c, "pendencia-comando");
+        Assert.Null(d.Bloqueio);
+        Assert.Equal("dotnet test", d.Pendencia.Escopo!.Comando);
+
+        // Sem o código (ou com o autenticador desligado), nada é autorizado; responder e aprovar não valem para a autorização.
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAprovar, Codigo: "123456"))).StatusCode);
+        var chave = await Ativar(c, relogio);
+        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: "000000"))).StatusCode);
+
+        // O escopo mudou depois da revisão (outro comando): a autorização revisada não vale para ele.
+        await Retrato(c, pedido with { Escopo = pedido.Escopo! with { Comando = "rm -rf build" } });
+        relogio.Avancar();
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/pendencia-comando",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+
+        // Com o escopo de agora e o código válido, a autorização é gravada com o segundo fator e a máquina a consome uma vez.
+        await Retrato(c, pedido);
+        relogio.Avancar();
+        var r = await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)));
+        r.EnsureSuccessStatusCode();
+        var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.Equal((DecisoesV1.AcaoAutorizar, true), (autorizacao.Acao, autorizacao.SegundoFator));
+        Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+
+        // A pendência de autorização sem escopo não entra no retrato.
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsJsonAsync("/api/remoto/retrato",
+            new RetratoV1(1, "notebook", DateTimeOffset.UtcNow, [], [], [pedido with { Escopo = null }]))).StatusCode);
+    }
+
+    [Fact]
+    public async Task O_dispositivo_da_decisao_vem_na_resposta_no_consumo_e_e_opcional()
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var c = await original.AdminAsync();
+        var autenticado = api.CreateClient(); autenticado.DefaultRequestHeaders.Authorization = c.DefaultRequestHeaders.Authorization; c = autenticado;
+        var arquivar = new PendenciaNoRetratoV1("autorizacao-arquivar", RemotoV1.PendenciaAutorizacao, "Arquivar 2 task(s) pedidas pelo Orquestrador",
+            "O Orquestrador pede para arquivar: #901, #902. Autorizar o arquivamento?",
+            Escopo: new EscopoDaAutorizacaoV1(DecisoesV1.AtoArquivarTasks, "Orquestrador", Itens: ["#901", "#902"],
+                Comando: "devcli sessao --acao arquivar --alvo #901,#902 --aplicar"));
+        await PrepararMaquina(c); await Retrato(c, arquivar, Pergunta);
+        var d = await Ler(c, "autorizacao-arquivar");
+        Assert.Null(d.Bloqueio);
+        var chave = await Ativar(c, relogio);
+
+        // Fora da lista, recusa sem gravar nada (nem gastar o código).
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: "tablet"))).StatusCode);
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
+
+        // O celular (com caixa e espaço, normalizado) vem na resposta, na caixa de saída da máquina e no consumo único.
+        var r = await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: " Celular "));
+        r.EnsureSuccessStatusCode();
+        var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
+        Assert.Equal((DecisoesV1.AcaoAutorizar, true, ConversaV1.DispositivoCelular), (autorizacao.Acao, autorizacao.SegundoFator, autorizacao.Dispositivo));
+        Assert.Contains("\"dispositivo\":\"celular\"", await r.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Equal(ConversaV1.DispositivoCelular, Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!).Dispositivo);
+        Assert.Equal(ConversaV1.DispositivoCelular, (await Ler(c, "autorizacao-arquivar")).Resposta!.Dispositivo);
+        var recebida = await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null);
+        Assert.Equal(ConversaV1.DispositivoCelular, (await recebida.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.Dispositivo);
+
+        // Sem o campo (o site antigo), a decisão vale como antes e a resposta vai sem o dispositivo.
+        var p = await Ler(c, "pergunta");
+        var semDispositivo = await c.PostAsJsonAsync(Rota + "/pergunta", new { snapshotId = p.SnapshotId, acao = "responder", opcao = "Manter" });
+        semDispositivo.EnsureSuccessStatusCode();
+        Assert.Null((await semDispositivo.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.Dispositivo);
+    }
+
+    [Fact]
     public async Task Mensagem_aprovo_nao_autoriza_e_aprovacao_exige_codigo_valido_nao_reutilizado()
     {
         using var original = new ApiDeTeste(); var relogio = new Relogio();
@@ -86,8 +205,8 @@ public sealed class DecisoesApiTests
         await PrepararMaquina(c); await Retrato(c, Aprovacao);
         var d = await Ler(c, "aprovacao");
         var usuario = (await c.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == "admin");
+        // A liberação pede a fila (remote-control-v3, item 5); o motor a conclui.
         (await c.PutAsJsonAsync($"/api/usuarios/{usuario.Id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true))).EnsureSuccessStatusCode();
-        (await c.PostAsJsonAsync("/api/provisao/filas", new PedidoDeFilaV1(null))).EnsureSuccessStatusCode();
         using (var escopo = api.Services.CreateScope())
         {
             var motor = escopo.ServiceProvider.GetRequiredService<IMotorDeProvisao>();

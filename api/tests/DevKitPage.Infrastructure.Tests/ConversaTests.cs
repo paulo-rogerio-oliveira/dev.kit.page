@@ -130,6 +130,24 @@ public sealed class ConversaTests
     }
 
     [Fact]
+    public void Script_das_correcoes_do_board_remoto_cria_a_dispensa_e_acrescenta_as_colunas_novas()
+    {
+        var script = BaseDeTeste.ScriptDoAzureSql("BoardRemoto.sql");
+
+        Assert.Contains("OBJECT_ID(N'[dbo].[PendenciasDispensadas]', N'U') IS NULL", script);
+        foreach (var coluna in BaseDeTeste.ColunasNoSqlServer("PendenciasDispensadas"))
+            Assert.Contains(coluna, script);
+        Assert.Contains("CREATE UNIQUE INDEX [IX_PendenciasDispensadas_UsuarioId_MaquinaId_PendenciaId]", script);
+        // Numa base que já tem a conversa, as colunas novas vêm daqui; a verificação do esquema aponta este script.
+        Assert.Contains("BoardRemoto.sql", EsquemaDoBanco.ScriptsQueTrazem("ComandosRemotos", "Contexto"));
+        Assert.Contains("BoardRemoto.sql", EsquemaDoBanco.ScriptsQueTrazem("FalasRemotas", "Anexos"));
+        Assert.Equal(["BoardRemoto.sql"], EsquemaDoBanco.ScriptsQueTrazem("PendenciasDispensadas", null));
+        // (controle-v4, item 3) O dispositivo da decisão, opcional: a coluna nula vem do mesmo script, depois do Decisoes.sql.
+        Assert.Contains("ALTER TABLE [dbo].[RespostasDasDecisoes] ADD [Dispositivo] nvarchar(20) NULL", script);
+        Assert.Equal(["BoardRemoto.sql"], EsquemaDoBanco.ScriptsQueTrazem("RespostasDasDecisoes", "Dispositivo"));
+    }
+
+    [Fact]
     public async Task A_migracao_cria_as_tabelas_e_nao_deixa_mudanca_de_modelo_pendente()
     {
         await using var baseDeTeste = new BaseDeTeste();

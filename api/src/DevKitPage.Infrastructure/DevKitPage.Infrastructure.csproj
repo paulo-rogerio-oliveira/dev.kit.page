@@ -23,6 +23,8 @@
     <PackageReference Include="Azure.Storage.Blobs" />
     <!-- A identidade gerenciada da API (a chave da fila do controle remoto) e a do worker da provisão: a mesma regra. -->
     <PackageReference Include="Azure.Identity" />
+    <!-- O key ring do DataProtection (KeyRing.cs): a chave do Key Vault que o protege, quando houver cofre. -->
+    <PackageReference Include="Azure.Security.KeyVault.Keys" />
     <PackageReference Include="Lib.Net.Http.WebPush" />
   </ItemGroup>
 

@@ -12,6 +12,19 @@ public sealed record LoginRequest(string Login, string Senha);
 public sealed record LoginResponse(
     string Token, DateTimeOffset ExpiraEm, bool DeveTrocarSenha, string Login, bool EhAdmin, string Papel = Papeis.Admin, string? Empresa = null);
 
+/// <summary>
+/// A renovação do login PELA MÁQUINA: o serviço do dev.kit a usa, com a chave da máquina (<c>X-Machine-Key</c>), para ter um
+/// token novo depois de o do app vencer — sem a senha. Vale só naquela máquina, para aquele usuário, até
+/// <c>ExpiraEm</c> e enquanto a senha dele não mudar.
+/// </summary>
+public sealed record SessaoDaMaquinaV1(string Renovacao, DateTimeOffset ExpiraEm);
+
+/// <summary>O pedido do serviço: a renovação guardada (a chave da máquina vai no cabeçalho).</summary>
+public sealed record RenovacaoPelaMaquinaV1(string Renovacao);
+
+/// <summary>O token novo e a renovação seguinte (cada uso troca a renovação).</summary>
+public sealed record SessaoRenovadaPelaMaquinaV1(LoginResponse Sessao, SessaoDaMaquinaV1 Maquina);
+
 /// <summary>A troca de senha (obrigatória no primeiro acesso do admin).</summary>
 public sealed record TrocarSenhaRequest(string SenhaAtual, string NovaSenha);
 

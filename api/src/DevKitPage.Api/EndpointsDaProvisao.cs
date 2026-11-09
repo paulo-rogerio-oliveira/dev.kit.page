@@ -16,8 +16,12 @@ namespace DevKitPage.Api;
 /// <item>o App Service e o Static Web App (item 12): <c>GET /cota</c> (o uso de cada tipo e o custo do mês), <c>POST /aplicativos</c>
 /// (409 com <see cref="ProvisaoV1.CodigoCotaCheia"/> ou <see cref="ProvisaoV1.CodigoCustoNoLimite"/>) e
 /// <c>POST /recursos/{id}/remover</c> com o código do segundo fator (403 com <see cref="ProvisaoV1.CodigoSegundoFator"/> sem ele);</item>
-/// <item><c>PUT /api/usuarios/{id}/recursos/{recurso}</c>: o admin libera ou retira.</item>
+/// <item><c>PUT /api/usuarios/{id}/recursos/{recurso}</c>: o admin libera (e a fila do usuário é pedida na hora) ou retira (a
+/// fila fica, a não ser que ele confirme a remoção dela).</item>
 /// </list>
+/// Desde o remote-control-v3 (item 5), o site não oferece mais ao usuário o <c>POST /filas</c> (quem cria a fila é a liberação)
+/// nem os aplicativos (<c>/cota</c>, <c>/aplicativos</c>, <c>/recursos/{id}/remover</c>): as rotas e o worker FICAM, sem acesso
+/// pela tela (<c>docs/arquitetura.md</c>, "Fila criada pela liberação e os aplicativos fora do site").
 /// O recurso de outro usuário é 404, sem revelar que existe. As escritas do usuário têm o limite por usuário
 /// (<see cref="LimiteDeTaxa.PoliticaDaProvisao"/>).
 /// </summary>
@@ -81,7 +85,7 @@ public static class EndpointsDaProvisao
                 {
                     if (liberacao is null)
                         return Results.Problem("Informe se o recurso fica liberado.", statusCode: StatusCodes.Status400BadRequest);
-                    var resultado = await usuarios.LiberarRecursoAsync(id, recurso, liberacao.Liberado, Autor(quem), ct);
+                    var resultado = await usuarios.LiberarRecursoAsync(id, recurso, liberacao.Liberado, liberacao.RemoverFila, Autor(quem), ct);
                     return resultado.Valor is { } valor ? Results.Ok(valor) : Falha(resultado);
                 })
             .WithTags("Usuários").RequireAuthorization(Seguranca.PoliticaAdmin);

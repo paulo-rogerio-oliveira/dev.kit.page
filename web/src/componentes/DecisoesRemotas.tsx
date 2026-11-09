@@ -1,22 +1,83 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { DecisaoPendente, ResponderDecisao, RespostaDaDecisao } from '../api/remoto';
+import type { DecisaoPendente, PendenciaRemota, ResponderDecisao, RespostaDaDecisao } from '../api/remoto';
 import { useSessao } from '../sessao';
 import './DecisoesRemotas.css';
 
 export type AoDecidir = (decisao: DecisaoPendente, pedido: ResponderDecisao) => Promise<RespostaDaDecisao>;
 
 export function RegistroDaDecisao({ resposta }: { resposta: RespostaDaDecisao }) {
-  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
+  return <p role="status" className="br-note br-registro">{resposta.acao === 'aprovar' ? 'Aprovação' : resposta.acao === 'autorizar' ? 'Autorização' : resposta.acao === 'ajuste' ? 'Pedido de ajuste' : `Resposta: ${resposta.opcao}`} registrada em {new Date(resposta.em).toLocaleString('pt-BR')} · {resposta.estado === 'recebida' ? 'recebida pela máquina' : resposta.estado === 'vencida' ? 'autorização vencida' : 'aguardando a máquina'} · {resposta.segundoFator ? 'segundo fator confirmado' : 'resposta auditada'}{resposta.dispositivo ? ` · pelo ${resposta.dispositivo}` : ''}. {resposta.acao === 'ajuste' && 'Nenhum ato foi autorizado. '}{resposta.sha && `SHA ${resposta.sha}`}</p>;
 }
 
-export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, decidir, revisar }: {
-  decisao: DecisaoPendente; compacta?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+/** O projeto e o item da pendência, e o tipo dela: a linha do cartão recolhido do painel. */
+export function OrigemDaPendencia({ pendencia: p }: { pendencia: PendenciaRemota }) {
+  const origem = [p.projeto, p.item ? `item ${p.item}` : ''].filter(Boolean).join(' · ');
+  const tipo = p.tipo === 'aprovacao' ? 'Aprovação' : p.tipo === 'autorizacao' ? 'Autorização' : 'Pergunta';
+  return <p className="br-origem">{origem && <span>{origem}</span>}<span className={`br-tipo${p.tipo === 'aprovacao' || p.tipo === 'autorizacao' ? ' br-tipo-aprovacao' : ''}`}>{tipo}</span></p>;
+}
+
+/** (ajuste 9) O ato da autorização na palavra do dev. */
+const nomeDoAto: Record<string, string> = {
+  'concluir-projeto': 'Concluir o projeto', 'integrar-item': 'Integrar o item', 'arquivar-tasks': 'Arquivar as tasks', 'executar-comando': 'Executar o comando',
+};
+
+/** (ajuste 9) O escopo EXATO que o segundo fator autoriza: o ato, o alvo, o SHA, os itens e o comando. */
+export function EscopoDaAutorizacao({ pendencia: p }: { pendencia: PendenciaRemota }) {
+  const e = p.escopo;
+  if (!e) return null;
+  return <dl className="br-card br-snapshot br-escopo" aria-label="Escopo da autorização">
+    <dt>Ato</dt><dd>{nomeDoAto[e.ato] ?? e.ato}</dd>
+    <dt>Alvo</dt><dd>{e.alvo}</dd>
+    {e.sha && <><dt>SHA</dt><dd><code>{e.sha}</code></dd></>}
+    {!!e.itens?.length && <><dt>Itens</dt><dd>{e.itens.join(', ')}</dd></>}
+    {e.comando && <><dt>Comando</dt><dd><code>{e.comando}</code></dd></>}
+  </dl>;
+}
+
+/**
+ * (correções do board remoto) O × que fecha o card no SITE — ou o Restaurar, no filtro "Dispensadas". Não decide nada e não
+ * vai à máquina: a task continua como está.
+ */
+export type AoDispensar = (pendencia: PendenciaRemota, dispensar: boolean) => Promise<void>;
+export function BotaoDeDispensar({ pendencia, dispensada, dispensar }: { pendencia: PendenciaRemota; dispensada: boolean; dispensar: AoDispensar }) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+  async function clicar() {
+    setEnviando(true); setErro('');
+    try { await dispensar(pendencia, !dispensada); } catch (e) { setErro(mensagemDaFalha(e)); } finally { setEnviando(false); }
+  }
+  return <>
+    {dispensada
+      ? <button type="button" className="br-btn br-restaurar" disabled={enviando} onClick={() => void clicar()}>Restaurar</button>
+      : <button type="button" className="br-fechar" disabled={enviando} aria-label={`Dispensar ${pendencia.titulo}`}
+        title="Fechar este card no site (a task no dev.kit não muda)" onClick={() => void clicar()}>×</button>}
+    {erro && <p role="alert" className="br-note">{erro}</p>}
+  </>;
+}
+
+/** O Ver detalhes do cartão recolhido (US #858): o painel mostra o título e a ação principal, e o resto sob pedido. */
+export function BotaoDeDetalhes({ aberto, alternar, controla, principal = false }: { aberto: boolean; alternar: () => void; controla: string; principal?: boolean }) {
+  return <button className={`br-btn${principal && !aberto ? ' br-primary' : ''}`} aria-expanded={aberto} aria-controls={controla} onClick={alternar}>{aberto ? 'Ocultar detalhes' : 'Ver detalhes'}</button>;
+}
+
+/**
+ * O cartão da decisão no PAINEL de decisões, o único lugar dela (remote-control-v3, item 3: o chat não renderiza aprovação).
+ * A aprovação abre a revisão, com o segundo fator e o SHA conferido; a pergunta responde com a opção, auditada.
+ */
+export function CartaoDaDecisao({ decisao: d, destacada = false, desabilitado, decidir, revisar, dispensar }: {
+  decisao: DecisaoPendente; destacada?: boolean; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void;
+  /** O × do card (correções do board remoto); ausente, o card não fecha. */
+  dispensar?: AoDispensar;
 }) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
   const [resposta, setResposta] = useState<RespostaDaDecisao | null>(null);
+  // No painel o cartão nasce recolhido; a notificação que aponta para ele o abre.
+  const [aberto, setAberto] = useState(destacada);
+  useEffect(() => { if (destacada) setAberto(true); }, [destacada]);
   const p = d.pendencia;
+  const idDoCartao = `board-decisao-${encodeURIComponent(p.id)}`;
   async function responder(opcao: string) {
     if (enviando) return;
     setEnviando(true); setErro('');
@@ -29,24 +90,29 @@ export function CartaoDaDecisao({ decisao: d, compacta = false, desabilitado, de
   const resumo = p.tipo === 'aprovacao' && snapshot
     ? `${snapshot.notas.length ? `Nota ${Math.min(...snapshot.notas.map(n => n.nota))}` : 'Aguardando notas'} · ${!snapshot.regressaoConcluida ? 'regressão pendente' : snapshot.testesFalhos ? `regressão com ${snapshot.testesFalhos} falhas` : 'regressão sem falhas'}`
     : p.jaTentei;
-  return <section id={`${compacta ? 'board' : 'chat'}-decisao-${encodeURIComponent(p.id)}`} tabIndex={-1} className={`br-card br-decisao-card${compacta ? ' br-need' : ''}`} aria-label={p.titulo}>
-    <div className="br-decisao-titulo"><b>{p.titulo}</b>{!compacta && p.tipo === 'pergunta' && <span className="br-chip">Decisão comum</span>}</div>
-    {p.pergunta && <p>{!compacta && <strong>Pergunta: </strong>}{p.pergunta}</p>}
-    {resumo && <p className={!compacta && p.tipo === 'pergunta' ? 'br-tentativa' : ''}>{!compacta && p.tipo === 'pergunta' && <strong>Já tentei<br /></strong>}{resumo}</p>}
+  const pendente = !registro || registro.estado === 'vencida';
+  const detalhes = `${idDoCartao}-detalhes`;
+  // (ajuste 9) A autorização decide como a aprovação: na revisão, com o escopo exato e o segundo fator.
+  const comRevisao = p.tipo === 'aprovacao' || p.tipo === 'autorizacao';
+  return <section id={idDoCartao} tabIndex={-1} className={`br-card br-decisao-card br-need br-compacta${d.dispensada ? ' br-dispensada' : ''}`} aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b>{dispensar && <BotaoDeDispensar pendencia={p} dispensada={!!d.dispensada} dispensar={dispensar} />}</div>
+    <OrigemDaPendencia pendencia={p} />
+    {p.tipo === 'aprovacao' && resumo && <p>{resumo}</p>}
     {registro && <RegistroDaDecisao resposta={registro} />}
-    {(!registro || registro.estado === 'vencida') && <>
-      {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
-      {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
-      {p.tipo === 'aprovacao' && <div className="br-row">{compacta ? <>
-        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Ver detalhes</button>
-        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Decidir</button>
-      </> : <>
-        <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>Revisar e aprovar</button>
-        <button className="br-btn" disabled={desabilitado} onClick={() => revisar(d)}>Pedir ajuste</button>
-      </>}</div>}
-      <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
-      {d.bloqueio && <p role="status">{d.bloqueio}</p>}
-    </>}
+    <div id={detalhes} className="br-detalhes">{aberto && <>
+      {p.pergunta && <p>{p.pergunta}</p>}
+      {p.tipo !== 'aprovacao' && resumo && <p>{resumo}</p>}
+      {pendente && <>
+        {registro?.estado === 'vencida' && <p>Revise novamente e registre uma nova decisão.</p>}
+        {p.tipo === 'pergunta' && <div className="br-row">{p.opcoes?.map((opcao, i) => <button key={opcao} className={`br-btn${i === 0 ? ' br-primary' : ''}`} disabled={desabilitado || enviando || !!d.bloqueio} onClick={() => void responder(opcao)}>{opcao}</button>)}</div>}
+        <small>{p.tipo === 'pergunta' ? 'Login confirmado · sua resposta será auditada.' : 'Ato irreversível · exige segundo fator e SHA conferido.'}</small>
+        {d.bloqueio && <p role="status">{d.bloqueio}</p>}
+      </>}
+    </>}</div>
+    <div className="br-row">
+      <BotaoDeDetalhes aberto={aberto} alternar={() => setAberto(a => !a)} controla={detalhes} principal={!comRevisao && pendente} />
+      {comRevisao && pendente && <button className="br-btn br-primary" disabled={desabilitado} onClick={() => revisar(d)}>{p.tipo === 'autorizacao' ? 'Autorizar' : 'Decidir'}</button>}
+    </div>
     {erro && <p role="alert">{erro}</p>}
   </section>;
 }
@@ -93,11 +159,13 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
     finally { setCodigo(''); setOcupado(false); }
   }
   const bloqueado = desabilitado || ocupado || !!d.bloqueio || !!resposta;
+  // (ajuste 9) A autorização revisa o ESCOPO exato no lugar do snapshot, com o mesmo segundo fator.
+  const autorizacao = p.tipo === 'autorizacao';
   return <main className="br-review" aria-label="Revisão da decisão" data-confirmar={confirmar}>
     <button className="br-voltar" onClick={voltar}>‹ Voltar ao Board</button>
     <header className="br-review-head"><h1>{p.titulo}</h1><p>Decisões no site e segundo fator</p><span className="br-chip">Login confirmado</span> <span className="br-chip">Ato irreversível · segundo fator</span></header>
     <div className="br-review-grid"><div>
-      {s ? <><dl className="br-card br-snapshot">
+      {autorizacao ? <><EscopoDaAutorizacao pendencia={p} /><p className="br-review-limite"><strong>Vale só para este escopo.</strong> O dev.kit confere o pedido de agora antes de executar; se ele mudar, autorize de novo.</p></> : s ? <><dl className="br-card br-snapshot">
         <dt>Nota</dt><dd>{s.notas.length ? s.notas.map(n => <div key={n.avaliador}><mark>{n.nota} de 100</mark> · mínima {n.minima} · {n.avaliador}</div>) : 'Aguardando avaliadores'}</dd>
         <dt>Regressão</dt><dd>{s.regressaoConcluida ? `${s.testesAprovados} aprovados, ${s.testesFalhos} falhas` : 'Pendente'}</dd>
         <dt>Alterações</dt><dd>{s.arquivos} arquivos em {s.commits} commits · <a href="#alteracoes-decisao" onClick={e => { const detalhes = e.currentTarget.closest('main')?.querySelector('details'); if (detalhes) detalhes.open = true; }}>Ver alterações</a></dd>
@@ -105,10 +173,10 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
       </dl><h2>Capturas</h2><div className="br-capturas">{s.capturas.map(c => <Captura key={c.url} {...c} />)}</div>{!s.capturas.length && <p className="br-note">Nenhuma captura recebida neste snapshot.</p>}
       <p className="br-review-limite"><strong>Vale só para este SHA e este destino.</strong> Não autoriza PR, merge na semana nem fechamento do projeto. Se o snapshot mudar, revise novamente.</p>
       <details id="alteracoes-decisao" className="br-card"><summary>Alterações do snapshot</summary><pre>{s.alteracoes}</pre></details></> : <p className="br-card">A máquina ainda não enviou as evidências deste snapshot.</p>}
-      <div className="br-card br-review-info"><strong>Confira as evidências antes de aprovar</strong><p>A aprovação fica vinculada à origem, ao destino e ao SHA apresentados. Mensagens enviadas pelo chat não autorizam este ato.</p></div>
+      <div className="br-card br-review-info">{autorizacao ? <><strong>Confira o escopo antes de autorizar</strong><p>A autorização vale só para o ato, o alvo e o comando apresentados. Mensagens enviadas pelo chat não autorizam este ato.</p></> : <><strong>Confira as evidências antes de aprovar</strong><p>A aprovação fica vinculada à origem, ao destino e ao SHA apresentados. Mensagens enviadas pelo chat não autorizam este ato.</p></>}</div>
     </div><aside className="br-review-actions">
       {resposta ? <div className="br-card"><RegistroDaDecisao resposta={resposta} /></div> : <>
-        <div className="br-review-controls"><section className="br-card br-confirm-panel"><h2>{confirmar ? 'Confirme com segundo fator' : 'Aprovar este snapshot'}</h2>
+        <div className="br-review-controls"><section className="br-card br-confirm-panel"><h2>{confirmar ? 'Confirme com segundo fator' : autorizacao ? 'Autorizar este pedido' : 'Aprovar este snapshot'}</h2>
           {!confirmar && <><p>O próximo passo pede o segundo fator. Nenhum ato será autorizado pelo texto da conversa.</p><p className="br-etapas">1. Revisar evidências → 2. Confirmar identidade</p></>}
           {confirmar && ativo === null && <p role="status">Conferindo autenticador…</p>}
           {confirmar && ativo === false && <form onSubmit={e => { e.preventDefault(); void executar(async () => {
@@ -128,9 +196,9 @@ export function RevisaoDaDecisao({ decisao: d, decidir, voltar, desabilitado }: 
           {erro && <p className="br-decisao-erro" role="alert">{erro}</p>}
           <div className="br-review-buttons"><button className="br-btn br-primary" disabled={bloqueado || (confirmar && (!ativo || codigo.length !== 6))} onClick={() => {
             if (!confirmar) setConfirmar(true);
-            else void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'aprovar', codigo })));
-          }}>{confirmar ? 'Confirmar e aprovar este SHA' : 'Aprovar com segundo fator'}</button>
-          <button className="br-btn" disabled={desabilitado || ocupado} onClick={() => void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'ajuste' })))}>Pedir ajuste</button></div>
+            else void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: autorizacao ? 'autorizar' : 'aprovar', codigo })));
+          }}>{autorizacao ? (confirmar ? 'Confirmar e autorizar' : 'Autorizar com segundo fator') : confirmar ? 'Confirmar e aprovar este SHA' : 'Aprovar com segundo fator'}</button>
+          <button className="br-btn" disabled={desabilitado || ocupado} onClick={() => void executar(async () => setResposta(await decidir(d, { snapshotId: d.snapshotId, acao: 'ajuste' })))}>{autorizacao ? 'Recusar' : 'Pedir ajuste'}</button></div>
         </div>
         <section className="br-card br-review-info"><strong>Quando a decisão não pode seguir</strong><p>Nota insuficiente, regressão com falhas ou snapshot alterado bloqueiam a aprovação e pedem nova revisão.</p></section>
         <p>Decisões comuns usam os botões da pergunta, com login e auditoria. Este ato exige confirmação adicional.</p>

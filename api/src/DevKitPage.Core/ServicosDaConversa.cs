@@ -161,11 +161,82 @@ public static class RegrasDaConversa
             return "Escreva a mensagem.";
         if (texto.Length > ConversaV1.TamanhoMaximoDoTexto)
             return $"A mensagem tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
+        if (ConversaV1.TiposDeCriacao.Contains(tipo) && RegrasDaCriacaoRemota.Validar(tipo, texto) is { Length: > 0 } formulario)
+            return formulario;
         var dispositivo = RegrasDoRemoto.Normalizar(comando.Dispositivo);
         if (dispositivo.Length > 0 && !ConversaV1.Dispositivos.Contains(dispositivo))
             return $"O dispositivo é um de: {string.Join(", ", ConversaV1.Dispositivos)}.";
         if (comando.TtlSegundos is { } ttl && (ttl < TtlMinimo(opcoes) || ttl > TtlMaximo(opcoes)))
             return $"O ttlSegundos vai de {TtlMinimo(opcoes)} a {TtlMaximo(opcoes)}.";
+        return ValidarFluxo(comando, tipo);
+    }
+
+    /// <summary>
+    /// (correções do board remoto) O fluxo escolhido no chat: só na mensagem, com id positivo; o agente (<c>cli</c> ou
+    /// <c>cli:modelo</c>) e os parâmetros (pelo nome do <c>{NOME}</c>, valor numa linha) só com o fluxo. Vazio quando valem.
+    /// </summary>
+    private static string ValidarFluxo(ComandoNovoV1 comando, string tipo)
+    {
+        var parametros = comando.Parametros ?? new Dictionary<string, string>();
+        if (comando.Fluxo is null && comando.Agente is null && parametros.Count == 0)
+            return string.Empty;
+        if (tipo != ConversaV1.ComandoMensagem)
+            return "O fluxo, o agente e os parâmetros vão só na mensagem ao Orquestrador.";
+        if (comando.Fluxo is not > 0)
+            return "Escolha o fluxo (o id do catálogo) para mandar o agente e os parâmetros.";
+        if (comando.Agente is not null && !AgenteValido(comando.Agente))
+            return "O agente é cli ou cli:modelo (ex.: claude:opus), até 100 caracteres.";
+        if (parametros.Count > ConversaV1.MaximoDeParametros)
+            return $"Até {ConversaV1.MaximoDeParametros} parâmetros do fluxo.";
+        foreach (var (nome, valor) in parametros)
+        {
+            if (!NomeDeParametroValido(nome))
+                return $"O parâmetro \"{nome}\" usa MAIÚSCULAS, dígitos e _ (como o {{NOME}} do fluxo).";
+            if (valor is null || valor.Length > ConversaV1.TamanhoMaximoDoParametro || valor.Contains('\n') || valor.Contains('\r'))
+                return $"O valor de {nome} tem até {ConversaV1.TamanhoMaximoDoParametro} caracteres, numa linha.";
+        }
+        return string.Empty;
+    }
+
+    /// <summary>O nome de um parâmetro do fluxo: o <c>{NOME}</c> em maiúsculas, dígitos e <c>_</c>, até 64.</summary>
+    public static bool NomeDeParametroValido(string? nome)
+        => nome is { Length: > 0 and <= 64 } && char.IsAsciiLetterUpper(nome[0]) && nome.All(c => char.IsAsciiLetterUpper(c) || char.IsAsciiDigit(c) || c == '_');
+
+    /// <summary>O agente da execução: <c>cli</c> (minúsculas) ou <c>cli:modelo</c>, sem espaço, até 100.</summary>
+    public static bool AgenteValido(string? agente)
+    {
+        if (agente is not { Length: > 0 and <= 100 })
+            return false;
+        var dois = agente.IndexOf(':');
+        var cli = dois < 0 ? agente : agente[..dois];
+        var modelo = dois < 0 ? "x" : agente[(dois + 1)..];
+        return cli.Length > 0 && cli.All(char.IsAsciiLetterLower) && modelo.Length > 0
+               && modelo.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '/' or '[' or ']');
+    }
+
+    /// <summary>O link da imagem de uma versão de design na API: <c>/api/design/...</c>, sem <c>..</c> nem barra invertida.</summary>
+    public static bool LinkDeDesignValido(string? url)
+        => url is { Length: > 12 and <= 500 } && url.StartsWith("/api/design/", StringComparison.Ordinal)
+           && !url.Contains("..", StringComparison.Ordinal) && !url.Contains('\\') && !url.Contains('?') && !url.Contains('#');
+
+    /// <summary>O problema dos anexos da fala, ou vazio: até <see cref="ConversaV1.MaximoDeAnexos"/>, cada um com título e link OU aviso.</summary>
+    private static string ValidarAnexos(IReadOnlyList<AnexoDaFalaV1>? anexos)
+    {
+        if (anexos is null || anexos.Count == 0)
+            return string.Empty;
+        if (anexos.Count > ConversaV1.MaximoDeAnexos)
+            return $"Até {ConversaV1.MaximoDeAnexos} anexos na fala.";
+        foreach (var (a, i) in anexos.Select((a, i) => (a, i)))
+        {
+            if (a is null || string.IsNullOrWhiteSpace(a.Titulo) || a.Titulo.Length > RemotoV1.TamanhoMaximoDoNome)
+                return $"anexos[{i}]: informe o título (até {RemotoV1.TamanhoMaximoDoNome} caracteres).";
+            if (a.Url is null && string.IsNullOrWhiteSpace(a.Aviso))
+                return $"anexos[{i}]: mande o link da imagem ou o aviso do porquê ela não está no site.";
+            if (a.Url is not null && !LinkDeDesignValido(a.Url))
+                return $"anexos[{i}]: o link é o da API de design (/api/design/...).";
+            if ((a.Aviso?.Length ?? 0) > RemotoV1.TamanhoMaximoDoNome)
+                return $"anexos[{i}]: o aviso tem até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
+        }
         return string.Empty;
     }
 
@@ -220,12 +291,16 @@ public static class RegrasDaConversa
             return $"A fala tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
         if (fala.DitaEm == default)
             return "Informe quando a fala foi dita (ditaEm).";
-        return string.Empty;
+        return ValidarAnexos(fala.Anexos);
     }
 
-    /// <summary>Os campos do comando com dado sensível (<see cref="DadosSensiveis"/>): o texto vai para o SQL e para a fila.</summary>
+    /// <summary>
+    /// Os campos do comando com dado sensível (<see cref="DadosSensiveis"/>): o texto vai para o SQL e para a fila — e o agente e
+    /// os parâmetros do fluxo, que vão juntos.
+    /// </summary>
     public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(ComandoNovoV1 comando)
-        => RegrasDoRemoto.Sensiveis([("texto", comando.Texto)]);
+        => RegrasDoRemoto.Sensiveis(new (string, string?)[] { ("texto", comando.Texto), ("agente", comando.Agente) }
+            .Concat((comando.Parametros ?? new Dictionary<string, string>()).Select(p => ($"parametros.{p.Key}", (string?)p.Value))));
 
     /// <summary>Os campos da resposta com dado sensível: a conversa sai da máquina do dev só sanitizada.</summary>
     public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(RespostaDoDevKitV1 resposta)
@@ -233,7 +308,8 @@ public static class RegrasDaConversa
 
     /// <summary>Os campos da fala com dado sensível: a conversa do chat do dev.kit sai da máquina só sanitizada.</summary>
     public static IReadOnlyList<CampoSensivelV1> CamposSensiveis(FalaDoDevKitV1 fala)
-        => RegrasDoRemoto.Sensiveis([("texto", fala.Texto)]);
+        => RegrasDoRemoto.Sensiveis(new (string, string?)[] { ("texto", fala.Texto) }
+            .Concat((fala.Anexos ?? []).SelectMany((a, i) => new (string, string?)[] { ($"anexos[{i}].titulo", a?.Titulo), ($"anexos[{i}].aviso", a?.Aviso) })));
 
     public static int TtlMinimo(OpcoesDoRemoto opcoes) => Math.Max(1, opcoes.TtlMinimoSegundos);
 

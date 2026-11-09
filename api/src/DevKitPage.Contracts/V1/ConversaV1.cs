@@ -10,13 +10,22 @@ namespace DevKitPage.Contracts.V1;
 /// </param>
 /// <param name="MaquinaId">A máquina de destino, uma só (o comando não vai para as outras máquinas do usuário).</param>
 /// <param name="Tipo">Um de <see cref="ConversaV1.TiposDeComando"/>.</param>
-/// <param name="Texto">A mensagem (obrigatória em <see cref="ConversaV1.ComandoMensagem"/>; vazia nos outros).</param>
+/// <param name="Texto">
+/// A mensagem (obrigatória em <see cref="ConversaV1.ComandoMensagem"/>), o formulário em JSON nos de criação
+/// (<see cref="ConversaV1.TiposDeCriacao"/>); vazia nos outros.
+/// </param>
 /// <param name="TtlSegundos">Quanto tempo o comando espera na fila; vazio é <c>Remoto:TtlPadraoSegundos</c>.</param>
 /// <param name="Dispositivo">De onde veio: <see cref="ConversaV1.DispositivoCelular"/> ou <see cref="ConversaV1.DispositivoNavegador"/>.</param>
 /// <param name="ConfirmarReinicio">O usuário confirmou reiniciar com o turno em andamento (sem isto, 409).</param>
+/// <param name="Fluxo">
+/// (campo novo, correções do board remoto) O id do fluxo do catálogo que o dev escolheu no <c>/</c> do chat; só na
+/// <see cref="ConversaV1.ComandoMensagem"/>. O dev.kit antigo o ignora e segue com o texto.
+/// </param>
+/// <param name="Agente">(campo novo) O agente da execução, <c>cli</c> ou <c>cli:modelo</c> (o <c>--agente</c> do devcli); só com <see cref="Fluxo"/>.</param>
+/// <param name="Parametros">(campo novo) Os valores dos parâmetros do fluxo, pelo NOME (o <c>--param NOME=valor</c>); só com <see cref="Fluxo"/>.</param>
 public sealed record ComandoNovoV1(
     string? Id, string MaquinaId, string Tipo, string? Texto = null, int? TtlSegundos = null, string? Dispositivo = null,
-    bool ConfirmarReinicio = false);
+    bool ConfirmarReinicio = false, long? Fluxo = null, string? Agente = null, IReadOnlyDictionary<string, string>? Parametros = null);
 
 /// <summary>
 /// Um comando como o site e o dev.kit o leem. O estado (<see cref="ConversaV1.EstadosDoComando"/>) diz onde ele está:
@@ -38,9 +47,13 @@ public sealed record ComandoRemotoV1(
 /// executar e, sem a confirmação, não interrompe o turno que começou depois do heartbeat que o site leu. O dev.kit antigo o
 /// ignora.
 /// </param>
+/// <param name="Fluxo">(campo novo) O fluxo escolhido no chat do site (<see cref="ComandoNovoV1.Fluxo"/>); o dev.kit antigo o ignora.</param>
+/// <param name="Agente">(campo novo) O agente <c>cli</c> ou <c>cli:modelo</c> escolhido para o fluxo.</param>
+/// <param name="Parametros">(campo novo) Os valores dos parâmetros do fluxo, pelo nome.</param>
 public sealed record MensagemDaFilaV1(
     int Contrato, string Id, string MaquinaId, string Tipo, string Texto, string Origem, string Dispositivo, DateTimeOffset CriadoEm,
-    DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false);
+    DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false, long? Fluxo = null, string? Agente = null,
+    IReadOnlyDictionary<string, string>? Parametros = null);
 
 /// <summary>O pedido da SAS da fila pelo serviço da máquina (<c>POST /api/remoto/fila/sas</c>).</summary>
 public sealed record PedidoDeSasV1(int Contrato, string MaquinaId);
@@ -94,12 +107,26 @@ public sealed record RespostaRecebidaV1(string Id, bool Repetida, DateTimeOffset
 /// O comando do site que trouxe a fala; obrigatório na de origem <see cref="ConversaV1.OrigemRemoto"/>, para o site juntar a fala
 /// ao comando e não mostrá-la duas vezes.
 /// </param>
+/// <param name="Anexos">
+/// (campo novo, correções do board remoto) As IMAGENS que a fala cita — a versão de design gravada, a proposta que o agente
+/// mostrou —, já traduzidas pelo dev.kit no link estável da API de design (<c>/api/design/{projeto}/{tela}/v{n}</c>). A imagem que
+/// não chegou ao site (o teto do plano, a falha do envio) vem só com o <see cref="AnexoDaFalaV1.Aviso"/>. O dev.kit antigo não
+/// o manda.
+/// </param>
 public sealed record FalaDoDevKitV1(
-    int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null);
+    int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null,
+    IReadOnlyList<AnexoDaFalaV1>? Anexos = null);
 
-/// <summary>Uma fala guardada, como o site a lê.</summary>
+/// <summary>
+/// Uma imagem citada numa fala: o título (a tela, a versão e o tipo) e o link da API de design — ou, sem link, o aviso do porquê
+/// a imagem não está no site. O site nunca monta um link quebrado.
+/// </summary>
+public sealed record AnexoDaFalaV1(string Titulo, string? Url = null, string? Aviso = null);
+
+/// <summary>Uma fala guardada, como o site a lê. <see cref="Anexos"/> é campo novo (ausente na fala sem imagem).</summary>
 public sealed record FalaRemotaV1(
-    string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm);
+    string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm,
+    IReadOnlyList<AnexoDaFalaV1>? Anexos = null);
 
 /// <summary>A resposta do envio da fala: <see cref="Repetida"/> é o reenvio de uma já gravada.</summary>
 public sealed record FalaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
@@ -131,8 +158,35 @@ public static class ConversaV1
     public const string ComandoLigar = "ligar";
     public const string ComandoReiniciar = "reiniciar";
 
-    /// <summary>O que o site manda: a mensagem ao Orquestrador e, ao serviço, ligar ou reiniciar o dev.kit.</summary>
-    public static IReadOnlyList<string> TiposDeComando { get; } = [ComandoMensagem, ComandoLigar, ComandoReiniciar];
+    /// <summary>
+    /// O HANDSHAKE do chat remoto (campo novo, contrato seção 5): o site pede o catálogo da máquina, e o dev.kit responde com o
+    /// <c>PUT /api/remoto/catalogo</c> e o <c>concluido</c>. Não abre turno do agente, então não conta no limite por hora; o
+    /// dev.kit antigo o recusa (<c>recusado</c>), e o site segue com o último catálogo e o texto livre.
+    /// </summary>
+    public const string ComandoCatalogo = "catalogo";
+
+    /// <summary>
+    /// (remote-control-v3, item 4) CRIAR um projeto do Orquestrador pelo site: o <c>texto</c> é o JSON de
+    /// <see cref="NovoProjetoRemotoV1"/>, e o dev.kit o executa pelo mesmo caminho do <c>devcli projeto --criar</c>. O projeto
+    /// nasce em rascunho: o site não aprova nem dispara. O dev.kit antigo o recusa (<c>recusado</c>), com o motivo.
+    /// </summary>
+    public const string ComandoProjeto = "projeto";
+
+    /// <summary>
+    /// (remote-control-v3, item 4) CRIAR (ou abrir) o projeto de design de um repositório pelo site: o <c>texto</c> é o JSON de
+    /// <see cref="NovoDesignRemotoV1"/>, executado pelo mesmo caminho do <c>devcli design --repo</c>. Não grava nem envia versão.
+    /// </summary>
+    public const string ComandoDesign = "design";
+
+    /// <summary>
+    /// O que o site manda: a mensagem ao Orquestrador, ao serviço ligar ou reiniciar o dev.kit, o pedido do catálogo e a criação
+    /// de projeto e de projeto de design (o novo entra no fim).
+    /// </summary>
+    public static IReadOnlyList<string> TiposDeComando { get; } =
+        [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo, ComandoProjeto, ComandoDesign];
+
+    /// <summary>Os comandos de CRIAÇÃO: o <c>texto</c> é o formulário em JSON, conferido pela API antes da fila.</summary>
+    public static IReadOnlyList<string> TiposDeCriacao { get; } = [ComandoProjeto, ComandoDesign];
 
     public const string EstadoPendente = "pendente";
     public const string EstadoNaFila = "na-fila";
@@ -193,6 +247,15 @@ public static class ConversaV1
     public const string PermissaoDaSas = "p";
 
     public const int TamanhoMaximoDoTexto = 4000;
+
+    /// <summary>Quantas imagens uma fala leva (<see cref="FalaDoDevKitV1.Anexos"/>).</summary>
+    public const int MaximoDeAnexos = 10;
+
+    /// <summary>Quantos parâmetros do fluxo um comando leva (<see cref="ComandoNovoV1.Parametros"/>).</summary>
+    public const int MaximoDeParametros = 30;
+
+    /// <summary>O maior valor de um parâmetro do fluxo.</summary>
+    public const int TamanhoMaximoDoParametro = 500;
 
     /// <summary>O maior corpo dos envios da conversa (o comando, o recebimento, a resposta e o pedido da SAS).</summary>
     public const int TamanhoMaximoDoEnvio = 32 * 1024;

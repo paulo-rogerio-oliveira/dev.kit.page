@@ -16,6 +16,12 @@ public sealed class OpcoesDeAutenticacao
     public string Audiencia { get; set; } = "dev.kit.page";
     public int ExpiracaoMinutos { get; set; } = 60;
 
+    /// <summary>
+    /// A validade da renovação da MÁQUINA (o serviço do dev.kit renova o login sem o app aberto): cada uso devolve uma nova, e
+    /// a máquina parada mais que isto volta a pedir o login no app.
+    /// </summary>
+    public int RenovacaoDaMaquinaDias { get; set; } = 30;
+
     /// <summary>Falhas de login seguidas antes do bloqueio.</summary>
     public int MaxFalhas { get; set; } = 5;
 
@@ -166,6 +172,37 @@ public sealed class OpcoesDoRemoto
 }
 
 /// <summary>
+/// O key ring do DataProtection da API (seção <c>ProtecaoDeDados</c>): o que protege o push do board e o segundo fator. Em
+/// Production ele tem de ser PERSISTIDO e COMPARTILHADO entre as instâncias — sem isso, cada reinício (ou cada instância) gera
+/// uma chave nova e o que foi protegido antes deixa de abrir. O <see cref="Blob"/> é o caminho do Azure, com a identidade da API
+/// e, quando houver cofre, a chave do Key Vault (<see cref="ChaveDoCofre"/>) protegendo o key ring; a <see cref="Pasta"/> serve a
+/// um disco compartilhado (o <c>/home</c> do App Service). Fora de Production, sem nada, vale o padrão do ASP.NET (a pasta do
+/// usuário que roda).
+/// </summary>
+public sealed class OpcoesDaProtecaoDeDados
+{
+    public const string Secao = "ProtecaoDeDados";
+
+    /// <summary>
+    /// O nome da aplicação no DataProtection: fixo, para todas as instâncias (e o slot) abrirem o que a outra protegeu. Trocar
+    /// invalida o que já está protegido.
+    /// </summary>
+    public const string NomeDaAplicacao = "DevKitPage.Api";
+
+    /// <summary>O blob do key ring (<c>https://&lt;conta&gt;.blob.core.windows.net/&lt;contêiner&gt;/keys.xml</c>); o contêiner já existe.</summary>
+    public string Blob { get; set; } = string.Empty;
+
+    /// <summary>A chave RSA do Key Vault que protege o key ring (<c>https://&lt;cofre&gt;.vault.azure.net/keys/&lt;nome&gt;</c>). Vazio: sem cofre.</summary>
+    public string ChaveDoCofre { get; set; } = string.Empty;
+
+    /// <summary>A pasta do key ring num disco compartilhado (alternativa ao <see cref="Blob"/>).</summary>
+    public string Pasta { get; set; } = string.Empty;
+
+    /// <summary>O client id da identidade atribuída ao usuário que lê o blob e o cofre (não é segredo); vazio é a do sistema.</summary>
+    public string IdentidadeClientId { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// A provisão no Azure (seção <c>Provisao</c>): o que a API aceita no pedido e o que o worker segue ao executar. A API só
 /// grava o pedido; quem tem a permissão no Azure é o worker (<c>DevKitPage.Provisao</c>), com a identidade gerenciada dele.
 /// </summary>
@@ -202,7 +239,14 @@ public sealed class OpcoesDaProvisao
     /// <summary>Por quanto tempo uma execução fica reservada a um worker: passou disto, outro a retoma (o worker caiu).</summary>
     public int ReservaMinutos { get; set; } = 10;
 
-    /// <summary>O prefixo do grupo de recursos do usuário: <c>rg-devkit-u{id}</c>.</summary>
+    /// <summary>
+    /// O grupo de recursos FIXO da provisão (ex.: <c>devkit-clients</c>), já criado na assinatura: a fila e os aplicativos de todos
+    /// os usuários ficam nele, com nomes únicos por usuário e as tags de dono. O worker não cria grupo e não sobe sem ele; a API
+    /// grava este grupo no pedido. Vazio só no desenvolvimento (cai no <see cref="PrefixoDoGrupo"/>).
+    /// </summary>
+    public string Grupo { get; set; } = string.Empty;
+
+    /// <summary>O grupo do usuário quando o <see cref="Grupo"/> não está configurado (desenvolvimento, provedor simulado): <c>rg-devkit-u{id}</c>.</summary>
     public string PrefixoDoGrupo { get; set; } = "rg-devkit-u";
 
     /// <summary>A cota de App Services ATIVOS (não removidos) por usuário.</summary>

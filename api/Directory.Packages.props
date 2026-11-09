@@ -28,6 +28,8 @@
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.26.0" />
     <!-- O worker da provisão: a identidade gerenciada (ou o az login no desenvolvimento) para o Azure Resource Manager. -->
     <PackageVersion Include="Azure.Identity" Version="1.17.1" />
+    <!-- O key ring do DataProtection protegido pela chave do Key Vault (o resolvedor da chave do cofre). -->
+    <PackageVersion Include="Azure.Security.KeyVault.Keys" Version="4.7.0" />
     <!-- Web Push RFC 8291 (aes128gcm) e VAPID, inclusive Safari. -->
     <PackageVersion Include="Lib.Net.Http.WebPush" Version="3.3.1" />
     <!-- Autenticação: nada feito à mão — o JWT Bearer (o PasswordHasher do Identity vem com o framework do ASP.NET Core). -->

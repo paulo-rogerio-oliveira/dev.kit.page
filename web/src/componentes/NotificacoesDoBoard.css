@@ -1,14 +1,32 @@
-/* Proposta push-board v008: o controle permanece acessível nas abas Chat e Board. */
-.br-push{flex:none;border-bottom:1px solid var(--line);background:var(--surface);font-size:12px}
-.br-push>summary{cursor:pointer;padding:9px 16px;color:var(--ink);font-weight:600}
+/* Proposta push-board v008: o controle permanece acessível. Desde a US #858 ele fica no painel, recolhido. */
+.br-push{flex:none;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:12px}
+.br-push>summary{cursor:pointer;padding:8px 10px;color:var(--ink);font-weight:600}
 .br-push>summary span{font-weight:400;color:var(--muted);margin-left:8px}
-.br-push-conteudo{padding:0 16px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-height:40dvh;overflow:auto}
+.br-push-conteudo{padding:0 10px 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .br-push-conteudo>div{flex:1;min-width:200px}
 .br-push p{margin:5px 0;color:var(--muted)}
 .br-push-conteudo>details,.br-push-mensagem{flex-basis:100%;color:var(--muted)}
 .br-push-conteudo>details>summary{cursor:pointer}
+.br-push-conteudo>.br-btn{width:100%}
 .br-push .br-primary{color:white;background:var(--accent);border-color:var(--accent)}
 .br-push .br-btn:disabled{background:var(--panel);color:var(--muted);border-color:var(--line)}
-.br-aviso-push{flex:none;margin:0;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--bluetint);color:var(--blue);font-size:12px}
-@media(max-width:700px){.br-push>summary{padding:9px 12px}.br-push-conteudo{padding:0 12px 12px;gap:8px}.br-push-conteudo>.br-btn{width:100%}}
-@media(prefers-color-scheme:dark){.br-push .br-primary:not(:disabled){color:#1b1e24}}
+/* US #858: o aviso do site com timer, no canto, sem faixa fixa no topo. */
+.br-avisos{position:fixed;right:340px;bottom:170px;z-index:15;display:flex;flex-direction:column-reverse;gap:8px;width:min(360px,calc(100vw - 24px));pointer-events:none}
+.br-aviso{position:relative;overflow:hidden;display:flex;align-items:flex-start;gap:8px;padding:10px 10px 12px 12px;border-radius:10px;background:var(--ink);color:var(--surface);box-shadow:0 10px 26px rgba(0,0,0,.25);font-size:12px;pointer-events:auto}
+.br-aviso p{flex:1;margin:0;line-height:1.45;overflow-wrap:anywhere}
+.br-aviso-contagem{flex:none;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;line-height:18px}
+.board-remoto .br-aviso-fechar{flex:none;width:22px;height:22px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;font-size:16px;line-height:1}
+.br-aviso-tempo{position:absolute;left:0;bottom:0;height:3px;width:100%;background:var(--accent);transform-origin:left;animation-name:br-aviso-tempo;animation-timing-function:linear;animation-fill-mode:forwards}
+.br-avisos-animados .br-aviso{animation:br-aviso-entra .18s ease-out}
+@keyframes br-aviso-tempo{to{transform:scaleX(0)}}
+@keyframes br-aviso-entra{from{opacity:0;transform:translateY(8px)}}
+.board-remoto .br-secao{display:flex;width:100%;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:12px;font-weight:600;text-align:left}
+.br-secao span{color:var(--muted);font-weight:400}
+.br-historico ul{list-style:none;margin:6px 0 0;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.br-historico li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:12px}
+.br-historico li:first-child{border-top:0}
+.br-historico li small{flex:none}
+.br-historico .br-note{margin-top:6px}
+/* No celular, acima do compositor do chat (e do aviso de instalação e do rodapé). */
+@media(max-width:700px){.br-avisos{right:12px;left:12px;width:auto;bottom:206px}}
+@media(prefers-color-scheme:dark){.br-push .br-primary:not(:disabled){color:#1b1e24}.br-aviso{background:#f1f2f5;color:#1b1e24}}

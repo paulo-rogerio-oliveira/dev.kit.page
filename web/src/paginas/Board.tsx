@@ -1,16 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
-import type { DecisaoPendente, ResponderDecisao } from '../api/remoto';
-import { CartaoDaDecisao, RevisaoDaDecisao, type AoDecidir } from '../componentes/DecisoesRemotas';
+import type { CatalogoRemoto, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
+import { dispositivoAtual, type DecisaoPendente, type PendenciaRemota, type ResponderDecisao } from '../api/remoto';
+import { BotaoDeDetalhes, BotaoDeDispensar, CartaoDaDecisao, OrigemDaPendencia, RevisaoDaDecisao, type AoDecidir, type AoDispensar } from '../componentes/DecisoesRemotas';
+import { ImagemAmpliada, MiniaturaDoDesign } from '../componentes/AnexosDoChat';
 import { useSessao } from '../sessao';
 import { prepararBoardPwa } from '../boardPwa';
-import { NotificacoesDoBoard } from '../componentes/NotificacoesDoBoard';
+import { AvisosDoBoard, HistoricoDeAvisos, NotificacoesDoBoard, pendenciasNovas, useAvisosDoBoard } from '../componentes/NotificacoesDoBoard';
 import { Abas } from '../componentes/Abas';
+import { Chips } from '../componentes/Chips';
+import { filtrarPorDia, periodoDaUrl, periodosDoDia, type PeriodoDoDia } from '../componentes/filtroDeDia';
 import { ChatRemoto } from '../componentes/ChatRemoto';
 import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../componentes/ControleDoDevKit';
 import { useConversaRemota } from '../componentes/useConversaRemota';
+import { useCatalogoRemoto } from '../componentes/useCatalogoRemoto';
+import { DesfechoDaCriacao, ehGerarArtefato, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
+import { ArtefatosDoCard, useArtefatosDoBoard } from '../componentes/ArtefatosDoProjeto';
+import type { Artefato } from '../api/projetos';
+import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
@@ -25,36 +33,118 @@ function idade(data: string | null | undefined, agora: number) {
   return `há ${Math.floor(segundos / 3600)} h`;
 }
 
-function ConteudoDoBoard({ foto, agora, decisoes, desabilitado, decidir, revisar }: { foto: RetratoDaMaquina | null; agora: number; decisoes: DecisaoPendente[]; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void }) {
+/** Listas longas do painel mostram as primeiras entradas e um Ver mais (US #858: menos coisa renderizada de uma vez). */
+const primeirasEntradas = 5;
+
+function VerMais({ total, todos, alternar }: { total: number; todos: boolean; alternar: () => void }) {
+  if (total <= primeirasEntradas) return null;
+  return <button className="br-mais" aria-expanded={todos} onClick={alternar}>{todos ? 'Ver menos' : `Ver mais (${total - primeirasEntradas})`}</button>;
+}
+
+function PendenciaSemDados({ pendencia: p, dispensada, dispensar }: { pendencia: PendenciaRemota; dispensada: boolean; dispensar: AoDispensar }) {
+  const [aberto, setAberto] = useState(false);
+  const detalhes = `board-pendencia-${encodeURIComponent(p.id)}-detalhes`;
+  return <section className={`br-card br-need br-decisao-card br-compacta${dispensada ? ' br-dispensada' : ''}`} aria-label={p.titulo}>
+    <div className="br-decisao-titulo"><b>{p.titulo}</b><BotaoDeDispensar pendencia={p} dispensada={dispensada} dispensar={dispensar} /></div>
+    <OrigemDaPendencia pendencia={p} />
+    <div id={detalhes} className="br-detalhes">{aberto && <>{p.pergunta && <p>{p.pergunta}</p>}{p.jaTentei && <p>{p.jaTentei}</p>}</>}</div>
+    <p className="br-note">Aguardando os dados da decisão.</p>
+    <div className="br-row"><BotaoDeDetalhes aberto={aberto} alternar={() => setAberto(a => !a)} controla={detalhes} /></div>
+  </section>;
+}
+
+/** O projeto que já saiu do andamento: concluído ou em fechamento (todos os itens integrados, ajuste 8). */
+function projetoTerminando(situacao: string) { return situacao === 'concluido' || situacao === 'fechando'; }
+
+/** As pendências do retrato que o dev fechou no site (correções do board remoto): a decisão marcada ou a dispensa local. */
+function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[], locais: Map<string, boolean>) {
+  return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
+}
+
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]> }) {
   const retrato = foto?.retrato;
+  const [todosOsProjetos, setTodosOsProjetos] = useState(false);
+  const [todosOsDesigns, setTodosOsDesigns] = useState(false);
+  const [todasAsExecucoes, setTodasAsExecucoes] = useState(false);
+  const [vistas, setVistas] = useState<'pendentes' | 'dispensadas'>('pendentes');
+  const [ampliada, setAmpliada] = useState<{ titulo: string; link: string } | null>(null);
+  // (ajuste 8) O painel lista os projetos em andamento; o "Mostrar concluídos" traz os concluídos e os em fechamento.
+  const [comConcluidos, setComConcluidos] = useState(false);
+  const todosOsRecebidos = retrato?.projetos ?? [];
+  const terminando = todosOsRecebidos.filter(p => projetoTerminando(p.situacao)).length;
+  const projetos = comConcluidos ? todosOsRecebidos : todosOsRecebidos.filter(p => !projetoTerminando(p.situacao));
+  const recebidas = retrato?.fluxos ?? [];
+  // O filtro de dia vale para as execuções; as pendências nunca são escondidas por data — só a que o dev fechou no site.
+  const execucoes = filtrarPorDia(recebidas, periodo, agora);
+  const todas = retrato?.pendencias ?? [];
+  const abertas = todas.filter(p => !dispensadas.has(p.id));
+  const fechadas = todas.filter(p => dispensadas.has(p.id));
+  const mostradas = vistas === 'dispensadas' ? fechadas : abertas;
   return <>
-    <h2>Precisa de você · {retrato?.pendencias?.length ?? 0}</h2>
-    {retrato?.pendencias?.map(p => {
+    <div className="br-secao-titulo"><h2>Precisa de você · {abertas.length}</h2>
+      {(fechadas.length > 0 || vistas === 'dispensadas') && <Chips rotulo="Filtro das pendências" valor={vistas} aoMudar={setVistas}
+        opcoes={[{ valor: 'pendentes', rotulo: 'Pendentes' }, { valor: 'dispensadas', rotulo: 'Dispensadas', contagem: fechadas.length }]} />}</div>
+    {mostradas.map(p => {
       const d = decisoes.find(d => d.pendencia.id === p.id);
-      return d ? <CartaoDaDecisao key={`${p.id}-${d.snapshotId}`} decisao={d} compacta desabilitado={desabilitado} decidir={decidir} revisar={revisar} />
-        : <section className="br-card br-need" key={p.id}><b>{p.titulo}</b><p>{p.pergunta}</p><p>{p.jaTentei}</p><p className="br-note">Aguardando os dados da decisão.</p></section>;
+      return d ? <CartaoDaDecisao key={`${p.id}-${d.snapshotId}`} decisao={{ ...d, dispensada: dispensadas.has(p.id) }} destacada={destacada === p.id} desabilitado={desabilitado} decidir={decidir} revisar={revisar} dispensar={dispensar} />
+        : <PendenciaSemDados key={p.id} pendencia={p} dispensada={dispensadas.has(p.id)} dispensar={dispensar} />;
     })}
-    {!retrato?.pendencias?.length && <p className="br-note">Nenhuma pendência recebida.</p>}
+    {!todas.length && <p className="br-note">Nenhuma pendência recebida.</p>}
+    {!!todas.length && !mostradas.length && <p className="br-note">{vistas === 'dispensadas' ? 'Nenhum card dispensado.' : 'Nenhuma pendência aberta: as outras foram dispensadas no site.'}</p>}
     <p className="br-note">Confira os detalhes antes de decidir. O texto do chat nunca aprova.</p>
-    <h2>Projetos</h2>
-    {retrato?.projetos?.map(p => {
+    {/* (item 4) Os projetos abrem a página Projetos no projeto, e o Novo projeto cria pelo dev.kit da máquina. */}
+    <div className="br-secao-titulo"><h2>Projetos{projetos.length > 0 && ` · ${projetos.length}`}</h2>
+      <Link className="br-ver" to="/projetos">Ver todos</Link>
+      <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('projeto')}>+ Novo projeto</button></div>
+    {(todosOsProjetos ? projetos : projetos.slice(0, primeirasEntradas)).map(p => {
       const itens = p.itens ?? [];
       const integrados = itens.filter(i => i.situacao === 'integrado').length;
       const rodando = itens.filter(i => i.situacao === 'rodando').length;
       const ondas = Math.max(p.ondaAtual, ...itens.map(i => i.onda));
-      return <section className="br-card br-proj" key={p.slug}>
-        <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
-        <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
-        <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
-      </section>;
+      // (controle-v4, item 2) O card abre o projeto e, embaixo, gera artefato e mostra os últimos links.
+      return <div className="br-card br-proj-card" key={p.slug}>
+        <Link className="br-proj br-abrir" to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
+          <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
+          <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
+          <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
+        </Link>
+        <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.get(p.slug) ?? []} gerar={slug => void criacao.gerarArtefato(slug)}
+          desabilitado={criacao.desabilitado} motivo={criacao.motivo} agora={agora} />
+      </div>;
     })}
-    {!retrato?.projetos?.length && <p className="br-note">Nenhum projeto recebido.</p>}
-    <h2>Executando</h2>
-    {!!retrato?.fluxos?.length && <section className="br-card">{retrato.fluxos.map(f => <div className="br-item" key={f.id}>
+    <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
+    {(terminando > 0 || comConcluidos) && <label className="br-interruptor">
+      <input type="checkbox" checked={comConcluidos} onChange={e => setComConcluidos(e.target.checked)} />
+      Mostrar concluídos{terminando > 0 && ` (${terminando})`}
+    </label>}
+    {!todosOsRecebidos.length && <p className="br-note">Nenhum projeto recebido.</p>}
+    {!!todosOsRecebidos.length && !projetos.length && <p className="br-note">Nenhum projeto em andamento.</p>}
+    <DesfechoDaCriacao criacao={criacao} />
+    {/* Os projetos de design vêm do catálogo da máquina (o handshake): abrem o Design compartilhado no repositório. */}
+    <div className="br-secao-titulo"><h2>Design{designs.length > 0 && ` · ${designs.length}`}</h2>
+      <Link className="br-ver" to="/design">Ver todos</Link>
+      <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('design')}>+ Novo design</button></div>
+    {(todosOsDesigns ? designs : designs.slice(0, primeirasEntradas)).map(d => {
+      const destino = d.repositorio ? `/design?repositorio=${encodeURIComponent(d.repositorio)}` : '/design';
+      // A miniatura é a última versão do projeto no site: o clique nela amplia, e o card continua abrindo o Design.
+      return <div className={`br-design-card${d.miniatura ? ' br-com-miniatura' : ''}`} key={d.nome}>
+        {d.miniatura && <MiniaturaDoDesign titulo={`${d.nome} · última versão`} link={d.miniatura} ampliar={setAmpliada} />}
+        <Link className="br-card br-design br-abrir" to={destino} aria-label={`Abrir o design de ${d.nome}`}>
+          <b>{d.nome}<span>{d.telas === 1 ? '1 tela' : `${d.telas} telas`}</span></b><small>Abrir no Design</small>
+        </Link>
+      </div>;
+    })}
+    {ampliada && <ImagemAmpliada {...ampliada} fechar={() => setAmpliada(null)} />}
+    <VerMais total={designs.length} todos={todosOsDesigns} alternar={() => setTodosOsDesigns(t => !t)} />
+    {!designs.length && <p className="br-note">Nenhum projeto de design no catálogo da máquina.</p>}
+    <p className="br-note">Criar pelo site vira um pedido na fila: o dev.kit executa como o devcli e devolve o resultado aqui. Aprovar e disparar continuam no dev.kit.</p>
+    <h2>Executando · {execucoes.length}<span className="br-periodo"> {periodosDoDia.find(p => p.valor === periodo)!.rotulo.toLowerCase()}</span></h2>
+    {!!execucoes.length && <section className="br-card">{(todasAsExecucoes ? execucoes : execucoes.slice(0, primeirasEntradas)).map(f => <div className="br-item" key={f.id}>
       <div><span>{f.nome}</span>{f.etapa && <small>{f.etapa}{f.agente ? ` · ${f.agente}` : ''}</small>}</div>
       <span className={`br-chip${f.situacao === 'fila' || f.situacao === 'na-fila' ? ' br-warn' : ''}`}>{f.situacao === 'fila' || f.situacao === 'na-fila' ? 'na fila' : f.situacao}</span>
     </div>)}</section>}
-    {!retrato?.fluxos?.length && <p className="br-note">Nenhuma execução recebida.</p>}
+    <VerMais total={execucoes.length} todos={todasAsExecucoes} alternar={() => setTodasAsExecucoes(t => !t)} />
+    {!execucoes.length && <p className="br-note">{recebidas.length ? 'Nenhuma execução neste período.' : 'Nenhuma execução recebida.'}</p>}
     <p className="br-note">Última atualização {idade(retrato?.geradoEm, agora)}.</p>
   </>;
 }
@@ -68,6 +158,8 @@ export function Board() {
   const { sessao, sair } = useSessao();
   const [parametros, setParametros] = useSearchParams();
   const aba = parametros.get('aba') === 'chat' ? 'chat' : 'board';
+  const periodo = periodoDaUrl(parametros.get('dia'));
+  function mudarParametro(nome: string, valor: string) { const p = new URLSearchParams(parametros); p.set(nome, valor); setParametros(p, { replace: true }); }
   const [maquinas, setMaquinas] = useState<MaquinaRemota[]>([]);
   const [selecionada, setSelecionada] = useState('');
   const [foto, setFoto] = useState<RetratoDaMaquina | null>(null);
@@ -80,23 +172,35 @@ export function Board() {
   const geracao = useRef(0);
   const notificacao = parametros.get('notificacao');
   const [destinoPush, setDestinoPush] = useState<{ maquinaId: string; pendenciaId: string; snapshotId: string } | null>(null);
-  const [avisoPush, setAvisoPush] = useState('');
+  // O aviso do site some sozinho, agrupa os repetidos e fica na seção Avisos do painel (US #858).
+  const { avisos, avisar, encerrar } = useAvisosDoBoard();
+  const [destacada, setDestacada] = useState('');
+  const conhecidas = useRef<{ maquinaId: string; ids: Set<string> } | null>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
-    setDestinoPush(null); setAvisoPush('');
+    setDestinoPush(null);
     if (!notificacao || !sessao) return;
-    if (!/^[a-f0-9]{32}$/.test(notificacao)) { setAvisoPush('Notificação inválida. Consulte as pendências do Board.'); return; }
-    setAvisoPush('Abrindo a decisão da notificação…');
+    if (!/^[a-f0-9]{32}$/.test(notificacao)) { avisar('Notificação inválida. Consulte as pendências do Board.'); return; }
+    // Sem aviso de "abrindo": o desfecho (aberta, resolvida ou indisponível) é o aviso que importa.
     void api.destinoDoPush(sessao.token, notificacao, ctrl.signal).then(d => {
       if (!ctrl.signal.aborted) setDestinoPush(d);
     }).catch(e => {
       if (ctrl.signal.aborted) return;
       if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
-      else setAvisoPush(mensagemDaFalha(e));
+      else avisar(mensagemDaFalha(e));
     });
     return () => ctrl.abort();
-  }, [notificacao, sessao, sair]);
+  }, [notificacao, sessao, sair, avisar]);
+
+  // As pendências que chegam entre um retrato e o seguinte viram aviso; o primeiro retrato de cada máquina, não.
+  useEffect(() => {
+    const pendencias = foto?.retrato?.pendencias;
+    if (!foto || !pendencias) return;
+    const anteriores = conhecidas.current?.maquinaId === foto.maquina.maquinaId ? conhecidas.current.ids : null;
+    for (const p of pendenciasNovas(anteriores, pendencias)) avisar(`Nova pendência: ${p.titulo}`, `pendencia:${p.id}`);
+    conhecidas.current = { maquinaId: foto.maquina.maquinaId, ids: new Set(pendencias.map(p => p.id)) };
+  }, [foto, avisar]);
 
   useEffect(() => {
     if (!sessao) return;
@@ -110,7 +214,7 @@ export function Board() {
         if (controller.signal.aborted || atual !== geracao.current) return;
         setMaquinas(lista);
         if (destinoPush && !lista.some(m => m.maquinaId === destinoPush.maquinaId)) {
-          setDestinoPush(null); setAvisoPush('A máquina desta notificação não está disponível para sua conta.');
+          setDestinoPush(null); avisar('A máquina desta notificação não está disponível para sua conta.');
         }
         const preferida = destinoPush?.maquinaId ?? selecionada;
         const id = lista.some(m => m.maquinaId === preferida) ? preferida : lista[0]?.maquinaId ?? '';
@@ -142,23 +246,25 @@ export function Board() {
     }
     void carregar();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [sessao, selecionada, tentativa, sair, destinoPush]);
+  }, [sessao, selecionada, tentativa, sair, destinoPush, avisar]);
 
   useEffect(() => {
     if (!destinoPush || carregando || erro || selecionada !== destinoPush.maquinaId || !foto) return;
     const d = decisoes.find(d => d.pendencia.id === destinoPush.pendenciaId && d.snapshotId === destinoPush.snapshotId);
     setDestinoPush(null);
     if (!d || (d.resposta && d.resposta.estado !== 'vencida')) {
-      setAvisoPush('Esta decisão foi resolvida ou o snapshot mudou. Consulte as pendências atuais.'); return;
+      avisar('Esta decisão foi resolvida ou o snapshot mudou. Consulte as pendências atuais.'); return;
     }
-    setAvisoPush('Decisão aberta a partir da notificação. Confira os dados atuais antes de decidir.');
+    avisar('Decisão aberta a partir da notificação. Confira os dados atuais antes de decidir.');
     if (d.pendencia.tipo === 'aprovacao') setRevisao(d);
     else {
       const p = new URLSearchParams(parametros); p.set('aba', 'board'); setParametros(p, { replace: true });
+      // O cartão apontado pela notificação abre os detalhes, além de receber o foco.
+      setDestacada(d.pendencia.id);
       const cartao = document.getElementById(`board-decisao-${encodeURIComponent(d.pendencia.id)}`);
       cartao?.scrollIntoView?.({ block: 'nearest' }); cartao?.focus();
     }
-  }, [destinoPush, carregando, erro, selecionada, foto, decisoes, parametros, setParametros]);
+  }, [destinoPush, carregando, erro, selecionada, foto, decisoes, parametros, setParametros, avisar]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setAgora(Date.now()), 1000);
@@ -174,7 +280,8 @@ export function Board() {
   async function decidir(d: DecisaoPendente, pedido: ResponderDecisao) {
     const atual = geracao.current;
     try {
-      const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, pedido);
+      // (controle-v4, item 3) A decisão leva o dispositivo: a máquina o registra na auditoria do que executar.
+      const resposta = await api.responderDecisao(sessao!.token, selecionada, d.pendencia.id, { ...pedido, dispositivo: dispositivoAtual() });
       if (atual === geracao.current)
         setDecisoes(lista => lista.map(item => item.pendencia.id === d.pendencia.id && item.snapshotId === d.snapshotId ? { ...item, resposta } : item));
       return resposta;
@@ -183,10 +290,47 @@ export function Board() {
       throw e;
     }
   }
+  // (correções do board remoto) O × do card: só no site. A resposta da API vale para a decisão e para o card ainda sem dados.
+  const [dispensasLocais, setDispensasLocais] = useState(new Map<string, boolean>());
+  useEffect(() => setDispensasLocais(new Map()), [selecionada]);
+  async function dispensar(p: PendenciaRemota, dispensarCard: boolean) {
+    const maquinaId = selecionada;
+    try {
+      await api.dispensarDecisao(sessao!.token, maquinaId, p.id, dispensarCard);
+    } catch (e) {
+      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+      throw e;
+    }
+    if (maquinaId !== selecionada) return;
+    setDispensasLocais(m => new Map(m).set(p.id, dispensarCard));
+    setDecisoes(lista => lista.map(d => d.pendencia.id === p.id ? { ...d, dispensada: dispensarCard } : d));
+    avisar(dispensarCard ? `Card dispensado no site: ${p.titulo}. A task no dev.kit não muda; o filtro Dispensadas o traz de volta.` : `Card restaurado: ${p.titulo}.`);
+  }
+  // O Desvincular do serviço: a lista já mostra a máquina sem vínculo, e a próxima leitura confirma pela API.
+  async function desvincular() {
+    const maquinaId = selecionada;
+    try {
+      await api.desvincularMaquina(sessao!.token, maquinaId);
+    } catch (e) {
+      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+      throw e;
+    }
+    setMaquinas(lista => lista.map(m => m.maquinaId === maquinaId ? { ...m, vinculada: false } : m));
+    avisar('Serviço desvinculado: o heartbeat e a fila desta máquina pararam até o próximo login no dev.kit nela.');
+  }
   const mudou = !!revisao && !decisoes.some(d => d.pendencia.id === revisao.pendencia.id && d.snapshotId === revisao.snapshotId);
   // UMA conversa por máquina para o chat e o controle do dev.kit: o mesmo histórico e o mesmo SSE.
   const conversa = useConversaRemota(selecionada);
   const controle = useControleDoDevKit({ maquina, conectada, conversa: conversa.conversa, acionar: conversa.acionar, agora });
+  // (item 4) O catálogo da máquina (o handshake) é UM para o chat e o painel: os atalhos, os designs e os formulários.
+  const catalogo = useCatalogoRemoto({ maquina, conectada, conversa });
+  const criacao = useCriacaoRemota({ maquina, conversa, agora });
+  // (controle-v4, item 2) Os links do card relidos a cada desfecho de um "Gerar artefato".
+  const desfechosDoArtefato = conversa.conversa.comandos.filter(c => ehGerarArtefato(c) && c.estado === 'concluido').map(c => c.id).join(',');
+  const artefatos = useArtefatosDoBoard(sessao?.token, desfechosDoArtefato);
+  const doCatalogo = catalogo.catalogo?.catalogo ?? null;
+  const dispensadas = dispensadasDe(foto?.retrato?.pendencias ?? [], decisoes, dispensasLocais);
+  const abertas = (foto?.retrato?.pendencias ?? []).filter(p => !dispensadas.has(p.id)).length;
 
   return <div className="board-remoto" data-aba={aba}>
     <header className="br-top">
@@ -200,27 +344,35 @@ export function Board() {
         </div>
         <small title="Idade do último heartbeat recebido"><span className="br-mobile-state">{estado} · </span><span className="br-desktop-state">Última atualização </span>{idade(maquina?.ultimoHeartbeatEm, agora)}{agente && ` · ${agente}`}{maquina?.turnoEmAndamento && ' · turno em andamento'}</small>
       </div>
-      <BotaoDoDevKit controle={controle} />
     </header>
     <FaixaDoAcionamento controle={controle} />
-    <NotificacoesDoBoard />
-    {avisoPush && <p className="br-aviso-push" role="status">{avisoPush}</p>}
     {revisao && <RevisaoDaDecisao key={`${selecionada}-${revisao.snapshotId}`} decisao={mudou ? { ...revisao, bloqueio: 'O snapshot mudou. Volte ao Board e revise as novas evidências.' } : revisao} decidir={decidir} voltar={() => { setRevisao(null); setTentativa(t => t + 1); }} desabilitado={desabilitado || mudou} />}
-    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board' }]} ativa={aba} aoMudar={id => { const p = new URLSearchParams(parametros); p.set('aba', id); setParametros(p, { replace: true }); }}>
+    <div className="br-navegacao" hidden={!!revisao}><Abas rotulo="Navegação do Board" prefixo="board-aba" abas={[{ id: 'chat', rotulo: 'Chat' }, { id: 'board', rotulo: 'Board', contagem: foto?.retrato?.pendencias ? abertas : undefined }]} ativa={aba} aoMudar={id => mudarParametro('aba', id)}>
+    {/* Como no Board do dev.kit: o chat na coluna principal e o painel de auxílio à direita, na mesma ordem de leitura. */}
     <main className="br-main">
+      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} catalogo={catalogo}
+        acoes={<BotaoDoDevKit controle={controle} />} />
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
+        <Chips rotulo="Filtro de dia" opcoes={periodosDoDia} valor={periodo} aoMudar={valor => mudarParametro('dia', valor)} />
         {carregando && <p role="status" className="br-note">Carregando Board…</p>}
         {erro && <div role="alert" className="br-card br-need"><p>{erro}</p>{foto && <p>Exibindo o último retrato recebido; os dados podem estar desatualizados.</p>}<button className="br-btn" onClick={() => setTentativa(t => t + 1)}>Tentar novamente</button></div>}
         {!carregando && !erro && !maquina && <p className="br-note">Nenhuma máquina cadastrada. Abra o dev.kit na máquina para enviar o primeiro heartbeat.</p>}
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
-        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} decisoes={decisoes} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao} />}
+        {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
+          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} />}
+        {/* A chave é própria: o ConteudoDoBoard, irmão dele, já usa a da máquina. */}
+        {maquina && <VinculoDoServico key={`vinculo-${selecionada}`} maquina={maquina} desvincular={desvincular} />}
+        <HistoricoDeAvisos avisos={avisos} />
+        <NotificacoesDoBoard />
       </aside>
-      <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} decisoes={decisoes} desabilitarDecisoes={desabilitado} decidir={decidir} revisar={setRevisao} />
     </main>
     </Abas></div>
+    {criacao.aberta === 'projeto' && <NovoProjetoNoBoard key={`projeto-${selecionada}`} criacao={criacao} catalogo={doCatalogo} recebidoEm={catalogo.catalogo?.recebidoEm ?? null} />}
+    {criacao.aberta === 'design' && <NovoDesignNoBoard key={`design-${selecionada}`} criacao={criacao} catalogo={doCatalogo} />}
+    <AvisosDoBoard avisos={avisos} encerrar={encerrar} />
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
-    <footer className="br-footer"><span className="br-desktop-state">Ligar e Reiniciar são executados pelo serviço do dev.kit na máquina.</span><span className="br-mobile-state">Texto do chat nunca aprova · decisões auditadas</span></footer>
+    {/* Sem rodapé (proposta chat-remoto v016): o "Ligar e Reiniciar…" é a dica do botão, e o "decisões auditadas", o selo do chat. */}
   </div>;
 }

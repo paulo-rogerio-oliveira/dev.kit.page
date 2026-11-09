@@ -145,6 +145,19 @@ export interface UsuarioResumo {
   ultimoLogin?: string | null;
   /** Os recursos que o admin liberou a este usuário (a provisão no Azure); ausente numa API anterior a eles. */
   recursosLiberados?: RecursoLiberavel[] | null;
+  /** A fila do controle remoto ativa do usuário (remote-control-v3, item 5); nula sem fila, ausente numa API anterior a ela. */
+  fila?: FilaDoUsuario | null;
+}
+
+/** A fila do controle remoto de um usuário como o admin a vê na lista: a ativa, não removida. */
+export interface FilaDoUsuario {
+  id: number;
+  /** A conta de armazenamento no Azure. */
+  nome: string;
+  fila: string;
+  regiao: string;
+  operacao: OperacaoDaProvisao;
+  estado: EstadoDaProvisao;
 }
 
 // ----- A provisão no Azure (controle remoto v2, item 4) -----

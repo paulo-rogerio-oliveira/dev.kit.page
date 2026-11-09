@@ -88,6 +88,19 @@ describe('Design compartilhado (US #669)', () => {
     expect(screen.queryByRole('group', { name: 'Escopo' })).not.toBeInTheDocument();
   });
 
+  it('o Board remoto abre o design pelo repositório do catálogo, sem diferença de caixa', async () => {
+    servidor.use(http.get(`${API}/api/design/projetos`, () => HttpResponse.json(projetosDeDesign.filter((p) => p.nivel === 'usuario'))));
+    renderizar('/design?repositorio=GitHub.com/acme/portal', tokenDoDev());
+    expect(await screen.findByRole('button', { name: /Rascunho/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Repositório' })).toHaveValue('github.com/acme/portal');
+  });
+
+  it('o design que o Board abre e ainda não tem versão no site é dito', async () => {
+    servidor.use(http.get(`${API}/api/design/projetos`, () => HttpResponse.json([])));
+    renderizar('/design?repositorio=github.com/acme/novo', tokenDoDev());
+    expect(await screen.findByText(/O projeto de design de github.com\/acme\/novo ainda não tem versão no site/)).toBeInTheDocument();
+  });
+
   it('a lista vazia diz de onde as telas vêm', async () => {
     servidor.use(http.get(`${API}/api/design/projetos`, () => HttpResponse.json([])));
     renderizar('/design', tokenDoDev());

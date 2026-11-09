@@ -17,6 +17,12 @@ public sealed class ConversaRemota(
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>A mensagem da fila sem os campos novos nulos: a mensagem sem fluxo sai igual à de antes.</summary>
+    private static readonly JsonSerializerOptions JsonDaFila = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
     public async Task<ResultadoDaConversa<ComandoAceito>> EnviarAsync(int usuarioId, ComandoNovoV1 pedido, CancellationToken ct)
     {
         var cfg = opcoes.Value;
@@ -40,10 +46,20 @@ public sealed class ConversaRemota(
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.SemFila,
                 "Você ainda não tem a fila do controle remoto pronta. Peça-a na sua conta (Fila do controle remoto).");
 
+        // O handshake (o pedido do catálogo) ainda na fila serve a quem pede de novo: o site que reabre o Board e o duplo
+        // "Atualizar" não empilham pedidos que o dev.kit responderia todos com o mesmo catálogo.
+        if (tipo == ConversaV1.ComandoCatalogo && await db.ComandosRemotos.AsNoTracking()
+                .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == pedido.MaquinaId && c.Tipo == ConversaV1.ComandoCatalogo
+                            && (c.Estado == ConversaV1.EstadoPendente || c.Estado == ConversaV1.EstadoNaFila) && c.ExpiraEmUtc > agora)
+                .OrderByDescending(c => c.CriadoEmUtc).FirstOrDefaultAsync(ct) is { } aguardando)
+            return new(new ComandoAceito(Leitura(aguardando), Novo: false));
+
+        // O limite por hora é de quem pode abrir turno do agente: o handshake não abre, e não conta nem é barrado por ele.
         var inicioDaJanela = agora.AddHours(-1);
-        var naJanela = await db.ComandosRemotos.AsNoTracking().Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela)
+        var naJanela = await db.ComandosRemotos.AsNoTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela && c.Tipo != ConversaV1.ComandoCatalogo)
             .Select(c => c.CriadoEmUtc).ToListAsync(ct);
-        if (RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
+        if (tipo != ConversaV1.ComandoCatalogo && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
         {
             var espera = RegrasDaConversa.TenteEm(naJanela.Min(), agora);
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.Limite,
@@ -65,6 +81,7 @@ public sealed class ConversaRemota(
             CriadoEmUtc = agora,
             ExpiraEmUtc = agora.Add(RegrasDaConversa.Ttl(pedido.TtlSegundos, cfg)),
             AtualizadoEmUtc = agora,
+            Contexto = pedido.Fluxo is > 0 ? JsonSerializer.Serialize(new ContextoDoComando(pedido.Fluxo, pedido.Agente, pedido.Parametros), Json) : string.Empty,
         };
         db.ComandosRemotos.Add(comando);
         try
@@ -109,9 +126,12 @@ public sealed class ConversaRemota(
         ComandoRemoto comando, FilaDoUsuario filaDoUsuario, bool novo, bool confirmarReinicio, CancellationToken ct)
     {
         var agora = relogio.GetUtcNow().UtcDateTime;
+        // O fluxo escolhido no chat vai em campos próprios da mensagem; sem ele, eles ficam de fora (o dev.kit antigo não os lê).
+        var contexto = comando.Contexto.Length > 0 ? JsonSerializer.Deserialize<ContextoDoComando>(comando.Contexto, Json) : null;
         var mensagem = JsonSerializer.Serialize(new MensagemDaFilaV1(RemotoV1.Contrato, comando.ComandoId, comando.MaquinaId, comando.Tipo, comando.Texto,
             ConversaV1.OrigemRemoto, comando.Dispositivo, DevKitPageDb.Utc(comando.CriadoEmUtc), DevKitPageDb.Utc(comando.ExpiraEmUtc),
-            comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio), Json);
+            comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio, contexto?.Fluxo, contexto?.Agente,
+            contexto?.Parametros is { Count: > 0 } parametros ? parametros : null), JsonDaFila);
         string? erro = null;
         try
         {
@@ -296,6 +316,7 @@ public sealed class ConversaRemota(
             Texto = (fala.Texto ?? string.Empty).Trim(),
             ComandoId = fala.ComandoId ?? string.Empty,
             DitaEmUtc = fala.DitaEm.UtcDateTime,
+            Anexos = fala.Anexos is { Count: > 0 } anexos ? JsonSerializer.Serialize(anexos, Json) : string.Empty,
         };
         if (await FalaGravadaAsync(linha, ct) is { } gravada)
             return gravada;
@@ -336,7 +357,8 @@ public sealed class ConversaRemota(
             .FirstOrDefaultAsync(f => f.UsuarioId == nova.UsuarioId && f.MaquinaId == nova.MaquinaId && f.FalaId == nova.FalaId, ct);
         if (gravada is null)
             return null;
-        if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId)
+        if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId
+            || gravada.Anexos != nova.Anexos)
             return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outra fala desta máquina. Mande a fala nova com outro id.");
         return new(new FalaRecebidaV1(gravada.FalaId, Repetida: true, DevKitPageDb.Utc(gravada.RecebidaEmUtc)));
     }
@@ -414,7 +436,7 @@ public sealed class ConversaRemota(
 
     internal static FalaRemotaV1 Leitura(FalaRemota f)
         => new(f.FalaId, f.MaquinaId, f.Autor, f.Origem, f.Texto, f.ComandoId.Length == 0 ? null : f.ComandoId, DevKitPageDb.Utc(f.DitaEmUtc),
-            DevKitPageDb.Utc(f.RecebidaEmUtc));
+            DevKitPageDb.Utc(f.RecebidaEmUtc), f.Anexos.Length == 0 ? null : JsonSerializer.Deserialize<AnexoDaFalaV1[]>(f.Anexos, Json));
 }
 
 /// <summary>A retenção da conversa (<see cref="OpcoesDoRemoto.RetencaoDaConversaDias"/>): o comando, a resposta, a fala e o evento, pela data deles.</summary>

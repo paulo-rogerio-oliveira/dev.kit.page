@@ -12,10 +12,14 @@ namespace DevKitPage.Contracts.V1;
 /// <param name="RecursosLiberados">
 /// Os recursos que o admin liberou a este usuário (<see cref="ProvisaoV1.RecursosLiberaveis"/>); nulo só numa API anterior a eles.
 /// </param>
+/// <param name="Fila">
+/// A fila do controle remoto ativa do usuário (remote-control-v3, item 5): o admin a vê na lista; nula sem fila, ou numa API
+/// anterior a ela.
+/// </param>
 public sealed record UsuarioResumo(
     int Id, string Login, string Nome, string Papel, int? EmpresaId, string? Empresa, bool Bloqueado,
     DateTimeOffset? BloqueadoAte, bool DeveTrocarSenha, DateTimeOffset CriadoEm, LicencaDoUsuarioV1? Licenca = null, DateTimeOffset? UltimoLogin = null,
-    IReadOnlyList<string>? RecursosLiberados = null);
+    IReadOnlyList<string>? RecursosLiberados = null, FilaDoUsuarioV1? Fila = null);
 
 /// <summary>Os tipos da licença de um usuário como a gestão os mostra e o admin os escolhe (US #687).</summary>
 public static class TiposDaLicencaDoUsuario

@@ -98,6 +98,27 @@ public sealed class RegrasDaConversaTests
     }
 
     [Fact]
+    public void A_criacao_de_projeto_e_de_design_entra_no_fim_dos_tipos_e_o_formulario_e_conferido()
+    {
+        // O tipo novo entra no fim: o site e o dev.kit antigos leem a lista como antes (item 4 do remote-control-v3).
+        Assert.Equal(["mensagem", "ligar", "reiniciar", "catalogo", "projeto", "design"], ConversaV1.TiposDeComando);
+        Assert.Equal([ConversaV1.ComandoProjeto, ConversaV1.ComandoDesign], ConversaV1.TiposDeCriacao);
+
+        Assert.Empty(RegrasDaConversa.Validar(Comando(ConversaV1.ComandoProjeto,
+            """{"nome":"Projetos pelo site","repositorios":["github.com/org/app"],"definicao":"Ver e criar.","nivel":"Time"}"""), Opcoes));
+        Assert.Empty(RegrasDaConversa.Validar(Comando(ConversaV1.ComandoDesign, """{"repositorio":"github.com/org/app"}"""), Opcoes));
+
+        Assert.Contains("Envie o formulário", RegrasDaConversa.Validar(Comando(ConversaV1.ComandoDesign, ""), Opcoes));
+        Assert.Contains("JSON", RegrasDaConversa.Validar(Comando(ConversaV1.ComandoProjeto, "criar projeto"), Opcoes));
+        Assert.Contains("Envie o novo projeto", RegrasDaConversa.Validar(Comando(ConversaV1.ComandoProjeto, "null"), Opcoes));
+        var muitos = string.Join(",", Enumerable.Range(1, CriacaoRemotaV1.MaximoDeRepositorios + 1).Select(i => $"\"github.com/org/app{i}\""));
+        Assert.Contains("até 20 repositórios", RegrasDaConversa.Validar(Comando(ConversaV1.ComandoProjeto, $$"""{"nome":"Novo","repositorios":[{{muitos}}]}"""), Opcoes));
+        Assert.Contains("definição", RegrasDaCriacaoRemota.Validar(new NovoProjetoRemotoV1("Novo", ["github.com/org/app"],
+            new string('a', CriacaoRemotaV1.TamanhoMaximoDaDefinicao + 1))));
+        Assert.Contains("Cada repositório", RegrasDaCriacaoRemota.Validar(new NovoProjetoRemotoV1("Novo", ["github.com/org/app", " "])));
+    }
+
+    [Fact]
     public void A_resposta_valida_passa_e_a_que_conclui_diz_o_comando()
     {
         Assert.Empty(RegrasDaConversa.Validar(Resposta()));

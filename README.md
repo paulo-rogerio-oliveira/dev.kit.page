@@ -92,10 +92,14 @@ publica os resultados.
 | `Cors:Origens` | (Development: Vite) | As origens da web. |
 | `Provisao:Regioes` · `RegiaoPadrao` · `MaximoDeFilasPorUsuario` · `PlanosQueLiberam` · `PedidosPorHora` | `brazilsouth`, `eastus2` · `brazilsouth` · 1 · — · 20 | A provisão no Azure na API: as regiões, a cota de filas, os planos que liberam sem a permissão do admin (o tier de assinatura) e o limite de pedidos. |
 | `Provisao:Provedor` · `AssinaturaId` · `IdentidadeClientId` (worker) | `azure` · — · — | O worker da provisão: o provedor (`simulado` só fora de Production), a assinatura e o client id da identidade gerenciada — **nenhum segredo**. |
+| `Provisao:Grupo` (worker e API) | — | O grupo de recursos FIXO da provisão, já criado (ex.: `devkit-clients`): a fila e os aplicativos de todos os usuários ficam nele, com as tags de dono. Obrigatório com o provedor `azure` (o worker não sobe sem ele e não cria grupos); vazio só no desenvolvimento (`rg-devkit-u{id}`). |
 | `Remoto:Fila` · `IdentidadeClientId` | `azure` · — | A fila da conversa remota na API: `azure` lê a chave da conta pela identidade gerenciada da API (só `listKeys`); `simulado` só fora de Production — **nenhum segredo** na configuração. |
 | `Remoto:TtlPadraoSegundos` · `TtlMinimoSegundos` · `TtlMaximoSegundos` · `SasMinutos` | 900 · 60 · 86400 · 15 | O TTL do comando (vencido antes da entrega, volta `expirado`) e a validade da SAS de consumo do serviço. |
 | `Remoto:ComandosPorHora` · `EnviosDaConversaPorMinuto` · `RetencaoDaConversaDias` | 30 · 60 · 30 | O limite de comandos por usuário (no SQL, 429 com `Retry-After`), o de escritas por minuto e a retenção do histórico da conversa. |
 | `Remoto:FalasPorMinuto` | 60 | O limite das falas do chat do dev.kit (`POST /api/remoto/conversa/falas`) por usuário, separado das escritas da conversa. |
+| `ProtecaoDeDados:Blob` · `ChaveDoCofre` · `Pasta` · `IdentidadeClientId` | — | O key ring do DataProtection (push e segundo fator): o blob com a identidade da API, protegido pela chave do Key Vault quando houver, ou uma pasta compartilhada. **Obrigatório em Production** (a API não sobe sem o `Blob` ou a `Pasta`). |
+| `Push:ChavePublica` · `ChavePrivada` · `Assunto` | — | O par VAPID do push do board (`dotnet run --project api/src/DevKitPage.Api -- --gerar-chaves-vapid`) e o contato; a privada é **segredo**. |
+| `Jwt:RenovacaoDaMaquinaDias` | 30 | A validade da renovação do login pela máquina (o serviço do dev.kit renova sem o app aberto). |
 | `VITE_SITE_URL` (build da web) | — | A URL pública do site, para o canonical e o Open Graph. |
 
 ## Como verificar cada critério da US #270

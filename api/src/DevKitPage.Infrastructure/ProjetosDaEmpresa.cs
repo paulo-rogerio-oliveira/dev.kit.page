@@ -137,10 +137,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
     private IQueryable<ProjetoCompartilhado> Visiveis(EscopoDoDesign escopo, string? time)
     {
         var doTime = RegrasDoConhecimentoDaEmpresa.NormalizarTime(time);
-        var empresa = escopo.EmpresaId;
-        var eu = escopo.UsuarioId;
         return db.ProjetosCompartilhados.AsNoTracking().Include(p => p.Itens).Include(p => p.Autor).Include(p => p.Acessos)
-            .Where(p => p.DonoId == eu || (empresa != null && p.EmpresaId == empresa && p.Acessos.Any(a => a.UsuarioId == eu)))
+            .Visiveis(escopo)
             .Where(p => p.Nivel != NiveisDeConvencao.Time || doTime == string.Empty || p.Time == doTime);
     }
 

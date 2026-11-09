@@ -46,10 +46,16 @@ public sealed record FluxoNoRetratoV1(
 /// <see cref="Pergunta"/>, <see cref="Opcoes"/> e <see cref="JaTentei"/> —, que as decisões remotas (fase 3 da proposta) mostram
 /// como botões. O <see cref="Id"/> é estável: é por ele que a resposta volta.
 /// </summary>
+/// <param name="Escopo">
+/// (campo novo, correções do board remoto, ajuste 9) O escopo exato da AUTORIZAÇÃO (tipo <see cref="RemotoV1.PendenciaAutorizacao"/>).
+/// Ausente nas outras pendências — e fora do JSON, para o id do snapshot (o resumo da pendência serializada) não mudar.
+/// </param>
 public sealed record PendenciaNoRetratoV1(
     string Id, string Tipo, string Titulo, string? Pergunta = null, IReadOnlyList<string>? Opcoes = null, string? JaTentei = null,
     string? Projeto = null, int? Item = null, string? Fluxo = null, DateTimeOffset? CriadaEm = null,
-    SnapshotDaDecisaoV1? Snapshot = null);
+    SnapshotDaDecisaoV1? Snapshot = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    EscopoDaAutorizacaoV1? Escopo = null);
 
 /// <summary>
 /// A resposta do heartbeat: quando a API o recebeu, de quanto em quanto tempo o próximo é esperado e os
@@ -63,11 +69,13 @@ public sealed record RetratoRecebidoV1(string MaquinaId, DateTimeOffset Recebido
 
 /// <summary>
 /// Uma máquina do usuário, como o site a lista. <see cref="Conectada"/> é o heartbeat recebido há no máximo
-/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API.
+/// <see cref="RemotoV1.SegundosAteDesconectar"/> segundos — pelo relógio da API. <see cref="Vinculada"/> (campo novo, item 9 do
+/// remote-control-v3) é o serviço da máquina com o client credentials ativo: o site oferece o "Desvincular".
 /// </summary>
 public sealed record MaquinaRemotaV1(
     string MaquinaId, string Nome, string VersaoDevKit, string Origem, bool AppAberto, string EstadoDoAgente,
-    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm);
+    bool TurnoEmAndamento, bool Conectada, DateTimeOffset? UltimoHeartbeatEm, DateTimeOffset? RetratoGeradoEm,
+    bool Vinculada = false);
 
 /// <summary>O retrato mais recente de uma máquina do usuário, com a máquina.</summary>
 public sealed record RetratoDaMaquinaV1(MaquinaRemotaV1 Maquina, RetratoV1 Retrato, DateTimeOffset RecebidoEm);
@@ -124,8 +132,14 @@ public static class RemotoV1
     public const string PendenciaAprovacao = "aprovacao";
     public const string PendenciaFalha = "falha";
 
-    /// <summary>Os tipos de pendência.</summary>
-    public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha];
+    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o segundo fator.</summary>
+    public const string PendenciaAutorizacao = "autorizacao";
+
+    /// <summary>Os tipos de pendência (o novo entra no fim; o dev.kit só o publica com <see cref="RecursoDecisoesAutorizar"/>).</summary>
+    public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha, PendenciaAutorizacao];
+
+    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o segundo fator.</summary>
+    public const string RecursoDecisoesAutorizar = "decisoes-autorizar";
 
     public const string SensivelSegredo = "segredo";
     public const string SensivelEmail = "email";
@@ -143,7 +157,29 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot"];
+    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar];
+
+    /// <summary>
+    /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina
+    /// (<c>PUT /api/remoto/catalogo</c>, contrato seção 5): o handshake dos atalhos do chat remoto.
+    /// </summary>
+    public const string RecursoCatalogo = "catalogo-remoto";
+
+    /// <summary>O maior corpo do envio do catálogo.</summary>
+    public const int TamanhoMaximoDoCatalogo = 256 * 1024;
+
+    /// <summary>O máximo de entradas em cada lista do catálogo (o dev.kit corta as excedentes).</summary>
+    public const int MaximoNoCatalogo = 200;
+
+    public const string ParametroTexto = "texto";
+    public const string ParametroLista = "lista";
+    public const string ParametroSimNao = "sim-nao";
+
+    /// <summary>Os tipos de parâmetro de um fluxo do catálogo (<see cref="ParametroDoFluxoV1.Tipo"/>): o campo que o chat mostra.</summary>
+    public static IReadOnlyList<string> TiposDeParametro { get; } = [ParametroTexto, ParametroLista, ParametroSimNao];
+
+    /// <summary>Quantos parâmetros um fluxo do catálogo declara, no máximo.</summary>
+    public const int MaximoDeParametrosDoFluxo = 30;
 
     /// <summary>O <c>codigo</c> do 400 de contrato que esta API não conhece (o ProblemDetails leva <c>contratoAceito</c>).</summary>
     public const string CodigoContratoDesconhecido = "contrato-desconhecido";

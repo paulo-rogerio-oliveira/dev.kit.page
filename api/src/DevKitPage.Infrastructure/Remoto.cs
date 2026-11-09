@@ -9,9 +9,10 @@ namespace DevKitPage.Infrastructure;
 /// <summary>
 /// O controle remoto no banco: uma <see cref="MaquinaRemota"/> por (usuário, máquina). Toda consulta filtra pelo usuário
 /// do token — a máquina de outro usuário não aparece nem com o id certo. O primeiro envio de duas chamadas ao mesmo tempo
-/// é decidido pelo índice único: o perdedor relê e grava por cima.
+/// é decidido pelo índice único: o perdedor relê e grava por cima. A máquina listada diz se o serviço dela tem o vínculo do
+/// client credentials (<see cref="IClientesDaMaquina"/>).
 /// </summary>
-public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
+public sealed class Remoto(DevKitPageDb db, TimeProvider relogio, IClientesDaMaquina clientes) : IRemoto
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -54,7 +55,8 @@ public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
     {
         var agora = relogio.GetUtcNow().UtcDateTime;
         var maquinas = await db.MaquinasRemotas.AsNoTracking().Where(m => m.UsuarioId == usuarioId).ToListAsync(ct);
-        return maquinas.Select(m => Leitura(m, agora))
+        var vinculadas = await clientes.VinculadasAsync(usuarioId, ct);
+        return maquinas.Select(m => Leitura(m, agora, vinculadas))
             .OrderByDescending(m => m.Conectada).ThenByDescending(m => m.UltimoHeartbeatEm).ThenBy(m => m.MaquinaId, StringComparer.Ordinal)
             .ToArray();
     }
@@ -65,7 +67,7 @@ public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
         if (maquina is null || maquina.Retrato.Length == 0 || maquina.RetratoRecebidoEmUtc is not { } recebido)
             return null;
         var retrato = JsonSerializer.Deserialize<RetratoV1>(maquina.Retrato, Json)!;
-        return new RetratoDaMaquinaV1(Leitura(maquina, relogio.GetUtcNow().UtcDateTime), retrato, DevKitPageDb.Utc(recebido));
+        return new RetratoDaMaquinaV1(Leitura(maquina, relogio.GetUtcNow().UtcDateTime, await clientes.VinculadasAsync(usuarioId, ct)), retrato, DevKitPageDb.Utc(recebido));
     }
 
     /// <summary>
@@ -101,19 +103,28 @@ public sealed class Remoto(DevKitPageDb db, TimeProvider relogio) : IRemoto
         }
     }
 
-    private static MaquinaRemotaV1 Leitura(MaquinaRemota m, DateTime agora)
+    private static MaquinaRemotaV1 Leitura(MaquinaRemota m, DateTime agora, IReadOnlySet<string> vinculadas)
         => new(m.MaquinaId, m.Nome, m.VersaoDevKit, m.Origem, m.AppAberto, m.EstadoDoAgente, m.TurnoEmAndamento,
             m.UltimoHeartbeatEmUtc is { } ultimo && (agora - ultimo).TotalSeconds <= RemotoV1.SegundosAteDesconectar,
             m.UltimoHeartbeatEmUtc is { } hb ? DevKitPageDb.Utc(hb) : null,
-            m.RetratoGeradoEmUtc is { } gerado ? DevKitPageDb.Utc(gerado) : null);
+            m.RetratoGeradoEmUtc is { } gerado ? DevKitPageDb.Utc(gerado) : null,
+            vinculadas.Contains(m.MaquinaId));
 }
 
-/// <summary>A retenção do controle remoto (<see cref="OpcoesDoRemoto.RetencaoDias"/>): pelo último contato da máquina.</summary>
+/// <summary>
+/// A retenção do controle remoto (<see cref="OpcoesDoRemoto.RetencaoDias"/>): pelo último contato da máquina, e o catálogo
+/// pelo último recebimento — o da máquina que saiu não fica órfão por mais que o prazo. Os jti das asserções do client
+/// credentials saem quando a asserção vence.
+/// </summary>
 public sealed class ExpurgoDoRemoto(DevKitPageDb db, TimeProvider relogio, IOptions<OpcoesDoRemoto> opcoes) : IExpurgoDoRemoto
 {
-    public Task<int> ExpurgarAsync(CancellationToken ct)
+    public async Task<int> ExpurgarAsync(CancellationToken ct)
     {
-        var corte = relogio.GetUtcNow().UtcDateTime.AddDays(-Math.Max(1, opcoes.Value.RetencaoDias));
-        return db.MaquinasRemotas.Where(m => m.AtualizadaEmUtc < corte).ExecuteDeleteAsync(ct);
+        var agora = relogio.GetUtcNow().UtcDateTime;
+        var corte = agora.AddDays(-Math.Max(1, opcoes.Value.RetencaoDias));
+        await db.CatalogosRemotos.Where(c => c.RecebidoEmUtc < corte).ExecuteDeleteAsync(ct);
+        // Os jti das asserções vencidas não barram mais nada: a asserção já não seria aceita.
+        await db.AssercoesDoCliente.Where(a => a.ExpiraEmUtc < agora).ExecuteDeleteAsync(ct);
+        return await db.MaquinasRemotas.Where(m => m.AtualizadaEmUtc < corte).ExecuteDeleteAsync(ct);
     }
 }

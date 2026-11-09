@@ -1,4 +1,8 @@
+using Azure.Core.Cryptography;
+using Azure.Security.KeyVault.Keys.Cryptography;
 using DevKitPage.Core;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -88,14 +92,38 @@ public static class Composicao
         servicos.AddScoped<IAcessosAosProjetos, AcessosAosProjetos>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
         servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
+        // Os artefatos do projeto (controle-v4, item 2): sem a seção Artefatos, o armazém e a conexão do Blob são os do design.
+        servicos.AddOptions<OpcoesDosArtefatos>().Bind(configuracao.GetSection(OpcoesDosArtefatos.Secao))
+            .PostConfigure<IOptions<OpcoesDoDesign>>((opcoes, design) =>
+            {
+                if (string.IsNullOrWhiteSpace(opcoes.Armazem))
+                    opcoes.Armazem = design.Value.Armazem;
+                if (string.IsNullOrWhiteSpace(opcoes.ConexaoDoBlob))
+                    opcoes.ConexaoDoBlob = design.Value.ConexaoDoBlob;
+            });
+        servicos.TryAddSingleton<IArmazemDeArtefatos>(sp =>
+            string.Equals(sp.GetRequiredService<IOptions<OpcoesDosArtefatos>>().Value.Armazem, OpcoesDoDesign.Blob, StringComparison.OrdinalIgnoreCase)
+                ? new ArmazemDeArtefatosNoBlob(sp.GetRequiredService<IOptions<OpcoesDosArtefatos>>())
+                : ActivatorUtilities.CreateInstance<ArmazemDeArtefatosEmDisco>(sp));
+        servicos.AddScoped<IArtefatosDosProjetos, ArtefatosDosProjetosNoBanco>();
         // O controle remoto, fase 1: o heartbeat e o retrato das máquinas, por usuário.
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();
         servicos.AddScoped<IExpurgoDoRemoto, ExpurgoDoRemoto>();
+        // O handshake do chat remoto: o último catálogo de cada máquina.
+        servicos.AddScoped<ICatalogoRemoto, CatalogosDoRemoto>();
+        // O client credentials da máquina (remote-control-v3 item 9): o vínculo, os jti gastos e a revogação.
+        servicos.Configure<OpcoesDoClienteDaMaquina>(configuracao.GetSection(OpcoesDoClienteDaMaquina.Secao));
+        servicos.AddScoped<IClientesDaMaquina, ClientesDaMaquina>();
         // A conversa e os comandos remotos (fase 2): o SQL, a fila do usuário e o aviso do SSE. A fila do Azure lê a chave da
         // conta com a identidade gerenciada da API; a simulada é de desenvolvimento (a API não sobe com ela em Production).
         servicos.AddScoped<IConversaRemota, ConversaRemota>();
-        servicos.AddDataProtection();
+        // O key ring persistido e compartilhado (o blob com a identidade da API, protegido pelo Key Vault quando houver): a
+        // escolha sai das opções na criação, e o KeyRing.Validar recusa Production sem ele.
+        servicos.Configure<OpcoesDaProtecaoDeDados>(configuracao.GetSection(OpcoesDaProtecaoDeDados.Secao));
+        servicos.AddDataProtection().SetApplicationName(OpcoesDaProtecaoDeDados.NomeDaAplicacao);
+        servicos.AddSingleton<IConfigureOptions<KeyManagementOptions>, ConfiguracaoDoKeyRing>();
+        servicos.TryAddSingleton<IKeyEncryptionKeyResolver>(sp => new KeyResolver(KeyRing.Credencial(sp)));
         servicos.AddScoped<ISegundoFator, SegundoFator>();
         servicos.AddScoped<IDecisoesRemotas, DecisoesRemotas>();
         servicos.Configure<OpcoesDoPush>(configuracao.GetSection(OpcoesDoPush.Secao));
