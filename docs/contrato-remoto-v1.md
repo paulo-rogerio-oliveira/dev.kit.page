@@ -266,6 +266,31 @@ As da seção "Recusas dos envios" (400, 401, 413 acima de 32 KB, 415, 422) e:
 | **429** | `limite-de-envio`: mais de `Remoto:ComandosPorHora` (30) comandos na última hora, contados no SQL (vale entre instâncias), com `Retry-After`. Cada mensagem pode abrir um turno do agente. As escritas da conversa também têm `Remoto:EnviosDaConversaPorMinuto` (60), separado do heartbeat. As falas têm o seu, `Remoto:FalasPorMinuto` (60), com `Retry-After`: o espelho do chat não tira a vez do comando nem da resposta. |
 | **503** | `fila-indisponivel`: a fila não aceitou, ou a SAS não pôde ser assinada. |
 
+### 4.4 Conversa com o agente de uma task (semana 7, 09/11/2026)
+
+O dev conversa pelo site e pelo celular com o agente de UMA task, e não só com o Orquestrador. Tudo é campo novo e opcional
+(regra #2): sem ele, nada muda para o dev.kit nem para o site antigos.
+
+- **Recurso** `conversa-da-task`, no fim de `recursos` do heartbeat. Só com ele o dev.kit marca a execução conversável e
+  publica as falas da task.
+- **Retrato:** `fluxos[].conversavel` (bool, opcional). Verdadeiro, a task daquela execução aceita a conversa, e o id dela é
+  o `fluxos[].id` opaco (`exec-…`). O site só abre o chat da task com `conversavel: true`, então o dev.kit antigo nunca
+  recebe mensagem com destino.
+- **Falas da task:** o `POST /api/remoto/conversa/falas` leva `sessao` (o `fluxos[].id`) e, para o agente, `autor: "agente"`
+  (o novo entra no fim de `AutoresDaFala`). A fala do agente sem `sessao` é 400, e a do Orquestrador com `sessao` também. A
+  mesma fala reenviada com outra `sessao` é 409 `id-em-uso`.
+- **Mensagem à task:** o `POST /api/remoto/comandos` aceita `sessao` só em `tipo: mensagem` e sem `fluxo`, `agente` nem
+  `parametros`, porque a conversa da task é só texto. Aprovar, enviar e fazer merge seguem pelas decisões, e o texto nunca
+  aprova. A `MensagemDaFilaV1` leva o `sessao`. O dev.kit acha a task pelo id da execução e entrega o texto na conversa dela
+  como mensagem do desenvolvedor. O destino fica no `Contexto` do comando, sem coluna própria, e volta em `comandos[].sessao`.
+- **Leitura:** `GET /api/remoto/maquinas/{maquina}/sessoes/{sessao}/conversa` devolve o mesmo `ConversaDaMaquinaV1`, só com a
+  task: as últimas 50 falas, as mensagens com esse destino e as respostas a elas. A `sessao` segue a regra do id (letras,
+  dígitos e hífen, até 64); fora dela, 404. O `GET /maquinas/{maquina}/conversa` deixa de trazer a conversa das tasks, então
+  o chat do Orquestrador não mistura. O SSE é o mesmo da máquina, e cada evento traz `fala.sessao` e `comando.sessao`, pelos
+  quais o site separa as conversas.
+- **No Azure SQL:** a coluna `FalasRemotas.Sessao` e o índice dela vêm de `api/scripts/sqlserver/ConversaDaTask.sql`, que
+  deve rodar antes de publicar a API.
+
 ## 5. Catálogo do chat — o handshake (remote-control-v3)
 
 Os atalhos do chat do Board (`/` fluxo, projeto ou design · `#` work item · `@` repositório) mostram o que o dev.kit da

@@ -37,6 +37,63 @@ function responder(lista = [maquina()]) {
   );
 }
 
+describe('Board remoto · conversa da task (semana 7, item 4)', () => {
+  const comTask = (m = maquina()): RetratoDaMaquina => {
+    const r = retrato(m);
+    return { ...r, retrato: { ...r.retrato!, fluxos: [
+      { id: 'exec-7a1', nome: 'Item 4 · chat da task', etapa: 'Implementação', situacao: 'rodando', agente: 'claude', conversavel: true },
+      { id: 'exec-antiga', nome: 'Execução do dev.kit antigo', etapa: 'Avaliação', situacao: 'rodando' },
+    ] } };
+  };
+
+  it('a task conversável abre o chat DELA com as últimas falas, e a mensagem vai só como texto com o destino', async () => {
+    responder();
+    let enviado: Record<string, unknown> | undefined;
+    const agora = Date.now();
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => HttpResponse.json(comTask(maquina(String(params.id))))),
+      http.get(`${API}/api/remoto/maquinas/:id/sessoes/:sessao/conversa`, ({ params }) => HttpResponse.json({
+        comandos: [], respostas: [], ultimoEvento: 0, falas: params.sessao !== 'exec-7a1' ? [] : [
+          { id: 'ft-1', maquinaId: 'notebook', autor: 'dev', origem: 'desktop', texto: 'Comece pelo contrato da API.', comandoId: null, ditaEm: new Date(agora - 120_000).toISOString(), recebidaEm: new Date().toISOString(), sessao: 'exec-7a1' },
+          { id: 'ft-2', maquinaId: 'notebook', autor: 'agente', origem: 'desktop', texto: 'Contrato feito; rodando os testes da API.', comandoId: null, ditaEm: new Date(agora - 60_000).toISOString(), recebidaEm: new Date().toISOString(), sessao: 'exec-7a1' },
+        ],
+      })),
+      http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+        enviado = await request.json() as Record<string, unknown>;
+        return HttpResponse.json({ id: enviado.id, maquinaId: 'notebook', tipo: 'mensagem', texto: enviado.texto, dispositivo: 'navegador', estado: 'na-fila',
+          criadoEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 600_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '', sessao: 'exec-7a1' }, { status: 202 });
+      }),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    // A execução do dev.kit antigo não abre conversa: fica como antes, só informativa.
+    expect(await board.findByText('Execução do dev.kit antigo')).toBeInTheDocument();
+    expect(board.queryByRole('button', { name: 'Conversar com a task Execução do dev.kit antigo' })).not.toBeInTheDocument();
+
+    await userEvent.click(board.getByRole('button', { name: 'Conversar com a task Item 4 · chat da task' }));
+    const chat = within(await screen.findByRole('region', { name: 'Conversa da task Item 4 · chat da task' }));
+    expect(chat.getByText('Agente da task · Implementação · claude')).toBeInTheDocument();
+    const log = within(chat.getByRole('log', { name: 'Mensagens da task Item 4 · chat da task' }));
+    expect(await log.findByText('Contrato feito; rodando os testes da API.')).toBeInTheDocument();
+    expect(log.getByText(/^Agente · no dev.kit/)).toBeInTheDocument();
+    expect(log.getByText(/^Você · no dev.kit/)).toBeInTheDocument();
+    // O chat do Orquestrador sai de cena enquanto a task está aberta.
+    expect(screen.queryByRole('region', { name: 'Orquestrador' })).not.toBeInTheDocument();
+
+    await userEvent.type(chat.getByLabelText('Mensagem à task'), 'Rode só os testes do Board.');
+    await userEvent.click(chat.getByRole('button', { name: 'Enviar à task' }));
+    await waitFor(() => expect(enviado).toMatchObject({ maquinaId: 'notebook', tipo: 'mensagem', texto: 'Rode só os testes do Board.', sessao: 'exec-7a1' }));
+    // Só texto: nada de fluxo, agente ou parâmetro na mensagem à task.
+    expect(enviado).not.toHaveProperty('fluxo');
+    expect(enviado).not.toHaveProperty('parametros');
+    expect(await log.findByText('Rode só os testes do Board.')).toBeInTheDocument();
+    expect(log.getByText('aguardando o dev.kit')).toBeInTheDocument();
+
+    await userEvent.click(chat.getByRole('button', { name: '‹ Orquestrador' }));
+    expect(await screen.findByRole('region', { name: 'Orquestrador' })).toBeInTheDocument();
+  });
+});
+
 describe('Board remoto', () => {
   it('preserva a notificação após login e recusa destino externo', () => {
     expect(destinoDa(tokenDoDev(), '/board?notificacao=' + 'a'.repeat(32))).toBe('/board?notificacao=' + 'a'.repeat(32));

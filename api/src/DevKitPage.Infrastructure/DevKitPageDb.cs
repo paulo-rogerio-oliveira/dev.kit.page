@@ -755,10 +755,14 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(f => f.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
             // (correções do board remoto) As imagens da fala; no Azure SQL a coluna vem de api/scripts/sqlserver/BoardRemoto.sql.
             e.Property(f => f.Anexos).HasDefaultValue("");
+            // (semana 7) A task da fala; no Azure SQL a coluna e o índice vêm de api/scripts/sqlserver/ConversaDaTask.sql.
+            e.Property(f => f.Sessao).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId).HasDefaultValue("");
             // O reenvio do dev.kit não duplica a fala.
             e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.FalaId }).IsUnique();
             // O histórico por máquina, na ordem em que foram ditas.
             e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.DitaEmUtc });
+            // A conversa de uma task, na mesma ordem.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.Sessao, f.DitaEmUtc });
             e.HasIndex(f => f.RecebidaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(f => f.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });

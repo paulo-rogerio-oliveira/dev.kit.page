@@ -122,6 +122,7 @@ BEGIN
         [DitaEmUtc] datetime2 NOT NULL,
         [RecebidaEmUtc] datetime2 NOT NULL,
         [Anexos] nvarchar(max) NOT NULL DEFAULT N'',
+        [Sessao] nvarchar(64) NOT NULL DEFAULT N'',
         CONSTRAINT [PK_FalasRemotas] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_FalasRemotas_Usuarios_UsuarioId] FOREIGN KEY ([UsuarioId]) REFERENCES [dbo].[Usuarios] ([Id]) ON DELETE CASCADE
     );
