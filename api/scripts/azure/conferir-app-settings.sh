@@ -162,6 +162,43 @@ faixa ClienteDaMaquina__ValidadeDoTokenMinutos 1 60
 faixa ClienteDaMaquina__ValidadeMaximaDaAssercaoSegundos 30 600
 faixa ClienteDaMaquina__ToleranciaDoRelogioSegundos 0 300
 
+# Os artefatos do projeto (controle-v4, item 2; OpcoesDosArtefatos): a seção Artefatos é opcional e herda do design o armazém
+# e a conexão do Blob. A API sobe sem ela; o que quebra é o POST /api/projetos/{id}/artefatos.
+ARMAZEM_ARTEFATOS="Artefatos__Armazem"
+tem "$ARMAZEM_ARTEFATOS" || ARMAZEM_ARTEFATOS="Design__Armazem"
+case "$(minusculo "$(valor "$ARMAZEM_ARTEFATOS")")" in
+  blob)
+    ok "$ARMAZEM_ARTEFATOS (blob, o dos artefatos)"
+    CONEXAO_ARTEFATOS="Artefatos__ConexaoDoBlob"
+    tem "$CONEXAO_ARTEFATOS" || CONEXAO_ARTEFATOS="Design__ConexaoDoBlob"
+    if ! tem "$CONEXAO_ARTEFATOS"; then
+      falta "Artefatos__ConexaoDoBlob | Design__ConexaoDoBlob" "com o armazém blob, sem a conexão o envio do artefato (e o do design) responde 500"
+    elif ! do_cofre "$CONEXAO_ARTEFATOS" && [[ "$(valor "$CONEXAO_ARTEFATOS")" != *AccountKey=* ]]; then
+      # O link de download é uma SAS de serviço, assinada com a chave da conta (ArmazemDeArtefatosNoBlob.Link).
+      falta "$CONEXAO_ARTEFATOS" "sem a AccountKey a API não assina o link de download do artefato: o envio responde 500"
+    else ok "$CONEXAO_ARTEFATOS (a dos artefatos)"; fi
+    ;;
+  ""|disco)
+    # No disco, a pasta padrão (dados/artefatos) cai em wwwroot, somente leitura no deploy por pacote; /home é persistente.
+    case "$(valor Artefatos__Pasta)" in
+      /*|[A-Za-z]:[\\/]*) ok "Artefatos__Pasta (armazém em disco)" ;;
+      *) aviso "$ARMAZEM_ARTEFATOS" "o zip do artefato vai para o disco da API, em wwwroot (somente leitura no deploy por pacote): use Design__Armazem=blob ou um Artefatos__Pasta em /home" ;;
+    esac
+    ;;
+  *) falta "$ARMAZEM_ARTEFATOS" "é blob ou disco: outro valor manda o zip do artefato para o disco sem aviso" ;;
+esac
+# Os números da seção: inteiros (outro texto faz as rotas dos artefatos responderem 500 ao ler a configuração); abaixo de 1,
+# a API usa 1.
+for nome in Artefatos__TamanhoMaximoMb Artefatos__RetencaoDias Artefatos__LinkHoras Artefatos__MaximoPorProjeto; do
+  tem "$nome" || continue
+  if do_cofre "$nome"; then ok "$nome"; continue; fi
+  v=$(valor "$nome")
+  if ! [[ "$v" =~ ^-?[0-9]{1,18}$ ]] || [ "$v" -gt 2147483647 ] || [ "$v" -lt -2147483648 ]; then
+    falta "$nome" "é um número inteiro: outro texto faz as rotas dos artefatos responderem 500"
+  elif [ "$v" -lt 1 ]; then aviso "$nome" "abaixo de 1: a API usa 1"
+  else ok "$nome"; fi
+done
+
 # O que só degrada um recurso: avisa, sem segurar o deploy.
 case "$(valor ASPNETCORE_ENVIRONMENT)" in
   ""|Production) ;;

@@ -105,6 +105,22 @@
 .board-remoto .br-novo {min-height:28px; padding:3px 10px; border-color:var(--accent); color:var(--accent)}
 .board-remoto .br-abrir {display:block; color:inherit; text-decoration:none}
 .board-remoto .br-abrir:hover, .board-remoto .br-abrir:focus-visible {border-color:var(--accent)}
+/* Item 2 do controle-v4: o card do projeto gera artefato e mostra os últimos links (pacote .NET e preview), nunca produção. */
+.br-proj-card {display:flex; flex-direction:column; gap:8px}
+.br-proj-card:has(.br-abrir:hover), .br-proj-card:has(.br-abrir:focus-visible) {border-color:var(--accent)}
+.board-remoto .br-proj-card .br-proj {border:0; padding:0; background:none}
+.br-artefatos {display:flex; flex-direction:column; gap:2px; border-top:1px solid var(--line); padding-top:8px}
+.br-artefatos-titulo {display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px}
+.br-artefatos-titulo span {font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px}
+.board-remoto .br-gerar {min-height:26px; padding:2px 10px; border-color:var(--accent); color:var(--accent); font-size:12px}
+.br-artefato {display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:6px; row-gap:1px; align-items:center; padding:4px 6px; margin:0 -6px;
+  border-radius:6px; color:var(--ink); font-size:12px; text-decoration:none}
+.br-artefato:hover, .br-artefato:focus-visible {background:var(--tint)}
+.br-artefato span:nth-child(2) {overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+.br-artefato small {grid-column:2; color:var(--muted); font-size:11.5px}
+.br-artefato small b {color:var(--accent); font-weight:600}
+.br-chip.br-chip-preview {background:color-mix(in srgb, var(--ok) 12%, var(--surface)); color:var(--ok)}
+.br-artefatos-aviso {margin:2px 0 0; color:var(--muted); font-size:11.5px; line-height:1.4}
 .br-design b {display:flex; justify-content:space-between; gap:8px}
 .br-design b span {font-weight:400; color:var(--muted); font-size:12px; flex:none}
 .br-design small {color:var(--muted)}

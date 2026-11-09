@@ -142,6 +142,9 @@ public sealed class ConversaTests
         Assert.Contains("BoardRemoto.sql", EsquemaDoBanco.ScriptsQueTrazem("ComandosRemotos", "Contexto"));
         Assert.Contains("BoardRemoto.sql", EsquemaDoBanco.ScriptsQueTrazem("FalasRemotas", "Anexos"));
         Assert.Equal(["BoardRemoto.sql"], EsquemaDoBanco.ScriptsQueTrazem("PendenciasDispensadas", null));
+        // (controle-v4, item 3) O dispositivo da decisão, opcional: a coluna nula vem do mesmo script, depois do Decisoes.sql.
+        Assert.Contains("ALTER TABLE [dbo].[RespostasDasDecisoes] ADD [Dispositivo] nvarchar(20) NULL", script);
+        Assert.Equal(["BoardRemoto.sql"], EsquemaDoBanco.ScriptsQueTrazem("RespostasDasDecisoes", "Dispositivo"));
     }
 
     [Fact]

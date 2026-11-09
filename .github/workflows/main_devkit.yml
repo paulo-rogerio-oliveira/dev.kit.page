@@ -11,7 +11,7 @@ on:
     inputs:
       aplicar_sql:
         # Desligado por padrão: os scripts são idempotentes, mas mexem na base de produção (docs/publicacao-azure.md).
-        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push, CatalogoRemoto, ClienteDaMaquina, BoardRemoto) antes do deploy'
+        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push, CatalogoRemoto, ClienteDaMaquina, BoardRemoto, ArtefatosDosProjetos) antes do deploy'
         type: boolean
         default: false
 
@@ -159,6 +159,13 @@ jobs:
         with:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
           path: api/scripts/sqlserver/BoardRemoto.sql
+
+      # Os artefatos do projeto (controle-v4, item 2): o zip do pacote .NET e a URL do preview (sugestão de impacto #32).
+      - name: ArtefatosDosProjetos.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ArtefatosDosProjetos.sql
 
   deploy:
     runs-on: ubuntu-latest

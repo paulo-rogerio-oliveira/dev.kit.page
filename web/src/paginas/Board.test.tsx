@@ -136,7 +136,7 @@ describe('Board remoto', () => {
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
     await userEvent.click(await board.findByRole('button', { name: 'Ver detalhes' }));
     await userEvent.click(board.getByRole('button', { name: 'Aguardar' }));
-    expect(recebido).toEqual({ snapshotId: 'a'.repeat(64), acao: 'responder', opcao: 'Aguardar' });
+    expect(recebido).toEqual({ snapshotId: 'a'.repeat(64), acao: 'responder', opcao: 'Aguardar', dispositivo: 'navegador' });
     expect(await board.findByRole('status')).toHaveTextContent('Resposta: Aguardar registrada');
     expect(board.queryByRole('button', { name: 'Aguardar' })).not.toBeInTheDocument();
   });
@@ -241,7 +241,32 @@ describe('Board remoto', () => {
     expect(recebido).toBeUndefined();
     await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
     await userEvent.click(confirmar);
-    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'autorizar', codigo: '123456' }));
+    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'autorizar', codigo: '123456', dispositivo: 'navegador' }));
+  });
+
+  it('arquivar as tasks pedidas pelo Orquestrador mostra a lista e a decisão no celular leva o dispositivo', async () => {
+    responder();
+    const celular = vi.spyOn(window, 'matchMedia').mockImplementation(consulta => ({ matches: consulta === '(max-width:700px)', addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList);
+    onTestFinished(() => celular.mockRestore());
+    let recebido: unknown;
+    const escopo = { ato: 'arquivar-tasks', alvo: 'Orquestrador', itens: ['#901', '#902'], comando: 'devcli sessao --acao arquivar --alvo #901,#902 --aplicar' };
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'autorizacao', titulo: 'Arquivar 2 task(s) pedidas pelo Orquestrador', escopo }, snapshotId: 'd'.repeat(64), bloqueio: null, resposta: null }])),
+      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 3, acao: 'autorizar', em: new Date().toISOString(), segundoFator: true, estado: 'registrada', dispositivo: 'celular' }); }),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Autorizar' }));
+    const escopoNaTela = within(await screen.findByLabelText('Escopo da autorização'));
+    expect(escopoNaTela.getByText('Arquivar as tasks')).toBeInTheDocument();
+    expect(escopoNaTela.getByText('#901, #902')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Autorizar com segundo fator' }));
+    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '654321');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar e autorizar' }));
+    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'd'.repeat(64), acao: 'autorizar', codigo: '654321', dispositivo: 'celular' }));
+    // O registro aparece no cartão e na revisão: os dois dizem o dispositivo.
+    expect(await screen.findAllByText(/segundo fator confirmado · pelo celular/)).not.toHaveLength(0);
   });
 
   it('revisa evidências e exige seis dígitos antes de confirmar o SHA', async () => {
@@ -272,7 +297,7 @@ describe('Board remoto', () => {
     await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
     expect(confirmar).toBeEnabled();
     await userEvent.click(confirmar);
-    expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', codigo: '123456' });
+    expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', codigo: '123456', dispositivo: 'navegador' });
     expect(await screen.findByRole('status')).toHaveTextContent('segundo fator confirmado');
   });
 
@@ -288,7 +313,7 @@ describe('Board remoto', () => {
     await userEvent.click(await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' }));
     expect(screen.getByRole('button', { name: 'Aprovar com segundo fator' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Pedir ajuste' }));
-    expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'ajuste' });
+    expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'ajuste', dispositivo: 'navegador' });
     expect(await screen.findByRole('status')).toHaveTextContent('Pedido de ajuste registrada');
     expect(screen.getByRole('status')).toHaveTextContent('Nenhum ato foi autorizado.');
     expect(screen.queryByLabelText('Código de 6 dígitos')).not.toBeInTheDocument();
@@ -599,6 +624,46 @@ describe('Board remoto', () => {
       expect(painel.getAllByRole('link', { name: 'Ver todos' }).map(l => l.getAttribute('href'))).toEqual(['/projetos', '/design']);
       expect(painel.getByText('2 telas')).toBeInTheDocument();
     });
+
+    it('o card do projeto pede o artefato pela fila com a ação e, no desfecho, mostra os últimos links (item 2 do controle-v4)', async () => {
+      responder();
+      const artefato = (id: number, tipo: 'pacote' | 'preview') => ({
+        id, projetoId: 11, tipo, sha: '3f9c2a1b4d', autor: 'Ana', criadoEm: new Date().toISOString(),
+        repositorio: tipo === 'pacote' ? 'https://github.com/acme/app-desktop.git' : 'https://github.com/acme/portal-web',
+        link: tipo === 'pacote' ? 'https://conta.blob.core.windows.net/artefatos/projetos/11/a.zip?sv=2025-01-05&se=amanha&sp=r&sig=assinatura' : 'https://portal-projeto.eastus2.azurestaticapps.net',
+        expiraEm: tipo === 'pacote' ? new Date(Date.now() + 23.5 * 3_600_000).toISOString() : null,
+        hash: tipo === 'pacote' ? 'ab'.repeat(32) : '', tamanho: tipo === 'pacote' ? 43_200_000 : 0, ambiente: tipo === 'preview' ? 'projeto' : '',
+      });
+      let leituras = 0;
+      servidor.use(http.get(`${API}/api/projetos/artefatos`, () => {
+        leituras++;
+        return HttpResponse.json(leituras === 1 ? [] : [{ projetoId: 11, slug: 'projeto', nome: 'Projeto de demonstração', artefatos: [artefato(2, 'preview'), artefato(1, 'pacote')] }]);
+      }));
+      const enviados = comFila(() => ({ estado: 'concluido', texto: 'Artefato nº 7 pedido ao executor do dev.kit: pacote .NET de app-desktop no 3f9c2a1.' }));
+      renderizar('/board', tokenDoDev());
+      const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
+      const card = within(await painel.findByRole('group', { name: 'Artefatos de Projeto de demonstração' }));
+      expect(card.getByText(/Nenhum artefato ainda/)).toBeInTheDocument();
+
+      await userEvent.click(card.getByRole('button', { name: 'Gerar artefato' }));
+      const pedido = unico(enviados);
+      // O mesmo comando projeto, com a ação no texto: o site não gera nada, quem gera é o dev.kit da máquina.
+      expect(pedido.tipo).toBe('projeto');
+      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto' });
+      const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Gerar artefato'), { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent('Artefato nº 7 pedido ao executor'), { timeout: 6000 });
+
+      // O desfecho relê os links: o pacote baixa pelo link assinado com prazo, e o preview abre a URL do ambiente.
+      const baixar = await card.findByRole('link', { name: 'Baixar o pacote de app-desktop · 3f9c2a1' }, { timeout: 6000 });
+      expect(baixar.getAttribute('href')).toContain('sig=');
+      expect(baixar).toHaveTextContent('41,2 MB · expira em 23 h');
+      expect(card.getByRole('link', { name: 'Abrir o preview de portal-web · 3f9c2a1' })).toHaveAttribute('href', 'https://portal-projeto.eastus2.azurestaticapps.net');
+      expect(card.getByText('Artefatos · 2')).toBeInTheDocument();
+      expect(card.getByText(/nunca produção/)).toBeInTheDocument();
+      // O card continua abrindo o projeto.
+      expect(painel.getByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto');
+    }, 15_000);
 
     it('cria o projeto pelo formulário com os repositórios do catálogo e mostra o desfecho do dev.kit, sem aprovar nem disparar', async () => {
       responder();

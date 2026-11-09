@@ -326,6 +326,14 @@ caminho do `devcli` e responde `concluido` (com o slug ou o projeto de design) o
   no envio (413).
 - **Compatibilidade:** o dev.kit antigo não conhece `projeto` nem `design` e os recusa (`recusado`, "não é conhecido por esta
   versão do dev.kit"); a API antiga recusa o tipo com **400**. O site mostra as duas recusas no formulário.
+- **Ação no projeto (controle-v4, item 2):** o `texto` do `projeto` com a propriedade `acao` é uma AÇÃO num projeto que
+  já existe, e não a criação: `{ "acao": "artefato", "projeto": slug, "repositorio"?, "sha"? }`
+  (`AcaoNoProjetoRemotoV1`). O dev.kit a executa como `devcli projeto --projeto <slug> --artefato --aplicar` — enfileira a
+  geração no executor delegado (pacote .NET ou preview da página estática, nunca produção) e responde `concluido` com o
+  número do artefato, ou `recusado` com o motivo (o leitor do projeto, o projeto que não existe). Sem `repositorio`, o
+  primeiro do projeto; sem `sha`, o HEAD do branch do projeto. O link chega ao site pelo `POST /api/projetos/{id}/artefatos`
+  da máquina, e o card do Board o lê em `GET /api/projetos/artefatos`. O dev.kit antigo lê o texto como um Novo projeto sem
+  nome e recusa com o motivo, sem criar nada; a API antiga recusa a ação com **400** (o formulário sem nome).
 
 ### 5.2 Correções do board remoto (07/11/2026)
 
@@ -339,6 +347,7 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
 | `DesignNoCatalogoV1` | `miniatura` | O link da última versão enviada (`/api/design/...`): a miniatura do card de Design do painel. |
 | `FalaDoDevKitV1` / `FalaRemotaV1` | `anexos` (`titulo`, `url`?, `aviso`?) | As imagens da fala: o dev.kit traduz o `[GITKIT:DESIGN]`/`[GITKIT:IMAGEM]` no link estável da versão ANTES de sanitizar. Sem link (o teto do plano, o envio pendente), vai o `aviso`. Até 10. O site mostra a miniatura e abre o modal. |
 | `DecisaoPendenteV1` | `dispensada` | O card fechado no site. |
+| `ResponderDecisaoV1` e `RespostaDaDecisaoV1` | `dispositivo` (`celular` ou `navegador`) | (controle-v4, item 3) De onde o dev decidiu. O site o manda no `POST .../decisoes/{pendencia}`; fora da lista é **400**, sem gravar. A resposta, a caixa de saída (`GET .../decisoes/respostas`) e o consumo único (`.../recebida`) o devolvem, e o dev.kit o leva à auditoria ("pelo celular"). Sem ele (o site antigo, a decisão gravada antes), vai nulo. |
 
 - **Dispensar** (`POST .../decisoes/{pendencia}` com `{ "acao": "dispensar" }` ou `"restaurar"`): só no site, por usuário,
   máquina e pendência; não vai à máquina e não decide nada. `GET .../decisoes` deixa as dispensadas de fora (o push também);
@@ -353,10 +362,14 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
   com o `escopo` exato (`ato` = `concluir-projeto`, `integrar-item`, `arquivar-tasks` ou `executar-comando`; `alvo`, `sha`?,
   `itens`?, `comando`?). O site responde `acao: "autorizar"` com o código TOTP — o mesmo segundo fator e a mesma auditoria do
   `aprovar` —, ou `ajuste` para recusar. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
-  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez) e
-  `concluir-projeto` (em fechamento, sem o fechamento confirmado); `integrar-item` segue pelo `aprovar` do snapshot.
-- **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto` e `FalasRemotas.Anexos` vêm de
-  `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
+  chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez),
+  `concluir-projeto` (em fechamento, sem o fechamento confirmado) e (controle-v4, item 3) `arquivar-tasks`: o pedido do
+  Orquestrador `devcli sessao --acao arquivar --alvo a,b --aplicar`, pendente na sessão dele, vira o cartão com `alvo` =
+  `Orquestrador`, `itens` = as tasks e `comando` = o pedido exato; autorizado, o dev.kit arquiva pelo mesmo caminho do
+  Arquivar do card (nenhuma pasta é apagada), com a origem site, a decisão, o dispositivo e o horário na conversa de cada task.
+  `integrar-item` segue pelo `aprovar` do snapshot.
+- **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto`, `FalasRemotas.Anexos` e
+  `RespostasDasDecisoes.Dispositivo` vêm de `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
 
 ## Retenção
 

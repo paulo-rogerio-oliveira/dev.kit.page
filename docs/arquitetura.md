@@ -589,6 +589,18 @@ branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina d
   O painel React `AcessoAoProjeto` atende às duas telas; `AcessoAoDesign` mantém a entrada do design.
 - Tabelas novas pela migration `Us693ProjetosCompartilhados` e, no Azure SQL, pelo script `api/scripts/sqlserver/Us693.sql`
   — publicados ANTES do pacote do dev.kit que chama a rota (o cliente trata o 404 da API antiga).
+- **Artefatos (controle-v4, item 2):** `ArtefatoDoProjeto` guarda o que o "Gerar artefato" do dev.kit produziu — o zip do
+  pacote .NET no armazém (`IArmazemDeArtefatos`: o Blob em produção, a pasta em desenvolvimento) ou a URL do preview do
+  Static Web App. `POST /api/projetos/{id}/artefatos` recebe o zip (multipart, campo `arquivo`, com `repositorio`, `sha` e
+  `hash`) ou o preview (JSON `PreviewDoProjetoV1`): 201 com o `ArtefatoV1` e o link; 413 acima de
+  `Artefatos:TamanhoMaximoMb`; 400 com o SHA-256 que não confere, a URL que não é HTTPS ou leva usuário/consulta, e o
+  ambiente `production`; 403 para o leitor; 404 sem acesso. `GET /api/projetos/{id}/artefatos` lista os vigentes e
+  `GET /api/projetos/artefatos` dá os 3 últimos de cada projeto visível ao card do Board. O link do pacote é uma SAS de
+  leitura do blob (só HTTPS, com prazo de `Artefatos:LinkHoras`, nunca além da retenção) gerada a cada leitura; no disco, a
+  rota anônima `GET /api/artefatos/download/{token}` com o token cifrado pelo DataProtection e com prazo. A retenção
+  (`RetencaoDias`, `MaximoPorProjeto`) roda a cada registro e apaga o zip que sai. A visibilidade é a mesma consulta do
+  projeto (`ConsultaDosProjetos.Visiveis`). Tabela pela migration `ArtefatosDosProjetos` e pelo script
+  `api/scripts/sqlserver/ArtefatosDosProjetos.sql` (o passo 9 do job `sql`).
 
 ### O admin útil: painel de utilidade, licença, empresa e editor de artefato (US #687)
 

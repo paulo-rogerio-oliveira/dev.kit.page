@@ -165,6 +165,81 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         Assert.True(saida == 0, texto);
     }
 
+    [Theory]
+    [InlineData("Design__Armazem", null, "Artefatos__ConexaoDoBlob | Design__ConexaoDoBlob")]
+    [InlineData("Design__Armazem", "BlobEndpoint=https://ficticia.blob.core.windows.net;SharedAccessSignature=sv=ficticia", "Design__ConexaoDoBlob")]
+    [InlineData("Artefatos__Armazem", "DefaultEndpointsProtocol=https;AccountName=ficticia;EndpointSuffix=core.windows.net", "Design__ConexaoDoBlob")]
+    public async Task O_armazem_blob_dos_artefatos_sem_conexao_ou_sem_a_chave_da_conta_segura_o_deploy(string armazem, string? conexao, string falta)
+    {
+        var (saida, texto) = await ConferirAsync(Com(s =>
+        {
+            s[armazem] = "Blob";
+            if (conexao is not null)
+                s["Design__ConexaoDoBlob"] = conexao;
+        }));
+
+        Assert.Equal(1, saida);
+        Assert.Equal([falta], Faltas(texto).Select(l => l[7..l.IndexOf(':')]));
+        if (conexao is not null)
+            Assert.DoesNotContain(conexao, texto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_conexao_propria_dos_artefatos_com_a_chave_da_conta_passa_sem_aviso_dos_artefatos()
+    {
+        const string conexao = "DefaultEndpointsProtocol=https;AccountName=ficticia;AccountKey=Y2hhdmUtZmljdGljaWE=;EndpointSuffix=core.windows.net";
+        var (saida, texto) = await ConferirAsync(Com(s =>
+        {
+            s["Design__Armazem"] = "blob";
+            s["Design__ConexaoDoBlob"] = "@Microsoft.KeyVault(SecretUri=https://cofre.vault.azure.net/secrets/design-blob/)";
+            s["Artefatos__ConexaoDoBlob"] = conexao;
+            s["Artefatos__TamanhoMaximoMb"] = "25";
+        }));
+
+        Assert.True(saida == 0, texto);
+        Assert.Contains("ok     Artefatos__ConexaoDoBlob (a dos artefatos)", texto, StringComparison.Ordinal);
+        Assert.Contains("ok     Artefatos__TamanhoMaximoMb", texto, StringComparison.Ordinal);
+        Assert.DoesNotContain("aviso  Artefatos__", texto, StringComparison.Ordinal);
+        Assert.DoesNotContain(conexao, texto, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task O_armazem_desconhecido_dos_artefatos_segura_o_deploy_e_o_disco_em_wwwroot_so_avisa()
+    {
+        var (desconhecido, textoDesconhecido) = await ConferirAsync(Com(s => s["Artefatos__Armazem"] = "azure"));
+        var (padrao, textoPadrao) = await ConferirAsync(Completas);
+        var (emHome, textoEmHome) = await ConferirAsync(Com(s =>
+        {
+            s["Artefatos__Armazem"] = "disco";
+            s["Artefatos__Pasta"] = "/home/dados/artefatos";
+        }));
+
+        Assert.Equal(1, desconhecido);
+        Assert.Equal(["Artefatos__Armazem"], Faltas(textoDesconhecido).Select(l => l[7..l.IndexOf(':')]));
+        Assert.True(padrao == 0, textoPadrao);
+        Assert.Contains("aviso  Design__Armazem: o zip do artefato vai para o disco da API, em wwwroot", textoPadrao, StringComparison.Ordinal);
+        Assert.True(emHome == 0, textoEmHome);
+        Assert.Contains("ok     Artefatos__Pasta (armazém em disco)", textoEmHome, StringComparison.Ordinal);
+        Assert.DoesNotContain("aviso  Artefatos__", textoEmHome, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Artefatos__TamanhoMaximoMb", "cem", 1)]
+    [InlineData("Artefatos__RetencaoDias", "7.5", 1)]
+    [InlineData("Artefatos__LinkHoras", "99999999999", 1)]
+    [InlineData("Artefatos__MaximoPorProjeto", "0", 0)]
+    [InlineData("Artefatos__RetencaoDias", "-3", 0)]
+    public async Task Os_numeros_dos_artefatos_que_nao_sao_inteiros_seguram_o_deploy_e_abaixo_de_1_so_avisam(string nome, string valor, int esperada)
+    {
+        var (saida, texto) = await ConferirAsync(Com(s => s[nome] = valor));
+
+        Assert.Equal(esperada, saida);
+        if (esperada == 1)
+            Assert.Equal([nome], Faltas(texto).Select(l => l[7..l.IndexOf(':')]));
+        else
+            Assert.Contains($"aviso  {nome}: abaixo de 1: a API usa 1", texto, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task O_que_so_degrada_um_recurso_e_aviso_e_nao_segura_o_deploy()
     {
@@ -196,12 +271,12 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
     {
         var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));
         var doc = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo("docs/publicacao-azure.md"));
-        var noWorkflow = Regex.Matches(Job(workflow, "sql"), @"path: api/scripts/sqlserver/(\S+\.sql)").Select(m => m.Groups[1].Value).ToArray();
+        var noWorkflow = ScriptsDoJobSql(workflow);
         var secao = doc[doc.IndexOf("### Scripts SQL do controle remoto, na ordem", StringComparison.Ordinal)..];
         secao = secao[..secao.IndexOf("\n### ", 5, StringComparison.Ordinal)];
         var noDoc = Regex.Matches(secao, @"^\d+\. `(\S+\.sql)`", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToArray();
 
-        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql"], noWorkflow);
+        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql", "ArtefatosDosProjetos.sql"], noWorkflow);
         Assert.Equal(noWorkflow, noDoc);
         Assert.All(noWorkflow, nome => ScriptsDoRepositorio.Arquivo($"api/scripts/sqlserver/{nome}"));
         // O disparo manual diz quais scripts roda: todos, pelo nome.
@@ -209,19 +284,82 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         Assert.All(noWorkflow, nome => Assert.Contains(Path.GetFileNameWithoutExtension(nome), descricao, StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData("CatalogosRemotos")]
-    [InlineData("ClientesDaMaquina")]
-    [InlineData("AssercoesDoCliente")]
-    [InlineData("PendenciasDispensadas")]
-    public async Task As_tabelas_novas_do_remote_control_v3_vem_de_um_script_aplicado_pelo_workflow(string tabela)
+    /// <summary>
+    /// Todo script da pasta <c>api/scripts/sqlserver</c> vai no job <c>sql</c> (sugestão #32), salvo os
+    /// <see cref="AnterioresAoControleRemoto"/>: o script novo esquecido fora do job reprova aqui, antes do deploy.
+    /// </summary>
+    [Fact]
+    public async Task Todo_script_da_pasta_vai_no_job_sql_salvo_os_anteriores_ao_controle_remoto()
     {
         var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));
-        var scripts = EsquemaDoBanco.ScriptsQueTrazem(tabela, null);
+        var doc = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo("docs/publicacao-azure.md"));
+        var pasta = Path.GetDirectoryName(ScriptsDoRepositorio.Arquivo("api/scripts/sqlserver/Remoto.sql"))!;
+        var naPasta = Directory.GetFiles(pasta, "*.sql").Select(arquivo => Path.GetFileName(arquivo)).ToArray();
+        var noJob = ScriptsDoJobSql(workflow);
+
+        var fora = ForaDoJobSql(naPasta, noJob);
+
+        Assert.True(fora.Length == 0,
+            $"Script(s) de api/scripts/sqlserver fora do job sql do main_devkit.yml: {string.Join(", ", fora)}. Ponha cada um no job sql e na lista de docs/publicacao-azure.md (\"Scripts SQL do controle remoto, na ordem\").");
+        // A lista congelada não apodrece: cada anterior existe na pasta, fica fora do job e tem a seção dele na publicação.
+        Assert.All(AnterioresAoControleRemoto, nome =>
+        {
+            Assert.Contains(nome, naPasta);
+            Assert.DoesNotContain(nome, noJob);
+            Assert.Contains($"api/scripts/sqlserver/{nome}", doc, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void O_script_novo_fora_do_job_sql_reprova_a_conferencia()
+    {
+        string[] noJob = ["Remoto.sql", "Provisao.sql", "ArtefatosDosProjetos.sql"];
+
+        Assert.Equal(["Novo.sql"], ForaDoJobSql(["Remoto.sql", "Us425.sql", "Novo.sql", "ArtefatosDosProjetos.sql", "Provisao.sql"], noJob));
+        // O nome confere exato: um anterior com outra caixa é um script novo.
+        Assert.Equal(["us425.sql"], ForaDoJobSql(["us425.sql", "Remoto.sql"], noJob));
+        Assert.Empty(ForaDoJobSql([.. noJob, .. AnterioresAoControleRemoto], noJob));
+    }
+
+    [Theory]
+    [InlineData("CatalogosRemotos", null)]
+    [InlineData("ClientesDaMaquina", null)]
+    [InlineData("AssercoesDoCliente", null)]
+    [InlineData("PendenciasDispensadas", null)]
+    [InlineData("ArtefatosDosProjetos", null)]
+    [InlineData("ComandosRemotos", "Contexto")]
+    [InlineData("FalasRemotas", "Anexos")]
+    [InlineData("RespostasDasDecisoes", "Dispositivo")]
+    public async Task As_tabelas_e_colunas_novas_do_controle_remoto_vem_de_um_script_aplicado_pelo_workflow(string tabela, string? coluna)
+    {
+        var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));
+        var scripts = EsquemaDoBanco.ScriptsQueTrazem(tabela, coluna);
 
         var script = Assert.Single(scripts);
-        Assert.Contains($"path: api/scripts/sqlserver/{script}", Job(workflow, "sql"), StringComparison.Ordinal);
+        Assert.Contains(script, ScriptsDoJobSql(workflow));
     }
+
+    /// <summary>
+    /// Os scripts de <c>api/scripts/sqlserver</c> ANTERIORES ao controle remoto: cada um tem a seção da sua US em
+    /// <c>docs/publicacao-azure.md</c> e foi aplicado uma vez, à mão, ficando FORA do job <c>sql</c> — o
+    /// <c>AcessoAosProjetos.sql</c> retira a tabela que o <c>DesignAcesso.sql</c> cria, e reaplicar a sequência a cada deploy
+    /// não é seguro. A lista é CONGELADA: script novo vai no job.
+    /// </summary>
+    private static readonly string[] AnterioresAoControleRemoto =
+    [
+        "AcessoAosProjetos.sql", "AvaliacoesDeEntrega.sql", "DesignAcesso.sql", "Empresas.sql", "GruposDeErro.sql",
+        "PedidosDeDemonstracao.sql", "RoiDeWorkItem.sql", "UltimoLogin.sql", "Us425.sql", "Us461.sql", "Us491.sql", "Us550.sql",
+        "Us602.sql", "Us663.sql", "Us669.sql", "Us687.sql", "Us693.sql", "Us747.sql", "Usuarios.sql", "us738-origem-catalogo.sql",
+    ];
+
+    /// <summary>Os scripts da pasta que nem o job <c>sql</c> aplica nem são <see cref="AnterioresAoControleRemoto"/>, em ordem.</summary>
+    private static string[] ForaDoJobSql(IEnumerable<string> naPasta, IReadOnlyCollection<string> noJob)
+        => naPasta.Where(nome => !noJob.Contains(nome, StringComparer.Ordinal) && !AnterioresAoControleRemoto.Contains(nome, StringComparer.Ordinal))
+            .Order(StringComparer.Ordinal).ToArray();
+
+    /// <summary>Os scripts do job <c>sql</c>, na ordem dos passos.</summary>
+    private static string[] ScriptsDoJobSql(string workflow)
+        => Regex.Matches(Job(workflow, "sql"), @"path: api/scripts/sqlserver/(\S+\.sql)").Select(m => m.Groups[1].Value).ToArray();
 
     /// <summary>O bloco de um job do workflow: da linha <c>  nome:</c> até o próximo job (dois espaços de recuo).</summary>
     private static string Job(string workflow, string nome)
