@@ -59,7 +59,8 @@ export interface RespostaDaDecisao {
 /** `dispensada` é campo novo (correções do board remoto): o card fechado no site, só com `?dispensadas=true`. */
 export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null; dispensada?: boolean }
 export interface ResponderDecisao {
-  snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string;
+  /** (semana 7) Sem `codigo`: o aprovar e o autorizar valem com o login confirmado; a API ainda aceita e ignora o campo do cliente antigo. */
+  snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string;
   /** (controle-v4, item 3) O dispositivo da decisão, que a máquina leva à auditoria. */
   dispositivo?: Dispositivo;
 }

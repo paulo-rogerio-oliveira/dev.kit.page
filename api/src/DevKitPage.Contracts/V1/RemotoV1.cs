@@ -132,13 +132,13 @@ public static class RemotoV1
     public const string PendenciaAprovacao = "aprovacao";
     public const string PendenciaFalha = "falha";
 
-    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o segundo fator.</summary>
+    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o login confirmado.</summary>
     public const string PendenciaAutorizacao = "autorizacao";
 
     /// <summary>Os tipos de pendência (o novo entra no fim; o dev.kit só o publica com <see cref="RecursoDecisoesAutorizar"/>).</summary>
     public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha, PendenciaAutorizacao];
 
-    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o segundo fator.</summary>
+    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o login confirmado.</summary>
     public const string RecursoDecisoesAutorizar = "decisoes-autorizar";
 
     public const string SensivelSegredo = "segredo";

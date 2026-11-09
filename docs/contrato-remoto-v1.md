@@ -360,8 +360,10 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
   avaliadores da mesma dona e a dona (nada é apagado).
 - **Autorização (ajuste 9):** com o recurso `decisoes-autorizar` no heartbeat, o dev.kit publica a pendência `tipo: "autorizacao"`
   com o `escopo` exato (`ato` = `concluir-projeto`, `integrar-item`, `arquivar-tasks` ou `executar-comando`; `alvo`, `sha`?,
-  `itens`?, `comando`?). O site responde `acao: "autorizar"` com o código TOTP — o mesmo segundo fator e a mesma auditoria do
-  `aprovar` —, ou `ajuste` para recusar. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
+  `itens`?, `comando`?). O site responde `acao: "autorizar"` com o login confirmado — a mesma conferência e a mesma auditoria do
+  `aprovar` —, ou `ajuste` para recusar. (semana 7) Sem segundo fator na decisão: o `codigo` continua no V1, OPCIONAL E
+  IGNORADO (o cliente antigo que o manda não é recusado), e a resposta grava `segundoFator: false`; a máquina não exige o campo.
+  O segundo fator segue só na Provisão. O `escopo` entra no id do snapshot: o escopo alterado depois da revisão é 409. O texto do
   chat continua sem aprovar nada. Nesta versão o dev.kit oferece e executa `executar-comando` (o comando bloqueado, uma vez),
   `concluir-projeto` (em fechamento, sem o fechamento confirmado) e (controle-v4, item 3) `arquivar-tasks`: o pedido do
   Orquestrador `devcli sessao --acao arquivar --alvo a,b --aplicar`, pendente na sessão dele, vira o cartão com `alvo` =
