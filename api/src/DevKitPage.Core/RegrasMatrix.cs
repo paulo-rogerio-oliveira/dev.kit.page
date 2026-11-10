@@ -84,15 +84,18 @@ public static class RegrasMatrix
     {
         var a = antes?.Matriz?.Celulas ?? [];
         var b = depois.Matriz?.Celulas ?? [];
+        var componentes = EixosDiferentes(antes?.Matriz?.Componentes ?? [], depois.Matriz?.Componentes ?? []);
+        var layers = EixosDiferentes(antes?.Matriz?.Layers ?? [], depois.Matriz?.Layers ?? []);
         var ids = a.Select(c => c.Id).Union(b.Select(c => c.Id)).Where(id =>
-            JsonSerializer.Serialize(a.FirstOrDefault(c => c.Id == id), Json) != JsonSerializer.Serialize(b.FirstOrDefault(c => c.Id == id), Json)).ToArray();
-        var eixoMudou = antes?.Matriz is { } ma && depois.Matriz is { } mb
-            && (JsonSerializer.Serialize(ma.Componentes, Json) != JsonSerializer.Serialize(mb.Componentes, Json)
-                || JsonSerializer.Serialize(ma.Layers, Json) != JsonSerializer.Serialize(mb.Layers, Json)
-                || ma.RevisaoDoMapa != mb.RevisaoDoMapa);
-        if (eixoMudou) ids = a.Concat(b).Select(c => c.Id).Distinct().ToArray();
+            JsonSerializer.Serialize(a.FirstOrDefault(c => c.Id == id), Json) != JsonSerializer.Serialize(b.FirstOrDefault(c => c.Id == id), Json)
+            || a.Concat(b).Any(c => c.Id == id && (componentes.Contains(c.Componente) || layers.Contains(c.Layer)))).ToArray();
+        // A revisão do mapa identifica a origem; as obrigações efetivas são os snapshots de células/eixos.
+        // Um eixo sem células ou uma reordenação não muda o recorte de nenhuma task.
         return new(ids, a.Concat(b).Where(c => ids.Contains(c.Id)).SelectMany(c => c.Responsaveis).Select(r => r.Id).Distinct().ToArray());
     }
+
+    private static HashSet<string> EixosDiferentes(EixoMatrix[] antes, EixoMatrix[] depois)
+        => antes.Except(depois).Concat(depois.Except(antes)).Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
 
     public static void ValidarReferencia(DocumentoMatrix d, Func<string, string, int, RevisaoMatrix?> ler)
     {

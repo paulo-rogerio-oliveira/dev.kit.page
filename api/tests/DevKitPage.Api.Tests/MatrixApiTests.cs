@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using DevKit.Matrix;
 using DevKitPage.Contracts.V1;
+using DevKitPage.Core;
 
 namespace DevKitPage.Api.Tests;
 
@@ -91,12 +92,16 @@ public sealed class MatrixApiTests : IDisposable
             "Demonstração", "144", RemotoV1.OrigemServico, true, RemotoV1.AgenteAtivo, true));
         Assert.Equal(HttpStatusCode.OK, heartbeat.StatusCode);
         Assert.Contains("matrix-v1", (await heartbeat.Content.ReadFromJsonAsync<HeartbeatRecebidoV1>())!.Recursos!);
-        var retrato = new RetratoV1(RemotoV1.Contrato, maquina, DateTimeOffset.UtcNow, [],
-            [new FluxoNoRetratoV1("sessao", "Task", "Implementação", "executando")], []);
+        var retrato = new RetratoV1(RemotoV1.Contrato, maquina, DateTimeOffset.UtcNow,
+            [new ProjetoNoRetratoV1("outro-projeto", "Outro", ProjetosV1.Aprovado, 1,
+                [new ItemNoRetratoV1(1, "Item", ProjetosV1.ItemRodando, 1)])],
+            [new FluxoNoRetratoV1("sessao", "Task", "Implementação", "executando"),
+                new FluxoNoRetratoV1("sessao-item", "Task do item", "Implementação", "executando", "outro-projeto", 1)], []);
         Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync("/api/remoto/retrato", retrato)).StatusCode);
         var vinculo = new DocumentoMatrix { Aplicacao = "app", Tipo = "vinculo", Id = "demanda",
             Vinculo = new("task-1", "sessao", Maquina: maquina) };
         Assert.Equal(HttpStatusCode.NotFound, (await Editar(bia, vinculo)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Editar(ana, vinculo with { Vinculo = new("task-1", "sessao-item", Maquina: maquina) })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo)).StatusCode);
         Assert.Equal("sessao", (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("vinculo", "demanda")))![0].Documento.Vinculo!.Sessao);
     }
@@ -115,5 +120,65 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await Editar(ana, vinculo)).StatusCode);
         var invalida = Matriz() with { Matriz = Matriz().Matriz! with { RevisaoDoMapa = 99 } };
         Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, invalida, 1)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("adicionar-componente", false)]
+    [InlineData("adicionar-layer", false)]
+    [InlineData("editar-componente-alheio", false)]
+    [InlineData("editar-layer-alheia", false)]
+    [InlineData("remover-componente-alheio", false)]
+    [InlineData("remover-layer-alheia", false)]
+    [InlineData("reordenar", false)]
+    [InlineData("revisao-do-mapa", false)]
+    [InlineData("editar-componente-usado", true)]
+    [InlineData("editar-layer-usada", true)]
+    public async Task Eixo_so_afeta_celulas_relacionadas_e_preserva_avaliacoes_alheias(string caso, bool afetaPrimeira)
+    {
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Matrix eixos");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@eixos-matrix.com");
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, Mapa())).StatusCode);
+        var matriz = Matriz().Matriz! with
+        {
+            Componentes = [new("chat", "Chat"), new("tasks", "Tasks"), new("sem-celulas", "Sem células")],
+            Layers = [new("web", "Web"), new("cli", "CLI"), new("sem-celulas", "Sem células")],
+            Celulas = [Matriz().Matriz!.Celulas[0], Matriz().Matriz!.Celulas[0] with
+                { Id = "c2", Componente = "tasks", Layer = "cli", Responsaveis = [new("task-2")] }]
+        };
+        var documento = Matriz() with { Matriz = matriz };
+        var criada = await Editar(ana, documento);
+        Assert.Equal(HttpStatusCode.OK, criada.StatusCode);
+        var origem = (await criada.Content.ReadFromJsonAsync<ResultadoMatrix>())!.Revisao;
+        var registro = new RegistroMatrix("c1", 1, "task-1", "avaliacao", "atendido", "Validado", ["log"], new() { ["repo-a"] = new('a', 40) });
+        var outro = registro with { Celula = "c2", Responsavel = "task-2" };
+        var r = new DocumentoMatrix { Aplicacao = "app", Id = "demanda", Tipo = "registro", Registro = registro };
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, r)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, r with { Registro = outro }, 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, Mapa(), 1)).StatusCode);
+        var nova = caso switch
+        {
+            "adicionar-componente" => matriz with { Componentes = [.. matriz.Componentes, new("novo", "Novo")] },
+            "adicionar-layer" => matriz with { Layers = [.. matriz.Layers, new("nova", "Nova")] },
+            "editar-componente-alheio" => matriz with { Componentes = matriz.Componentes.Select(e => e.Id == "sem-celulas" ? e with { Orientacao = "Mudou" } : e).ToArray() },
+            "editar-layer-alheia" => matriz with { Layers = matriz.Layers.Select(e => e.Id == "sem-celulas" ? e with { Nome = "Mudou" } : e).ToArray() },
+            "remover-componente-alheio" => matriz with { Componentes = matriz.Componentes.Where(e => e.Id != "sem-celulas").ToArray() },
+            "remover-layer-alheia" => matriz with { Layers = matriz.Layers.Where(e => e.Id != "sem-celulas").ToArray() },
+            "reordenar" => matriz with { Componentes = matriz.Componentes.Reverse().ToArray(), Layers = matriz.Layers.Reverse().ToArray() },
+            "revisao-do-mapa" => matriz with { RevisaoDoMapa = 2 },
+            "editar-componente-usado" => matriz with { Componentes = matriz.Componentes.Select(e => e.Id == "chat" ? e with { Orientacao = "Mudou" } : e).ToArray() },
+            _ => matriz with { Layers = matriz.Layers.Select(e => e.Id == "web" ? e with { Nome = "Mudou" } : e).ToArray() }
+        };
+        var gravada = await Editar(ana, documento with { Matriz = nova }, 1);
+        Assert.Equal(HttpStatusCode.OK, gravada.StatusCode);
+        var resultado = (await gravada.Content.ReadFromJsonAsync<ResultadoMatrix>())!;
+        Assert.Equal(afetaPrimeira ? new[] { "c1" } : [], resultado.Mudancas.Celulas);
+        Assert.Equal(afetaPrimeira ? new[] { "task-1" } : [], resultado.Mudancas.Responsaveis);
+        var h = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!;
+        Assert.Equal(!afetaPrimeira, RegrasMatrix.RegistroVigente(registro, origem, h[1]));
+        Assert.True(RegrasMatrix.RegistroVigente(outro, origem, h[1]));
+        var registros = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("registro", "demanda")))!;
+        Assert.Equal(2, registros.Length);
+        Assert.All(registros, v => Assert.Equal(1, v.Documento.Registro!.RevisaoDaDefinicao));
     }
 }

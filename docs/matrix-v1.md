@@ -24,6 +24,8 @@ Há quatro streams, versionados separadamente:
 - `vinculo`: associa a identidade do responsável à sessão após o disparo. A matriz
   pode ser atribuída antes de existir sessão. O vínculo é conferido contra a sessão
   local e branch do item; remotamente, contra máquina do usuário e retrato persistido.
+  Uma matriz avulsa recusa sessão de projeto/item nos dois canais. Na leitura local,
+  isso inclui branches secundários, branches customizados e vínculo não confirmado.
 - `registro`: implementação ou avaliação, célula, responsável, revisão da definição,
   resultado, justificativa, evidências e SHAs completos por repositório. Não altera
   definição nem atribui nota aos avaliadores do fluxo.
@@ -33,8 +35,10 @@ qualquer versão diferente da atual é conflito, inclusive entre processos. Auto
 e horário vêm do executor, não do arquivo. As revisões são imutáveis. A edição
 retorna células e responsáveis afetados, incluindo antigos e novos donos. O helper
 `RegistroVigente` compara a definição avaliada com a atual: alteração em outra
-célula conserva a avaliação anterior; mudanças de eixos/revisão do mapa afetam
-o conjunto. O registro histórico continua guardado em todos os casos.
+célula conserva a avaliação anterior. Mudanças de eixos afetam apenas as células
+que os utilizam; eixo sem células e reordenação preservam os resultados. Trocar a
+referência de origem do mapa, mantendo obrigações/eixos efetivos, também preserva
+as avaliações. O registro histórico continua guardado em todos os casos.
 
 ## devcli
 
