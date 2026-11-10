@@ -65,6 +65,27 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AssercaoDoCliente> AssercoesDoCliente => Set<AssercaoDoCliente>();
     public DbSet<ArtefatoDoProjeto> ArtefatosDosProjetos => Set<ArtefatoDoProjeto>();
 
+    private void ConfigurarMatrix(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RevisaoMatrixNoBanco>(e =>
+        {
+            e.ToTable("RevisoesMatrix");
+            e.Property(r => r.Espaco).HasMaxLength(80);
+            e.Property(r => r.Aplicacao).HasMaxLength(100);
+            e.Property(r => r.Tipo).HasMaxLength(12);
+            e.Property(r => r.DocumentoId).HasMaxLength(100);
+            e.HasIndex(r => new { r.Espaco, r.Aplicacao, r.Tipo, r.DocumentoId, r.Versao }).IsUnique();
+            e.HasIndex(r => r.ProjetoId);
+            if (Database.IsSqlServer())
+            {
+                e.Property(r => r.Espaco).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.Aplicacao).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.Tipo).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.DocumentoId).UseCollation("Latin1_General_100_BIN2");
+            }
+        });
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
@@ -75,6 +96,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         ConfigurarConversa(modelBuilder);
         ConfigurarDecisoes(modelBuilder);
         ConfigurarPush(modelBuilder);
+        ConfigurarMatrix(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {

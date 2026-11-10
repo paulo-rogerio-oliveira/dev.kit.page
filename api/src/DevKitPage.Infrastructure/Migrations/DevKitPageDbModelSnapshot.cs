@@ -17,6 +17,25 @@ namespace DevKitPage.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("DevKitPage.Core.RevisaoMatrixNoBanco", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");
+                    b.Property<string>("Espaco").IsRequired().HasMaxLength(80).HasColumnType("TEXT");
+                    b.Property<string>("Aplicacao").IsRequired().HasMaxLength(100).HasColumnType("TEXT");
+                    b.Property<string>("Tipo").IsRequired().HasMaxLength(12).HasColumnType("TEXT");
+                    b.Property<string>("DocumentoId").IsRequired().HasMaxLength(100).HasColumnType("TEXT");
+                    b.Property<int>("Versao").HasColumnType("INTEGER");
+                    b.Property<int>("DonoId").HasColumnType("INTEGER");
+                    b.Property<long?>("ProjetoId").HasColumnType("INTEGER");
+                    b.Property<int>("AutorId").HasColumnType("INTEGER");
+                    b.Property<DateTime>("EmUtc").HasColumnType("TEXT");
+                    b.Property<string>("Documento").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Id");
+                    b.HasIndex("ProjetoId");
+                    b.HasIndex("Espaco", "Aplicacao", "Tipo", "DocumentoId", "Versao").IsUnique();
+                    b.ToTable("RevisoesMatrix");
+                });
+
             modelBuilder.Entity("DevKitPage.Core.AcessoAosDados", b =>
                 {
                     b.Property<long>("Id")

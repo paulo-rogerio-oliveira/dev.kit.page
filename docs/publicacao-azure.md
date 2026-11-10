@@ -442,7 +442,7 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 ### Scripts SQL do controle remoto, na ordem
 
-Numa base Azure SQL que já existe, o controle remoto precisa de nove scripts de `api/scripts/sqlserver/`, todos
+Numa base Azure SQL que já existe, o controle remoto precisa de dez scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros; o `CatalogoRemoto.sql` e o
 `ClienteDaMaquina.sql`, das `Maquinas` e dos `Usuarios` que já existem; o `BoardRemoto.sql`, do `Conversa.sql` e do
 `Decisoes.sql`; o `ArtefatosDosProjetos.sql`, dos `ProjetosCompartilhados` do `Us693.sql`):
@@ -462,6 +462,8 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 9. `ArtefatosDosProjetos.sql` — os artefatos do projeto (controle-v4, item 2): a tabela `ArtefatosDosProjetos` (o zip do
    pacote .NET no Blob, com o hash e a retenção, e a URL do preview). Sem ele, `POST /api/projetos/{id}/artefatos` e
    `GET /api/projetos/artefatos` respondem 500, e a verificação do esquema na subida o aponta.
+10. `Matrix.sql` — o histórico versionado de mapas, matrizes, vínculos e comprovações por aplicação (`RevisoesMatrix`).
+    Aplique antes da API que anuncia `matrix-v1`; o script é aditivo e não altera as definições existentes.
 
 **O que o remote-control-v3 acrescenta ao banco** são só os passos 6 e 7 (as tabelas `CatalogosRemotos`,
 `ClientesDaMaquina` e `AssercoesDoCliente`). Os itens 4 (ver e criar projeto e design pelo site) e 5 (a fila criada pela
@@ -481,7 +483,7 @@ congelada no teste `Todo_script_da_pasta_vai_no_job_sql_salvo_os_anteriores_ao_c
 ambiente nas Configurações) são do git.kit e não mudam o banco nem a API.
 
 ```bash
-for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos; do
+for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos Matrix; do
   sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
 done
 ```
@@ -710,7 +712,7 @@ dispositivo e o cartão de arquivar tasks (item 3). **Na ordem**, com o branch d
 2. **Storage**: nada a criar à mão — o contêiner PRIVADO `artefatos` nasce na primeira gravação, na conta do design (ou na
    do `Artefatos__ConexaoDoBlob`). Configure o ciclo de vida dele (*Lifecycle management*: blobs com mais de 7 dias, ou do
    `Artefatos__RetencaoDias`).
-3. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** — `configuracao` → `sql` (os nove
+3. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** — `configuracao` → `sql` (os dez
    scripts; os do controle-v4 são o passo 8, `BoardRemoto.sql`, e o 9, `ArtefatosDosProjetos.sql`) → `deploy`. À mão, o
    mesmo com `sqlcmd … -i api/scripts/sqlserver/BoardRemoto.sql` e depois `-i api/scripts/sqlserver/ArtefatosDosProjetos.sql`,
    **antes** do deploy da API (o segundo recusa sem o `Us693.sql`, com a mensagem dizendo qual rodar).
@@ -787,6 +789,15 @@ gera no GitHub (`app_location: web`, `output_location: dist`):
           app_location: web
           output_location: dist
 ```
+
+## Matrix v1
+
+Antes de disponibilizar a API que anuncia `matrix-v1`, aplicar
+`api/scripts/sqlserver/Matrix.sql` (idempotente, incluído no job `sql` opcional).
+Conferir `dbo.RevisoesMatrix` e seu índice único por espaço, aplicação, tipo, id e
+versão. O SQLite aplica `20261110170000_Matrix` na inicialização habitual.
+O roteiro de validação e os contratos opcionais estão em [matrix-v1.md](matrix-v1.md).
+O item prepara a publicação; produção continua no portão existente.
 
 ## Depois de publicar
 
