@@ -80,7 +80,8 @@ test('Board consulta o retrato real, atualiza e só decide pela revisão com log
       }
       // O chat foi ligado na fase 2: a caixa aceita texto, o envio vazio fica bloqueado e o chat nunca aprova.
       await expect(page.getByLabel('Mensagem ao Orquestrador')).toBeEditable();
-      await expect(page.getByText('Conversa e consulta com login. Texto do chat nunca aprova.')).toBeVisible();
+      // No layout v016 o aviso fica na dica do selo do cabeçalho do chat.
+      await expect(page.getByTitle('Conversa e consulta com login. Texto do chat nunca aprova: as decisões são auditadas no painel.', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
       if (width < 700) await page.getByRole('tab', { name: 'Board', exact: true }).click();
     }
