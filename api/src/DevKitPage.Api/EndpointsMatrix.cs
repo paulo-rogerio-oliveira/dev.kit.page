@@ -9,6 +9,12 @@ public static class EndpointsMatrix
     public static void MapearMatrix(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/matrix").WithTags("Matrix");
+        grupo.MapGet("", async (ClaimsPrincipal quem, IMatrizes matrizes, CancellationToken ct) =>
+        {
+            if (Seguranca.EscopoDoDesign(quem) is not { } e) return Results.Forbid();
+            var r = await matrizes.ListarAsync(e, ct);
+            return r.Status == 200 ? Results.Ok(r.Valor) : Results.Problem(r.Erro, statusCode: r.Status);
+        });
         grupo.MapGet("/{aplicacao}/{tipo}/{id}", async (string aplicacao, string tipo, string id, ClaimsPrincipal quem, IMatrizes matrizes, CancellationToken ct) =>
         {
             if (Seguranca.EscopoDoDesign(quem) is not { } e) return Results.Forbid();

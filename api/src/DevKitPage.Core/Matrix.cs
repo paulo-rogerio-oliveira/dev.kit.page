@@ -20,6 +20,7 @@ public sealed class RevisaoMatrixNoBanco
 public sealed record RespostaMatrix<T>(int Status, T? Valor = default, string Erro = "");
 public interface IMatrizes
 {
+    Task<RespostaMatrix<CabecalhoMatrix[]>> ListarAsync(EscopoDoDesign escopo, CancellationToken ct);
     Task<RespostaMatrix<RevisaoMatrix[]>> HistoricoAsync(EscopoDoDesign escopo, string aplicacao, string tipo, string id, CancellationToken ct);
     Task<RespostaMatrix<ResultadoMatrix>> EditarAsync(EscopoDoDesign escopo, EdicaoMatrix edicao, bool aplicar, CancellationToken ct);
 }

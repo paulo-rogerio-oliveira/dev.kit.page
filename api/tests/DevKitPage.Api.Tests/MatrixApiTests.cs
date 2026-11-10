@@ -26,6 +26,24 @@ public sealed class MatrixApiTests : IDisposable
         => cliente.PutAsJsonAsync(Rota(d.Tipo, d.Id, d.Aplicacao) + (aplicar ? "?aplicar=true" : ""), new EdicaoMatrix(versao, d));
 
     [Fact]
+    public async Task Catalogo_de_sincronizacao_preserva_acl_revisao_e_identidade_da_aplicacao()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _api.CreateClient().GetAsync("/api/matrix")).StatusCode);
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Matrix catálogo");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@catalogo-matrix.com");
+        var (bia, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "bia@catalogo-matrix.com");
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, Mapa())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, Matriz())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, Mapa(), 1)).StatusCode);
+        var catalogo = (await ana.GetFromJsonAsync<CabecalhoMatrix[]>("/api/matrix"))!;
+        Assert.Equal(2, catalogo.Length);
+        Assert.Equal(2, Assert.Single(catalogo, c => c.Tipo == "mapa").Versao);
+        Assert.All(catalogo, c => Assert.Equal("app", c.Aplicacao));
+        Assert.Empty((await bia.GetFromJsonAsync<CabecalhoMatrix[]>("/api/matrix"))!);
+    }
+
+    [Fact]
     public async Task Avulsa_simula_aplica_le_historico_conflita_e_isola_dono_aplicacao_e_demanda()
     {
         var admin = await _api.AdminAsync();
@@ -65,6 +83,7 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, (await bia.GetAsync(Rota())).StatusCode);
         await ana.PostAsJsonAsync($"/api/projetos/{projeto.Id}/acessos", new ConcessaoDeAcessoV1("bia@acl-matrix.com", "leitor"));
         Assert.Equal(HttpStatusCode.OK, (await bia.GetAsync(Rota())).StatusCode);
+        Assert.Equal(2, (await bia.GetFromJsonAsync<CabecalhoMatrix[]>("/api/matrix"))!.Length);
         Assert.Equal(HttpStatusCode.Forbidden, (await Editar(bia, Matriz("projeto"), 1)).StatusCode);
         var registro = new DocumentoMatrix { Aplicacao = "app", Tipo = "registro", Id = "demanda", Projeto = "projeto",
             Registro = new("c1", 1, "task-1", "implementacao", "atendido", "Validado", ["log"], new()) };
