@@ -788,6 +788,15 @@ gera no GitHub (`app_location: web`, `output_location: dist`):
           output_location: dist
 ```
 
+## Matrix v1
+
+Antes de disponibilizar a API que anuncia `matrix-v1`, aplicar
+`api/scripts/sqlserver/Matrix.sql` (idempotente, incluído no job `sql` opcional).
+Conferir `dbo.RevisoesMatrix` e seu índice único por espaço, aplicação, tipo, id e
+versão. O SQLite aplica `20261110170000_Matrix` na inicialização habitual.
+O roteiro de validação e os contratos opcionais estão em [matrix-v1.md](matrix-v1.md).
+O item prepara a publicação; produção continua no portão existente.
+
 ## Depois de publicar
 
 1. Abra a web → **Entrar** → `admin` e a senha do Key Vault → defina a nova senha.
