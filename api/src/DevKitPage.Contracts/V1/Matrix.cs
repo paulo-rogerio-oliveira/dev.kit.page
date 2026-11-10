@@ -1,5 +1,7 @@
 namespace DevKit.Matrix;
 
+public sealed record CabecalhoMatrix(string Aplicacao, string Tipo, string Id, string Projeto, int Versao);
+
 // Contrato matrix-v1, espelhado em DevKitPage.Contracts. Não depende da UI ou do transporte.
 public sealed record EixoMatrix(string Id, string Nome, string Orientacao = "");
 public sealed record RelacaoMatrix(string Id, string Origem, string Destino, string[] Layers,

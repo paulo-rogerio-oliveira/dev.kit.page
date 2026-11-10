@@ -15,6 +15,18 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
     private static RevisaoMatrix Ler(RevisaoMatrixNoBanco r) => new(r.Versao, r.AutorId.ToString(CultureInfo.InvariantCulture),
         DevKitPageDb.Utc(r.EmUtc), JsonSerializer.Deserialize<DocumentoMatrix>(r.Documento, RegrasMatrix.Json)!);
 
+    public async Task<RespostaMatrix<CabecalhoMatrix[]>> ListarAsync(EscopoDoDesign e, CancellationToken ct)
+    {
+        var projetos = db.ProjetosCompartilhados.Visiveis(e).Select(p => p.Id);
+        var linhas = await db.Set<RevisaoMatrixNoBanco>().AsNoTracking()
+            .Where(r => r.Espaco == Espaco(e) && (r.ProjetoId.HasValue
+                ? projetos.Contains(r.ProjetoId.Value) : r.DonoId == e.UsuarioId))
+            .GroupBy(r => new { r.Aplicacao, r.Tipo, r.DocumentoId })
+            .Select(g => g.OrderByDescending(r => r.Versao).First()).ToArrayAsync(ct);
+        return new(200, linhas.Select(r => new CabecalhoMatrix(r.Aplicacao, r.Tipo, r.DocumentoId,
+            Ler(r).Documento.Projeto, r.Versao)).OrderBy(r => r.Aplicacao).ThenBy(r => r.Tipo).ThenBy(r => r.Id).ToArray());
+    }
+
     private async Task<int> AcessoAsync(EscopoDoDesign e, RevisaoMatrixNoBanco alvo, bool editar, CancellationToken ct)
     {
         if (alvo.ProjetoId is not { } id) return alvo.DonoId == e.UsuarioId ? 200 : 404;

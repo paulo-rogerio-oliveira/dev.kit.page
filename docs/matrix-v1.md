@@ -1,7 +1,7 @@
 # Matrix v1: modelo e operação
 
-Este item entrega dados, persistência e operações. O editor visual e a distribuição
-automática aos agentes pertencem aos próximos itens do projeto matrix. Uma edição
+Os itens 1 e 2 entregam dados, persistência, operações e distribuição automática
+aos agentes pelo host. O editor visual pertence aos próximos itens. Uma edição
 da matriz nunca concede autorização de envio, PR, integração ou publicação.
 
 ## Identidade e revisões
@@ -53,6 +53,8 @@ devcli matrix --aplicacao app --tipo matriz --id demanda --arquivo matriz.json -
 devcli matrix --aplicacao app --id demanda --atribuir celula-1 --responsavel task-1 --item 1 --versao 1
 devcli matrix --aplicacao app --id demanda --versao 2 --recorte task-1
 devcli matrix --aplicacao app --id demanda --historico
+devcli matrix --aplicacao app --tipo mapa --versao 1 --sugerir chat --gatilho "alterar chat"
+devcli matrix --evento gatilho:123
 ```
 
 `--gerar` copia eixos e fixa a revisão, com células vazias para preenchimento
@@ -62,8 +64,9 @@ Uma task avulsa omite `projeto`; a identidade da demanda continua sendo `id`.
 Para associar uma sessão, envie documento do tipo `vinculo`, com `responsavel`,
 `sessao`, `item` opcional e `maquina` no remoto. Evidência/avaliação usa `registro`.
 
-`--remoto` usa a API autenticada com o login do dev.kit. Falha remota não vira
-sucesso local. `impacto --sugerir` continua cuidando das sugestões de Rules, sem
+`--remoto` usa a API autenticada com o login do dev.kit. Streams recebidos da API
+mantêm a origem remota também sem essa opção, inclusive novos registros da mesma
+demanda. Falha remota não vira sucesso local. `impacto --sugerir` continua cuidando das sugestões de Rules, sem
 interferência deste comando. A operação está disponível ao serviço e desktop
 através de `ServicoMatrix`/`IArmazemMatrix`; nenhuma ação visual foi adicionada.
 
@@ -74,6 +77,52 @@ e só grava com `?aplicar=true`. Ausente/falso simula as mesmas validações. O 
 opcional `matrix-v1` é anunciado no heartbeat. `IMatrixRemota` não modifica os
 contratos antigos de projetos e o cliente anterior não consegue apagar a matriz
 ao reenviar um projeto sem campos novos.
+
+`GET /api/matrix` acrescenta descoberta dos cabeçalhos (aplicação, tipo, id,
+projeto e última versão). O catálogo aplica o mesmo ACL antes de retornar qualquer
+identidade; não revela documentos de outro usuário/projeto. Não altera as rotas
+existentes nem exige campos novos de clientes anteriores. API anterior pode
+responder 404: task sem origem remota continua como antes; matriz já vinculada à
+API registra pendência em vez de tratar a avaliação como completa.
+
+## Contexto e distribuição pelo host
+
+O Orquestrador consulta pedido, Rules do escopo e mapa da aplicação pelos comandos
+existentes. `--sugerir` seleciona relações por componente e gatilho explícitos e
+devolve aplicação, revisão do mapa, ID da relação, motivo e obrigações candidatas.
+Não grava células. Cabe ao Orquestrador revisar a pertinência e editar a matriz
+concreta, com responsáveis e versão esperada; novas descobertas exigem proposta
+explícita, preservando as Rules reutilizáveis e os demais projetos.
+
+O host resolve atribuições de item pelas sessões e branches cadastrados, incluindo
+branches customizados. Avulsa usa vínculo explícito. Continuidade de fluxo
+(`OpensTask`, incluindo Implementador da tela) persiste `MATRIX_ORIGEM` nos
+parâmetros da sessão; a cadeia é relida após reinício ou troca de agente.
+
+`ContextoDaMatrix` atende a composição inicial da task e os dois caminhos dos
+gatilhos: `AbrirTaskAsync` e `AvisarTaskAbertaAsync`. Roteiro padrão e prompt
+próprio recebem células atribuídas, dependências com seus donos, IDs e revisões.
+Cada evento distingue a sessão efetivamente avaliada da origem do vínculo da matriz
+e fixa um documento imutável `gatilho:<execução>` no journal do host,
+consultável por `devcli matrix --evento`. A referência acompanha a entrega e a
+correlação já existentes no evento, inclusive os SHAs e a evidência da entrega
+conferidos pelo host, que ficam também no documento imutável. Reavaliar fixa um
+novo documento sem substituir o anterior. Falha de leitura impede compor o evento
+como avaliação completa; a execução falha com pendência explícita.
+
+A revisão efetiva muda quando obrigações/eixos utilizados do responsável mudam.
+A revisão do contexto considera também as dependências; `celulasAlteradas`
+destaca a mudança. Obrigações alheias não são cobradas como parte da entrega.
+A matriz completa permanece consultável na revisão indicada.
+
+`SincronizacaoMatrix` consulta a API autenticada na abertura/evento e a cada
+30 segundos no host, sem depender de turno do Orquestrador. Importa o histórico
+imutável e recusa definições locais/remotas divergentes sem sobrescrever nenhuma.
+A reserva de entrega e o aviso entram na mesma transação SQLite em `TaskMessages`;
+processos concorrentes, repetição, reinício e troca de agente reutilizam a mesma
+entrega. Cada revisão pertinente recebe uma identidade própria. Alteração apenas
+local também usa essa fila, inclusive sem login no site. Salvar uma definição
+não reinicia uma execução nem concede PR, merge ou publicação.
 
 API armazena streams por empresa (ou usuário sem empresa), aplicação, tipo, id e
 versão. Aplicação/demanda sem projeto pertence somente ao criador. Com projeto,
