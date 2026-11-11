@@ -7,6 +7,7 @@ import { EditorMatrix } from './EditorMatrix';
 import { documentoDeTeste, revisaoDeTeste } from './fixtures';
 import type { ResultadoMatrix } from '../../api/matrix';
 import { chaveRascunho } from './modelo';
+import { CHAVE_DA_SESSAO, SessaoProvider } from '../../sessao';
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -16,8 +17,8 @@ afterEach(() => vi.restoreAllMocks());
 
 function montar(editar = true, recorte?: string[]) {
   const d = documentoDeTeste();
-  return render(<MemoryRouter><EditorMatrix alvo={{ documento: d, historico: [revisaoDeTeste(d)], mapa: [], registros: [], recorte }}
-    token="token-ficticio" conta="demonstracao" editar={editar} /></MemoryRouter>);
+  return render(<MemoryRouter><SessaoProvider><EditorMatrix alvo={{ documento: d, historico: [revisaoDeTeste(d)], mapa: [], registros: [], recorte }}
+    token="token-ficticio" conta="demonstracao" editar={editar} /></SessaoProvider></MemoryRouter>);
 }
 const abrir = async (layer = 'Page') => {
   // Grade e lista móvel têm o mesmo controle; apenas uma delas é mostrada pelo CSS no navegador.
@@ -34,9 +35,11 @@ describe('editor web da Matrix', () => {
     await userEvent.clear(dialogo.getByLabelText('Como validar'));
     await userEvent.type(dialogo.getByLabelText('Como validar'), 'Validar persistência real em 390 px');
     await userEvent.click(dialogo.getByRole('button', { name: 'Revisar e salvar →' }));
-    expect(await dialogo.findByText(/Tasks afetadas: item-4/)).toBeInTheDocument();
+    expect(await screen.findByText(/Tasks afetadas: item-4/)).toBeInTheDocument();
     expect(gravar).toHaveBeenCalledTimes(1); expect(gravar.mock.calls[0][2]).toBe(false);
-    await userEvent.click(dialogo.getByRole('button', { name: 'Salvar r2 e distribuir' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Histórico e autoria' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar r2 e distribuir' }));
     expect(await screen.findByText(/Revisão r2 salva/)).toBeInTheDocument();
     expect(gravar.mock.calls[1][2]).toBe(true);
     expect(gravar.mock.calls[1][1].documento.matriz!.celulas[1]).toEqual(documentoDeTeste().matriz!.celulas[1]);
@@ -54,13 +57,37 @@ describe('editor web da Matrix', () => {
 
   it('preserva o rascunho ao receber 401 e restaura ao reabrir', async () => {
     vi.spyOn(api, 'editarMatrix').mockRejectedValue(new ErroDaApi(401, 'Expirou'));
+    sessionStorage.setItem(CHAVE_DA_SESSAO, JSON.stringify({ token: 'invalido', login: 'demonstracao', papel: 'dev', expiraEm: new Date(Date.now() + 3600000).toISOString() }));
     const r = montar(); const dialogo = await abrir();
     await userEvent.type(dialogo.getByLabelText('Como validar'), ' · rascunho');
     await userEvent.click(dialogo.getByRole('button', { name: 'Revisar e salvar →' }));
     expect(await dialogo.findByRole('alert')).toHaveTextContent('Sessão expirada');
     await waitFor(() => expect(sessionStorage.getItem(chaveRascunho('demonstracao', documentoDeTeste()))).toContain('rascunho'));
+    await userEvent.click(dialogo.getByRole('link', { name: 'Entrar novamente' }));
+    expect(sessionStorage.getItem(CHAVE_DA_SESSAO)).toBeNull();
+    expect(sessionStorage.getItem(chaveRascunho('demonstracao', documentoDeTeste()))).toContain('rascunho');
     r.unmount(); montar(); const restaurado = await abrir();
     expect(restaurado.getByLabelText('Como validar')).toHaveValue('Validar em 390 px · rascunho');
+  });
+  it('editar e restaurar o original remove o rascunho e não ressuscita a edição ao remontar', async () => {
+    const r = montar(), d = await abrir();
+    const campo = d.getByLabelText('Como validar');
+    await userEvent.type(campo, ' · edição desfeita');
+    const chave = chaveRascunho('demonstracao', documentoDeTeste());
+    await waitFor(() => expect(sessionStorage.getItem(chave)).toContain('edição desfeita'));
+    await userEvent.clear(campo); await userEvent.type(campo, 'Validar em 390 px');
+    await waitFor(() => expect(sessionStorage.getItem(chave)).toBeNull());
+    r.unmount(); montar();
+    expect((await abrir()).getByLabelText('Como validar')).toHaveValue('Validar em 390 px');
+  });
+  it('filtra a lista móvel por layer e abre o editor da célula selecionada', async () => {
+    const r = montar();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Layer' }), 'api');
+    const lista = within(r.container.querySelector('.mx-lista')! as HTMLElement);
+    expect(lista.queryByRole('button', { name: 'Editor × Page · imp-page' })).not.toBeInTheDocument();
+    await userEvent.click(lista.getByRole('button', { name: 'Editor × API · imp-api' }));
+    await userEvent.click(lista.getByRole('button', { name: 'Abrir editor completo →' }));
+    expect(within(screen.getByRole('dialog')).getByLabelText('Como validar')).toHaveValue(documentoDeTeste().matriz!.celulas[1].criterio);
   });
 
   it.each([new TypeError('Rede indisponível'), new ErroDaApi(403, 'Permissão revogada')])('preserva definição e motivo quando o servidor recusa ou a rede cai: %s', async falha => {
@@ -89,7 +116,7 @@ describe('editor web da Matrix', () => {
     await userEvent.click(d.getByRole('button', { name: 'Reaplicar e revisar' }));
     expect(gravar).toHaveBeenCalledTimes(1);
     await userEvent.click(d.getByRole('button', { name: 'Revisar e salvar →' }));
-    await d.findByRole('button', { name: 'Salvar r3 e distribuir' });
+    await screen.findByRole('button', { name: 'Salvar r3 e distribuir' });
     expect(gravar.mock.calls[1][1].versaoEsperada).toBe(2);
     expect(gravar.mock.calls[1][1].documento.matriz!.celulas.find(c => c.id === 'imp-api')!.criterio).toBe('Mudança do desktop');
   });

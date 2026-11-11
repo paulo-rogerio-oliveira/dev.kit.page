@@ -20,8 +20,10 @@ export function useEdicaoMatrix({ documento, versao, token, conta, aoSalvar }: {
     (rascunho.edicao.versaoEsperada === 0 && !!(rascunho.edicao.documento.mapa || rascunho.edicao.documento.matriz));
 
   useEffect(() => {
-    if (!alterado) return;
-    try { sessionStorage.setItem(chave, JSON.stringify(rascunho)); }
+    try {
+      if (alterado) sessionStorage.setItem(chave, JSON.stringify(rascunho));
+      else sessionStorage.removeItem(chave);
+    }
     catch { setErro('O navegador não conseguiu preservar o rascunho. Exporte antes de sair.'); }
   }, [rascunho, alterado, chave]);
   useEffect(() => {
@@ -50,6 +52,7 @@ export function useEdicaoMatrix({ documento, versao, token, conta, aoSalvar }: {
       setErro(codigo === 401 ? 'Sessão expirada. Reentre para continuar; seu rascunho está preservado nesta aba.' :
         codigo === 403 ? 'Leitura permitida; salvar exige editor ou dono. O rascunho foi preservado.' :
         codigo === 409 ? 'Existe uma revisão mais recente. Compare antes de reaplicar.' :
+        codigo === 0 ? 'Sem conexão. Não foi possível salvar; seu rascunho está preservado. Reconecte e tente novamente.' :
         `Não foi possível salvar. Rascunho preservado. ${mensagemDaFalha(e)}`);
       if (codigo === 409) {
         try {

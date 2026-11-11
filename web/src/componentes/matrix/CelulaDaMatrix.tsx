@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CelulaMatrix, RegistroMatrix, RevisaoMatrix } from '../../api/matrix';
 import type { ItemDoProjeto } from '../../api/projetos';
 import { DialogoMatrix } from './DialogoMatrix';
 import { ConflitoDaMatrix, FalhaDaMatrix, PreviaDaMatrix } from './RevisaoDaMatrix';
-import { escreverDefinicao, exportarRascunho, lerDefinicao, registroVigente, validarCelula } from './modelo';
+import { celulasAlteradas, escreverDefinicao, exportarRascunho, lerDefinicao, registroVigente, validarCelula } from './modelo';
 import type { EdicaoDaMatrix } from './useEdicaoMatrix';
 
 const resultados: Record<RegistroMatrix['resultado'], string> = {
   atendido: 'Atendido', parcial: 'Parcial', 'nao-atendido': 'Não atendido', 'nao-aplicavel': 'Não aplicável',
 };
-export function RegistrosDaCelula({ tipo, celula, registros, historico }: {
-  tipo: RegistroMatrix['tipo']; celula: string; registros: RevisaoMatrix[]; historico: RevisaoMatrix[];
+export function RegistrosDaCelula({ tipo, celula, registros, historico, autores = {} }: {
+  tipo: RegistroMatrix['tipo']; celula: string; registros: RevisaoMatrix[]; historico: RevisaoMatrix[]; autores?: Record<string, string>;
 }) {
   const lista = registros.filter(r => r.documento.registro?.celula === celula && r.documento.registro.tipo === tipo);
   return <section><h3>{tipo === 'implementacao' ? 'Evidências do implementador' : 'Resultado do avaliador'}</h3>
@@ -19,7 +19,7 @@ export function RegistrosDaCelula({ tipo, celula, registros, historico }: {
       const v = r.documento.registro!, vigente = registroVigente(v, historico);
       return <article className="mx-card" key={`${r.documento.tipo}-${r.versao}`}>
         <strong>{resultados[v.resultado]} · {vigente ? 'Vigente' : 'Histórico · requer revisão da célula'}</strong>
-        <p>{v.justificativa}</p><p>Recorte r{v.revisaoDaDefinicao} · {v.responsavel} · autor {r.autor} · {new Date(r.em).toLocaleString('pt-BR')}</p>
+        <p>{v.justificativa}</p><p>Recorte r{v.revisaoDaDefinicao} · {v.responsavel} · {autores[r.autor] ?? `Usuário ${r.autor}`} · {new Date(r.em).toLocaleString('pt-BR')}</p>
         <ul>{v.evidencias.map((e, i) => <li key={i}>{/^https?:\/\//i.test(e) ? <a href={e} target="_blank" rel="noreferrer">{e}</a> : e}</li>)}</ul>
         {Object.entries(v.shas).map(([repo, sha]) => <p key={repo}>{repo}: <code>{sha}</code></p>)}
       </article>;
@@ -27,12 +27,13 @@ export function RegistrosDaCelula({ tipo, celula, registros, historico }: {
   </section>;
 }
 
-export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, historico, fechar, recorte, solicitar }: {
+export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, historico, fechar, recorte, solicitar, consultarOrigem, aplicacao, autores }: {
   id: string; edicao: EdicaoDaMatrix; editar: boolean; itens: ItemDoProjeto[]; registros: RevisaoMatrix[];
-  historico: RevisaoMatrix[]; fechar: () => void; recorte?: string[]; solicitar?: () => void;
+  historico: RevisaoMatrix[]; fechar: () => void; recorte?: string[]; solicitar?: () => void; consultarOrigem?: () => void; aplicacao?: string; autores?: Record<string, string>;
 }) {
   const [aba, setAba] = useState('definicao');
   const [erro, setErro] = useState('');
+  useEffect(() => { if (e.previa) fechar(); }, [e.previa, fechar]);
   const m = e.documento.matriz!, c = m.celulas.find(c => c.id === id)!;
   const definicao = lerDefinicao(c.justificativa);
   const permitido = editar && (!recorte || recorte.includes(id));
@@ -42,7 +43,12 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
     e.mudar({ ...e.documento, matriz: { ...m, celulas: m.celulas.map(x => x.id === id ? { ...x, ...parcial } : x) } });
   };
   const titulo = `${m.componentes.find(x => x.id === c.componente)?.nome} × ${m.layers.find(x => x.id === c.layer)?.nome}`;
-  return <DialogoMatrix titulo={titulo} contexto={`${e.documento.projeto || e.documento.id} · Aplicação ${e.documento.aplicacao} · definição r${e.versao}`} fechar={fechar} rodape={<><span>{id} · definição r{e.versao}{e.alterado && ' · rascunho preservado'}</span>
+  const alteradas = celulasAlteradas(e.rascunho.base.matriz, m);
+  const tasks = [...new Set(m.celulas.filter(x => alteradas.includes(x.id)).flatMap(x => x.responsaveis.map(r => r.item ? `Item ${r.item}` : r.id)))];
+  const task = c.responsaveis.map(r => r.item ? `Item ${r.item} · ${itens.find(i => i.numero === r.item)?.titulo ?? r.id}` : r.id).join(', ') || 'Responsável a definir';
+  return <DialogoMatrix classe="mx-cell-editor" rotulo={`EDITAR CÉLULA · ${id.toUpperCase()}`} titulo={e.conflito ? 'Conflito de edição' : titulo}
+    contexto={<><strong>{e.documento.projeto || e.documento.id} / {task}</strong><span>Aplicação {aplicacao ?? e.documento.aplicacao}</span><span>Definição r{e.versao}</span></>} fechar={fechar} rodape={<><div className="mx-change-summary"><strong>{alteradas.length} obrigação(ões) alterada(s) · {alteradas.length} célula(s){tasks.length > 0 && ` · afeta ${tasks.join(', ')}`}</strong>
+      <small>{e.alterado ? 'Revisar alterações antes de salvar e distribuir às tasks responsáveis.' : `${id} · definição r${e.versao} · nenhuma alteração`}</small></div>
     <div className="mx-actions"><button onClick={fechar}>Fechar</button>{e.conflito && <><button onClick={() => exportarRascunho(e.rascunho)}>Exportar rascunho</button>
       <button className="mx-primary" onClick={e.reaplicarRevisao}>Reaplicar e revisar</button></>}{permitido && !e.previa && !e.conflito &&
       <button className="mx-primary" disabled={ocupado || !e.alterado} onClick={() => {
@@ -53,7 +59,7 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
       <div className="mx-columns"><div>
         <p className="mx-alerta">{recorte ? 'Somente as células atribuídas a esta task podem ser editadas. Dependências ficam em consulta.' : 'Esta edição vale somente para esta demanda. O mapa da aplicação permanece como referência.'}</p>
         {!permitido && <p role="status">Somente leitura{editar ? ' · célula de outra task' : ' · salvar exige editor ou dono'}.</p>}
-        <p className="mx-muted">Origem: {c.origem}</p>
+        <p className="mx-muted mx-origin">Origem: {c.origem} {consultarOrigem && <button onClick={consultarOrigem}>Consultar ↗</button>}</p>
         <nav className="mx-tabs" aria-label="Conteúdo da célula">{['definicao', 'evidencias', 'avaliacao'].map(a =>
           <button key={a} aria-pressed={aba === a} onClick={() => setAba(a)}>{a === 'definicao' ? 'Definição' : a === 'evidencias' ? 'Evidências' : 'Avaliação'}</button>)}</nav>
         {aba === 'definicao' && <fieldset disabled={!permitido || ocupado}>
@@ -74,19 +80,18 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
           })}
             <label>Outros responsáveis (IDs separados por vírgula)<input value={c.responsaveis.filter(r => r.item === null).map(r => r.id).join(', ')}
               onChange={v => mudar({ responsaveis: [...c.responsaveis.filter(r => r.item !== null), ...v.target.value.split(',').map(s => s.trim()).filter(Boolean).map(id => ({ id, item: null }))] })} /></label>
-          </fieldset></details>
+          </fieldset>{solicitar && <button type="button" onClick={solicitar}>Solicitar atualização ao Orquestrador ↗</button>}</details>
         </fieldset>}
-        {aba !== 'definicao' && <RegistrosDaCelula tipo={aba === 'evidencias' ? 'implementacao' : 'avaliacao'} celula={id} registros={registros} historico={historico} />}
-      </div><div>
+        {aba !== 'definicao' && <RegistrosDaCelula tipo={aba === 'evidencias' ? 'implementacao' : 'avaliacao'} celula={id} registros={registros} historico={historico} autores={autores} />}
+      </div>{aba === 'definicao' && <div>
         <fieldset disabled={!permitido || ocupado}>
           <label>Justificativa / motivo<textarea value={definicao.motivo} onChange={v => mudar({ justificativa: escreverDefinicao(definicao.obrigacao, v.target.value) })} /></label>
           <label>Como validar<textarea value={c.criterio} onChange={v => mudar({ criterio: v.target.value })} /></label>
           <label>Evidência esperada<textarea value={c.evidenciaEsperada} onChange={v => mudar({ evidenciaEsperada: v.target.value })} /></label>
         </fieldset>
         <div className="mx-card mx-dashed"><strong>Comprovação separada da definição</strong><p>Implementador: atendimento e links. Avaliador: atendido, parcial, não atendido ou não aplicável, com motivo, revisão e SHAs.</p></div>
-        {solicitar && <p className="mx-nota">Novo impacto fora deste recorte? <button onClick={solicitar}>Solicitar atualização ao Orquestrador ↗</button></p>}
         {erro && <p role="alert" className="mx-alerta">{erro}</p>}
-      </div></div>
+      </div>}</div>
     </>}
   </DialogoMatrix>;
 }

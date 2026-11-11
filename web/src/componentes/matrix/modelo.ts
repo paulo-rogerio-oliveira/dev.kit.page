@@ -31,28 +31,39 @@ export function registroVigente(r: RegistroMatrix, historico: RevisaoMatrix[]): 
   return !!origem && !!atual && !celulasAlteradas(origem.documento.matriz, atual.documento.matriz).includes(r.celula);
 }
 
-/** Só reaplica o que mudou localmente; preserva adições e alterações remotas não tocadas. */
+const objeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+/** Mescla em três vias por campo. Colisões no mesmo campo usam o valor local após a comparação explícita. */
+function mesclar(base: unknown, local: unknown, remoto: unknown): unknown {
+  if (igual(base, local)) return remoto;
+  if (igual(base, remoto) || igual(local, remoto)) return local;
+  if (Array.isArray(base) && Array.isArray(local) && Array.isArray(remoto)) {
+    const todos = [...base, ...local, ...remoto];
+    if (todos.every(v => objeto(v) && typeof v.id === 'string')) {
+      const antes = new Map(base.map(v => [v.id, v]));
+      const depois = new Map(local.map(v => [v.id, v]));
+      const servidor = new Map(remoto.map(v => [v.id, v]));
+      return [...new Set([...servidor.keys(), ...depois.keys()])].flatMap(id => {
+        if (antes.has(id) && !depois.has(id)) return []; // Desativação local explícita.
+        if (!depois.has(id)) return [servidor.get(id)];
+        if (!servidor.has(id)) return igual(antes.get(id), depois.get(id)) ? [] : [depois.get(id)];
+        return [mesclar(antes.get(id), depois.get(id), servidor.get(id))];
+      });
+    }
+    // Listas de IDs: conserva inclusões remotas e aplica apenas inclusões/remoções locais.
+    return [...remoto.filter(v => !base.some(b => igual(b, v)) || local.some(l => igual(l, v))),
+      ...local.filter(v => !base.some(b => igual(b, v)) && !remoto.some(r => igual(r, v)))];
+  }
+  if (objeto(base) && objeto(local) && objeto(remoto)) {
+    return Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remoto)])]
+      .map(k => [k, mesclar(base[k], local[k], remoto[k])]));
+  }
+  return local;
+}
+
+/** Só reaplica campos alterados localmente, preservando os demais campos e inclusões do servidor. */
 export function reaplicar(base: DocumentoMatrix, local: DocumentoMatrix, remoto: DocumentoMatrix): DocumentoMatrix {
   if (base.aplicacao !== remoto.aplicacao || base.id !== remoto.id || base.tipo !== remoto.tipo) throw new Error('Alvos diferentes.');
-  function lista<T extends { id: string }>(a: T[], b: T[], c: T[]) {
-    const alterados = new Set([...a, ...b].filter(x => !igual(a.find(e => e.id === x.id), b.find(e => e.id === x.id))).map(x => x.id));
-    return [...c.filter(x => !alterados.has(x.id)), ...b.filter(x => alterados.has(x.id))];
-  }
-  if (base.matriz && local.matriz && remoto.matriz) return { ...remoto, matriz: {
-    ...remoto.matriz,
-    revisaoDoMapa: base.matriz.revisaoDoMapa === local.matriz.revisaoDoMapa ? remoto.matriz.revisaoDoMapa : local.matriz.revisaoDoMapa,
-    componentes: lista(base.matriz.componentes, local.matriz.componentes, remoto.matriz.componentes),
-    layers: lista(base.matriz.layers, local.matriz.layers, remoto.matriz.layers),
-    celulas: lista(base.matriz.celulas, local.matriz.celulas, remoto.matriz.celulas),
-  } };
-  if (base.mapa && local.mapa && remoto.mapa) return { ...remoto, mapa: {
-    nome: base.mapa.nome === local.mapa.nome ? remoto.mapa.nome : local.mapa.nome,
-    repositorios: igual(base.mapa.repositorios, local.mapa.repositorios) ? remoto.mapa.repositorios : local.mapa.repositorios,
-    componentes: lista(base.mapa.componentes, local.mapa.componentes, remoto.mapa.componentes),
-    layers: lista(base.mapa.layers, local.mapa.layers, remoto.mapa.layers),
-    relacoes: lista(base.mapa.relacoes, local.mapa.relacoes, remoto.mapa.relacoes),
-  } };
-  return { ...local };
+  return mesclar(base, local, remoto) as DocumentoMatrix;
 }
 
 export function validarCelula(c: CelulaMatrix): string {

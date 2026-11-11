@@ -25,6 +25,41 @@ describe('revisões compartilhadas Matrix', () => {
     expect(registroVigente(r, h)).toBe(false);
     expect(registroVigente({ ...r, celula: 'imp-api', responsavel: 'item-2' }, h)).toBe(true);
   });
+  it('preserva outro campo remoto da mesma célula, inclusive responsáveis', () => {
+    const base = documentoDeTeste(), local = structuredClone(base), remoto = structuredClone(base);
+    local.matriz!.celulas[0].criterio = 'Critério local';
+    remoto.matriz!.celulas[0].evidenciaEsperada = 'Evidência remota';
+    remoto.matriz!.celulas[0].responsaveis.push({ id: 'apoio', item: null });
+    const r = reaplicar(base, local, remoto).matriz!.celulas[0];
+    expect(r.criterio).toBe('Critério local');
+    expect(r.evidenciaEsperada).toBe('Evidência remota');
+    expect(r.responsaveis).toEqual(remoto.matriz!.celulas[0].responsaveis);
+  });
+  it('mescla por campo nos eixos e conserva inclusões remotas', () => {
+    const base = documentoDeTeste(), local = structuredClone(base), remoto = structuredClone(base);
+    local.matriz!.componentes[0].nome = 'Nome local';
+    remoto.matriz!.componentes[0].orientacao = 'Orientação remota';
+    remoto.matriz!.layers.push({ id: 'nova', nome: 'Nova layer', orientacao: '' });
+    const r = reaplicar(base, local, remoto).matriz!;
+    expect(r.componentes[0]).toMatchObject({ nome: 'Nome local', orientacao: 'Orientação remota' });
+    expect(r.layers.at(-1)?.id).toBe('nova');
+  });
+  it('mescla campos e listas de layers da mesma relação do mapa', () => {
+    const base = { ...documentoDeTeste(), tipo: 'mapa' as const, matriz: undefined, mapa: {
+      nome: 'Aplicação', repositorios: ['repo'], componentes: [], layers: [], relacoes: [{ id: 'rel', origem: 'a', destino: 'b',
+        layers: ['page'], gatilho: 'Gatilho', motivo: 'Motivo', propagacao: 'Propagação', verificacao: 'Critério' }],
+    } };
+    const local = structuredClone(base), remoto = structuredClone(base);
+    local.mapa.relacoes[0].motivo = 'Motivo local'; local.mapa.relacoes[0].layers.push('desktop');
+    remoto.mapa.relacoes[0].verificacao = 'Critério remoto'; remoto.mapa.relacoes[0].layers.push('api');
+    expect(reaplicar(base, local, remoto).mapa!.relacoes[0]).toMatchObject({ motivo: 'Motivo local', verificacao: 'Critério remoto', layers: ['page', 'api', 'desktop'] });
+  });
+  it('uma colisão real usa o campo local somente após reaplicação explícita', () => {
+    const base = documentoDeTeste(), local = structuredClone(base), remoto = structuredClone(base);
+    local.matriz!.celulas[0].criterio = 'Local'; remoto.matriz!.celulas[0].criterio = 'Servidor';
+    expect(reaplicar(base, local, remoto).matriz!.celulas[0].criterio).toBe('Local');
+    expect(remoto.matriz!.celulas[0].criterio).toBe('Servidor');
+  });
   it('não confunde não analisada com não aplicável; exige motivo e responsável quando aplicável', () => {
     const c = documentoDeTeste().matriz!.celulas[0];
     expect(validarCelula({ ...c, aplicavel: false, justificativa: '' })).toMatch(/justificativa/);

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useSessao } from '../../sessao';
 import type { EdicaoDaMatrix } from './useEdicaoMatrix';
 import type { CelulaMatrix, DocumentoMatrix } from '../../api/matrix';
 import { celulasAlteradas, exportarRascunho, igual, lerDefinicao } from './modelo';
@@ -22,10 +23,15 @@ export function ResumoDoDocumento({ documento: d }: { documento: DocumentoMatrix
   </div>;
 }
 
+export function ReentradaDaMatrix() {
+  const { sair } = useSessao();
+  return <Link to="/login" state={{ de: location.pathname + location.search }} onClick={() => sair('expirou')}>Entrar novamente</Link>;
+}
+
 export function FalhaDaMatrix({ edicao: e }: { edicao: EdicaoDaMatrix }) {
   if (e.conflito) return null;
   return <>{e.erro && <p role="alert" className="mx-alerta">{e.erro}
-    {e.status === 401 && <> <Link to="/login" state={{ de: location.pathname + location.search }}>Entrar novamente</Link></>}
+    {e.status === 401 && <> <ReentradaDaMatrix /></>}
     <button type="button" onClick={() => exportarRascunho(e.rascunho)}>Exportar rascunho</button></p>}</>;
 }
 
@@ -40,14 +46,14 @@ export function ConflitoDaMatrix({ edicao: e, acoesNoRodape = false }: { edicao:
       const l = local.matriz?.celulas.find(c => c.id === id), r = servidor.matriz?.celulas.find(c => c.id === id);
       const b = e.rascunho.base.matriz?.celulas.find(c => c.id === id), a = campos(l), s = campos(r), anterior = campos(b);
       const nomes = [...new Set([...Object.keys(a), ...Object.keys(s)])].filter(k => a[k] !== anterior[k] || s[k] !== anterior[k]);
-      return <div className="mx-card" key={id}><h4>{id} · {local.matriz?.componentes.find(c => c.id === l?.componente)?.nome}</h4>
+      return <div className="mx-card" key={id}><h4>{id} · {local.matriz?.componentes.find(c => c.id === l?.componente)?.nome} × {local.matriz?.layers.find(c => c.id === l?.layer)?.nome}</h4>
         {nomes.length ? nomes.map(nome => <div key={nome}><strong>{nome}</strong><div className="mx-columns">
           <label>Seu rascunho r{e.versao}<span className="mx-value">{a[nome] ?? 'Removido'}</span></label>
           <label>Servidor r{e.conflito!.versao}<span className="mx-value">{s[nome] ?? 'Removido'}</span></label></div></div>) : <p>Os eixos desta célula foram alterados. Confira os nomes e orientações na revisão.</p>}
       </div>;
     }) : <div className="mx-columns"><div><h4>Seu rascunho</h4><ResumoDoDocumento documento={local} /></div>
       <div><h4>Servidor</h4><ResumoDoDocumento documento={servidor} /></div></div>}
-    <p>Reaplicar mantém suas alterações nos mesmos campos/células e preserva as outras mudanças do servidor. Revise novamente antes de salvar.</p>
+    <p>Reaplicar preserva os campos do servidor que você não editou. Quando o mesmo campo mudou nos dois clientes, usa o valor do seu rascunho mostrado acima. Revise novamente antes de salvar.</p>
     <p className="mx-nota">Autorização continua necessária. Comparar revisões ou reentrar não concede acesso de editor.</p>
     {!acoesNoRodape && <div className="mx-actions"><button onClick={() => exportarRascunho(e.rascunho)}>Exportar rascunho</button>
       <button className="mx-primary" onClick={e.reaplicarRevisao}>Reaplicar e revisar</button></div>}

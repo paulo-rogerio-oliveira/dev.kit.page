@@ -46,6 +46,8 @@ export async function prepararMatrix(request: APIRequestContext) {
         gatilho: 'Alterar o editor ou o contrato de resultado', motivo: 'Manter o mesmo significado em todos os clientes.', propagacao: 'Revisar a edição e a avaliação por célula.', verificacao: 'Conferir definição, revisão e SHAs avaliados.' },
       { id: 'rel-distribuir', origem: componentes[0].id, destino: componentes[2].id, layers: [layers[2].id, layers[3].id],
         gatilho: 'Alterar a revisão do recorte', motivo: 'Distribuir apenas às tasks afetadas.', propagacao: 'Conferir a entrega do recorte.', verificacao: 'Preservar avaliações de outras células.' },
+      { id: 'rel-historico', origem: componentes[0].id, destino: componentes[3].id, layers: [layers[1].id],
+        gatilho: 'Alterar o histórico do editor', motivo: 'Permitir comparação das revisões também no celular.', propagacao: 'Revisar a apresentação do histórico.', verificacao: 'Conferir autor, revisão e evidências anteriores.' },
     ],
   } };
   async function gravar(documento: DocumentoMatrix, versaoEsperada: number): Promise<ResultadoMatrix> {
@@ -65,8 +67,12 @@ export async function prepararMatrix(request: APIRequestContext) {
       ][ci][li],
       origem: `orientação ${c.nome} · mapa r2`, responsaveis: [{ id: `item-${li === 0 ? 3 : li === 1 ? 4 : 2}`, item: li === 0 ? 3 : li === 1 ? 4 : 2 }],
       criterio: 'Conferir resultado, revisão avaliada e evidências no desktop e em 390 px.', evidenciaEsperada: 'Imagem da célula e roteiro de validação.',
-    }))) } };
-  for (let v = 0; v < 4; v++) await gravar(matriz, v);
+    }))).filter(c => !(c.componente === componentes[3].id && c.layer === layers[1].id)) } };
+  for (let v = 0; v < 4; v++) {
+    const documento = structuredClone(matriz);
+    if (v < 3) documento.matriz!.celulas.find(c => c.id === 'imp-008')!.criterio = 'Conferir resultado e evidências da célula.';
+    await gravar(documento, v);
+  }
   let versaoRegistro = 0;
   for (const c of matriz.matriz!.celulas.filter(c => c.layer !== 'layer-0' && c.layer !== 'layer-1')) {
     await gravar({ contrato: 1, aplicacao: 'demo', tipo: 'registro', id: 'matrix', projeto: 'matrix', registro: {
@@ -74,6 +80,11 @@ export async function prepararMatrix(request: APIRequestContext) {
       evidencias: ['log-demonstracao.txt'], shas: { 'demo/aplicacao': 'a'.repeat(40) },
     } }, versaoRegistro++);
   }
+  for (const tipo of ['implementacao', 'avaliacao'] as const) await gravar({ contrato: 1, aplicacao: 'demo', tipo: 'registro', id: 'matrix', projeto: 'matrix', registro: {
+    celula: 'imp-008', revisaoDaDefinicao: 3, responsavel: 'item-4', tipo, resultado: 'parcial',
+    justificativa: tipo === 'implementacao' ? 'Comprovação anterior de demonstração, preservada no histórico.' : 'Resultado anterior de demonstração: conferir a evidência da célula.',
+    evidencias: ['captura-anterior-demonstracao.png'], shas: { 'demo/aplicacao': 'b'.repeat(40) },
+  } }, versaoRegistro++);
   const maquina = 'matrix-demo', task = 'matrix-item-4';
   expect((await request.post(`${API}/api/remoto/heartbeat`, { headers, data: { contrato: 1, maquinaId: maquina, nome: 'Ambiente de demonstração', versaoDevKit: '146', origem: 'servico', appAberto: true, estadoDoAgente: 'ativo', turnoEmAndamento: false } })).ok()).toBeTruthy();
   expect((await request.put(`${API}/api/remoto/retrato`, { headers, data: { contrato: 1, maquinaId: maquina, geradoEm: new Date().toISOString(),

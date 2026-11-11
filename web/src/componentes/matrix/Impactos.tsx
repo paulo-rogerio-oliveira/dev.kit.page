@@ -3,22 +3,26 @@ import { Link } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../../api/cliente';
 import type { CabecalhoMatrix, DocumentoMatrix, RevisaoMatrix } from '../../api/matrix';
 import type { Projeto } from '../../api/projetos';
+import type { AcessosDoDesign } from '../../api/tipos';
 import { dispositivoAtual } from '../../api/remoto';
 import { useSessao } from '../../sessao';
 import { EditorMatrix, type AlvoDoEditorMatrix } from './EditorMatrix';
 import { DialogoMatrix } from './DialogoMatrix';
+import { ReentradaDaMatrix } from './RevisaoDaMatrix';
 import { MapaDaMatrix } from './MapaDaMatrix';
 import { identificador, ultimo } from './modelo';
 
 const contaDa = (s: { login: string; empresa?: string | null }) => `${s.empresa ?? ''}:${s.login}`;
 const normalizarRepo = (s: string) => s.replace(/\.git\/?$/, '').replace(/\/$/, '').toLowerCase();
 const compativel = (h: RevisaoMatrix[]) => h.every(r => r.documento.contrato === 1);
+const autoresDoAcesso = (a: Pick<AcessosDoDesign, 'dono' | 'acessos'> | null) => Object.fromEntries(
+  [a?.dono, ...(a?.acessos ?? []).map(x => x.usuario)].flatMap(u => u ? [[String(u.id), u.nome || u.login]] : []));
 
 function FalhaDaConsulta({ erro, repetir }: { erro: unknown; repetir: () => void }) {
   const status = erro instanceof ErroDaApi ? erro.status : 0;
   return <div role="alert" className="mx-alerta"><p>{[404, 405, 501].includes(status) ? 'Impactos indisponíveis neste servidor ou cliente anterior. Atualize o recurso sem substituir definições.' :
     status === 401 ? 'Sessão expirada. O rascunho da aba está preservado; reentre para continuar.' : mensagemDaFalha(erro)}</p>
-    {status === 401 ? <Link to="/login" state={{ de: location.pathname + location.search }}>Entrar novamente</Link> : <button onClick={repetir}>Tentar novamente</button>}</div>;
+    {status === 401 ? <ReentradaDaMatrix /> : <button onClick={repetir}>Tentar novamente</button>}</div>;
 }
 
 async function carregarAlvo(token: string, cabecalho: CabecalhoMatrix, lista: CabecalhoMatrix[], signal: AbortSignal): Promise<AlvoDoEditorMatrix> {
@@ -34,10 +38,10 @@ async function carregarAlvo(token: string, cabecalho: CabecalhoMatrix, lista: Ca
   return { documento, historico, mapa, registros };
 }
 
-export function ImpactosDoProjeto({ projeto }: { projeto: Projeto }) {
+export function ImpactosDoProjeto({ projeto, visao = 'matriz' }: { projeto: Projeto; visao?: string }) {
   const { sessao } = useSessao();
   const [tentativa, setTentativa] = useState(0);
-  const [dados, setDados] = useState<{ lista: CabecalhoMatrix[]; mapas: RevisaoMatrix[][]; editar: boolean } | null>(null);
+  const [dados, setDados] = useState<{ lista: CabecalhoMatrix[]; mapas: RevisaoMatrix[][]; editar: boolean; autores: Record<string, string> } | null>(null);
   const [erro, setErro] = useState<unknown>(null);
   const [selecao, setSelecao] = useState('');
   const [alvo, setAlvo] = useState<AlvoDoEditorMatrix | null>(null);
@@ -56,7 +60,7 @@ export function ImpactosDoProjeto({ projeto }: { projeto: Projeto }) {
         if (!mapas.every(compativel)) throw new Error('Contrato Matrix desconhecido. Atualize o cliente.');
         const proprios = mapas.filter(h => ultimo(h)?.documento.mapa?.repositorios.some(r => projeto.repositorios.some(p => normalizarRepo(p) === normalizarRepo(r))));
         const matrizes = lista.filter(c => c.tipo === 'matriz' && c.projeto === projeto.slug);
-        setDados({ lista, mapas: proprios, editar: acesso.papel === 'dono' || acesso.papel === 'editor' });
+        setDados({ lista, mapas: proprios, editar: acesso.papel === 'dono' || acesso.papel === 'editor', autores: autoresDoAcesso(acesso) });
         setSelecao(matrizes[0] ? `${matrizes[0].aplicacao}/${matrizes[0].id}` : proprios[0] ? `${ultimo(proprios[0])!.documento.aplicacao}/` : '');
       } catch (falha) { if (!ctrl.signal.aborted) setErro(falha); }
     })();
@@ -68,7 +72,7 @@ export function ImpactosDoProjeto({ projeto }: { projeto: Projeto }) {
     const ctrl = new AbortController(); setAlvo(null); setErro(null);
     const [app, id] = selecao.split('/');
     const h = dados.lista.find(c => c.aplicacao === app && c.id === id && c.tipo === 'matriz');
-    if (h) void carregarAlvo(token, h, dados.lista, ctrl.signal).then(a => { if (!ctrl.signal.aborted) setAlvo(a); }).catch(e => { if (!ctrl.signal.aborted) setErro(e); });
+    if (h) void carregarAlvo(token, h, dados.lista, ctrl.signal).then(a => { if (!ctrl.signal.aborted) setAlvo({ ...a, autores: dados.autores }); }).catch(e => { if (!ctrl.signal.aborted) setErro(e); });
     else {
       const mapa = dados.mapas.find(h => ultimo(h)?.documento.aplicacao === app);
       if (mapa) setAlvo({ documento: { contrato: 1, aplicacao: app, tipo: 'matriz', id: projeto.slug, projeto: projeto.slug, matriz: null }, historico: [], mapa, registros: [] });
@@ -100,7 +104,9 @@ export function ImpactosDoProjeto({ projeto }: { projeto: Projeto }) {
       </select></label>
       <MaquinasDaMatrix valor={maquina} mudar={setMaquina} token={token} /></details>
       {aviso && <p role="status" className="mx-nota">{aviso}</p>}
-      {alvo && <EditorMatrix key={`${alvo.documento.aplicacao}/${alvo.documento.id}`} alvo={alvo} projeto={projeto} token={token} conta={contaDa(sessao!)} editar={dados.editar} solicitar={() => void solicitar()} />}
+      {alvo && <EditorMatrix key={`${alvo.documento.aplicacao}/${alvo.documento.id}`} alvo={alvo} projeto={projeto} token={token} conta={contaDa(sessao!)} editar={dados.editar} solicitar={() => void solicitar()} visao={visao}
+        aplicacoes={dados.mapas.map(h => ({ id: ultimo(h)!.documento.aplicacao, nome: ultimo(h)!.documento.mapa!.nome }))}
+        selecionarAplicacao={app => setSelecao(`${app}/${dados.lista.find(c => c.tipo === 'matriz' && c.projeto === projeto.slug && c.aplicacao === app)?.id ?? ''}`)} />}
       {!alvo && selecao && !erro && <p role="status">Carregando a definição e o histórico…</p>}
       {!selecao && <p>Nenhuma aplicação selecionada. Use o mapa da aplicação vinculada aos repositórios deste projeto.</p>}
       {dados.editar && !selecao && <section className="mx-card"><h3>Novo mapa desta aplicação</h3>
@@ -152,7 +158,7 @@ export function ImpactosDaTask({ maquina, sessao: task, projeto, item, solicitar
           const d = h[0].documento;
           const a = await carregarAlvo(token, { ...d, tipo: 'matriz', versao: 0 }, lista, c.signal);
           const responsaveis = h.map(r => r.documento.vinculo!.responsavel);
-          return { ...a, responsavel: responsaveis[0], recorte: a.documento.matriz!.celulas.filter(c => c.responsaveis.some(r => responsaveis.includes(r.id) && r.item === (item ?? null))).map(c => c.id) };
+          return { ...a, autores: autoresDoAcesso(acesso), responsavel: responsaveis[0], recorte: a.documento.matriz!.celulas.filter(c => c.responsaveis.some(r => responsaveis.includes(r.id) && r.item === (item ?? null))).map(c => c.id) };
         }));
         if (!c.signal.aborted) setDados({ alvos, projeto: p, editar: projeto ? acesso?.papel === 'dono' || acesso?.papel === 'editor' : true });
       } catch (e) { if (!c.signal.aborted) setErro(e); }
