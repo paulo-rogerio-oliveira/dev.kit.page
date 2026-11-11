@@ -5,6 +5,7 @@ import type { Projeto } from '../api/projetos';
 import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
 import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
+import { ImpactosDoProjeto } from '../componentes/matrix/Impactos';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
 import './Projetos.css';
@@ -94,6 +95,8 @@ export function Projetos() {
 
 function Detalhe({ projeto: p }: { projeto: Projeto }) {
   const { sessao, sair } = useSessao();
+  const [consulta, setConsulta] = useSearchParams();
+  const impactos = consulta.get('visao') === 'impactos';
   const [erro, setErro] = useState('');
   const tratar = useCallback((falha: unknown) => {
     if (falha instanceof ErroDaApi && falha.status === 401) sair('expirou');
@@ -107,7 +110,9 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
     <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
     <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
     <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{p.itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
-    <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
+    <nav className="projeto-abas" aria-label="Visões do projeto">{['plano', 'impactos'].map(v => <button key={v} aria-pressed={impactos === (v === 'impactos')}
+      onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{v === 'plano' ? 'Plano' : 'Impactos'}</button>)}</nav>
+    {impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
       <h3>Onda {onda} · {onda < atual ? 'concluída' : onda === atual ? 'atual' : 'próxima'}</h3>
       {p.itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
         <h4>{i.numero} · {i.titulo}</h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>
@@ -115,7 +120,7 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
         {i.dependencias.length > 0 && <p>Depende de: {i.dependencias.join(', ')}</p>}
         {i.workItemId > 0 && <small>Work item #{i.workItemId}</small>}
       </div>)}
-    </section>)}</div>
+    </section>)}</div>}
     <p className="projetos-nota">Última sincronização: {formatar.dataHora(p.atualizadoEm)}. No dev.kit de outra máquina, use Sincronizar para recuperar o projeto e continuar.</p>
     {erro && <p role="alert" className="erro">{erro}</p>}
     <AcessoAoProjeto key={p.id} token={sessao!.token} recurso="projeto" projeto={{ id: p.id, chave: p.nome }} tratar={tratar} />

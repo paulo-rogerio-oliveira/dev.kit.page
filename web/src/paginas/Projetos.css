@@ -24,3 +24,7 @@
 .projeto-item span, .projeto-item p, .projeto-item small { font-size: .75rem; }
 .projetos-nota { opacity: .65; font-size: .75rem; margin-top: 20px; }
 @media (max-width: 850px) { .projetos-board { grid-template-columns: 1fr; } .projetos-lista { flex-direction: row; overflow-x: auto; } .projeto-resumo { min-width: 240px; } }
+@media (max-width: 700px) {
+  .projeto-detalhe .design-acesso-lista li { flex-wrap: wrap; }
+  .projeto-detalhe .design-acesso-lista .login-com-iniciais { min-width: 0; overflow-wrap: anywhere; }
+}
