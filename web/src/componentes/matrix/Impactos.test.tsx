@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { api, ErroDaApi } from '../../api/cliente';
 import { renderizar } from '../../testes/renderizar';
@@ -22,6 +23,8 @@ it('cliente anterior sem Matrix mantém o projeto e explica que o recurso está 
   renderizar('/projetos?slug=matrix&visao=impactos', tokenDoDev());
   expect(await screen.findByText(/Impactos indisponíveis neste servidor ou cliente anterior/)).toBeInTheDocument();
   expect(screen.getByRole('article', { name: 'Detalhe do projeto' })).toHaveTextContent('feature/demo');
+  await userEvent.click(screen.getByRole('button', { name: 'Ver recursos disponíveis' }));
+  expect(screen.getByRole('navigation', { name: 'Recursos disponíveis' })).toHaveTextContent('Board');
   expect(gravar).not.toHaveBeenCalled();
 });
 

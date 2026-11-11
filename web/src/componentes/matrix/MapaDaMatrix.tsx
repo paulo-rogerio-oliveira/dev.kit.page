@@ -110,7 +110,7 @@ export function HistoricoDaMatrix({ historico, autores = {}, registros = [], cel
     <div className="mx-timeline">{historico.slice().reverse().map(r => {
       const anterior = historico.find(h => h.versao === r.versao - 1);
       const ids = celulasAlteradas(anterior?.documento.matriz, r.documento.matriz);
-      const alteradas = r.documento.matriz?.celulas.filter(c => ids.includes(c.id)) ?? [];
+      const alteradas = [...(anterior?.documento.matriz?.celulas ?? []), ...(r.documento.matriz?.celulas ?? [])].filter(c => ids.includes(c.id));
       const tasks = [...new Set(alteradas.flatMap(c => c.responsaveis.map(t => t.item ? `Item ${t.item}` : t.id)))];
       const resultados = registros.filter(v => v.documento.registro?.revisaoDaDefinicao === r.versao && (!celulas || celulas.includes(v.documento.registro.celula)));
       return <article key={`${r.documento.tipo}-${r.versao}`}>

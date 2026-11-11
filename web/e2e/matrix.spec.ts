@@ -17,6 +17,10 @@ test('Matrix: persistência, concorrência real, mapa e recorte nas duas largura
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await page.goto('/projetos?slug=matrix&visao=impactos');
     await expect(page.getByRole('heading', { name: 'Matriz deste projeto' })).toBeVisible();
+    await page.getByRole('button', { name: 'Minha task', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Matriz de impacto × API · imp-0-2' }).filter({ visible: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Minha task', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Matriz de impacto × API · imp-0-2' }).filter({ visible: true })).toBeVisible();
     const dimensoes = await page.evaluate(() => ({ viewport: innerWidth, documento: document.documentElement.scrollWidth,
       excedentes: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && e.getBoundingClientRect().width > 0)
         .slice(0, 10).map(e => ({ tag: e.tagName, classe: String(e.className), direita: e.getBoundingClientRect().right })) }));
@@ -30,7 +34,7 @@ test('Matrix: persistência, concorrência real, mapa e recorte nas duas largura
     remoto.matriz!.celulas.find(x => x.id === 'imp-0-2')!.criterio = `Desktop concorrente ${width}`;
     await c.gravar(remoto, versao++);
     await d.getByRole('button', { name: 'Revisar e salvar →' }).click();
-    await expect(d.getByRole('heading', { name: 'Existe uma revisão mais recente' })).toBeVisible();
+    await expect(d.getByRole('heading', { name: 'Conflito de edição' })).toBeVisible();
     await d.getByRole('button', { name: 'Reaplicar e revisar' }).click();
     await d.getByRole('button', { name: 'Revisar e salvar →' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);

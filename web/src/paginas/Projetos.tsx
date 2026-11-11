@@ -96,6 +96,7 @@ export function Projetos() {
 function Detalhe({ projeto: p }: { projeto: Projeto }) {
   const { sessao, sair } = useSessao();
   const [consulta, setConsulta] = useSearchParams();
+  const [emRevisao, setEmRevisao] = useState(false);
   const visao = consulta.get('visao') ?? 'plano';
   const impactos = ['impactos', 'entregas', 'historico'].includes(visao);
   const [erro, setErro] = useState('');
@@ -111,9 +112,9 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
     <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
     <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
     <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{p.itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
-    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={visao === v}
+    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
       onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', impactos: 'Impactos', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
-    {impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
+    {impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
       <h3>Onda {onda} · {onda < atual ? 'concluída' : onda === atual ? 'atual' : 'próxima'}</h3>
       {p.itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
         <h4>{i.numero} · {i.titulo}</h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>

@@ -28,10 +28,12 @@ export function ReentradaDaMatrix() {
   return <Link to="/login" state={{ de: location.pathname + location.search }} onClick={() => sair('expirou')}>Entrar novamente</Link>;
 }
 
-export function FalhaDaMatrix({ edicao: e }: { edicao: EdicaoDaMatrix }) {
+export function FalhaDaMatrix({ edicao: e, solicitar }: { edicao: EdicaoDaMatrix; solicitar?: (motivo?: string) => void }) {
   if (e.conflito) return null;
   return <>{e.erro && <p role="alert" className="mx-alerta">{e.erro}
     {e.status === 401 && <> <ReentradaDaMatrix /></>}
+    {e.status === 403 && solicitar && <button type="button" onClick={() => solicitar('Solicitar acesso de editor à definição da Matrix')}>Solicitar acesso</button>}
+    {e.status === 0 && <button type="button" disabled={e.ocupado} onClick={() => void (e.previa ? e.salvar() : e.revisar())}>Tentar novamente</button>}
     <button type="button" onClick={() => exportarRascunho(e.rascunho)}>Exportar rascunho</button></p>}</>;
 }
 
@@ -40,7 +42,7 @@ export function ConflitoDaMatrix({ edicao: e, acoesNoRodape = false }: { edicao:
   const local = e.documento, servidor = e.conflito.documento;
   const ids = celulasAlteradas(e.rascunho.base.matriz, local.matriz);
   return <section aria-label="Conflito de edição">
-    <h3>Existe uma revisão mais recente</h3>
+    {!acoesNoRodape && <h3>Existe uma revisão mais recente</h3>}
     <p className="mx-alerta">Seu rascunho r{e.versao} · servidor r{e.conflito.versao}. Nenhum conteúdo foi substituído automaticamente.</p>
     {local.matriz ? ids.map(id => {
       const l = local.matriz?.celulas.find(c => c.id === id), r = servidor.matriz?.celulas.find(c => c.id === id);
@@ -60,12 +62,12 @@ export function ConflitoDaMatrix({ edicao: e, acoesNoRodape = false }: { edicao:
   </section>;
 }
 
-export function PreviaDaMatrix({ edicao: e }: { edicao: EdicaoDaMatrix }) {
+export function PreviaDaMatrix({ edicao: e, voltar, cabecalho = true }: { edicao: EdicaoDaMatrix; voltar?: () => void; cabecalho?: boolean }) {
   if (!e.previa) return null;
   const m = e.previa.mudancas;
-  return <section aria-label="Revisar alterações antes de salvar"><h3>Revisar alterações antes de salvar</h3>
-    <p>Revisão r{e.versao} → r{e.previa.revisao.versao}</p>
-    <div className="mx-card"><h4>Resumo da revisão</h4><p>{m.celulas.length} célula(s) alterada(s): {m.celulas.join(', ') || 'nenhuma obrigação do projeto'}</p>
+  return <section className={cabecalho ? '' : 'mx-card'} aria-label="Revisar alterações antes de salvar"><h3>{cabecalho ? 'Revisar alterações antes de salvar' : 'Resumo da revisão'}</h3>
+    {cabecalho && <p>Revisão r{e.versao} → r{e.previa.revisao.versao}</p>}
+    <div className={cabecalho ? 'mx-card' : ''}>{cabecalho && <h4>Resumo da revisão</h4>}<p>{m.celulas.length} célula(s) alterada(s): {m.celulas.join(', ') || 'nenhuma obrigação do projeto'}</p>
       <p>Tasks afetadas: {m.responsaveis.join(', ') || 'nenhuma'}</p>
       <p className="mx-nota">Ao salvar, a revisão fica disponível às tasks afetadas pela mesma API. Definições e avaliações anteriores permanecem no histórico; somente células alteradas precisam de nova avaliação.</p>
       {m.celulas.map(id => {
@@ -75,7 +77,7 @@ export function PreviaDaMatrix({ edicao: e }: { edicao: EdicaoDaMatrix }) {
           <div key={nome}><strong>{nome}</strong><p>Antes: {a[nome] ?? 'Não definida'}</p><p>Depois: {b[nome] ?? 'Removida'}</p></div>)}</article>;
       })}
       {!e.documento.matriz && <ResumoDoDocumento documento={e.documento} />}</div>
-    <div className="mx-actions"><button onClick={e.voltar} disabled={e.ocupado}>Voltar à edição</button>
+    <div className="mx-actions"><button onClick={voltar ?? e.voltar} disabled={e.ocupado}>Voltar à edição</button>
       <button className="mx-primary" disabled={e.ocupado} onClick={() => void e.salvar()}>Salvar r{e.previa.revisao.versao} e distribuir</button></div>
   </section>;
 }

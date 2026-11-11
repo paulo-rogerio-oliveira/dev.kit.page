@@ -15,10 +15,10 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-function montar(editar = true, recorte?: string[]) {
+function montar(editar = true, recorte?: string[], opcoes: { minhasTasks?: string[]; solicitar?: (motivo?: string) => void } = {}) {
   const d = documentoDeTeste();
-  return render(<MemoryRouter><SessaoProvider><EditorMatrix alvo={{ documento: d, historico: [revisaoDeTeste(d)], mapa: [], registros: [], recorte }}
-    token="token-ficticio" conta="demonstracao" editar={editar} /></SessaoProvider></MemoryRouter>);
+  return render(<MemoryRouter><SessaoProvider><EditorMatrix alvo={{ documento: d, historico: [revisaoDeTeste(d)], mapa: [], registros: [], recorte, minhasTasks: opcoes.minhasTasks }}
+    token="token-ficticio" conta="demonstracao" editar={editar} solicitar={opcoes.solicitar} /></SessaoProvider></MemoryRouter>);
 }
 const abrir = async (layer = 'Page') => {
   // Grade e lista móvel têm o mesmo controle; apenas uma delas é mostrada pelo CSS no navegador.
@@ -27,6 +27,65 @@ const abrir = async (layer = 'Page') => {
 };
 
 describe('editor web da Matrix', () => {
+  it('Minha task usa o vínculo do contexto e o botão destacado abre a célula sem edição prévia', async () => {
+    montar(true, undefined, { minhasTasks: ['item-4'] });
+    await userEvent.click(screen.getByRole('button', { name: 'Minha task' }));
+    expect(screen.getByRole('combobox', { name: 'Tasks' })).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Editor × API · imp-api' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Editar IMP-PAGE →' }));
+    expect(within(screen.getByRole('dialog')).getByLabelText('Como validar')).toBeEnabled();
+  });
+
+  it('dependência em consulta permite solicitar atualização sem alterar o documento', async () => {
+    const solicitar = vi.fn(), gravar = vi.spyOn(api, 'editarMatrix');
+    montar(true, ['imp-page'], { solicitar }); const d = await abrir('API');
+    expect(d.getByLabelText('Como validar')).toBeDisabled();
+    const acao = d.getByRole('button', { name: 'Solicitar atualização ao Orquestrador ↗' });
+    expect(acao).toBeEnabled(); await userEvent.click(acao);
+    expect(solicitar).toHaveBeenCalledWith('Solicitar atualização de impactos fora deste recorte');
+    expect(gravar).not.toHaveBeenCalled();
+  });
+
+  it('leitor solicita acesso e recorte vinculado vazio conserva as dependências em consulta', async () => {
+    const solicitar = vi.fn();
+    montar(false, [], { solicitar });
+    expect(screen.getByRole('heading', { name: 'Nenhuma obrigação atribuída a esta task' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pedir revisão do recorte' }));
+    expect(solicitar).toHaveBeenCalledWith('Solicitar revisão do recorte vinculado sem obrigações atribuídas');
+    const d = await abrir(); expect(d.getByLabelText('Como validar')).toBeDisabled();
+    await userEvent.click(d.getByRole('button', { name: 'Solicitar acesso' }));
+    expect(solicitar).toHaveBeenCalledWith('Solicitar acesso de editor à definição da Matrix');
+    expect(d.queryByRole('button', { name: 'Revisar e salvar →' })).not.toBeInTheDocument();
+  });
+
+  it('Tentar novamente repete a simulação com o rascunho preservado após queda de rede', async () => {
+    const gravar = vi.spyOn(api, 'editarMatrix').mockRejectedValueOnce(new TypeError('offline')).mockImplementation(async (_t, edicao) => ({
+      aplicado: false, revisao: revisaoDeTeste(edicao.documento, 2), mudancas: { celulas: ['imp-page'], responsaveis: ['item-4'] },
+    }));
+    montar(); const d = await abrir(); await userEvent.type(d.getByLabelText('Como validar'), ' · preservado');
+    await userEvent.click(d.getByRole('button', { name: 'Revisar e salvar →' }));
+    await userEvent.click(await d.findByRole('button', { name: 'Tentar novamente' }));
+    await screen.findByRole('button', { name: 'Salvar r2 e distribuir' });
+    expect(gravar.mock.calls[1][1]).toEqual(gravar.mock.calls[0][1]); expect(gravar.mock.calls[1][2]).toBe(false);
+  });
+
+  it('editar eixos na prévia invalida a confirmação e exige nova revisão antes de salvar', async () => {
+    const gravar = vi.spyOn(api, 'editarMatrix').mockImplementation(async (_t, edicao, aplicar) => ({
+      aplicado: aplicar ?? false, revisao: revisaoDeTeste(edicao.documento, 2), mudancas: { celulas: ['imp-page'], responsaveis: ['item-4'] },
+    }));
+    montar(); const d = await abrir(); await userEvent.type(d.getByLabelText('Como validar'), ' · revisar');
+    await userEvent.click(d.getByRole('button', { name: 'Revisar e salvar →' }));
+    await screen.findByRole('button', { name: 'Salvar r2 e distribuir' });
+    const nome = screen.getByRole('textbox', { name: 'Nome da layer' });
+    await userEvent.clear(nome); await userEvent.type(nome, 'Canal Page');
+    expect(screen.queryByRole('button', { name: 'Salvar r2 e distribuir' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Layer' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Revisar eixos alterados' }));
+    await screen.findByRole('button', { name: 'Salvar r2 e distribuir' });
+    expect(gravar.mock.calls.at(-1)![1].documento.matriz!.layers[0].nome).toBe('Canal Page');
+    expect(gravar.mock.calls.every(c => !c[2])).toBe(true);
+  });
+
   it('simula e apresenta tasks afetadas antes de aplicar uma revisão', async () => {
     const gravar = vi.spyOn(api, 'editarMatrix').mockImplementation(async (_token, edicao, aplicar) => ({
       aplicado: aplicar, revisao: revisaoDeTeste(edicao.documento, 2), mudancas: { celulas: ['imp-page'], responsaveis: ['item-4'] },
@@ -112,7 +171,7 @@ describe('editor web da Matrix', () => {
     vi.spyOn(api, 'historicoMatrix').mockResolvedValue([revisaoDeTeste(), revisaoDeTeste(remoto, 2)]);
     montar(); const d = await abrir(); await userEvent.type(d.getByLabelText('Como validar'), ' · local');
     await userEvent.click(d.getByRole('button', { name: 'Revisar e salvar →' }));
-    expect(await d.findByRole('heading', { name: 'Existe uma revisão mais recente' })).toBeInTheDocument();
+    expect(await d.findByRole('heading', { name: 'Conflito de edição' })).toBeInTheDocument();
     await userEvent.click(d.getByRole('button', { name: 'Reaplicar e revisar' }));
     expect(gravar).toHaveBeenCalledTimes(1);
     await userEvent.click(d.getByRole('button', { name: 'Revisar e salvar →' }));

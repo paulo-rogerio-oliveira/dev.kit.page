@@ -29,7 +29,7 @@ export function RegistrosDaCelula({ tipo, celula, registros, historico, autores 
 
 export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, historico, fechar, recorte, solicitar, consultarOrigem, aplicacao, autores }: {
   id: string; edicao: EdicaoDaMatrix; editar: boolean; itens: ItemDoProjeto[]; registros: RevisaoMatrix[];
-  historico: RevisaoMatrix[]; fechar: () => void; recorte?: string[]; solicitar?: () => void; consultarOrigem?: () => void; aplicacao?: string; autores?: Record<string, string>;
+  historico: RevisaoMatrix[]; fechar: () => void; recorte?: string[]; solicitar?: (motivo?: string) => void; consultarOrigem?: () => void; aplicacao?: string; autores?: Record<string, string>;
 }) {
   const [aba, setAba] = useState('definicao');
   const [erro, setErro] = useState('');
@@ -44,21 +44,21 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
   };
   const titulo = `${m.componentes.find(x => x.id === c.componente)?.nome} × ${m.layers.find(x => x.id === c.layer)?.nome}`;
   const alteradas = celulasAlteradas(e.rascunho.base.matriz, m);
-  const tasks = [...new Set(m.celulas.filter(x => alteradas.includes(x.id)).flatMap(x => x.responsaveis.map(r => r.item ? `Item ${r.item}` : r.id)))];
+  const tasks = [...new Set([...(e.rascunho.base.matriz?.celulas ?? []), ...m.celulas].filter(x => alteradas.includes(x.id)).flatMap(x => x.responsaveis.map(r => r.item ? `Item ${r.item}` : r.id)))];
   const task = c.responsaveis.map(r => r.item ? `Item ${r.item} · ${itens.find(i => i.numero === r.item)?.titulo ?? r.id}` : r.id).join(', ') || 'Responsável a definir';
-  return <DialogoMatrix classe="mx-cell-editor" rotulo={`EDITAR CÉLULA · ${id.toUpperCase()}`} titulo={e.conflito ? 'Conflito de edição' : titulo}
-    contexto={<><strong>{e.documento.projeto || e.documento.id} / {task}</strong><span>Aplicação {aplicacao ?? e.documento.aplicacao}</span><span>Definição r{e.versao}</span></>} fechar={fechar} rodape={<><div className="mx-change-summary"><strong>{alteradas.length} obrigação(ões) alterada(s) · {alteradas.length} célula(s){tasks.length > 0 && ` · afeta ${tasks.join(', ')}`}</strong>
+  return <DialogoMatrix classe={`mx-cell-editor${e.conflito ? ' mx-conflict-editor' : ''}`} rotulo={e.conflito ? `CONFLITO · ${id.toUpperCase()}` : recorte ? 'IMPACTOS DA TASK · RECORTE' : `EDITAR CÉLULA · ${id.toUpperCase()}`} titulo={e.conflito ? 'Conflito de edição' : titulo}
+    contexto={!e.conflito && <><strong>{e.documento.projeto || e.documento.id} / {task}</strong><span>Aplicação {aplicacao ?? e.documento.aplicacao} · r{e.versao}</span></>} fechar={fechar} rodape={<><div className="mx-change-summary"><strong>{alteradas.length} obrigação(ões) alterada(s) · {alteradas.length} célula(s){tasks.length > 0 && ` · afeta ${tasks.join(', ')}`}</strong>
       <small>{e.alterado ? 'Revisar alterações antes de salvar e distribuir às tasks responsáveis.' : `${id} · definição r${e.versao} · nenhuma alteração`}</small></div>
     <div className="mx-actions"><button onClick={fechar}>Fechar</button>{e.conflito && <><button onClick={() => exportarRascunho(e.rascunho)}>Exportar rascunho</button>
       <button className="mx-primary" onClick={e.reaplicarRevisao}>Reaplicar e revisar</button></>}{permitido && !e.previa && !e.conflito &&
       <button className="mx-primary" disabled={ocupado || !e.alterado} onClick={() => {
         const falha = validarCelula(c); setErro(falha); if (!falha) void e.revisar();
       }}>Revisar e salvar →</button>}</div></>}>
-    <FalhaDaMatrix edicao={e} />
+    <FalhaDaMatrix edicao={e} solicitar={solicitar} />
     {e.conflito ? <ConflitoDaMatrix edicao={e} acoesNoRodape /> : e.previa ? <PreviaDaMatrix edicao={e} /> : <>
       <div className="mx-columns"><div>
         <p className="mx-alerta">{recorte ? 'Somente as células atribuídas a esta task podem ser editadas. Dependências ficam em consulta.' : 'Esta edição vale somente para esta demanda. O mapa da aplicação permanece como referência.'}</p>
-        {!permitido && <p role="status">Somente leitura{editar ? ' · célula de outra task' : ' · salvar exige editor ou dono'}.</p>}
+        {!permitido && <p role="status">Somente leitura{editar ? ' · célula de outra task' : ' · salvar exige editor ou dono'}. {!editar && solicitar && <button onClick={() => solicitar('Solicitar acesso de editor à definição da Matrix')}>Solicitar acesso</button>}</p>}
         <p className="mx-muted mx-origin">Origem: {c.origem} {consultarOrigem && <button onClick={consultarOrigem}>Consultar ↗</button>}</p>
         <nav className="mx-tabs" aria-label="Conteúdo da célula">{['definicao', 'evidencias', 'avaliacao'].map(a =>
           <button key={a} aria-pressed={aba === a} onClick={() => setAba(a)}>{a === 'definicao' ? 'Definição' : a === 'evidencias' ? 'Evidências' : 'Avaliação'}</button>)}</nav>
@@ -80,7 +80,7 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
           })}
             <label>Outros responsáveis (IDs separados por vírgula)<input value={c.responsaveis.filter(r => r.item === null).map(r => r.id).join(', ')}
               onChange={v => mudar({ responsaveis: [...c.responsaveis.filter(r => r.item !== null), ...v.target.value.split(',').map(s => s.trim()).filter(Boolean).map(id => ({ id, item: null }))] })} /></label>
-          </fieldset>{solicitar && <button type="button" onClick={solicitar}>Solicitar atualização ao Orquestrador ↗</button>}</details>
+          </fieldset></details>
         </fieldset>}
         {aba !== 'definicao' && <RegistrosDaCelula tipo={aba === 'evidencias' ? 'implementacao' : 'avaliacao'} celula={id} registros={registros} historico={historico} autores={autores} />}
       </div>{aba === 'definicao' && <div>
@@ -90,6 +90,7 @@ export function CelulaDaMatrix({ id, edicao: e, editar, itens, registros, histor
           <label>Evidência esperada<textarea value={c.evidenciaEsperada} onChange={v => mudar({ evidenciaEsperada: v.target.value })} /></label>
         </fieldset>
         <div className="mx-card mx-dashed"><strong>Comprovação separada da definição</strong><p>Implementador: atendimento e links. Avaliador: atendido, parcial, não atendido ou não aplicável, com motivo, revisão e SHAs.</p></div>
+        {solicitar && <p className="mx-scope-request">Novo impacto fora deste recorte? <button type="button" onClick={() => solicitar('Solicitar atualização de impactos fora deste recorte')}>Solicitar atualização ao Orquestrador ↗</button></p>}
         {erro && <p role="alert" className="mx-alerta">{erro}</p>}
       </div>}</div>
     </>}
