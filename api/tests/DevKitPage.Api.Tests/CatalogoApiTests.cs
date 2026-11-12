@@ -59,17 +59,46 @@ public sealed class CatalogoApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Tags_do_catalogo_ficam_fora_das_versoes_do_app_e_o_catalogo_usa_a_mesma_lista_em_cache()
+    public async Task Catalogo_e_app_usam_repositorios_e_caches_independentes()
     {
         var cliente = _api.CreateClient();
 
         var ultima = (await cliente.GetFromJsonAsync<VersaoV1>("/api/versoes/ultima"))!;
         await cliente.GetAsync("/api/catalogo/base");
         await cliente.GetAsync("/api/catalogo/base/vitrine");
+        await cliente.GetAsync("/api/versoes/ultima");
 
         Assert.Equal("v136", ultima.Tag);
         Assert.Equal(HttpStatusCode.NotFound, (await cliente.GetAsync("/api/versoes/2/download")).StatusCode); // catalogo-v2 não é a versão 2
-        Assert.Single(_api.GitHub.Pedidos, p => p.Endereco.AbsolutePath.EndsWith("/releases", StringComparison.Ordinal));
+        Assert.Single(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.Api + "/releases");
+        Assert.Single(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.ApiDoCatalogo + "/releases");
+        Assert.Contains(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.ApiDoCatalogo + "/releases/assets/52");
+        Assert.DoesNotContain(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.Api + "/releases/assets/52");
+    }
+
+    [Fact]
+    public async Task Falha_na_origem_do_catalogo_preserva_atualizacao_e_recupera_sem_cachear_a_falha()
+    {
+        _api.GitHub.CatalogoForaDoAr = true;
+        var cliente = _api.CreateClient();
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await cliente.GetAsync("/api/catalogo/base")).StatusCode);
+        Assert.Equal("v136", (await cliente.GetFromJsonAsync<VersaoV1>("/api/versoes/ultima"))!.Tag);
+        _api.GitHub.CatalogoForaDoAr = false;
+        Assert.Equal(2, (await cliente.GetFromJsonAsync<CatalogoBaseV1>("/api/catalogo/base"))!.Manifesto.Versao);
+    }
+
+    [Fact]
+    public async Task Nova_origem_sem_releases_preserva_manifesto_e_download_do_historico()
+    {
+        _api.GitHub.CatalogoVazio = true;
+        var cliente = _api.CreateClient();
+        Assert.Equal(2, (await cliente.GetFromJsonAsync<CatalogoBaseV1>("/api/catalogo/base"))!.Manifesto.Versao);
+        var download = await cliente.GetAsync("/api/catalogo/base/download");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        Assert.Equal(_api.GitHub.ZipDoCatalogo, await download.Content.ReadAsByteArrayAsync());
+        Assert.Contains(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.Api + "/releases/assets/52");
+        Assert.Contains(_api.GitHub.Pedidos, p => p.Endereco.GetLeftPart(UriPartial.Path) == GitHubDeMentira.Api + "/releases/assets/51");
+        Assert.Null(Assert.Single(_api.GitHub.Pedidos, p => p.Endereco.AbsolutePath.EndsWith("catalogo-2.zip", StringComparison.Ordinal)).Authorization);
     }
 
     [Fact]

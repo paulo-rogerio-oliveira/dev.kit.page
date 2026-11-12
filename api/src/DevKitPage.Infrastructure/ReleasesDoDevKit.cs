@@ -49,13 +49,13 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
     /// <summary>A lista lida de uma vez: as releases do app e as do catálogo, cada uma pela sua regra de tag.</summary>
     private sealed record Lidas(IReadOnlyList<ReleaseDoDevKit> Estaveis, IReadOnlyList<ReleaseDoCatalogo> Catalogos);
 
-    public async Task<IReadOnlyList<ReleaseDoDevKit>?> EstaveisAsync(CancellationToken ct) => (await LidasAsync(ct))?.Estaveis;
+    public async Task<IReadOnlyList<ReleaseDoDevKit>?> EstaveisAsync(CancellationToken ct) => (await LidasAsync(false, ct))?.Estaveis;
 
-    public async Task<IReadOnlyList<ReleaseDoCatalogo>?> CatalogosAsync(CancellationToken ct) => (await LidasAsync(ct))?.Catalogos;
+    public async Task<IReadOnlyList<ReleaseDoCatalogo>?> CatalogosAsync(CancellationToken ct) => (await LidasAsync(true, ct))?.Catalogos;
 
     public async Task<ManifestoDoCatalogoV1?> ManifestoAsync(ReleaseDoCatalogo release, CancellationToken ct)
     {
-        var cfg = opcoes.Value;
+        var cfg = Configuracao(true, release.Repositorio);
         if (cfg.Token.Length == 0)
             return null;
 
@@ -87,18 +87,30 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
         }
     }
 
-    public Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoCatalogo release, CancellationToken ct) => AbrirAssetAsync(release.AssetId, ct);
+    public Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoCatalogo release, CancellationToken ct) => AbrirAssetAsync(release.AssetId, ct, true, release.Repositorio);
 
-    private async Task<Lidas?> LidasAsync(CancellationToken ct)
+    private OpcoesDeAtualizacao Configuracao(bool catalogo, string? repositorio = null)
     {
         var cfg = opcoes.Value;
+        return catalogo ? new OpcoesDeAtualizacao
+        {
+            Repositorio = repositorio ?? cfg.RepositorioDoCatalogo,
+            Token = cfg.Token,
+            UrlDaApi = cfg.UrlDaApi,
+            CacheMinutos = cfg.CacheMinutos,
+        } : cfg;
+    }
+
+    private async Task<Lidas?> LidasAsync(bool catalogo, CancellationToken ct)
+    {
+        var cfg = Configuracao(catalogo);
         if (cfg.Token.Length == 0)
         {
             log.LogWarning("Atualização do dev.kit indisponível: a variável {Variavel} não está configurada.", OpcoesDeAtualizacao.VariavelDoToken);
             return null;
         }
 
-        var chave = $"{ChaveDoCache}:{cfg.Repositorio}";
+        var chave = $"{ChaveDoCache}:{cfg.Repositorio}:{catalogo}";
         if (cache.TryGetValue(chave, out Lidas? guardadas))
             return guardadas;
 
@@ -108,7 +120,11 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
             if (cache.TryGetValue(chave, out guardadas))
                 return guardadas;
 
-            var lidas = await LerAsync(cfg, ct);
+            var lidas = await LerAsync(cfg, catalogo, ct);
+            // Um destino recém-criado ainda não tem releases. Preserve o histórico até a primeira publicação;
+            // erros de acesso ou de rede da nova origem continuam falhas, em vez de serem mascarados.
+            if (catalogo && lidas is { Catalogos.Count: 0 } && cfg.Repositorio != opcoes.Value.Repositorio)
+                lidas = await LerAsync(Configuracao(false), true, ct);
             // Só o sucesso fica em cache: o GitHub que volta do ar volta na próxima visita.
             if (lidas is not null)
                 cache.Set(chave, lidas, TimeSpan.FromMinutes(Math.Max(1, cfg.CacheMinutos)));
@@ -123,9 +139,9 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
     public Task<PacoteAberto?> AbrirPacoteAsync(ReleaseDoDevKit release, CancellationToken ct) => AbrirAssetAsync(release.AssetId, ct);
 
     /// <summary>O asset aberto em streaming — o zip do app e o do catálogo pelo mesmo caminho.</summary>
-    private async Task<PacoteAberto?> AbrirAssetAsync(long assetId, CancellationToken ct)
+    private async Task<PacoteAberto?> AbrirAssetAsync(long assetId, CancellationToken ct, bool catalogo = false, string? repositorio = null)
     {
-        var cfg = opcoes.Value;
+        var cfg = Configuracao(catalogo, repositorio);
         if (cfg.Token.Length == 0)
             return null;
 
@@ -140,7 +156,7 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
     /// A lista do GitHub, já separada: as do app pela <see cref="RegrasDeVersao"/>, as do catálogo pela
     /// <see cref="RegrasDoCatalogoBase"/> (com o zip E o manifesto). Nula na falha.
     /// </summary>
-    private async Task<Lidas?> LerAsync(OpcoesDeAtualizacao cfg, CancellationToken ct)
+    private async Task<Lidas?> LerAsync(OpcoesDeAtualizacao cfg, bool catalogo, CancellationToken ct)
     {
         try
         {
@@ -153,6 +169,8 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
             }
 
             var releases = await resposta.Content.ReadFromJsonAsync<ReleaseDoGitHub[]>(Json, ct) ?? [];
+            if (catalogo)
+                return new Lidas([], await CatalogosAsync(cfg, releases, ct));
             var estaveis = RegrasDeVersao.Estaveis(
                     releases.Where(r => Pacote(r) is not null),
                     r => new RegrasDeVersao.Candidata(r.TagName, r.Prerelease, r.Draft, r.PublishedAt))
@@ -170,7 +188,7 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
                     RegrasDeVersao.Destaques(r.Body), zip.Id, zip.Name!, zip.Size, sha));
             }
 
-            return new Lidas(lista, await CatalogosAsync(cfg, releases, ct));
+            return new Lidas(lista, []);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or NotSupportedException
                                        || (ex is TaskCanceledException && !ct.IsCancellationRequested))
@@ -201,7 +219,7 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
             var sha = RegrasDeVersao.Sha256DoDigest(zip.Digest) ?? (lista.Count == 0 ? await Sha256DoArquivoAsync(cfg, r, zip, ct) : null);
             lista.Add(new ReleaseDoCatalogo(
                 versao!.Value, r.TagName!, string.IsNullOrWhiteSpace(r.Name) ? r.TagName! : r.Name.Trim(), r.PublishedAt ?? DateTimeOffset.MinValue,
-                zip.Id, zip.Name!, zip.Size, sha, ManifestoDa(r)!.Id));
+                zip.Id, zip.Name!, zip.Size, sha, ManifestoDa(r)!.Id, cfg.Repositorio));
         }
 
         return lista;

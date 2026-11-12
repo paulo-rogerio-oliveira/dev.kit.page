@@ -12,6 +12,7 @@ namespace DevKitPage.Api.Tests;
 public sealed class GitHubDeMentira : HttpMessageHandler
 {
     public const string Api = "https://api.github.com/repos/paulo-rogerio-oliveira/git.kit";
+    public const string ApiDoCatalogo = "https://api.github.com/repos/paulo-rogerio-oliveira/dev.kit.catalogo";
     public const string Armazenamento = "https://objects.githubusercontent.com";
 
     /// <summary>O corpo da falha: nada dele pode chegar ao cliente da API.</summary>
@@ -39,6 +40,10 @@ public sealed class GitHubDeMentira : HttpMessageHandler
 
     /// <summary>O GitHub fora do ar: toda resposta é 500 com o <see cref="CorpoDaFalha"/>.</summary>
     public bool ForaDoAr { get; set; }
+
+    public bool CatalogoForaDoAr { get; set; }
+
+    public bool CatalogoVazio { get; set; }
 
     /// <summary>
     /// As releases: a v137 é prerelease (fica de fora), a v136 é a última estável (sem digest, com o
@@ -112,12 +117,12 @@ public sealed class GitHubDeMentira : HttpMessageHandler
         lock (_pedidos)
             _pedidos.Add(new Pedido(endereco, request.Headers.Authorization?.ToString(), request.Headers.Accept.ToString()));
 
-        if (ForaDoAr)
+        if (ForaDoAr || (CatalogoForaDoAr && endereco.GetLeftPart(UriPartial.Path).StartsWith(ApiDoCatalogo, StringComparison.Ordinal)))
             return Responder(HttpStatusCode.InternalServerError, new StringContent(CorpoDaFalha, Encoding.UTF8, "application/json"));
 
         var caminho = endereco.GetLeftPart(UriPartial.Path);
         // A API do GitHub exige o token; o armazenamento usa a URL assinada (e recusaria o Authorization).
-        if (caminho.StartsWith(Api, StringComparison.Ordinal) && request.Headers.Authorization is null)
+        if ((caminho.StartsWith(Api, StringComparison.Ordinal) || caminho.StartsWith(ApiDoCatalogo, StringComparison.Ordinal)) && request.Headers.Authorization is null)
             return Responder(HttpStatusCode.Unauthorized, new StringContent(CorpoDaFalha));
         if (caminho.StartsWith(Armazenamento, StringComparison.Ordinal) && request.Headers.Authorization is not null)
             return Responder(HttpStatusCode.BadRequest, new StringContent("Only one auth mechanism allowed"));
@@ -125,16 +130,17 @@ public sealed class GitHubDeMentira : HttpMessageHandler
         return caminho switch
         {
             $"{Api}/releases" => Responder(HttpStatusCode.OK, new StringContent(Releases, Encoding.UTF8, "application/json")),
+            $"{ApiDoCatalogo}/releases" => Responder(HttpStatusCode.OK, new StringContent(CatalogoVazio ? "[]" : Releases, Encoding.UTF8, "application/json")),
             $"{Api}/releases/assets/11" => Redirecionar($"{Armazenamento}/github-production-release-asset/devkit-136.zip?X-Amz-Signature=assinada"),
             $"{Api}/releases/assets/12" => Redirecionar($"{Armazenamento}/github-production-release-asset/devkit-136.zip.sha256?X-Amz-Signature=assinada"),
             $"{Api}/releases/assets/13" => Responder(HttpStatusCode.OK, new ByteArrayContent([1, 2, 3, 4])),
             $"{Armazenamento}/github-production-release-asset/devkit-136.zip" => Responder(HttpStatusCode.OK, Conteudo(Zip, "application/octet-stream")),
             $"{Armazenamento}/github-production-release-asset/devkit-136.zip.sha256" => Responder(HttpStatusCode.OK, new StringContent($"{Sha256}  devkit-136.zip\n")),
             // O catálogo básico (US #425): o zip passa pelo armazenamento como o do app; os manifestos vêm direto.
-            $"{Api}/releases/assets/51" => Redirecionar($"{Armazenamento}/github-production-release-asset/catalogo-2.zip?X-Amz-Signature=assinada"),
+            $"{ApiDoCatalogo}/releases/assets/51" or $"{Api}/releases/assets/51" => Redirecionar($"{Armazenamento}/github-production-release-asset/catalogo-2.zip?X-Amz-Signature=assinada"),
             $"{Armazenamento}/github-production-release-asset/catalogo-2.zip" => Responder(HttpStatusCode.OK, Conteudo(ZipDoCatalogo, "application/octet-stream")),
-            $"{Api}/releases/assets/52" => Responder(HttpStatusCode.OK, new StringContent(Manifesto2, Encoding.UTF8, "application/octet-stream")),
-            $"{Api}/releases/assets/54" => Responder(HttpStatusCode.OK, new StringContent(Manifesto1, Encoding.UTF8, "application/octet-stream")),
+            $"{ApiDoCatalogo}/releases/assets/52" or $"{Api}/releases/assets/52" => Responder(HttpStatusCode.OK, new StringContent(Manifesto2, Encoding.UTF8, "application/octet-stream")),
+            $"{ApiDoCatalogo}/releases/assets/54" or $"{Api}/releases/assets/54" => Responder(HttpStatusCode.OK, new StringContent(Manifesto1, Encoding.UTF8, "application/octet-stream")),
             _ => Responder(HttpStatusCode.NotFound, new StringContent(CorpoDaFalha)),
         };
     }

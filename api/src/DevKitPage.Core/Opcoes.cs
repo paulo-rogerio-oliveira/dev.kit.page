@@ -361,6 +361,9 @@ public sealed class OpcoesDeAtualizacao
     /// <summary>O repositório das releases, <c>owner/nome</c> — o do dev.kit (git.kit) por padrão.</summary>
     public string Repositorio { get; set; } = "paulo-rogerio-oliveira/git.kit";
 
+    /// <summary>Origem independente das releases do catálogo básico; não altera a atualização do aplicativo.</summary>
+    public string RepositorioDoCatalogo { get; set; } = "paulo-rogerio-oliveira/dev.kit.catalogo";
+
     /// <summary>A raiz da API do GitHub (trocada só em teste ou num GitHub Enterprise).</summary>
     public string UrlDaApi { get; set; } = "https://api.github.com/";
 
