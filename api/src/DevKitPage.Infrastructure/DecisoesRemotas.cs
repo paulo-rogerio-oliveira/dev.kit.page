@@ -5,7 +5,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DevKitPage.Infrastructure;
 
-public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFator fator, TimeProvider relogio) : IDecisoesRemotas
+/// <summary>
+/// As decisões remotas do site. (semana 7) O aprovar e o autorizar valem com o LOGIN CONFIRMADO (o JWT do dev), sem o segundo
+/// fator: o <c>Codigo</c> que um cliente antigo ainda mande é ignorado, e a auditoria grava <c>SegundoFator</c> falso. Ficam as
+/// travas do ato: o escopo exato (o id do snapshot), as evidências, o SHA, o prazo e o consumo único pela máquina.
+/// </summary>
+public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, TimeProvider relogio) : IDecisoesRemotas
 {
     public async Task<IReadOnlyList<DecisaoPendenteV1>?> PendentesAsync(int usuario, string maquina, CancellationToken ct, bool incluirDispensadas = false)
     {
@@ -68,7 +73,8 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
             anterior.Estado = "vencida";
             await db.SaveChangesAsync(ct);
         }
-        // (ajuste 9) O autorizar exige o segundo fator, como o aprovar; o escopo está no id do snapshot conferido acima.
+        // (ajuste 9) O autorizar decide como o aprovar; o escopo está no id do snapshot conferido acima. (semana 7) Sem segundo
+        // fator: o login confirmado basta, e o pedido.Codigo de um cliente antigo é ignorado (não valida nem recusa).
         var aprovar = pedido.Acao is DecisoesV1.AcaoAprovar or DecisoesV1.AcaoAutorizar;
         if (p.Tipo == RemotoV1.PendenciaAutorizacao)
         {
@@ -86,18 +92,13 @@ public sealed class DecisoesRemotas(DevKitPageDb db, IRemoto remoto, ISegundoFat
             if (aprovar && RegrasDaDecisao.Bloqueio(p) is { } bloqueio) return new(null, bloqueio);
         }
         else return new(null, "Esta pendência não aceita decisão remota.", 400);
-        if (aprovar)
-        {
-            var erro = await fator.VerificarAsync(usuario, pedido.Codigo, ativar: false, ct);
-            // O contador de tentativas inválidas precisa persistir mesmo sem autorização.
-            if (erro is not null) { await transacao.CommitAsync(ct); return new(null, erro, 403); }
-        }
         var resposta = new RespostaDaDecisao
         {
             UsuarioId = usuario, MaquinaId = maquina, PendenciaId = pendencia, SnapshotId = hash,
             Acao = pedido.Acao, Opcao = p.Tipo == RemotoV1.PendenciaPergunta ? pedido.Opcao : null,
             Origem = p.Snapshot?.Origem, Destino = p.Snapshot?.Destino, Sha = p.Snapshot?.Sha ?? p.Escopo?.Sha,
-            EmUtc = relogio.GetUtcNow().UtcDateTime, SegundoFator = aprovar, Dispositivo = dispositivo,
+            // Honesto: não houve TOTP nesta decisão. A coluna fica para a auditoria das decisões antigas.
+            EmUtc = relogio.GetUtcNow().UtcDateTime, SegundoFator = false, Dispositivo = dispositivo,
         };
         db.RespostasDasDecisoes.Add(resposta);
         await db.SaveChangesAsync(ct);

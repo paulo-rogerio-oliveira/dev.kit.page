@@ -37,6 +37,74 @@ function responder(lista = [maquina()]) {
   );
 }
 
+describe('Board remoto · conversa da task (semana 7, item 4)', () => {
+  const comTask = (m = maquina()): RetratoDaMaquina => {
+    const r = retrato(m);
+    return { ...r, retrato: { ...r.retrato!, fluxos: [
+      { id: 'exec-7a1', nome: 'Item 4 · chat da task', etapa: 'Implementação', situacao: 'rodando', agente: 'claude', conversavel: true },
+      { id: 'exec-antiga', nome: 'Execução do dev.kit antigo', etapa: 'Avaliação', situacao: 'rodando' },
+    ] } };
+  };
+
+  it('a task conversável abre o chat DELA com as últimas falas, e a mensagem vai só como texto com o destino', async () => {
+    responder();
+    let enviado: Record<string, unknown> | undefined;
+    const pedidos: Record<string, unknown>[] = [];
+    const agora = Date.now();
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => HttpResponse.json(comTask(maquina(String(params.id))))),
+      http.get(`${API}/api/matrix`, () => HttpResponse.json([])),
+      http.get(`${API}/api/remoto/maquinas/:id/sessoes/:sessao/conversa`, ({ params }) => HttpResponse.json({
+        comandos: [], respostas: [], ultimoEvento: 0, falas: params.sessao !== 'exec-7a1' ? [] : [
+          { id: 'ft-1', maquinaId: 'notebook', autor: 'dev', origem: 'desktop', texto: 'Comece pelo contrato da API.', comandoId: null, ditaEm: new Date(agora - 120_000).toISOString(), recebidaEm: new Date().toISOString(), sessao: 'exec-7a1' },
+          { id: 'ft-2', maquinaId: 'notebook', autor: 'agente', origem: 'desktop', texto: 'Contrato feito; rodando os testes da API.', comandoId: null, ditaEm: new Date(agora - 60_000).toISOString(), recebidaEm: new Date().toISOString(), sessao: 'exec-7a1' },
+        ],
+      })),
+      http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+        enviado = await request.json() as Record<string, unknown>;
+        pedidos.push(enviado);
+        return HttpResponse.json({ id: enviado.id, maquinaId: 'notebook', tipo: enviado.tipo, texto: enviado.texto, dispositivo: 'navegador', estado: 'na-fila',
+          criadoEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 600_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '', sessao: enviado.sessao ?? null }, { status: 202 });
+      }),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    // A execução do dev.kit antigo não abre conversa: fica como antes, só informativa.
+    expect(await board.findByText('Execução do dev.kit antigo')).toBeInTheDocument();
+    expect(board.queryByRole('button', { name: 'Conversar com a task Execução do dev.kit antigo' })).not.toBeInTheDocument();
+
+    // Impactos mantém sua ação própria: abrir o recorte não abre a conversa nem envia mensagem.
+    await userEvent.click(board.getAllByRole('button', { name: 'Impactos' })[0]);
+    const impactos = within(await screen.findByRole('dialog', { name: 'Impactos da task' }));
+    expect(await impactos.findByText(/Nenhum recorte vinculado/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Conversa da task Item 4 · chat da task' })).not.toBeInTheDocument();
+    expect(pedidos.filter(p => p.tipo !== 'catalogo')).toEqual([]);
+    await userEvent.click(impactos.getByRole('button', { name: 'Fechar painel' }));
+
+    await userEvent.click(board.getByRole('button', { name: 'Conversar com a task Item 4 · chat da task' }));
+    const chat = within(await screen.findByRole('region', { name: 'Conversa da task Item 4 · chat da task' }));
+    expect(chat.getByText('Agente da task · Implementação · claude')).toBeInTheDocument();
+    const log = within(chat.getByRole('log', { name: 'Mensagens da task Item 4 · chat da task' }));
+    expect(await log.findByText('Contrato feito; rodando os testes da API.')).toBeInTheDocument();
+    expect(log.getByText(/^Agente · no dev.kit/)).toBeInTheDocument();
+    expect(log.getByText(/^Você · no dev.kit/)).toBeInTheDocument();
+    // O chat do Orquestrador sai de cena enquanto a task está aberta.
+    expect(screen.queryByRole('region', { name: 'Orquestrador' })).not.toBeInTheDocument();
+
+    await userEvent.type(chat.getByLabelText('Mensagem à task'), 'Rode só os testes do Board.');
+    await userEvent.click(chat.getByRole('button', { name: 'Enviar à task' }));
+    await waitFor(() => expect(enviado).toMatchObject({ maquinaId: 'notebook', tipo: 'mensagem', texto: 'Rode só os testes do Board.', sessao: 'exec-7a1' }));
+    // Só texto: nada de fluxo, agente ou parâmetro na mensagem à task.
+    expect(enviado).not.toHaveProperty('fluxo');
+    expect(enviado).not.toHaveProperty('parametros');
+    expect(await log.findByText('Rode só os testes do Board.')).toBeInTheDocument();
+    expect(log.getByText('aguardando o dev.kit')).toBeInTheDocument();
+
+    await userEvent.click(chat.getByRole('button', { name: '‹ Orquestrador' }));
+    expect(await screen.findByRole('region', { name: 'Orquestrador' })).toBeInTheDocument();
+  });
+});
+
 describe('Board remoto', () => {
   it('preserva a notificação após login e recusa destino externo', () => {
     expect(destinoDa(tokenDoDev(), '/board?notificacao=' + 'a'.repeat(32))).toBe('/board?notificacao=' + 'a'.repeat(32));
@@ -48,12 +116,13 @@ describe('Board remoto', () => {
     servidor.use(
       http.get(`${API}/api/remoto/push/entregas/${id}`, () => HttpResponse.json({ maquinaId: 'notebook', pendenciaId: 'p1', snapshotId: 'b'.repeat(64) })),
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Revisar este snapshot?' }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
     );
     renderizar('/board?notificacao=' + id, tokenDoDev());
     expect(await screen.findByRole('main', { name: 'Revisão da decisão' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Aprovar com segundo fator' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Confirmar e aprovar este SHA' })).not.toBeInTheDocument();
+    // (semana 7) Abrir a revisão não decide: o ato só sai no clique explícito, e não há mais o código do segundo fator.
+    expect(screen.getByRole('button', { name: 'Aprovar este SHA' })).toBeEnabled();
+    expect(screen.queryByLabelText('Código de 6 dígitos')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('notificação de pergunta seleciona a máquina e dá foco à pergunta atual', async () => {
@@ -219,14 +288,13 @@ describe('Board remoto', () => {
     expect(board.getByRole('link', { name: 'Abrir o design de dev.kit.page' })).toBeInTheDocument();
   });
 
-  it('a autorização mostra o escopo exato e só sai com o segundo fator, como autorizar', async () => {
+  it('a autorização mostra o escopo exato e sai com o login confirmado, sem segundo fator, como autorizar', async () => {
     responder();
     let recebido: unknown;
     const escopo = { ato: 'executar-comando', alvo: '#515 Implementar', comando: 'dotnet test tests/App.Tests' };
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'autorizacao', titulo: 'Comando bloqueado', escopo }, snapshotId: 'c'.repeat(64), bloqueio: null, resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
-      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 2, acao: 'autorizar', em: new Date().toISOString(), segundoFator: true, estado: 'registrada' }); }),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 2, acao: 'autorizar', em: new Date().toISOString(), segundoFator: false, estado: 'registrada' }); }),
     );
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
@@ -235,13 +303,11 @@ describe('Board remoto', () => {
     const escopoNaTela = within(await screen.findByLabelText('Escopo da autorização'));
     expect(escopoNaTela.getByText('Executar o comando')).toBeInTheDocument();
     expect(escopoNaTela.getByText('dotnet test tests/App.Tests')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Autorizar com segundo fator' }));
-    const confirmar = screen.getByRole('button', { name: 'Confirmar e autorizar' });
-    expect(confirmar).toBeDisabled();
     expect(recebido).toBeUndefined();
-    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
-    await userEvent.click(confirmar);
-    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'autorizar', codigo: '123456', dispositivo: 'navegador' }));
+    expect(screen.queryByLabelText('Código de 6 dígitos')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Autorizar este pedido' }));
+    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'autorizar', dispositivo: 'navegador' }));
+    expect(await screen.findAllByText(/login confirmado · pelo|login confirmado\./)).not.toHaveLength(0);
   });
 
   it('arquivar as tasks pedidas pelo Orquestrador mostra a lista e a decisão no celular leva o dispositivo', async () => {
@@ -252,8 +318,7 @@ describe('Board remoto', () => {
     const escopo = { ato: 'arquivar-tasks', alvo: 'Orquestrador', itens: ['#901', '#902'], comando: 'devcli sessao --acao arquivar --alvo #901,#902 --aplicar' };
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'autorizacao', titulo: 'Arquivar 2 task(s) pedidas pelo Orquestrador', escopo }, snapshotId: 'd'.repeat(64), bloqueio: null, resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
-      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 3, acao: 'autorizar', em: new Date().toISOString(), segundoFator: true, estado: 'registrada', dispositivo: 'celular' }); }),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 3, acao: 'autorizar', em: new Date().toISOString(), segundoFator: false, estado: 'registrada', dispositivo: 'celular' }); }),
     );
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
@@ -261,22 +326,19 @@ describe('Board remoto', () => {
     const escopoNaTela = within(await screen.findByLabelText('Escopo da autorização'));
     expect(escopoNaTela.getByText('Arquivar as tasks')).toBeInTheDocument();
     expect(escopoNaTela.getByText('#901, #902')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Autorizar com segundo fator' }));
-    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '654321');
-    await userEvent.click(screen.getByRole('button', { name: 'Confirmar e autorizar' }));
-    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'd'.repeat(64), acao: 'autorizar', codigo: '654321', dispositivo: 'celular' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Autorizar este pedido' }));
+    await waitFor(() => expect(recebido).toEqual({ snapshotId: 'd'.repeat(64), acao: 'autorizar', dispositivo: 'celular' }));
     // O registro aparece no cartão e na revisão: os dois dizem o dispositivo.
-    expect(await screen.findAllByText(/segundo fator confirmado · pelo celular/)).not.toHaveLength(0);
+    expect(await screen.findAllByText(/login confirmado · pelo celular/)).not.toHaveLength(0);
   });
 
-  it('revisa evidências e exige seis dígitos antes de confirmar o SHA', async () => {
+  it('revisa evidências e aprova o SHA com o login confirmado, sem o código do segundo fator', async () => {
     responder();
     const snapshot = { origem: 'feature/item-9', destino: 'feature/projeto', sha: 'a'.repeat(40), notas: [{ avaliador: 'Código', nota: 96, minima: 90 }], testesAprovados: 128, testesFalhos: 0, regressaoConcluida: true, arquivos: 4, commits: 2, alteracoes: '+ decisão', capturas: [] };
     let recebido: unknown;
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Integrar?', snapshot }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
-      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 1, acao: 'aprovar', sha: snapshot.sha, em: new Date().toISOString(), segundoFator: true, estado: 'registrada' }); }),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 1, acao: 'aprovar', sha: snapshot.sha, em: new Date().toISOString(), segundoFator: false, estado: 'registrada' }); }),
     );
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
@@ -290,28 +352,24 @@ describe('Board remoto', () => {
     expect(screen.getByText(snapshot.sha)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: 'Ver alterações' }));
     expect(screen.getByText('+ decisão').closest('details')).toHaveAttribute('open');
-    await userEvent.click(screen.getByRole('button', { name: 'Aprovar com segundo fator' }));
-    const confirmar = screen.getByRole('button', { name: 'Confirmar e aprovar este SHA' });
-    expect(confirmar).toBeDisabled();
     expect(recebido).toBeUndefined();
-    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
-    expect(confirmar).toBeEnabled();
-    await userEvent.click(confirmar);
-    expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', codigo: '123456', dispositivo: 'navegador' });
-    expect(await screen.findByRole('status')).toHaveTextContent('segundo fator confirmado');
+    expect(screen.queryByLabelText('Código de 6 dígitos')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Aprovar este SHA' }));
+    expect(recebido).toEqual({ snapshotId: 'b'.repeat(64), acao: 'aprovar', dispositivo: 'navegador' });
+    expect(await screen.findByRole('status')).toHaveTextContent('login confirmado');
+    expect(screen.getByRole('status')).toHaveTextContent(`SHA ${snapshot.sha}`);
   });
 
-  it('registra pedido de ajuste sem solicitar código de segundo fator nem autorizar aprovação', async () => {
+  it('registra pedido de ajuste sem autorizar aprovação', async () => {
     responder();
     let recebido: unknown;
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Revisar entrega?' }, snapshotId: 'c'.repeat(64), bloqueio: 'Regressão pendente ou com falhas: a aprovação está bloqueada.', resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: false })),
       http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, async ({ request }) => { recebido = await request.json(); return HttpResponse.json({ id: 2, acao: 'ajuste', em: new Date().toISOString(), segundoFator: false, estado: 'registrada' }); }),
     );
     renderizar('/board', tokenDoDev());
     await userEvent.click(await within(screen.getByRole('complementary', { name: 'Board' })).findByRole('button', { name: 'Decidir' }));
-    expect(screen.getByRole('button', { name: 'Aprovar com segundo fator' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Aprovar este SHA' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Pedir ajuste' }));
     expect(recebido).toEqual({ snapshotId: 'c'.repeat(64), acao: 'ajuste', dispositivo: 'navegador' });
     expect(await screen.findByRole('status')).toHaveTextContent('Pedido de ajuste registrada');
@@ -323,7 +381,6 @@ describe('Board remoto', () => {
     responder();
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Integrar?' }, snapshotId: 'b'.repeat(64), bloqueio: null, resposta: null }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
     );
     renderizar('/board?aba=chat', tokenDoDev());
     await waitFor(() => expect(screen.getByLabelText('Mensagem ao Orquestrador')).toBeEnabled());
@@ -355,18 +412,15 @@ describe('Board remoto', () => {
     let respostaAtual = antiga;
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/decisoes`, () => HttpResponse.json([{ pendencia: { id: 'p1', tipo: 'aprovacao', titulo: 'Renovar?' }, snapshotId: 'c'.repeat(64), bloqueio: null, resposta: respostaAtual }])),
-      http.get(`${API}/api/remoto/segundo-fator`, () => HttpResponse.json({ ativo: true })),
-      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, () => { respostaAtual = { ...antiga, id: 2, estado: 'registrada' }; return HttpResponse.json(respostaAtual); }),
+      http.post(`${API}/api/remoto/maquinas/:id/decisoes/:pendencia`, () => { respostaAtual = { ...antiga, id: 2, estado: 'registrada', segundoFator: false }; return HttpResponse.json(respostaAtual); }),
     );
     renderizar('/board', tokenDoDev());
     const board = within(screen.getByRole('complementary', { name: 'Board' }));
     await userEvent.click(await board.findByRole('button', { name: 'Decidir' }));
     expect(screen.getByRole('status')).toHaveTextContent('A autorização anterior venceu');
-    await userEvent.click(screen.getByRole('button', { name: 'Aprovar com segundo fator' }));
-    await userEvent.type(await screen.findByLabelText('Código de 6 dígitos'), '123456');
-    await userEvent.click(screen.getByRole('button', { name: 'Confirmar e aprovar este SHA' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Aprovar este SHA' }));
     expect(await screen.findByRole('status')).toHaveTextContent('aguardando a máquina');
-    expect(screen.queryByRole('button', { name: 'Confirmar e aprovar este SHA' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprovar este SHA' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Voltar ao Board/ }));
     expect(board.getByRole('status')).toHaveTextContent('aguardando a máquina');
     expect(board.queryByRole('button', { name: 'Decidir' })).not.toBeInTheDocument();

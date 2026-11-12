@@ -95,6 +95,12 @@
 .br-item {display:flex; justify-content:space-between; gap:8px; align-items:center; padding:6px 0; border-top:1px solid var(--line)}
 .br-item:first-child {border-top:0}
 .br-item small {display:block}
+/* (semana 7, item 4) A task que aceita conversa: o item inteiro abre o chat dela. */
+.br-item-task {display:flex; flex:1; min-width:0; justify-content:space-between; gap:8px; align-items:center; min-height:44px; padding:0; text-align:left; background:none; border:0; color:inherit; font:inherit; cursor:pointer}
+.br-item-task:hover>div>span,.br-item-task:focus-visible>div>span {color:var(--accent); text-decoration:underline}
+.br-item-task>div>span::after {content:' ›'; color:var(--muted)}
+.br-chat-task .br-voltar-orquestrador {flex:none; min-height:32px; padding:0 10px}
+.br-chat-task .br-logo-task {background:var(--surface); border:1px solid var(--line); color:var(--accent)}
 .br-chip {font-size:11px; padding:2px 7px; border-radius:9px; background:var(--bluetint); color:var(--blue); white-space:nowrap}
 .br-chip.br-warn {background:var(--warntint); color:var(--warn)}
 /* Item 4 do remote-control-v3: abrir e criar projeto e projeto de design a partir do Board. */

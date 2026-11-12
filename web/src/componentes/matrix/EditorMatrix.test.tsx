@@ -11,7 +11,6 @@ import { CHAVE_DA_SESSAO, SessaoProvider } from '../../sessao';
 
 beforeEach(() => {
   sessionStorage.clear();
-  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
 });
 afterEach(() => vi.restoreAllMocks());
 

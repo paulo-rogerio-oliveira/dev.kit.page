@@ -8,7 +8,7 @@ import { API, NOVA_SENHA } from './ambiente';
 // Desde as decisões remotas (fase 3) a pendência aparece no Board E como cartão no chat: o cenário confere a do Board.
 const pendencia = (p: Page) => p.getByRole('complementary', { name: 'Board' }).getByText('Integrar o item 20 no projeto?');
 
-test('Board consulta o retrato real, atualiza e só decide pela revisão com segundo fator nos dois temas e tamanhos', async ({ page, request, context }) => {
+test('Board consulta o retrato real, atualiza e só decide pela revisão com login confirmado nos dois temas e tamanhos', async ({ page, request, context }) => {
   await garantirSenhaDefinitiva(request);
   const entrada = await request.post(`${API}/api/auth/login`, { data: { login: 'admin', senha: NOVA_SENHA } });
   expect(entrada.ok()).toBeTruthy();
@@ -63,13 +63,13 @@ test('Board consulta o retrato real, atualiza e só decide pela revisão com seg
       await page.setViewportSize({ width, height: width > 700 ? 920 : 844 });
       await expect(pendencia(page)).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      // Decidir só abre a revisão; o ato irreversível exige o segundo fator e o SHA conferido (nenhuma escrita aqui).
+      // Decidir só abre a revisão; o ato irreversível exige o login confirmado e o SHA conferido (nenhuma escrita aqui).
       await expect(page.getByRole('button', { name: 'Decidir', exact: true })).toBeEnabled();
       // Desde a US #858 o cartão do painel nasce recolhido: a nota de segurança aparece com o Ver detalhes.
       const painel = page.getByRole('complementary', { name: 'Board' });
       const detalhes = painel.getByRole('button', { name: 'Ver detalhes', exact: true });
       if (await detalhes.count()) await detalhes.click();
-      await expect(painel.getByText('Ato irreversível · exige segundo fator e SHA conferido.')).toBeVisible();
+      await expect(painel.getByText('Ato irreversível · login confirmado e SHA conferido.')).toBeVisible();
       if (width < 700) {
         await expect(page.getByRole('tablist').getByRole('tab')).toHaveCount(2);
         await page.getByRole('tab', { name: 'Chat', exact: true }).click();
@@ -80,7 +80,9 @@ test('Board consulta o retrato real, atualiza e só decide pela revisão com seg
       }
       // O chat foi ligado na fase 2: a caixa aceita texto, o envio vazio fica bloqueado e o chat nunca aprova.
       await expect(page.getByLabel('Mensagem ao Orquestrador')).toBeEditable();
-      await expect(page.getByText('Conversa e consulta com login. Texto do chat nunca aprova.')).toBeVisible();
+      const seloDoChat = page.getByTitle('Conversa e consulta com login. Texto do chat nunca aprova: as decisões são auditadas no painel.', { exact: true });
+      await expect(seloDoChat).toBeVisible();
+      await expect(seloDoChat.getByText(width < 700 ? 'Chat não aprova · decisões auditadas' : 'Texto do chat não aprova', { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
       if (width < 700) await page.getByRole('tab', { name: 'Board', exact: true }).click();
     }

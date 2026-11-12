@@ -681,6 +681,13 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<DateTime>("RecebidaEmUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Sessao")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Texto")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -697,6 +704,8 @@ namespace DevKitPage.Infrastructure.Migrations
 
                     b.HasIndex("UsuarioId", "MaquinaId", "FalaId")
                         .IsUnique();
+
+                    b.HasIndex("UsuarioId", "MaquinaId", "Sessao", "DitaEmUtc");
 
                     b.ToTable("FalasRemotas", (string)null);
                 });
