@@ -93,8 +93,10 @@ public sealed class RegrasDaConversaTests
         Assert.Equal("falas-do-desktop", RemotoV1.RecursoFalasDoDesktop);
         Assert.Contains(RemotoV1.RecursoFalasDoDesktop, RemotoV1.RecursosDaApi);
         Assert.Equal([ConversaV1.EventoComando, ConversaV1.EventoResposta, ConversaV1.EventoFala], ConversaV1.TiposDeEvento);
-        Assert.Equal(["orquestrador", "dev"], ConversaV1.AutoresDaFala);
+        // (semana 7) O agente da task entra no fim: o site antigo não o conhece e segue com os dois de antes.
+        Assert.Equal(["orquestrador", "dev", "agente"], ConversaV1.AutoresDaFala);
         Assert.Equal(["desktop", "remoto"], ConversaV1.OrigensDaFala);
+        Assert.Equal("conversa-da-task", RemotoV1.RecursosDaApi[^1]);
     }
 
     [Fact]

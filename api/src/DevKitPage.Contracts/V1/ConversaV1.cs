@@ -23,18 +23,28 @@ namespace DevKitPage.Contracts.V1;
 /// </param>
 /// <param name="Agente">(campo novo) O agente da execução, <c>cli</c> ou <c>cli:modelo</c> (o <c>--agente</c> do devcli); só com <see cref="Fluxo"/>.</param>
 /// <param name="Parametros">(campo novo) Os valores dos parâmetros do fluxo, pelo NOME (o <c>--param NOME=valor</c>); só com <see cref="Fluxo"/>.</param>
+/// <param name="Sessao">
+/// (campo novo, semana 7) O DESTINO da mensagem: a execução do retrato (<see cref="FluxoNoRetratoV1.Id"/>) cuja task recebe o
+/// texto como mensagem do desenvolvedor, em vez do Orquestrador. Só na <see cref="ConversaV1.ComandoMensagem"/> e sem
+/// <see cref="Fluxo"/>; o site só o manda à máquina que anunciou a execução como <see cref="FluxoNoRetratoV1.Conversavel"/>.
+/// </param>
 public sealed record ComandoNovoV1(
     string? Id, string MaquinaId, string Tipo, string? Texto = null, int? TtlSegundos = null, string? Dispositivo = null,
-    bool ConfirmarReinicio = false, long? Fluxo = null, string? Agente = null, IReadOnlyDictionary<string, string>? Parametros = null);
+    bool ConfirmarReinicio = false, long? Fluxo = null, string? Agente = null, IReadOnlyDictionary<string, string>? Parametros = null,
+    string? Sessao = null);
 
 /// <summary>
 /// Um comando como o site e o dev.kit o leem. O estado (<see cref="ConversaV1.EstadosDoComando"/>) diz onde ele está:
 /// <see cref="ConversaV1.EstadoNaFila"/> até o dev.kit confirmar o recebimento, e <see cref="ConversaV1.EstadoExpirado"/>
 /// quando o TTL venceu antes disso — o site nunca finge que entregou.
 /// </summary>
+/// <param name="Sessao">
+/// (campo novo, semana 7) A task de destino da mensagem (<see cref="ComandoNovoV1.Sessao"/>); ausente na do Orquestrador. O site
+/// a usa para separar, no SSE, a conversa da task da do Orquestrador.
+/// </param>
 public sealed record ComandoRemotoV1(
     string Id, string MaquinaId, string Tipo, string Texto, string Dispositivo, string Estado, DateTimeOffset CriadoEm,
-    DateTimeOffset ExpiraEm, DateTimeOffset? EntregueEm, DateTimeOffset? ConcluidoEm, string Erro);
+    DateTimeOffset ExpiraEm, DateTimeOffset? EntregueEm, DateTimeOffset? ConcluidoEm, string Erro, string? Sessao = null);
 
 /// <summary>
 /// A MENSAGEM que vai na fila do usuário (o JSON do <c>MessageText</c>, em Base64). A fila é só transporte: a mensagem lida
@@ -50,10 +60,11 @@ public sealed record ComandoRemotoV1(
 /// <param name="Fluxo">(campo novo) O fluxo escolhido no chat do site (<see cref="ComandoNovoV1.Fluxo"/>); o dev.kit antigo o ignora.</param>
 /// <param name="Agente">(campo novo) O agente <c>cli</c> ou <c>cli:modelo</c> escolhido para o fluxo.</param>
 /// <param name="Parametros">(campo novo) Os valores dos parâmetros do fluxo, pelo nome.</param>
+/// <param name="Sessao">(campo novo, semana 7) A task de destino (<see cref="ComandoNovoV1.Sessao"/>); ausente, o Orquestrador.</param>
 public sealed record MensagemDaFilaV1(
     int Contrato, string Id, string MaquinaId, string Tipo, string Texto, string Origem, string Dispositivo, DateTimeOffset CriadoEm,
     DateTimeOffset ExpiraEm, bool ConfirmarReinicio = false, long? Fluxo = null, string? Agente = null,
-    IReadOnlyDictionary<string, string>? Parametros = null);
+    IReadOnlyDictionary<string, string>? Parametros = null, string? Sessao = null);
 
 /// <summary>O pedido da SAS da fila pelo serviço da máquina (<c>POST /api/remoto/fila/sas</c>).</summary>
 public sealed record PedidoDeSasV1(int Contrato, string MaquinaId);
@@ -113,9 +124,14 @@ public sealed record RespostaRecebidaV1(string Id, bool Repetida, DateTimeOffset
 /// não chegou ao site (o teto do plano, a falha do envio) vem só com o <see cref="AnexoDaFalaV1.Aviso"/>. O dev.kit antigo não
 /// o manda.
 /// </param>
+/// <param name="Sessao">
+/// (campo novo, semana 7) A execução do retrato (<see cref="FluxoNoRetratoV1.Id"/>) da task em que a fala foi dita — o agente
+/// (<see cref="ConversaV1.AutorAgente"/>) ou o dev; ausente, a fala é do chat do Orquestrador. Só o dev.kit que leu
+/// <see cref="RemotoV1.RecursoConversaDaTask"/> a manda.
+/// </param>
 public sealed record FalaDoDevKitV1(
     int Contrato, string MaquinaId, string Id, string Autor, string Origem, string? Texto, DateTimeOffset DitaEm, string? ComandoId = null,
-    IReadOnlyList<AnexoDaFalaV1>? Anexos = null);
+    IReadOnlyList<AnexoDaFalaV1>? Anexos = null, string? Sessao = null);
 
 /// <summary>
 /// Uma imagem citada numa fala: o título (a tela, a versão e o tipo) e o link da API de design — ou, sem link, o aviso do porquê
@@ -123,10 +139,13 @@ public sealed record FalaDoDevKitV1(
 /// </summary>
 public sealed record AnexoDaFalaV1(string Titulo, string? Url = null, string? Aviso = null);
 
-/// <summary>Uma fala guardada, como o site a lê. <see cref="Anexos"/> é campo novo (ausente na fala sem imagem).</summary>
+/// <summary>
+/// Uma fala guardada, como o site a lê. <see cref="Anexos"/> é campo novo (ausente na fala sem imagem); <see cref="Sessao"/>
+/// (semana 7) é a task da fala, ausente na do Orquestrador.
+/// </summary>
 public sealed record FalaRemotaV1(
     string Id, string MaquinaId, string Autor, string Origem, string Texto, string? ComandoId, DateTimeOffset DitaEm, DateTimeOffset RecebidaEm,
-    IReadOnlyList<AnexoDaFalaV1>? Anexos = null);
+    IReadOnlyList<AnexoDaFalaV1>? Anexos = null, string? Sessao = null);
 
 /// <summary>A resposta do envio da fala: <see cref="Repetida"/> é o reenvio de uma já gravada.</summary>
 public sealed record FalaRecebidaV1(string Id, bool Repetida, DateTimeOffset RecebidaEm);
@@ -225,8 +244,11 @@ public static class ConversaV1
     public const string AutorOrquestrador = "orquestrador";
     public const string AutorDev = "dev";
 
-    /// <summary>Quem falou no chat do dev.kit: o Orquestrador ou o desenvolvedor.</summary>
-    public static IReadOnlyList<string> AutoresDaFala { get; } = [AutorOrquestrador, AutorDev];
+    /// <summary>(semana 7) O agente de uma task, na conversa daquela task (<see cref="FalaDoDevKitV1.Sessao"/>).</summary>
+    public const string AutorAgente = "agente";
+
+    /// <summary>Quem falou no chat do dev.kit: o Orquestrador, o desenvolvedor ou o agente de uma task (o novo entra no fim).</summary>
+    public static IReadOnlyList<string> AutoresDaFala { get; } = [AutorOrquestrador, AutorDev, AutorAgente];
 
     /// <summary>A fala escrita no chat do próprio dev.kit, na máquina.</summary>
     public const string OrigemDesktop = "desktop";
@@ -262,6 +284,9 @@ public static class ConversaV1
 
     /// <summary>Quantos comandos e respostas o histórico devolve (os mais recentes).</summary>
     public const int MaximoDoHistorico = 200;
+
+    /// <summary>(semana 7) Quantas falas a conversa de uma task devolve (as últimas): o chat da task mostra o fim da conversa.</summary>
+    public const int MaximoDaConversaDaTask = 50;
 
     /// <summary>O <c>codigo</c> do 409 de quem ainda não tem a fila pronta (a ação "Fila do controle remoto" da conta).</summary>
     public const string CodigoSemFila = "sem-fila";

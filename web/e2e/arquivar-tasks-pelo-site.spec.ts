@@ -1,33 +1,14 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
-import { createHmac } from 'node:crypto';
 import { garantirSenhaDefinitiva } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
 
 /**
  * (controle-v4, item 3) O cartão de ARQUIVAR as tasks pedidas pelo Orquestrador e o DISPOSITIVO da decisão, de ponta a ponta
  * sobre a API real (SQLite temporário, dados fictícios): o retrato vai pelo mesmo PUT que o dev.kit faz, o dev autoriza com o
- * código do autenticador no desktop (1440x900) e no celular (390x844), e a caixa de saída que a máquina lê devolve o
- * dispositivo de cada decisão. As capturas vão para test-results/capturas-arquivar-tasks.
+ * login confirmado no desktop (1440x900) e no celular (390x844) — sem o segundo fator desde a semana 7 —, e a caixa de saída
+ * que a máquina lê devolve o dispositivo de cada decisão. As capturas vão para test-results/capturas-arquivar-tasks.
  */
 const pasta = 'test-results/capturas-arquivar-tasks';
-
-/** O TOTP de RFC 6238 (SHA-1, 6 dígitos, 30 s) da chave Base32 — o código do aplicativo autenticador. */
-function totp(chave: string, passo = Math.floor(Date.now() / 30_000)) {
-  const alfabeto = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  let bits = '';
-  for (const c of chave) bits += alfabeto.indexOf(c).toString(2).padStart(5, '0');
-  const bytes = Buffer.from(bits.match(/.{8}/g)!.map(b => parseInt(b, 2)));
-  const contador = Buffer.alloc(8);
-  contador.writeBigInt64BE(BigInt(passo));
-  const hash = createHmac('sha1', bytes).update(contador).digest();
-  const offset = hash[hash.length - 1] & 15;
-  return ((hash.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0');
-}
-
-/** Espera o próximo passo de 30 s: o mesmo código não autoriza duas vezes. */
-async function proximoPasso() {
-  await new Promise(r => setTimeout(r, 30_500 - (Date.now() % 30_000)));
-}
 
 async function devComSessao(request: APIRequestContext) {
   await garantirSenhaDefinitiva(request);
@@ -56,8 +37,8 @@ function cartao(id: string, tasks: string[]) {
   };
 }
 
-test('arquivar tasks pelo site: o cartão do Orquestrador, o segundo fator e o dispositivo na decisão', async ({ page, request }) => {
-  test.setTimeout(180_000);
+test('arquivar tasks pelo site: o cartão do Orquestrador, o login confirmado e o dispositivo na decisão', async ({ page, request }) => {
+  test.setTimeout(120_000);
   const sessao = await devComSessao(request);
   const headers = { Authorization: `Bearer ${sessao.token}` };
   const maquinaId = `dev3-arquivar-${Date.now()}`;
@@ -70,13 +51,10 @@ test('arquivar tasks pelo site: o cartão do Orquestrador, o segundo fator e o d
     contrato: 1, maquinaId, geradoEm: new Date().toISOString(), projetos: [], fluxos: [],
     pendencias: [cartao('autorizacao-arquivar-gatilhos', ['#901', '#902']), cartao('autorizacao-arquivar-avaliador', ['t_207'])],
   } })).ok()).toBeTruthy();
-  // O autenticador do dev (o mesmo preparo da tela de segundo fator).
-  const preparo = await request.post(`${API}/api/remoto/segundo-fator/preparar`, { headers, data: { senha: NOVA_SENHA } });
-  const { chave } = await preparo.json();
-  expect((await request.post(`${API}/api/remoto/segundo-fator/confirmar`, { headers, data: { codigo: totp(chave) } })).ok()).toBeTruthy();
+  // (semana 7) Sem preparar autenticador: o dev deste teste nem tem TOTP, e a autorização sai com o login confirmado.
   await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), sessao);
 
-  // 1. Desktop 1440x900: o cartão no Board, o escopo exato (as tasks e o comando) e a confirmação com o código.
+  // 1. Desktop 1440x900: o cartão no Board, o escopo exato (as tasks e o comando) e a autorização com um clique.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/board?aba=board');
   const painel = page.getByRole('complementary', { name: 'Board' });
@@ -88,12 +66,10 @@ test('arquivar tasks pelo site: o cartão do Orquestrador, o segundo fator e o d
   await expect(escopo).toContainText('Arquivar as tasks');
   await expect(escopo).toContainText('#901, #902');
   await expect(escopo).toContainText('devcli sessao --acao arquivar --alvo #901,#902');
-  await page.getByRole('button', { name: 'Autorizar com segundo fator' }).click();
-  await proximoPasso();
-  await page.getByLabel('Código de 6 dígitos').fill(totp(chave));
-  await page.screenshot({ path: `${pasta}/02-desktop-escopo-e-codigo.png` });
-  await page.getByRole('button', { name: 'Confirmar e autorizar' }).click();
-  await expect(page.getByText(/segundo fator confirmado · pelo navegador/).first()).toBeVisible();
+  await expect(page.getByLabel('Código de 6 dígitos')).toHaveCount(0);
+  await page.screenshot({ path: `${pasta}/02-desktop-escopo-sem-codigo.png` });
+  await page.getByRole('button', { name: 'Autorizar este pedido' }).click();
+  await expect(page.getByText(/login confirmado · pelo navegador/).first()).toBeVisible();
   await page.screenshot({ path: `${pasta}/03-desktop-autorizado-pelo-navegador.png` });
 
   // 2. Celular 390x844: o outro pedido, autorizado do celular.
@@ -104,20 +80,18 @@ test('arquivar tasks pelo site: o cartão do Orquestrador, o segundo fator e o d
   await page.screenshot({ path: `${pasta}/04-celular-cartao-arquivar-tasks.png`, fullPage: true });
   await avaliador.getByRole('button', { name: 'Autorizar' }).click();
   await expect(page.getByLabel('Escopo da autorização')).toContainText('t_207');
-  await page.getByRole('button', { name: 'Autorizar com segundo fator' }).click();
-  await proximoPasso();
-  await page.getByLabel('Código de 6 dígitos').fill(totp(chave));
-  await page.screenshot({ path: `${pasta}/05-celular-escopo-e-codigo.png`, fullPage: true });
-  await page.getByRole('button', { name: 'Confirmar e autorizar' }).click();
-  await expect(page.getByText(/segundo fator confirmado · pelo celular/).first()).toBeVisible();
+  await expect(page.getByLabel('Código de 6 dígitos')).toHaveCount(0);
+  await page.screenshot({ path: `${pasta}/05-celular-escopo-sem-codigo.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Autorizar este pedido' }).click();
+  await expect(page.getByText(/login confirmado · pelo celular/).first()).toBeVisible();
   await page.screenshot({ path: `${pasta}/06-celular-autorizado-pelo-celular.png`, fullPage: true });
 
   // 3. O que a máquina lê: a caixa de saída das decisões, com o dispositivo de cada uma (a mesma rota do dev.kit).
   const rota = `${API}/api/remoto/maquinas/${maquinaId}/decisoes/respostas`;
   const respostas = await (await request.get(rota, { headers })).json() as Array<{ pendenciaId: string; acao: string; segundoFator: boolean; dispositivo: string }>;
   expect(respostas.map(r => [r.pendenciaId, r.acao, r.segundoFator, r.dispositivo])).toEqual([
-    ['autorizacao-arquivar-gatilhos', 'autorizar', true, 'navegador'],
-    ['autorizacao-arquivar-avaliador', 'autorizar', true, 'celular'],
+    ['autorizacao-arquivar-gatilhos', 'autorizar', false, 'navegador'],
+    ['autorizacao-arquivar-avaliador', 'autorizar', false, 'celular'],
   ]);
   await page.setViewportSize({ width: 1440, height: 900 });
   // Cores fixas: com o navegador em tema escuro, o texto padrão sairia branco sobre o fundo claro.

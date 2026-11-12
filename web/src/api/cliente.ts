@@ -155,6 +155,9 @@ export const api = {
     (await requisitar(caminho, { token, signal, aceita: 'image/png' })).blob(),
   conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
+  /** (semana 7) A conversa com o agente de UMA task da máquina: a sessão é o id da execução no retrato. */
+  conversaDaTask: (token: string, maquina: string, sessao: string, signal?: AbortSignal) =>
+    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/sessoes/${encodeURIComponent(sessao)}/conversa`, { token, signal }),
   /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
   enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
     chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),
