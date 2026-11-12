@@ -51,3 +51,23 @@ it('obrigação compartilhada exige resultado de todos os donos e considera a ú
   expect(estadoDaCelula(c, [registro(), segundo], historico)).toBe('Comprovado');
   expect(estadoDaCelula(c, [registro(), segundo, registro(resultado({ resultado: 'parcial' }), 3)], historico)).toBe('A avaliar');
 });
+
+it.each(['atendido', 'parcial', 'nao-atendido'] as const)('transferência conserva o resultado %s do antigo dono sem bloquear a comprovação dos donos atuais', resultadoAntigo => {
+  const antes = documentoDeTeste(), depois = structuredClone(antes), c = depois.matriz!.celulas[0];
+  c.responsaveis = [{ id: 'item-3', item: 3 }];
+  const historico = [revisaoDeTeste(antes), revisaoDeTeste(depois, 2)];
+  const antigo = registro(resultado({ resultado: resultadoAntigo }));
+  const novo = registro(resultado({ responsavel: 'item-3', revisaoDaDefinicao: 2, revisaoEfetiva: 2, evento: 'gatilho:124' }), 2);
+  const registros = [antigo, novo];
+  expect(estadoDaCelula(c, [antigo], historico)).toBe('A avaliar');
+  expect(registroVigente(antigo.documento.registro!, historico)).toBe(false);
+  expect(registroVigente(novo.documento.registro!, historico)).toBe(true);
+  expect(estadoDaCelula(c, registros, historico)).toBe('Comprovado');
+  render(<RegistrosDaCelula tipo="avaliacao" celula={c.id} registros={registros} historico={historico} />);
+  expect(screen.getByText(/Histórico · Obrigação ou atribuição.*revisão 2/)).toBeInTheDocument();
+  expect(screen.getByText('Atendido · Vigente')).toBeInTheDocument();
+  c.responsaveis.push({ id: 'item-5', item: 5 });
+  expect(estadoDaCelula(c, registros, historico)).toBe('A avaliar');
+  expect(estadoDaCelula(c, [...registros, registro({ ...novo.documento.registro!, responsavel: 'item-5' }, 3)], historico)).toBe('Comprovado');
+  expect(registros).toHaveLength(2);
+});

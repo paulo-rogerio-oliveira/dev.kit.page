@@ -90,7 +90,8 @@ public static class RegrasAvaliacaoMatrix
 
     public static string EstadoDaCelula(CelulaMatrix celula, IReadOnlyList<RevisaoMatrix> registros, IReadOnlyList<RevisaoMatrix> historico)
     {
-        var lista = registros.Where(x => x.Documento.Registro is { Tipo: "avaliacao" } r && r.Celula == celula.Id)
+        var lista = registros.Where(x => x.Documento.Registro is { Tipo: "avaliacao" } r && r.Celula == celula.Id
+                && celula.Responsaveis.Any(d => d.Id == r.Responsavel))
             .GroupBy(x => (x.Documento.Registro!.Responsavel, x.Documento.Registro.Avaliador))
             .Select(g => g.OrderBy(x => x.Versao).Last().Documento.Registro!).ToArray();
         lista = lista.Where(r => r.Evento.Length > 0 || !lista.Any(v => v.Responsavel == r.Responsavel && v.Evento.Length > 0)).ToArray();

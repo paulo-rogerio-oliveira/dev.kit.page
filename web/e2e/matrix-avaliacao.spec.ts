@@ -7,7 +7,7 @@ import type { DocumentoMatrix } from '../src/api/matrix';
 import { prepararMatrix } from './matrix-cenario';
 import { API } from './ambiente';
 
-test('Matrix: avaliação vinculada e obsolescência seletiva no desktop e celular', async ({ page, request }) => {
+test('Matrix: avaliação vinculada, obsolescência seletiva e transferência no desktop e celular', async ({ page, request }) => {
   const c = await prepararMatrix(request);
   const evento = 'gatilho:123', shas = { 'demo/aplicacao': 'a'.repeat(40) };
   const revisaoDaEntrega = JSON.stringify({ Conferencia: { Ok: true }, Repositorios: [{ Name: 'demo/aplicacao', Delivery: { Head: shas['demo/aplicacao'] } }] });
@@ -26,12 +26,29 @@ test('Matrix: avaliação vinculada e obsolescência seletiva no desktop e celul
     shas, evento, avaliador: 7, sessaoAvaliada: c.task, revisaoEfetiva: 4, revisaoDoContexto: 4, revisaoDaEntrega,
   } }, versaoRegistro);
   await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), c.sessao);
-  const capturas = fileURLToPath(new URL('../../../apoio-capturas-matrix-page/', import.meta.url));
+  const capturas = fileURLToPath(new URL('../../../apoio-capturas-matrix-page-correcao/', import.meta.url));
   mkdirSync(capturas, { recursive: true });
-  for (const obsoleta of [false, true]) {
+  for (const estado of ['vigente', 'obsoleta', 'transferida']) {
+    const obsoleta = estado === 'obsoleta';
     if (obsoleta) {
       c.matriz.matriz!.celulas.find(x => x.id === 'imp-008')!.criterio = 'Novo critério após a leitura do avaliador';
       await c.gravar(c.matriz, 4);
+    }
+    if (estado === 'transferida') {
+      c.matriz.matriz!.celulas.find(x => x.id === 'imp-008')!.responsaveis = [{ id: 'item-3', item: 3 }];
+      await c.gravar(c.matriz, 5);
+      const novoEvento = 'gatilho:124';
+      await c.gravar({ ...recibo,
+        id: 'e-' + createHash('sha256').update(c.task + '\n' + novoEvento + '\nmatrix').digest('hex').toUpperCase().slice(0, 48),
+        evento: { ...recibo.evento!, evento: novoEvento, revisao: 6, revisaoEfetiva: 6, revisaoDoContexto: 6,
+          responsaveis: ['item-3'], celulas: c.matriz.matriz!.celulas.filter(x => x.responsaveis.some(r => r.id === 'item-3')).map(x => x.id) },
+      }, 0);
+      await c.gravar({ contrato: 1, aplicacao: 'demo', tipo: 'registro', id: 'matrix', projeto: 'matrix', registro: {
+        celula: 'imp-008', revisaoDaDefinicao: 6, responsavel: 'item-3', tipo: 'avaliacao', resultado: 'atendido',
+        justificativa: 'Novo dono conferiu a obrigação transferida; histórico do responsável anterior preservado.',
+        evidencias: ['log-transferencia-matrix.txt'], shas, evento: novoEvento, avaliador: 7, sessaoAvaliada: c.task,
+        revisaoEfetiva: 6, revisaoDoContexto: 6, revisaoDaEntrega,
+      } }, versaoRegistro + 1);
     }
     for (const colorScheme of ['light', 'dark'] as const) for (const width of [1440, 390]) {
       await page.emulateMedia({ colorScheme });
@@ -46,8 +63,12 @@ test('Matrix: avaliação vinculada e obsolescência seletiva no desktop e celul
       await dialogo.getByRole('button', { name: 'Avaliação', exact: true }).click();
       await expect(dialogo.getByText(/Evento gatilho:123 · avaliador 7/)).toBeVisible();
       await expect(dialogo.getByText(obsoleta ? /Atendido · Histórico · Obrigação ou atribuição.*revisão 5/ : 'Atendido · Vigente')).toBeVisible();
+      if (estado === 'transferida') {
+        await expect(dialogo.getByText(/Evento gatilho:124 · avaliador 7/)).toBeVisible();
+        await expect(dialogo.getByText(/Atendido · Histórico · Obrigação ou atribuição.*revisão 5/)).toBeVisible();
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-      await page.screenshot({ path: resolve(capturas, `page-avaliacao-${obsoleta ? 'obsoleta' : 'vigente'}-${width}-${colorScheme}.png`), fullPage: true });
+      await page.screenshot({ path: resolve(capturas, `page-avaliacao-${estado}-${width}-${colorScheme}.png`), fullPage: true });
     }
   }
   console.log(`Capturas reais da avaliação Matrix: ${capturas}`);

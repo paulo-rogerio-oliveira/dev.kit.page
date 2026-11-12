@@ -82,6 +82,34 @@ public sealed class AvaliacaoMatrixApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Transferencia_e_nova_avaliacao_persistidas_comprovam_o_dono_atual_preservando_o_historico()
+    {
+        var dev = await Preparar(); var recibo = Recibo(); var resultado = Resultado(recibo);
+        Assert.Equal(HttpStatusCode.OK, (await Gravar(dev, recibo)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Gravar(dev, resultado)).StatusCode);
+        var matriz = Matriz();
+        matriz = matriz with { Matriz = matriz.Matriz! with { Celulas = matriz.Matriz.Celulas
+            .Select(c => c.Id == "c1" ? c with { Responsaveis = [new("task-2")] } : c).ToArray() } };
+        Assert.Equal(HttpStatusCode.OK, (await Gravar(dev, matriz, 1)).StatusCode);
+        var novoRecibo = recibo with { Id = RegrasAvaliacaoMatrix.IdDoEvento("gatilho:124", "demanda", "implementador"),
+            Evento = recibo.Evento! with { Evento = "gatilho:124", Revisao = 2, RevisaoEfetiva = 2, RevisaoDoContexto = 2,
+                Responsaveis = ["task-2"], Celulas = ["c1", "c2"] } };
+        Assert.Equal(HttpStatusCode.OK, (await Gravar(dev, novoRecibo)).StatusCode);
+        var novo = Resultado(novoRecibo);
+        novo = novo with { Registro = novo.Registro! with { RevisaoDaDefinicao = 2, Responsavel = "task-2" } };
+        var historico = (await dev.GetFromJsonAsync<RevisaoMatrix[]>(Rota(matriz)))!;
+        var antigos = (await dev.GetFromJsonAsync<RevisaoMatrix[]>(Rota(resultado)))!;
+        Assert.StartsWith("A avaliar", RegrasAvaliacaoMatrix.EstadoDaCelula(matriz.Matriz!.Celulas[0], antigos, historico));
+        Assert.Equal(HttpStatusCode.OK, (await Gravar(dev, novo, 1)).StatusCode);
+        var registros = (await dev.GetFromJsonAsync<RevisaoMatrix[]>(Rota(resultado)))!;
+        Assert.Equal(2, registros.Length);
+        Assert.Equal("task-1", registros[0].Documento.Registro!.Responsavel);
+        Assert.NotEmpty(RegrasAvaliacaoMatrix.MotivoDaObsolescencia(registros[0].Documento.Registro!, historico));
+        Assert.Empty(RegrasAvaliacaoMatrix.MotivoDaObsolescencia(registros[1].Documento.Registro!, historico));
+        Assert.Equal("Comprovado", RegrasAvaliacaoMatrix.EstadoDaCelula(matriz.Matriz.Celulas[0], registros, historico));
+    }
+
+    [Fact]
     public async Task Revisao_alheia_preserva_avaliacao_e_mudanca_concorrente_do_recorte_recusa_novo_resultado()
     {
         var dev = await Preparar(); var recibo = Recibo(); var resultado = Resultado(recibo);
