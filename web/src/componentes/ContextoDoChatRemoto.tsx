@@ -147,14 +147,16 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
   }
   function abrirChip(nome: string) { abrir(null); setChip(chip === nome ? null : nome); }
   return <>
-    <button type="button" disabled={desabilitado} aria-label="Trocar fluxo" aria-expanded={atalho === '/'} onClick={() => abrir(atalho === '/' ? null : '/')}>
-      / {contexto.fluxo || 'Fluxo simples · padrão'}
-    </button>
-    {fluxo && <>
-      {/* O MODELO vem primeiro, já com o agente padrão do fluxo; depois, um chip por parâmetro (correções do board remoto). */}
-      <button type="button" className="br-chip-fluxo" disabled={desabilitado} aria-label="Modelo do fluxo" aria-expanded={chip === 'modelo'} onClick={() => abrirChip('modelo')}>
-        ⚙ {contexto.agente || 'modelo padrão'}
+    <span className="br-fluxo-modelo" role="group" aria-label="Fluxo e modelo">
+      <button type="button" disabled={desabilitado} aria-label="Trocar fluxo" aria-expanded={atalho === '/'} onClick={() => abrir(atalho === '/' ? null : '/')}>
+        / {contexto.fluxo || 'Fluxo simples · padrão'} ▾
       </button>
+      {fluxo && <button type="button" disabled={desabilitado} aria-label="Modelo do fluxo" aria-expanded={chip === 'modelo'} onClick={() => abrirChip('modelo')}>
+        ⚙ {contexto.agente || 'modelo padrão'} ▾
+      </button>}
+    </span>
+    {fluxo && <>
+      {/* Os parâmetros continuam independentes do componente de fluxo e modelo. */}
       {(fluxo.parametros ?? []).map(p => {
         const valor = (contexto.parametros[p.nome] ?? '').trim();
         const falta = !valor && p.obrigatorio !== false;

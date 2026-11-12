@@ -503,8 +503,12 @@ it('o fluxo do catálogo traz os chips de modelo e de parâmetros, valida o obri
   await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
   await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
   await userEvent.click(screen.getByRole('button', { name: /^Implementar com revisor/ }));
-  // O primeiro chip é o MODELO, com o agente padrão do fluxo; depois um por parâmetro, com o padrão já aplicado.
-  expect(screen.getByRole('button', { name: 'Modelo do fluxo' })).toHaveTextContent('claude:opus');
+  // Fluxo e modelo dividem um componente; cada segmento mantém sua ação e os parâmetros ficam fora dele.
+  const composto = screen.getByRole('group', { name: 'Fluxo e modelo' });
+  expect(within(composto).getAllByRole('button')).toHaveLength(2);
+  expect(within(composto).getByRole('button', { name: 'Trocar fluxo' })).toHaveTextContent('Implementar com revisor');
+  expect(within(composto).getByRole('button', { name: 'Modelo do fluxo' })).toHaveTextContent('claude:opus');
+  expect(within(composto).queryByRole('button', { name: 'Parâmetro Revisor' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Parâmetro AMBIENTE' })).toHaveTextContent('AMBIENTE: homologação');
   expect(screen.getByRole('button', { name: 'Parâmetro Revisor' })).toHaveTextContent('Revisor: obrigatório');
   expect(screen.getByRole('button', { name: 'Parâmetro NOTIFICAR' })).toHaveTextContent('NOTIFICAR: opcional');

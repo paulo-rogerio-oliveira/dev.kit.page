@@ -54,6 +54,10 @@
 .br-dica-texto span {display:block}
 .br-dica:hover .br-dica-texto,.br-dica:focus-within .br-dica-texto,.br-dica-texto.br-dica-aberta {display:block}
 .br-composer-ativo .br-bottom .br-chip-fluxo {color:var(--ink); background:var(--violettint); border-color:var(--violettint)}
+.br-fluxo-modelo {display:inline-flex; align-items:stretch; flex-wrap:wrap; max-width:100%; border:1px solid var(--line); border-radius:7px; overflow:hidden; background:var(--surface)}
+.br-composer-ativo .br-bottom .br-fluxo-modelo button {min-width:0; max-width:100%; border:0; border-radius:0; overflow-wrap:anywhere; white-space:normal}
+.br-composer-ativo .br-bottom .br-fluxo-modelo button+button {border-left:1px solid var(--line); color:var(--ink); background:var(--violettint)}
+.br-composer-ativo .br-bottom .br-fluxo-modelo button:focus-visible {outline:2px solid var(--violet); outline-offset:-2px}
 .br-composer-ativo .br-bottom .br-chip-fluxo.br-chip-falta {color:var(--accent); background:var(--tint); border-color:var(--needline)}
 .br-falta {color:var(--accent); margin-top:6px}
 /* As imagens das falas (correções do board remoto): a miniatura abre o modal; a que não chegou é o aviso. */
