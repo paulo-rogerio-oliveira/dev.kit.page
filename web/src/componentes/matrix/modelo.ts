@@ -21,14 +21,41 @@ export function celulasAlteradas(a: MatrizMatrix | null | undefined, b: MatrizMa
   const eixos = (campo: 'componentes' | 'layers') => [...(a?.[campo] ?? []), ...(b?.[campo] ?? [])]
     .filter(e => !igual(a?.[campo].find(x => x.id === e.id), b?.[campo].find(x => x.id === e.id))).map(e => e.id);
   const componentes = eixos('componentes'), layers = eixos('layers');
+  const coberturas = [...(a?.coberturas ?? []), ...(b?.coberturas ?? [])]
+    .filter(c => !(a?.coberturas ?? []).some(x => igual(x, c)) || !(b?.coberturas ?? []).some(x => igual(x, c))).map(c => c.celula);
   return [...new Set([...antes, ...depois].map(c => c.id))].filter(id =>
-    !igual(antes.find(c => c.id === id), depois.find(c => c.id === id)) ||
+    coberturas.includes(id) || !igual(antes.find(c => c.id === id), depois.find(c => c.id === id)) ||
     [...antes, ...depois].some(c => c.id === id && (componentes.includes(c.componente) || layers.includes(c.layer))));
 }
 
 export function registroVigente(r: RegistroMatrix, historico: RevisaoMatrix[]): boolean {
-  const origem = historico.find(h => h.versao === r.revisaoDaDefinicao), atual = ultimo(historico);
-  return !!origem && !!atual && !celulasAlteradas(origem.documento.matriz, atual.documento.matriz).includes(r.celula);
+  return !motivoDaObsolescencia(r, historico);
+}
+
+export function motivoDaObsolescencia(r: RegistroMatrix, historico: RevisaoMatrix[]): string {
+  if (r.tipo === 'avaliacao' && !r.evento) return 'Avaliação anterior sem vínculo verificável ao evento do host.';
+  let antes = historico.find(h => h.versao === r.revisaoDaDefinicao);
+  if (!antes) return 'Revisão da definição indisponível.';
+  for (const depois of historico.filter(h => h.versao > r.revisaoDaDefinicao).slice().sort((a, b) => a.versao - b.versao)) {
+    if (celulasAlteradas(antes.documento.matriz, depois.documento.matriz).includes(r.celula))
+      return `Obrigação ou atribuição da célula alterada na revisão ${depois.versao}.`;
+    antes = depois;
+  }
+  return '';
+}
+
+export function estadoDaCelula(c: CelulaMatrix, registros: RevisaoMatrix[], historico: RevisaoMatrix[]): string {
+  const lista = new Map<string, RegistroMatrix>();
+  registros.slice().sort((a, b) => a.versao - b.versao).forEach(x => {
+    const r = x.documento.registro;
+    if (r?.tipo === 'avaliacao' && r.celula === c.id) lista.set(`${r.responsavel}:${r.avaliador ?? 0}`, r);
+  });
+  const todos = [...lista.values()];
+  const resultados = todos.filter(r => r.evento || !todos.some(v => v.responsavel === r.responsavel && v.evento));
+  if (!resultados.length) return registros.some(x => x.documento.registro?.celula === c.id) ? 'A avaliar' : 'A implementar';
+  if (resultados.some(r => !registroVigente(r, historico))) return 'A avaliar';
+  if (c.responsaveis.some(d => !resultados.some(r => r.responsavel === d.id))) return 'A avaliar';
+  return c.aplicavel && resultados.every(r => r.resultado === 'atendido') ? 'Comprovado' : 'A avaliar';
 }
 
 const objeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

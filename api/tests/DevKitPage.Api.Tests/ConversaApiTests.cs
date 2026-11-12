@@ -480,7 +480,7 @@ public sealed class ConversaApiTests : IDisposable
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
             // Recursos são aditivos: conserva os quatro anteriores e acrescenta a matriz opcional ao fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1"], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.
