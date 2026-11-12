@@ -44,9 +44,15 @@ roteiro `git.kit/build/evidenciar-matrix-host.mjs`, no comando delegado 384:
 o mesmo avaliador real recebeu r1/`gatilho:1` e r2/`gatilho:2`, com SHAs distintos,
 após reinício completo do host e sem mensagem do Orquestrador. Os dois recibos,
 as mensagens e os logs próprios desse cenário são a prova da avaliação; os PNGs
-do E2E continuam representando dados sintéticos. O percurso completo do fluxo
-Tela com agentes reais ainda exige comprovação separada, conforme o relatório
-`git.kit/docs/matrix-validacao-integrada.md`.
+do E2E continuam representando dados sintéticos. O percurso de herança no grafo
+Tela foi concluído separadamente em 410/417: proposta com nota e objetivo reais,
+nova implementação com recibo de abertura herdado, envio local e resultados dos
+dois avaliadores, vinculados à revisão e ao SHA recebido. Critérios foram
+adaptados explicitamente ao ensaio sem nova UI; não houve aprovação de design
+novo nem Fechamento. O mapa por requisito, os registros e os limites estão em
+`git.kit/docs/matrix-entrega-item-7.md`. Orquestrador real (395), cobertura final
+dos chats com resultados sintéticos (398) e log automático do runner (388)
+completam as evidências devolvidas na primeira avaliação.
 
 ## Rules 28 e 29
 
