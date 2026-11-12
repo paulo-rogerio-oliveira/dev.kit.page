@@ -353,6 +353,23 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         "Us602.sql", "Us663.sql", "Us669.sql", "Us687.sql", "Us693.sql", "Us747.sql", "Usuarios.sql", "us738-origem-catalogo.sql",
     ];
 
+    [Fact]
+    public async Task Matrix_preparada_mantem_sql_optativo_e_falha_impede_publicacao()
+    {
+        var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));
+        var entrada = workflow[..workflow.IndexOf("jobs:", StringComparison.Ordinal)];
+        Assert.Matches(@"aplicar_sql:[\s\S]*?type: boolean\s+default: false", entrada);
+        var sql = Job(workflow, "sql");
+        Assert.Contains("github.event_name == 'workflow_dispatch' && inputs.aplicar_sql", sql);
+        Assert.Equal("Matrix.sql", ScriptsDoJobSql(workflow)[^1]);
+        Assert.Contains("needs.sql.result != 'failure'", Job(workflow, "deploy"));
+        Assert.DoesNotContain("continue-on-error", sql);
+        var script = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo("api/scripts/sqlserver/Matrix.sql"));
+        Assert.DoesNotMatch(@"(?i)\b(DROP|TRUNCATE|DELETE|UPDATE)\b", script);
+        Assert.Contains("CREATE UNIQUE INDEX IX_RevisoesMatrix_Espaco_Aplicacao_Tipo_DocumentoId_Versao", script);
+        Assert.Equal(2, Regex.Matches(script, "IF NOT EXISTS").Count);
+    }
+
     /// <summary>Os scripts da pasta que nem o job <c>sql</c> aplica nem são <see cref="AnterioresAoControleRemoto"/>, em ordem.</summary>
     private static string[] ForaDoJobSql(IEnumerable<string> naPasta, IReadOnlyCollection<string> noJob)
         => naPasta.Where(nome => !noJob.Contains(nome, StringComparer.Ordinal) && !AnterioresAoControleRemoto.Contains(nome, StringComparer.Ordinal))
