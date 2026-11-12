@@ -11,6 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { ArtefatosDoProjeto, Projeto } from './projetos';
+import { rotaMatrix } from './matrix';
 import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
@@ -129,6 +130,11 @@ const rotaDosAcessos = (recurso: 'design' | 'projeto', projeto: number) =>
   `${recurso === 'design' ? '/api/design/projetos' : '/api/projetos'}/${projeto}/acessos`;
 
 export const api = {
+  matrizes: (token: string, signal?: AbortSignal) => chamar<import('./matrix').CabecalhoMatrix[]>('/api/matrix', { token, signal }),
+  historicoMatrix: (token: string, alvo: Pick<import('./matrix').CabecalhoMatrix, 'aplicacao' | 'tipo' | 'id'>, signal?: AbortSignal) =>
+    chamar<import('./matrix').RevisaoMatrix[]>(rotaMatrix(alvo), { token, signal }),
+  editarMatrix: (token: string, edicao: import('./matrix').EdicaoMatrix, aplicar = false) =>
+    chamar<import('./matrix').ResultadoMatrix>(`${rotaMatrix(edicao.documento)}?aplicar=${aplicar}`, { token, metodo: 'PUT', corpo: edicao }),
   configuracaoDoPush: (token: string, signal?: AbortSignal) =>
     chamar<{ disponivel: boolean; chavePublica: string | null }>('/api/remoto/push', { token, signal }),
   assinarPush: (token: string, corpo: PushSubscriptionJSON) =>
