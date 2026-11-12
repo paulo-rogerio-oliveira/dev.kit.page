@@ -442,7 +442,7 @@ alterações, aprovação e disparo. A gestão de acessos é exclusiva do dono.
 
 ### Scripts SQL do controle remoto, na ordem
 
-Numa base Azure SQL que já existe, o controle remoto precisa de dez scripts de `api/scripts/sqlserver/`, todos
+Numa base Azure SQL que já existe, o controle remoto precisa de onze scripts de `api/scripts/sqlserver/`, todos
 idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeiros; o `CatalogoRemoto.sql` e o
 `ClienteDaMaquina.sql`, das `Maquinas` e dos `Usuarios` que já existem; o `BoardRemoto.sql`, do `Conversa.sql` e do
 `Decisoes.sql`; o `ArtefatosDosProjetos.sql`, dos `ProjetosCompartilhados` do `Us693.sql`):
@@ -462,7 +462,9 @@ idempotentes, NESTA ordem (o `Conversa.sql` depende das tabelas dos dois primeir
 9. `ArtefatosDosProjetos.sql` — os artefatos do projeto (controle-v4, item 2): a tabela `ArtefatosDosProjetos` (o zip do
    pacote .NET no Blob, com o hash e a retenção, e a URL do preview). Sem ele, `POST /api/projetos/{id}/artefatos` e
    `GET /api/projetos/artefatos` respondem 500, e a verificação do esquema na subida o aponta.
-10. `Matrix.sql` — o histórico versionado de mapas, matrizes, vínculos e comprovações por aplicação (`RevisoesMatrix`).
+10. `ConversaDaTask.sql` — a coluna `FalasRemotas.Sessao` e o índice da conversa por task, após `Conversa.sql`.
+    Aplique antes da API que anuncia `conversa-da-task`; preserva as falas existentes e pode ser reaplicado.
+11. `Matrix.sql` — o histórico versionado de mapas, matrizes, vínculos e comprovações por aplicação (`RevisoesMatrix`).
     Aplique antes da API que anuncia `matrix-v1`; o script é aditivo e não altera as definições existentes.
 
 **O que o remote-control-v3 acrescenta ao banco** são só os passos 6 e 7 (as tabelas `CatalogosRemotos`,
@@ -483,7 +485,7 @@ congelada no teste `Todo_script_da_pasta_vai_no_job_sql_salvo_os_anteriores_ao_c
 ambiente nas Configurações) são do git.kit e não mudam o banco nem a API.
 
 ```bash
-for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos Matrix; do
+for s in Remoto Provisao Conversa Decisoes Push CatalogoRemoto ClienteDaMaquina BoardRemoto ArtefatosDosProjetos ConversaDaTask Matrix; do
   sqlcmd -S <servidor>.database.windows.net -d <base> --authentication-method ActiveDirectoryDefault -i api/scripts/sqlserver/$s.sql || break
 done
 ```
@@ -649,7 +651,7 @@ na `main`:
    não muda nada.
 3. **Push**: `--gerar-chaves-vapid` e as três `Push__*` no App Service (se ainda não estão).
 4. **Banco e API**: *Actions → Build and deploy… → Run workflow* com **aplicar_sql** marcado — `configuracao` → `sql` (os
-   nove scripts, na ordem da seção "Scripts SQL do controle remoto") → `deploy` (a API e o WebJob `provisao` no mesmo
+   onze scripts, na ordem da seção "Scripts SQL do controle remoto") → `deploy` (a API e o WebJob `provisao` no mesmo
    pacote). O push na `main` já publica; o disparo manual é o que aplica o SQL. Se os scripts já foram aplicados à mão
    (`sqlcmd`), o push basta. **Não** reinicie nem mude settings durante o deploy (as DLLs corrompidas do 500 `Bad IL
    range`).
