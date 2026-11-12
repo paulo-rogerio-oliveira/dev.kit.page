@@ -47,8 +47,11 @@ public sealed class ComandoRemoto
     public string Contexto { get; set; } = string.Empty;
 }
 
-/// <summary>O contexto do fluxo de um comando (<see cref="ComandoRemoto.Contexto"/>), como a API o grava.</summary>
-public sealed record ContextoDoComando(long? Fluxo, string? Agente, IReadOnlyDictionary<string, string>? Parametros);
+/// <summary>
+/// O contexto de um comando (<see cref="ComandoRemoto.Contexto"/>), como a API o grava: o fluxo, o agente e os parâmetros e
+/// (semana 7) a task de destino da mensagem (<c>ComandoNovoV1.Sessao</c>) — no JSON, sem coluna própria.
+/// </summary>
+public sealed record ContextoDoComando(long? Fluxo, string? Agente, IReadOnlyDictionary<string, string>? Parametros, string? Sessao = null);
 
 /// <summary>
 /// Uma resposta do dev.kit, recebida por HTTPS. Única por (<see cref="UsuarioId"/>, <see cref="MaquinaId"/>,
@@ -104,6 +107,12 @@ public sealed class FalaRemota
 
     /// <summary>(correções do board remoto) As imagens da fala (<c>AnexoDaFalaV1[]</c>) em JSON; vazio sem imagem.</summary>
     public string Anexos { get; set; } = string.Empty;
+
+    /// <summary>
+    /// (semana 7) A task da fala (o id da execução no retrato); vazio é a fala do chat do Orquestrador. A conversa da máquina
+    /// só traz as vazias, e a da task, só as dela.
+    /// </summary>
+    public string Sessao { get; set; } = string.Empty;
 }
 
 /// <summary>

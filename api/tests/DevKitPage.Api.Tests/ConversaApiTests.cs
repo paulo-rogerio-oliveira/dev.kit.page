@@ -480,7 +480,8 @@ public sealed class ConversaApiTests : IDisposable
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
             // Recursos são aditivos: conserva as falas e as decisões com snapshot, e anuncia o catálogo do chat no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar], json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "conversa-da-task"],
+                json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 
         // A resposta do dev.kit antigo (sem autor nem origem) continua 201, e o comando vai a respondido como antes.
@@ -667,6 +668,82 @@ public sealed class ConversaApiTests : IDisposable
             Mensagem("c-7") with { Fluxo = 7, Parametros = new Dictionary<string, string> { ["REVISOR"] = "ana@empresa.com.br" } });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, sensivel.StatusCode);
         Assert.Equal(2, _api.Fila.Enviadas.Count);
+    }
+
+    /// <summary>
+    /// (semana 7, item 4) A conversa com o agente de UMA task: as falas com a sessão (o id da execução no retrato) e a mensagem
+    /// com destino vão para a conversa da task — e saem do chat do Orquestrador, que segue igual para o site antigo.
+    /// </summary>
+    [Fact]
+    public async Task A_conversa_da_task_guarda_as_falas_e_a_mensagem_com_destino_fora_do_chat_do_orquestrador()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        const string sessao = "exec-3f2a9c";
+        var t0 = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        // O dev manda à task pelo site: a mensagem vai na fila com o destino, e só como texto.
+        var paraTask = Mensagem("c-task", "Rode só os testes do Board, por favor.") with { Sessao = sessao };
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", paraTask)).StatusCode);
+        var naFila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoMensagem, sessao, (long?)null), (naFila.Tipo, naFila.Sessao, naFila.Fluxo));
+        // A mensagem ao Orquestrador continua sem o campo: o dev.kit antigo a lê igual.
+        Assert.Equal(HttpStatusCode.Accepted, (await ana.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-orq"))).StatusCode);
+        Assert.DoesNotContain("\"sessao\"", _api.Fila.Enviadas.Last().Mensagem, StringComparison.Ordinal);
+
+        // O dev.kit publica as falas da task (o agente e o dev, com a sessão) e uma do Orquestrador.
+        foreach (var fala in new[]
+        {
+            Fala("ft-1", ConversaV1.AutorAgente, texto: "Rodei os testes do Board: 33 passaram.", ditaEm: t0) with { Sessao = sessao },
+            Fala("ft-2", origem: ConversaV1.OrigemRemoto, texto: "Rode só os testes do Board, por favor.", ditaEm: t0.AddSeconds(5), comando: "c-task") with { Sessao = sessao },
+            Fala("fo-1", ConversaV1.AutorOrquestrador, texto: "O item 13 está em implementação.", ditaEm: t0.AddSeconds(10)),
+        })
+            Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", fala)).StatusCode);
+
+        var daTask = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/sessoes/{sessao}/conversa"))!;
+        Assert.Equal(["ft-1", "ft-2"], daTask.Falas.Select(f => f.Id));
+        Assert.All(daTask.Falas, f => Assert.Equal(sessao, f.Sessao));
+        Assert.Equal(ConversaV1.AutorAgente, daTask.Falas[0].Autor);
+        Assert.Equal(("c-task", sessao), (Assert.Single(daTask.Comandos).Id, daTask.Comandos[0].Sessao));
+
+        // O chat do Orquestrador não mistura: nem a fala da task, nem a mensagem com destino.
+        var doOrquestrador = (await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/conversa"))!;
+        Assert.Equal(["fo-1"], doOrquestrador.Falas.Select(f => f.Id));
+        Assert.Equal(["c-orq"], doOrquestrador.Comandos.Select(c => c.Id));
+        Assert.Null(doOrquestrador.Comandos[0].Sessao);
+
+        // Outra task da mesma máquina tem a conversa dela, vazia.
+        Assert.Empty((await ana.GetFromJsonAsync<ConversaDaMaquinaV1>($"/api/remoto/maquinas/{Maquina}/sessoes/exec-outra/conversa"))!.Falas);
+    }
+
+    /// <summary>(semana 7, item 4) A conversa da task é só texto, e o agente fala só numa task.</summary>
+    [Fact]
+    public async Task A_mensagem_a_task_e_so_texto_e_a_fala_do_agente_diz_a_task()
+    {
+        var (_, ana) = await DevComFilaAsync();
+        foreach (var (pedido, trecho) in new (ComandoNovoV1, string)[]
+        {
+            (Mensagem("c-1") with { Sessao = "exec-1", Fluxo = 7 }, "só texto"),
+            (Mensagem("c-2") with { Sessao = "exec/../1" }, "id da execução"),
+            (new ComandoNovoV1("c-3", Maquina, ConversaV1.ComandoLigar, Sessao: "exec-1"), "só na mensagem"),
+        })
+        {
+            var recusa = await ana.PostAsJsonAsync("/api/remoto/comandos", pedido);
+            Assert.Equal(HttpStatusCode.BadRequest, recusa.StatusCode);
+            Assert.Contains(trecho, await recusa.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+        Assert.Empty(_api.Fila.Enviadas);
+
+        var semTask = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("ft-1", ConversaV1.AutorAgente));
+        Assert.Equal(HttpStatusCode.BadRequest, semTask.StatusCode);
+        Assert.Contains("de qual task", await semTask.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        var orquestradorNaTask = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("fo-1", ConversaV1.AutorOrquestrador) with { Sessao = "exec-1" });
+        Assert.Equal(HttpStatusCode.BadRequest, orquestradorNaTask.StatusCode);
+        // A mesma fala reenviada com outra task não é a mesma fala: 409, como o outro conteúdo.
+        Assert.Equal(HttpStatusCode.Created, (await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("ft-2", ConversaV1.AutorAgente) with { Sessao = "exec-1" })).StatusCode);
+        var outraTask = await ana.PostAsJsonAsync("/api/remoto/conversa/falas", Fala("ft-2", ConversaV1.AutorAgente) with { Sessao = "exec-2" });
+        Assert.Equal((HttpStatusCode.Conflict, ConversaV1.CodigoIdEmUso), (outraTask.StatusCode, await CodigoAsync(outraTask)));
+        // A rota da conversa da task confere a sessão antes de ler.
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.GetAsync($"/api/remoto/maquinas/{Maquina}/sessoes/exec_1/conversa")).StatusCode);
     }
 
     [Fact]

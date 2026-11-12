@@ -28,6 +28,8 @@ export interface RetratoDaMaquina {
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;
       projeto?: string | null; item?: number | null; agente?: string | null; desdeEm?: string | null;
+      /** (semana 7, campo novo) A task aceita a conversa pelo site: o item do Executando abre o chat dela. */
+      conversavel?: boolean | null;
     }> | null;
     pendencias: PendenciaRemota[] | null;
   };
@@ -59,7 +61,8 @@ export interface RespostaDaDecisao {
 /** `dispensada` é campo novo (correções do board remoto): o card fechado no site, só com `?dispensadas=true`. */
 export interface DecisaoPendente { pendencia: PendenciaRemota; snapshotId: string; bloqueio: string | null; resposta: RespostaDaDecisao | null; dispensada?: boolean }
 export interface ResponderDecisao {
-  snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string; codigo?: string;
+  /** (semana 7) Sem `codigo`: o aprovar e o autorizar valem com o login confirmado; a API ainda aceita e ignora o campo do cliente antigo. */
+  snapshotId: string; acao: 'responder' | 'aprovar' | 'ajuste' | 'autorizar'; opcao?: string;
   /** (controle-v4, item 3) O dispositivo da decisão, que a máquina leva à auditoria. */
   dispositivo?: Dispositivo;
 }
@@ -78,6 +81,8 @@ export interface ComandoRemoto {
   id: string; maquinaId: string; tipo: string; texto: string; dispositivo: string;
   estado: 'pendente' | 'na-fila' | 'entregue' | 'respondido' | 'concluido' | 'recusado' | 'expirado' | 'falhou';
   criadoEm: string; expiraEm: string; entregueEm: string | null; concluidoEm: string | null; erro: string;
+  /** (semana 7, campo novo) A task de destino da mensagem; ausente na do Orquestrador. */
+  sessao?: string | null;
 }
 /** (remote-control-v3, item 4) Os comandos de criação pelo site: o formulário vai em JSON no texto. */
 export type TipoDeCriacao = 'projeto' | 'design';
@@ -96,6 +101,8 @@ export interface ComandoNovo {
   confirmarReinicio?: boolean;
   /** (correções do board remoto) O fluxo do catálogo escolhido no `/`, o agente `cli:modelo` e os parâmetros dele. */
   fluxo?: number; agente?: string; parametros?: Record<string, string>;
+  /** (semana 7) A task de destino (o id da execução no retrato): a mensagem vai ao agente dela, só como texto. */
+  sessao?: string;
 }
 /** Uma imagem da fala: o link da API de design, ou o aviso do porquê ela não está no site. */
 export interface AnexoDaFala { titulo: string; url?: string | null; aviso?: string | null }
@@ -104,10 +111,12 @@ export interface RespostaRemota {
 }
 /** A fala do chat do dev.kit (o recurso `falas-do-desktop`): quem falou e onde a fala nasceu. */
 export interface FalaRemota {
-  id: string; maquinaId: string; autor: 'dev' | 'orquestrador' | string; origem: 'desktop' | 'remoto' | string; texto: string;
+  id: string; maquinaId: string; autor: 'dev' | 'orquestrador' | 'agente' | string; origem: 'desktop' | 'remoto' | string; texto: string;
   comandoId: string | null; ditaEm: string; recebidaEm: string;
   /** Campo novo: as imagens citadas na fala (a versão de design gravada). */
   anexos?: AnexoDaFala[] | null;
+  /** (semana 7, campo novo) A task da fala; ausente na do chat do Orquestrador. */
+  sessao?: string | null;
 }
 export interface ConversaRemota {
   /** `falas` é campo novo do contrato v1: a API antiga não o manda. */

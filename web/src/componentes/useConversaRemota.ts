@@ -12,7 +12,12 @@ function juntar<T extends { id: string }>(lista: T[], item: T) {
   return [...lista.filter(x => x.id !== item.id), item];
 }
 
-export function useConversaRemota(maquina: string) {
+/**
+ * A conversa remota com uma máquina: a do Orquestrador ou (semana 7) a do agente de UMA task, quando `sessaoDaTask` (o id da
+ * execução no retrato) vem. O SSE é o mesmo da máquina: cada conversa fica só com os eventos dela — a do Orquestrador ignora os
+ * das tasks, e a da task, os dos outros.
+ */
+export function useConversaRemota(maquina: string, sessaoDaTask?: string) {
   const { sessao, sair } = useSessao();
   const [conversa, setConversa] = useState(vazia);
   const [erro, setErro] = useState('');
@@ -26,6 +31,8 @@ export function useConversaRemota(maquina: string) {
   const ocupado = useRef(false);
   const revisoes = useRef(new Map<string, number>());
   const pendente = useRef<ComandoNovo | null>(null);
+  // A conversa carregada é desta máquina E desta task: trocar de task não mostra a anterior.
+  const chave = `${maquina}|${sessaoDaTask ?? ''}`;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,14 +41,21 @@ export function useConversaRemota(maquina: string) {
     let timer: number;
     let cursor = 0;
     let inicializada = false;
-    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio(''); setCarregadaPara(maquina);
+    // (semana 7) Os comandos DESTA conversa e os das outras: a resposta vem só com o comandoId, e é por ele que se separa.
+    const destaConversa = new Set<string>();
+    const deOutra = new Set<string>();
+    const daConversa = (s?: string | null) => (s ?? '') === (sessaoDaTask ?? '');
+    setConversa(vazia); setCarregando(true); setErro(''); setFalhaNoEnvio(''); setCarregadaPara(chave);
     revisoes.current.clear(); ocupado.current = false; setEnviando(false);
     if (!sessao || !maquina) { setCarregando(false); return () => controller.abort(); }
     async function atualizar() {
       try {
         if (!inicializada) {
-          const historico = await api.conversaRemota(sessao!.token, maquina, signal);
+          const historico = sessaoDaTask
+            ? await api.conversaDaTask(sessao!.token, maquina, sessaoDaTask, signal)
+            : await api.conversaRemota(sessao!.token, maquina, signal);
           if (signal.aborted) return;
+          for (const c of historico.comandos) destaConversa.add(c.id);
           setConversa({ ...historico, falas: historico.falas ?? [] }); cursor = historico.ultimoEvento; inicializada = true;
           setCarregando(false);
         }
@@ -52,12 +66,20 @@ export function useConversaRemota(maquina: string) {
           if (signal.aborted || evento.id <= cursor) return;
           cursor = evento.id;
           if (evento.maquinaId !== maquina) return;
-          if (evento.comando) revisoes.current.set(evento.comando.id, evento.id);
+          const comando = evento.comando && daConversa(evento.comando.sessao) ? evento.comando : null;
+          if (evento.comando) (comando ? destaConversa : deOutra).add(evento.comando.id);
+          const fala = evento.fala && daConversa(evento.fala.sessao) ? evento.fala : null;
+          const doComando = evento.resposta?.comandoId;
+          // Na task, só a resposta a uma mensagem dela; no Orquestrador, tudo menos a resposta à mensagem de uma task.
+          const respostaDaConversa = evento.resposta && (sessaoDaTask ? !!doComando && destaConversa.has(doComando) : !(doComando && deOutra.has(doComando)))
+            ? evento.resposta : null;
+          if (!comando && !fala && !respostaDaConversa) { setConversa(atual => ({ ...atual, ultimoEvento: cursor })); return; }
+          if (comando) revisoes.current.set(comando.id, evento.id);
           setConversa(atual => ({
-            comandos: evento.comando ? juntar(atual.comandos, evento.comando) : atual.comandos,
-            respostas: evento.resposta ? juntar(atual.respostas, evento.resposta) : atual.respostas,
+            comandos: comando ? juntar(atual.comandos, comando) : atual.comandos,
+            respostas: respostaDaConversa ? juntar(atual.respostas, respostaDaConversa) : atual.respostas,
             // A fala do chat do dev.kit (o que o dev digitou no desktop e a resposta do Orquestrador a ela).
-            falas: evento.fala ? juntar(atual.falas ?? [], evento.fala) : atual.falas,
+            falas: fala ? juntar(atual.falas ?? [], fala) : atual.falas,
             ultimoEvento: cursor,
           }));
         });
@@ -71,7 +93,7 @@ export function useConversaRemota(maquina: string) {
     }
     void atualizar();
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [maquina, sessao, sair, tentativa]);
+  }, [maquina, sessaoDaTask, chave, sessao, sair, tentativa]);
 
   /**
    * A mensagem ao Orquestrador. `fluxo` (correções do board remoto) leva o fluxo escolhido no `/`, o agente e os parâmetros em
@@ -80,13 +102,15 @@ export function useConversaRemota(maquina: string) {
   const enviar = useCallback(async (texto: string, reenvio?: ComandoRemoto, fluxo?: FluxoDaMensagem) => {
     const controller = ciclo.current;
     if (!sessao || !maquina || ocupado.current || !controller || controller.signal.aborted) return false;
+    // (semana 7) Na conversa da task, a mensagem leva o destino e é só texto: o fluxo abre execução, e a task já existe.
+    const destino = sessaoDaTask ? { sessao: sessaoDaTask } : {};
     const pedido: ComandoNovo = reenvio ? {
       id: reenvio.id, maquinaId: maquina, tipo: 'mensagem', texto: reenvio.texto,
-      dispositivo: reenvio.dispositivo === 'celular' ? 'celular' : 'navegador',
-    } : pendente.current?.texto === texto ? pendente.current : {
+      dispositivo: reenvio.dispositivo === 'celular' ? 'celular' : 'navegador', ...destino,
+    } : pendente.current?.texto === texto && pendente.current.sessao === sessaoDaTask ? pendente.current : {
       id: crypto.randomUUID(), maquinaId: maquina, tipo: 'mensagem', texto,
-      dispositivo: dispositivoAtual(),
-      ...(fluxo ? { fluxo: fluxo.fluxo, ...(fluxo.agente ? { agente: fluxo.agente } : {}), ...(Object.keys(fluxo.parametros).length ? { parametros: fluxo.parametros } : {}) } : {}),
+      dispositivo: dispositivoAtual(), ...destino,
+      ...(fluxo && !sessaoDaTask ? { fluxo: fluxo.fluxo, ...(fluxo.agente ? { agente: fluxo.agente } : {}), ...(Object.keys(fluxo.parametros).length ? { parametros: fluxo.parametros } : {}) } : {}),
     };
     if (!reenvio) pendente.current = pedido;
     ocupado.current = true; setEnviando(true); setFalhaNoEnvio('');
@@ -110,7 +134,7 @@ export function useConversaRemota(maquina: string) {
     } finally {
       if (!controller.signal.aborted) { ocupado.current = false; setEnviando(false); }
     }
-  }, [sessao, maquina, sair]);
+  }, [sessao, maquina, sessaoDaTask, sair]);
 
   /**
    * (item 8) LIGAR ou REINICIAR o dev.kit: o comando vai ao serviço da máquina pela mesma fila, e o desfecho chega pela
@@ -185,7 +209,7 @@ export function useConversaRemota(maquina: string) {
     }
   }, [sessao, maquina, sair]);
 
-  const atual = carregadaPara === maquina;
+  const atual = carregadaPara === chave;
   return {
     conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
     carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, criar, recarregar: () => setTentativa(x => x + 1),

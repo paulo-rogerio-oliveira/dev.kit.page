@@ -60,6 +60,16 @@ public static class EndpointsDaConversa
                     ? Results.Ok(historico)
                     : Results.Problem("Máquina não encontrada, ou não é sua.", statusCode: StatusCodes.Status404NotFound)));
 
+        // (semana 7) A conversa com o agente de UMA task: a sessão é o id da execução no retrato. Os eventos novos dela vêm no
+        // mesmo SSE da máquina, com a sessão na fala e no comando (o site separa).
+        grupo.MapGet("/maquinas/{maquinaId}/sessoes/{sessao}/conversa", (string maquinaId, string sessao, ClaimsPrincipal quem,
+                IConversaRemota conversa, CancellationToken ct)
+            => EndpointsDoRemoto.ComUsuario(quem, async usuario =>
+                RegrasDoRemoto.MaquinaIdValido(maquinaId) && RegrasDaConversa.SessaoValida(sessao)
+                    && await conversa.ConversaDaTaskAsync(usuario, maquinaId, sessao, ct) is { } historico
+                    ? Results.Ok(historico)
+                    : Results.Problem("Máquina não encontrada, ou não é sua.", statusCode: StatusCodes.Status404NotFound)));
+
         grupo.MapGet("/conversa/eventos", (HttpContext http, string? maquinaId, long? desde, ClaimsPrincipal quem, IConversaRemota conversa,
                 IAvisoDaConversa aviso, IOptions<OpcoesDoRemoto> opcoes, CancellationToken ct) =>
             {

@@ -37,9 +37,14 @@ public sealed record ItemNoRetratoV1(int Numero, string Titulo, string Situacao,
 /// Um fluxo em execução (o "Executando" do Board): o id é o da execução no dev.kit — opaco, sem caminho —, e o projeto e
 /// o item, quando a execução é de um item de projeto.
 /// </summary>
+/// <param name="Conversavel">
+/// (campo novo, semana 7) A task desta execução aceita a CONVERSA pelo site (<see cref="RemotoV1.RecursoConversaDaTask"/>):
+/// o dev.kit publica as falas dela com a <see cref="FalaDoDevKitV1.Sessao"/> = <see cref="Id"/> e entrega a mensagem com esse
+/// destino. Ausente (o dev.kit antigo), o site não abre o chat da task.
+/// </param>
 public sealed record FluxoNoRetratoV1(
     string Id, string Nome, string Etapa, string Situacao, string? Projeto = null, int? Item = null, string? Agente = null,
-    DateTimeOffset? DesdeEm = null);
+    DateTimeOffset? DesdeEm = null, bool? Conversavel = null);
 
 /// <summary>
 /// Uma PENDÊNCIA do dev (o que espera decisão). A pergunta leva os MESMOS campos do <c>[GITKIT:PERGUNTA]</c> —
@@ -132,13 +137,13 @@ public static class RemotoV1
     public const string PendenciaAprovacao = "aprovacao";
     public const string PendenciaFalha = "falha";
 
-    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o segundo fator.</summary>
+    /// <summary>(ajuste 9) A confirmação que o Orquestrador pediria ao dev, como cartão com o escopo exato e o login confirmado.</summary>
     public const string PendenciaAutorizacao = "autorizacao";
 
     /// <summary>Os tipos de pendência (o novo entra no fim; o dev.kit só o publica com <see cref="RecursoDecisoesAutorizar"/>).</summary>
     public static IReadOnlyList<string> TiposDePendencia { get; } = [PendenciaPergunta, PendenciaAprovacao, PendenciaFalha, PendenciaAutorizacao];
 
-    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o segundo fator.</summary>
+    /// <summary>(ajuste 9) A API aceita as pendências de autorização e a ação "autorizar" com o login confirmado.</summary>
     public const string RecursoDecisoesAutorizar = "decisoes-autorizar";
 
     public const string SensivelSegredo = "segredo";
@@ -157,7 +162,15 @@ public static class RemotoV1
     /// O sinal de suporte da resposta do heartbeat: o que esta API aceita além do contrato da fase 1. Recurso novo entra no fim;
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
-    public static IReadOnlyList<string> RecursosDaApi { get; } = [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar];
+    public static IReadOnlyList<string> RecursosDaApi { get; } =
+        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, RecursoConversaDaTask];
+
+    /// <summary>
+    /// (semana 7) A API guarda as falas POR TASK (<see cref="FalaDoDevKitV1.Sessao"/>), as devolve na conversa da task
+    /// (<c>GET /api/remoto/maquinas/{maquina}/sessoes/{sessao}/conversa</c>) e leva a mensagem com destino
+    /// (<see cref="ComandoNovoV1.Sessao"/>) na fila. Só com ele o dev.kit publica as falas da task e a marca de conversável.
+    /// </summary>
+    public const string RecursoConversaDaTask = "conversa-da-task";
 
     /// <summary>
     /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina
