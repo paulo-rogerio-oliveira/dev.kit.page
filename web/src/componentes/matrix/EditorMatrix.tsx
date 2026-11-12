@@ -6,7 +6,7 @@ import { DialogoMatrix } from './DialogoMatrix';
 import { EixosDaMatrix } from './EixosDaMatrix';
 import { HistoricoDaMatrix, MapaDaMatrix } from './MapaDaMatrix';
 import { ConflitoDaMatrix, FalhaDaMatrix, PreviaDaMatrix } from './RevisaoDaMatrix';
-import { celulasAlteradas, lerDefinicao, registroVigente, ultimo, validarCelula } from './modelo';
+import { celulasAlteradas, estadoDaCelula, lerDefinicao, ultimo, validarCelula } from './modelo';
 import { useEdicaoMatrix } from './useEdicaoMatrix';
 import './Matrix.css';
 
@@ -49,8 +49,7 @@ export function EditorMatrix({ alvo, projeto, token, conta, editar, solicitar, v
   const modificar = (matriz: MatrizMatrix) => e.mudar({ ...e.documento, matriz });
   const noRecorte = (c: CelulaMatrix) => !alvo.recorte || alvo.recorte.includes(c.id);
   const podeEditar = editar && !e.ocupado;
-  const avaliacao = (c: CelulaMatrix) => ultimo(alvo.registros.filter(r => r.documento.registro?.celula === c.id && r.documento.registro.tipo === 'avaliacao' && registroVigente(r.documento.registro, historico)))?.documento.registro;
-  const situacao = (c: CelulaMatrix) => !c.aplicavel ? 'Não se aplica, com motivo' : avaliacao(c)?.resultado === 'atendido' ? 'Comprovado' : avaliacao(c) ? 'A avaliar' : 'A implementar';
+  const situacao = (c: CelulaMatrix) => !c.aplicavel ? 'Não se aplica, com motivo' : estadoDaCelula(c, alvo.registros, historico);
   const pendente = (c: CelulaMatrix) => c.aplicavel && situacao(c) !== 'Comprovado';
   const minhasTasks = alvo.responsavel ? [alvo.responsavel] : alvo.minhasTasks ?? [];
   const visivel = (c: CelulaMatrix) => (!filtro || c.responsaveis.some(r => r.id === filtro)) &&
@@ -73,7 +72,7 @@ export function EditorMatrix({ alvo, projeto, token, conta, editar, solicitar, v
     const falha = m?.celulas.map(validarCelula).find(Boolean);
     setErro(falha || ''); if (!falha) void e.revisar();
   };
-  const celulaVista = (c: CelulaMatrix, movel = false) => <button className={`mx-cell ${!c.aplicavel ? 'mx-na' : avaliacao(c)?.resultado === 'atendido' ? 'mx-ok' : 'mx-todo'}${movel && selecionadaAtual?.id === c.id ? ' mx-selecionada' : ''}`}
+  const celulaVista = (c: CelulaMatrix, movel = false) => <button className={`mx-cell ${!c.aplicavel ? 'mx-na' : situacao(c) === 'Comprovado' ? 'mx-ok' : 'mx-todo'}${movel && selecionadaAtual?.id === c.id ? ' mx-selecionada' : ''}`}
     onClick={() => { setSelecionada(c.id); if (!movel) setCelula(c.id); }} aria-label={`${m?.componentes.find(x => x.id === c.componente)?.nome} × ${m?.layers.find(x => x.id === c.layer)?.nome} · ${c.id}`}>
     <span>● {situacao(c)}</span><strong>{lerDefinicao(c.justificativa).obrigacao || 'Definir obrigação'}</strong>
     <small>{c.responsaveis.map(r => itemNome(r.id, r.item).length > 24 && r.item ? `Item ${r.item}` : itemNome(r.id, r.item)).join(', ') || 'Sem responsável'}{!noRecorte(c) && ' · dependência em consulta'}</small></button>;

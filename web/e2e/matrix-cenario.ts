@@ -18,7 +18,7 @@ export async function prepararMatrix(request: APIRequestContext) {
   const inicial = await (await request.post(`${API}/api/auth/login`, { data: { login: usuario.login, senha: senhaTemporaria } })).json();
   const troca = await request.post(`${API}/api/auth/trocar-senha`, { headers: { Authorization: `Bearer ${inicial.token}` }, data: { senhaAtual: senhaTemporaria, novaSenha: NOVA_SENHA } });
   expect(troca.ok()).toBeTruthy();
-  const sessao = await troca.json(), headers = { Authorization: `Bearer ${sessao.token}` };
+  const sessao = await troca.json(), headers = { Authorization: `Bearer ${sessao.token}`, 'X-DevKit-Matrix-Avaliacao': '1' };
   const repositorios = ['https://example.test/demo/aplicacao'];
   const envio = { slug: 'matrix', nome: 'matrix · demonstração', nivel: 'usuario', time: '', repositorios,
     branch: 'feature/demo/matrix', semanaConvertida: false, definicao: 'Matriz de impacto para demonstração isolada.',

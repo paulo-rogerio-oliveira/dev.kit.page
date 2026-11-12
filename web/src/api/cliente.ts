@@ -64,6 +64,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (opcoes.corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
   if (opcoes.ultimoEvento !== undefined) cabecalhos['Last-Event-ID'] = String(opcoes.ultimoEvento);
+  if (caminho.startsWith('/api/matrix')) cabecalhos['X-DevKit-Matrix-Avaliacao'] = '1';
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
     signal: opcoes.signal,

@@ -3,7 +3,7 @@ import type { CelulaMatrix, RegistroMatrix, RevisaoMatrix } from '../../api/matr
 import type { ItemDoProjeto } from '../../api/projetos';
 import { DialogoMatrix } from './DialogoMatrix';
 import { ConflitoDaMatrix, FalhaDaMatrix, PreviaDaMatrix } from './RevisaoDaMatrix';
-import { celulasAlteradas, escreverDefinicao, exportarRascunho, lerDefinicao, registroVigente, validarCelula } from './modelo';
+import { celulasAlteradas, escreverDefinicao, exportarRascunho, lerDefinicao, motivoDaObsolescencia, validarCelula } from './modelo';
 import type { EdicaoDaMatrix } from './useEdicaoMatrix';
 
 const resultados: Record<RegistroMatrix['resultado'], string> = {
@@ -16,10 +16,11 @@ export function RegistrosDaCelula({ tipo, celula, registros, historico, autores 
   return <section><h3>{tipo === 'implementacao' ? 'Evidências do implementador' : 'Resultado do avaliador'}</h3>
     {!lista.length && <p>Ainda sem {tipo === 'implementacao' ? 'comprovação' : 'avaliação'} registrada.</p>}
     {lista.slice().reverse().map(r => {
-      const v = r.documento.registro!, vigente = registroVigente(v, historico);
+      const v = r.documento.registro!, motivo = motivoDaObsolescencia(v, historico), vigente = !motivo;
       return <article className="mx-card" key={`${r.documento.tipo}-${r.versao}`}>
-        <strong>{resultados[v.resultado]} · {vigente ? 'Vigente' : 'Histórico · requer revisão da célula'}</strong>
+        <strong>{resultados[v.resultado]} · {vigente ? 'Vigente' : `Histórico · ${motivo}`}</strong>
         <p>{v.justificativa}</p><p>Recorte r{v.revisaoDaDefinicao} · {v.responsavel} · {autores[r.autor] ?? `Usuário ${r.autor}`} · {new Date(r.em).toLocaleString('pt-BR')}</p>
+        {v.evento && <p>Evento {v.evento} · avaliador {v.avaliador} · task {v.sessaoAvaliada} · revisão efetiva {v.revisaoEfetiva}</p>}
         <ul>{v.evidencias.map((e, i) => <li key={i}>{/^https?:\/\//i.test(e) ? <a href={e} target="_blank" rel="noreferrer">{e}</a> : e}</li>)}</ul>
         {Object.entries(v.shas).map(([repo, sha]) => <p key={repo}>{repo}: <code>{sha}</code></p>)}
       </article>;

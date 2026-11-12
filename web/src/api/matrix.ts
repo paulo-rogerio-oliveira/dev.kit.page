@@ -13,16 +13,24 @@ export interface CelulaMatrix {
   aplicavel: boolean; justificativa: string; origem: string; responsaveis: ResponsavelMatrix[];
   criterio: string; evidenciaEsperada: string;
 }
-export interface MatrizMatrix { revisaoDoMapa: number; componentes: EixoMatrix[]; layers: EixoMatrix[]; celulas: CelulaMatrix[] }
+export interface MatrizMatrix { revisaoDoMapa: number; componentes: EixoMatrix[]; layers: EixoMatrix[]; celulas: CelulaMatrix[]; coberturas?: { relacao: string; celula: string }[] | null }
 export interface RegistroMatrix {
   celula: string; revisaoDaDefinicao: number; responsavel: string; tipo: 'implementacao' | 'avaliacao';
   resultado: 'atendido' | 'parcial' | 'nao-atendido' | 'nao-aplicavel'; justificativa: string;
   evidencias: string[]; shas: Record<string, string>;
+  evento?: string; sessaoAvaliada?: string; avaliador?: number; revisaoEfetiva?: number;
+  revisaoDoContexto?: number; revisaoDaEntrega?: string;
 }
 export interface VinculoMatrix { responsavel: string; sessao: string; item: number | null; maquina: string }
+export interface EventoMatrix {
+  evento: string; matriz: string; maquina: string; sessaoAvaliada: string; avaliador: number;
+  revisao: number; revisaoEfetiva: number; revisaoDoContexto: number; responsaveis: string[];
+  celulas: string[]; dependencias?: string[]; shas: Record<string, string>; revisaoDaEntrega: string;
+}
 export interface DocumentoMatrix {
-  contrato: number; aplicacao: string; tipo: 'mapa' | 'matriz' | 'registro' | 'vinculo'; id: string; projeto: string;
+  contrato: number; aplicacao: string; tipo: 'mapa' | 'matriz' | 'registro' | 'vinculo' | 'evento'; id: string; projeto: string;
   mapa?: MapaMatrix | null; matriz?: MatrizMatrix | null; registro?: RegistroMatrix | null; vinculo?: VinculoMatrix | null;
+  evento?: EventoMatrix | null;
 }
 export interface CabecalhoMatrix { aplicacao: string; tipo: DocumentoMatrix['tipo']; id: string; projeto: string; versao: number }
 export interface RevisaoMatrix { versao: number; autor: string; em: string; documento: DocumentoMatrix }

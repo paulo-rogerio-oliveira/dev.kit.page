@@ -20,7 +20,7 @@ describe('revisões compartilhadas Matrix', () => {
   it('uma mudança no nome do eixo invalida só avaliações das células daquele eixo', () => {
     const base = documentoDeTeste(), atual = structuredClone(base);
     atual.matriz!.layers[0].nome = 'Celular e Page';
-    const r: RegistroMatrix = { celula: 'imp-page', revisaoDaDefinicao: 1, responsavel: 'item-4', tipo: 'avaliacao', resultado: 'atendido', justificativa: 'Conferido', evidencias: ['captura.png'], shas: { demo: 'a'.repeat(40) } };
+    const r: RegistroMatrix = { celula: 'imp-page', revisaoDaDefinicao: 1, responsavel: 'item-4', tipo: 'avaliacao', resultado: 'atendido', justificativa: 'Conferido', evidencias: ['captura.png'], shas: { demo: 'a'.repeat(40) }, evento: 'gatilho:123' };
     const h = [revisaoDeTeste(base, 1), revisaoDeTeste(atual, 2)];
     expect(registroVigente(r, h)).toBe(false);
     expect(registroVigente({ ...r, celula: 'imp-api', responsavel: 'item-2' }, h)).toBe(true);

@@ -48,6 +48,7 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
         try { RegrasMatrix.Validar(edicao.Documento); }
         catch (ArgumentException ex) { return new(400, Erro: ex.Message); }
         if (edicao.VersaoEsperada < 0 || edicao.VersaoEsperada == int.MaxValue) return new(400, Erro: "Versão esperada inválida.");
+        await using var transacao = aplicar ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct) : null;
         var d = edicao.Documento;
         var anterior = await Stream(e, d.Aplicacao, d.Tipo, d.Id).OrderByDescending(r => r.Versao).FirstOrDefaultAsync(ct);
         long? projetoId = anterior?.ProjetoId;
@@ -68,13 +69,18 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
             projetoId = projeto.Id;
         }
         if ((anterior?.Versao ?? 0) != edicao.VersaoEsperada) return new(409, Erro: "Conflito de versão matrix; releia antes de editar.");
+        if (d.Matriz is { Coberturas: null } matrizAnterior && anterior is not null)
+            d = d with { Matriz = matrizAnterior with { Coberturas = Ler(anterior).Documento.Matriz?.Coberturas } };
 
         // Leitura de referências sempre passa pelo mesmo ACL. Não aceita mapa de outra aplicação nem outra demanda.
         var referencias = new Dictionary<(string Tipo, string Id), RevisaoMatrix[]>();
         foreach (var alvo in d.Tipo switch
         {
             "matriz" => new[] { ("mapa", d.Aplicacao) },
-            "registro" or "vinculo" => new[] { ("matriz", d.Id) },
+            "registro" or "vinculo" => d.Registro is { Evento.Length: > 0 } r
+                ? new[] { ("matriz", d.Id), ("evento", RegrasAvaliacaoMatrix.IdDoEvento(r.Evento, d.Id, r.SessaoAvaliada)) }
+                : new[] { ("matriz", d.Id) },
+            "evento" => new[] { ("matriz", d.Evento!.Matriz) },
             _ => Array.Empty<(string, string)>()
         })
         {
@@ -89,10 +95,28 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
         try
         {
             RegrasMatrix.ValidarReferencia(d, Referencia);
+            if (d.Registro is { Evento.Length: > 0 } registro)
+                RegrasAvaliacaoMatrix.ConferirLeitura(Referencia("evento", RegrasAvaliacaoMatrix.IdDoEvento(registro.Evento, d.Id, registro.SessaoAvaliada), 0)!.Documento.Evento!,
+                    referencias[("matriz", d.Id)]);
             var h = await Stream(e, d.Aplicacao, d.Tipo, d.Id).ToArrayAsync(ct);
             RegrasMatrix.ValidarEstabilidade(h.Select(Ler), d);
         }
         catch (ArgumentException ex) { return new(400, Erro: ex.Message); }
+
+        if (d.Evento is { } evento)
+        {
+            if (anterior is not null || edicao.VersaoEsperada != 0) return new(409, Erro: "Recibo do host é imutável.");
+            var matriz = await Stream(e, d.Aplicacao, "matriz", evento.Matriz).FirstAsync(ct);
+            var acesso = await AcessoAsync(e, matriz, true, ct);
+            if (acesso != 200) return new(acesso, Erro: "Emitir recibo exige acesso à demanda.");
+            projetoId = matriz.ProjetoId; dono = matriz.DonoId;
+            var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == e.UsuarioId && m.MaquinaId == evento.Maquina, ct);
+            var retrato = maquina is null || maquina.Retrato.Length == 0 ? null
+                : JsonSerializer.Deserialize<RetratoV1>(maquina.Retrato, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var task = retrato?.Fluxos?.SingleOrDefault(f => f.Id == evento.SessaoAvaliada);
+            if (task is null || (task.Projeto ?? "") != d.Projeto)
+                return new(404, Erro: "Host/sessão avaliada não confirmado no retrato da máquina do solicitante.");
+        }
 
         if (d.Tipo is "registro" or "vinculo")
         {
@@ -137,6 +161,7 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
                 return new(409, Erro: "Outra edição venceu a concorrência matrix; releia.");
             throw;
         }
+        await transacao!.CommitAsync(ct);
         return new(200, resultado);
     }
 }

@@ -26,7 +26,7 @@ public static class RegrasMatrix
         Exigir(d.Contrato == 1, "Contrato matrix desconhecido; atualize o cliente sem sobrescrever a definição.");
         Exigir(Identificador(d.Aplicacao) && Identificador(d.Id), "Aplicação e id devem ser estáveis (até 100 caracteres).");
         Exigir(d.Projeto is not null && (d.Projeto.Length == 0 || Identificador(d.Projeto)), "Projeto inválido.");
-        Exigir(new object?[] { d.Mapa, d.Matriz, d.Registro, d.Vinculo }.Count(x => x is not null) == 1,
+        Exigir(new object?[] { d.Mapa, d.Matriz, d.Registro, d.Vinculo, d.Evento }.Count(x => x is not null) == 1,
             "Informe exatamente um documento do tipo solicitado.");
         switch (d.Tipo)
         {
@@ -61,8 +61,11 @@ public static class RegrasMatrix
                     Unicos(c.Responsaveis!.Select(r => r.Id));
                     Exigir(c.Responsaveis.All(r => r.Item is null or > 0), "Item deve ser positivo.");
                 }
+                Exigir(m.Coberturas is null || m.Coberturas.All(c => c is not null && Identificador(c.Relacao)
+                    && m.Celulas.Any(x => x.Id == c.Celula && x.Responsaveis.Length > 0)), "Relação exige obrigação e dono explícitos.");
                 break;
             case "registro" when d.Registro is { } r:
+                Exigir(r.Evento is not null && r.SessaoAvaliada is not null && r.RevisaoDaEntrega is not null, "Metadados do resultado inválidos.");
                 Exigir(Identificador(r.Celula) && Identificador(r.Responsavel) && r.RevisaoDaDefinicao > 0, "Identifique célula, responsável e revisão.");
                 Exigir(r.Tipo is "implementacao" or "avaliacao", "Registro: implementação ou avaliação.");
                 Exigir(r.Resultado is "atendido" or "parcial" or "nao-atendido" or "nao-aplicavel", "Resultado inválido.");
@@ -71,6 +74,9 @@ public static class RegrasMatrix
                 Exigir(r.Shas is not null && r.Shas.All(s => !string.IsNullOrWhiteSpace(s.Key) && s.Value is { Length: 40 or 64 } && s.Value.All(char.IsAsciiHexDigit)), "SHAs completos por repositório.");
                 Exigir(r.Resultado == "nao-aplicavel" || r.Resultado == "nao-atendido" || r.Evidencias!.Length > 0, "Resultado precisa de evidência.");
                 Exigir(r.Tipo != "avaliacao" || r.Shas!.Count > 0, "Avaliação precisa dos SHAs avaliados.");
+                break;
+            case "evento" when d.Evento is { } evento:
+                RegrasAvaliacaoMatrix.ValidarEvento(d, evento);
                 break;
             case "vinculo" when d.Vinculo is { } v:
                 Exigir(Identificador(v.Responsavel) && Identificador(v.Sessao) && v.Item is null or > 0, "Vínculo inválido.");
@@ -86,7 +92,9 @@ public static class RegrasMatrix
         var b = depois.Matriz?.Celulas ?? [];
         var componentes = EixosDiferentes(antes?.Matriz?.Componentes ?? [], depois.Matriz?.Componentes ?? []);
         var layers = EixosDiferentes(antes?.Matriz?.Layers ?? [], depois.Matriz?.Layers ?? []);
-        var ids = a.Select(c => c.Id).Union(b.Select(c => c.Id)).Where(id =>
+        var relacoes = (antes?.Matriz?.Coberturas ?? []).Except(depois.Matriz?.Coberturas ?? [])
+            .Concat((depois.Matriz?.Coberturas ?? []).Except(antes?.Matriz?.Coberturas ?? [])).Select(c => c.Celula).ToHashSet();
+        var ids = a.Select(c => c.Id).Union(b.Select(c => c.Id)).Where(id => relacoes.Contains(id) ||
             JsonSerializer.Serialize(a.FirstOrDefault(c => c.Id == id), Json) != JsonSerializer.Serialize(b.FirstOrDefault(c => c.Id == id), Json)
             || a.Concat(b).Any(c => c.Id == id && (componentes.Contains(c.Componente) || layers.Contains(c.Layer)))).ToArray();
         // A revisão do mapa identifica a origem; as obrigações efetivas são os snapshots de células/eixos.
@@ -100,7 +108,11 @@ public static class RegrasMatrix
     public static void ValidarReferencia(DocumentoMatrix d, Func<string, string, int, RevisaoMatrix?> ler)
     {
         if (d.Matriz is { } m)
-            Exigir(ler("mapa", d.Aplicacao, m.RevisaoDoMapa)?.Documento.Mapa is not null, "Revisão do mapa não encontrada nesta aplicação.");
+        {
+            var mapa = ler("mapa", d.Aplicacao, m.RevisaoDoMapa)?.Documento.Mapa;
+            Exigir(mapa is not null, "Revisão do mapa não encontrada nesta aplicação.");
+            Exigir((m.Coberturas ?? []).All(c => mapa!.Relacoes.Any(r => r.Id == c.Relacao)), "Cobertura aponta relação inexistente no mapa.");
+        }
         if (d.Registro is { } r)
         {
             var celula = ler("matriz", d.Id, r.RevisaoDaDefinicao)?.Documento.Matriz?.Celulas.FirstOrDefault(c => c.Id == r.Celula);
@@ -110,6 +122,19 @@ public static class RegrasMatrix
         {
             var matriz = ler("matriz", d.Id, 0)?.Documento.Matriz;
             Exigir(matriz is not null && matriz.Celulas.Any(c => c.Responsaveis.Any(r => r.Id == v.Responsavel && r.Item == v.Item)), "Responsável/item não pertence à matriz.");
+        }
+        if (d.Evento is { } evento)
+        {
+            var matriz = ler("matriz", evento.Matriz, evento.Revisao)?.Documento;
+            Exigir(matriz?.Matriz is not null && matriz.Projeto == d.Projeto, "Evento exige a matriz/revisão do mesmo escopo.");
+            Exigir(evento.Celulas.Order().SequenceEqual(matriz!.Matriz!.Celulas
+                .Where(c => c.Responsaveis.Any(r => evento.Responsaveis.Contains(r.Id))).Select(c => c.Id).Order()),
+                "Recibo difere do recorte atribuído na revisão.");
+        }
+        if (d.Registro is { Evento.Length: > 0 } registro)
+        {
+            var recibo = ler("evento", RegrasAvaliacaoMatrix.IdDoEvento(registro.Evento, d.Id, registro.SessaoAvaliada), 0)?.Documento.Evento;
+            RegrasAvaliacaoMatrix.ConferirVinculo(registro, recibo);
         }
     }
 
