@@ -26,3 +26,12 @@ test-results/
 .env
 .env.local
 appsettings.*.local.json
+
+# Instruções operacionais são geradas pelo dev.kit fora do versionamento.
+AGENTS.md
+CLAUDE.md
+agent.md
+.codex/
+.claude/
+.kiro/
+.kimi-code/

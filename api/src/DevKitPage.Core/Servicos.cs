@@ -264,14 +264,13 @@ public sealed class PacoteAberto(Stream conteudo, long? tamanho, IDisposable don
 /// </summary>
 public sealed record ReleaseDoCatalogo(
     int Versao, string Tag, string Nome, DateTimeOffset PublicadaEm, long AssetId, string NomeDoPacote, long TamanhoBytes,
-    string? Sha256, long ManifestoAssetId);
+    string? Sha256, long ManifestoAssetId, string? Repositorio = null);
 
 /// <summary>
 /// As releases do dev.kit no GitHub (US #405). O token (<see cref="OpcoesDeAtualizacao.Token"/>) só existe
 /// na API: o app e a landing pedem a versão e o pacote aqui. Nulo é "indisponível" (sem token, GitHub fora
 /// do ar) — a API responde 503 sem repassar nada do GitHub. Desde a US #425 as releases do catálogo básico
-/// (<c>catalogo-vN</c>) passam pelo MESMO caminho: o mesmo token, a mesma lista em cache e o mesmo download em
-/// streaming — separadas das do app pela tag.
+/// (<c>catalogo-vN</c>) usam o mesmo transporte autenticado e download em streaming, com origem e cache próprios.
 /// </summary>
 public interface IReleasesDoDevKit
 {
