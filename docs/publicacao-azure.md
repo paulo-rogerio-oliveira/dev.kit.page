@@ -796,8 +796,14 @@ Antes de disponibilizar a API que anuncia `matrix-v1`, aplicar
 `api/scripts/sqlserver/Matrix.sql` (idempotente, incluído no job `sql` opcional).
 Conferir `dbo.RevisoesMatrix` e seu índice único por espaço, aplicação, tipo, id e
 versão. O SQLite aplica `20261110170000_Matrix` na inicialização habitual.
-O roteiro de validação e os contratos opcionais estão em [matrix-v1.md](matrix-v1.md).
-O item prepara a publicação; produção continua no portão existente.
+Os recibos e resultados do projeto usam o mesmo journal, sem migration adicional
+no Page. Conferir também `matrix-avaliacao-v1` no heartbeat e o cabeçalho
+`X-DevKit-Matrix-Avaliacao: 1` nos clientes atuais.
+O roteiro completo, com prechecagens, convivência de versões, checklist de
+ativação, diagnóstico e recuperação sem apagar histórico, está em
+[matrix-ativacao.md](matrix-ativacao.md); o contrato está em [matrix-v1.md](matrix-v1.md)
+e [matrix-avaliacao.md](matrix-avaliacao.md). Produção continua no portão existente:
+o item 6 somente prepara e testa em bancos temporários.
 
 ## Depois de publicar
 

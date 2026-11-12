@@ -10,6 +10,6 @@ As áreas existentes de avaliação/evidências exibem evento, avaliador, revis�
 
 `matriz.coberturas` associa relação do mapa a uma célula com dono explícito. O fechamento existente no host confere coordenadas analisadas, comprovação dos responsáveis, não aplicação justificada e relações pertinentes. A nota global permanece distinta do resultado por obrigação. Não há nova aprovação, publicação automática, regressão no avaliador ou nota obrigatória em fluxo sem objetivo.
 
-Não há nova tabela nem script SQL no Page: documentos opcionais e recibos usam o journal existente. A ativação exige API/Board e host compatíveis, na etapa de publicação do projeto, sem envio automático para produção neste item.
+Não há nova tabela nem script SQL no Page para a avaliação: documentos opcionais e recibos usam o journal existente, criado por `Matrix.sql`/`20261110170000_Matrix`. A ativação exige API/Board e host compatíveis. Seguir o [roteiro de publicação, ativação e recuperação](matrix-ativacao.md), sem envio automático para produção.
 
 Validação focada: `AvaliacaoMatrixApiTests`, `MatrixApiTests`, testes dos componentes Matrix e o cenário Playwright da avaliação em 1440 e 390 pixels, sempre com SQLite temporário e dados fictícios.

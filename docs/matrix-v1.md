@@ -1,8 +1,10 @@
 # Matrix v1: modelo e operação
 
-Os itens 1 e 2 entregam dados, persistência, operações e distribuição automática
-aos agentes pelo host. O editor visual pertence aos próximos itens. Uma edição
-da matriz nunca concede autorização de envio, PR, integração ou publicação.
+O projeto entrega dados, persistência, operações, distribuição automática pelo
+host, editores desktop/Board e avaliação por obrigação. A ativação e recuperação
+estão em [matrix-ativacao.md](matrix-ativacao.md), e os recibos e a negociação de
+avaliação em [matrix-avaliacao.md](matrix-avaliacao.md). Uma edição da matriz nunca
+concede aprovação de projeto, envio, PR, integração, merge ou publicação.
 
 ## Identidade e revisões
 
@@ -136,14 +138,14 @@ para evitar sobrescrita por um editor incapaz de preservar o novo dado.
 
 - Serviço/local: `AppDatabaseMatrix` cria journal SQLite aditivo/idempotente;
   `ServicoMatrix` valida referências e sessão sem dependência da UI.
-- devcli: `MatrixTool`, contrato de ajuda e comandos opcionais remotos; a paridade
-  das ações visuais existentes continua válida, pois não há nova ação de view model.
+- devcli: `MatrixTool`, contrato de ajuda e comandos remotos; ações dos editores
+  compartilham `ServicoMatrix` e a paridade versionada no git.kit.
 - API: `MatrizesNoBanco`, ACL de `ConsultaDosProjetos`/`RegrasDeAcesso`, migração
   `20261110170000_Matrix` e script SQL Server `Matrix.sql`.
-- Desktop/Board: telas não alteradas neste item sem editor visual. Consumidores
-  antigos continuam usando `ProjetosDoDevKit` e `/api/projetos`; o armazenamento
-  da matriz fica independente dos snapshots antigos. Layout e recapturas de tela
-  dispensados; a demonstração do recurso usa dados fictícios e banco isolado.
+- Desktop/Board: abas Impactos e editores do mapa/recorte já integrados, inclusive
+  no celular. O item 6 não muda essas telas; layout/proposta/recapturas de interface
+  não se aplicam a esta revisão de publicação. Consumidores antigos continuam
+  usando `/api/projetos`; o journal é independente dos snapshots de projetos.
 
 Publicação: aplicar o script idempotente `api/scripts/sqlserver/Matrix.sql` antes
 da API nova (passo Matrix.sql no job SQL, desligado por padrão), conferir a tabela
