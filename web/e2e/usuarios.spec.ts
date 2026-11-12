@@ -42,7 +42,7 @@ test('admin cria usuário → o usuário entra com a senha temporária → troca
   await page.getByRole('searchbox', { name: 'Buscar por nome ou login' }).fill(login);
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2);
   await page.getByRole('button', { name: `Ações de ${login}` }).click();
-  await expect(page.getByRole('menu', { name: `Ações de ${login}` }).getByRole('menuitem')).toHaveText(['Licença', 'Editar', 'Bloquear', 'Redefinir senha']);
+  await expect(page.getByRole('menu', { name: `Ações de ${login}` }).getByRole('menuitem')).toHaveText(['Licença', 'Editar', 'Bloquear', 'Redefinir senha', 'Liberar a provisão']);
   await page.screenshot({ path: 'test-results/capturas/21-usuarios-menu-da-linha.png', fullPage: true });
   await page.keyboard.press('Escape');
 
