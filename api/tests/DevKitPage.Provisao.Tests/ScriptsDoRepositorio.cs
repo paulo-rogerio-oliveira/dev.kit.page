@@ -20,12 +20,19 @@ internal static class ScriptsDoRepositorio
         throw new DirectoryNotFoundException("A raiz do repositório (com .github e api) não foi achada acima da pasta dos testes.");
     }
 
-    /// <summary>O caminho de um arquivo do repositório (relativo à raiz, com '/'), que tem de existir.</summary>
+    /// <summary>O caminho de um fonte local ou documento centralizado, que tem de existir.</summary>
     public static string Arquivo(string relativo)
     {
-        var caminho = Path.Combine(Raiz(), relativo.Replace('/', Path.DirectorySeparatorChar));
+        var raiz = Raiz();
+        if (relativo.StartsWith("docs/", StringComparison.Ordinal))
+        {
+            // O CI informa a pasta do produto no checkout fixo de dev.kit.docs; localmente, os clones ficam lado a lado.
+            raiz = Environment.GetEnvironmentVariable("DEVKIT_PAGE_DOCS_RAIZ")
+                ?? Path.Combine(Directory.GetParent(raiz)!.FullName, "dev.kit.docs", "dev.kit.page");
+        }
+        var caminho = Path.Combine(raiz, relativo.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(caminho))
-            throw new FileNotFoundException($"{relativo} não foi achado no repositório.");
+            throw new FileNotFoundException($"{relativo} não foi achado na origem esperada.", caminho);
         return caminho;
     }
 

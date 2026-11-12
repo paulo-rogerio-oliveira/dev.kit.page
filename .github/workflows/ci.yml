@@ -15,11 +15,21 @@ jobs:
   api:
     name: API (.NET)
     runs-on: ubuntu-latest
+    env:
+      DEVKIT_PAGE_DOCS_RAIZ: ${{ github.workspace }}/.fontes/dev.kit.docs/dev.kit.page
     defaults:
       run:
         working-directory: api
     steps:
       - uses: actions/checkout@v4
+      - name: Documentação na revisão dos contratos de publicação
+        uses: actions/checkout@v4
+        with:
+          repository: paulo-rogerio-oliveira/dev.kit.docs
+          ref: b29bb0a9dea8e1ba303b8c22852c1e3e99439144
+          token: ${{ secrets.REPO_KEY || github.token }}
+          path: .fontes/dev.kit.docs
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: api/global.json
