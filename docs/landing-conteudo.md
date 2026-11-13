@@ -5,6 +5,34 @@ dev.kit faz, como ele trabalha, por que confiar nele e como vê-lo funcionando**
 [`web/src/conteudo/landing.ts`](../web/src/conteudo/landing.ts) (dados tipados, separados dos
 componentes) e as mídias em [`web/public/midia`](../web/public/midia).
 
+## A landing refeita (tarefa avulsa de 12/11/2026)
+
+O pedido: refazer a landing lendo os recursos do projeto dev.kit e o que o site oferece, com as principais
+informações na **primeira dobra**. A página foi reescrita sobre o produto da **versão 7** (a landing anterior ainda
+falava em "Novo na versão 5"), e o produto passou a ser contado pelos seus **quatro braços**, como a regra do
+projeto o define: o app desktop, o serviço do Windows, o Board do dev.kit.page (no site e no celular) e o devcli.
+
+**A primeira dobra** (1440 × 900, e também no notebook de 1366 × 650 úteis, que tem uma regra de altura própria):
+o selo do público, a promessa ("Do work item à Pull Request, com um time de agentes de IA"), o que o dev.kit
+faz (Rules, nota de 0 a 100, Orquestrador, desktop e celular), os dois CTAs, o download com a versão e os 14
+dias grátis, a **vitrine** (o Board do desktop com o Board do celular por cima, pedindo o segundo fator) e a
+**faixa dos quatro braços**, cada um com uma linha. No celular, a faixa vem logo depois do texto, antes da vitrine.
+
+**De onde vem cada fato** (nada aqui é inventado; a contagem que muda com o tempo aparece como "mais de"):
+
+| Fato | Fonte |
+|---|---|
+| As novidades das versões 6 e 7 (Projetos em ondas, Board no celular, aprovação com segundo fator, segredos fora dos logs, comandos destrutivos bloqueados, fluxos de Azure) | `git.kit/src/GitKit.Core/Updates/Novidades.md` (no repositório dev.kit.docs) |
+| O serviço: agenda, vigia o `/devkit executar`, publica o heartbeat, lê a fila e liga/reinicia o dev.kit com o app fechado | `git.kit/src/GitKit.Scheduler/SchedulerWorker.cs` |
+| "Mais de 50 comandos" e o servidor MCP | as tools de `git.kit/src/GitKit.Cli/Tools` (55) e o `devcli mcp` |
+| Os 12 fluxos prontos e "mais de 60 skills, 20 Rules" | `CatalogoDosFluxosBasicos` do git.kit e o catálogo básico (68 skills e 23 Rules em 12/11/2026) |
+| Até 8 itens em paralelo nos Projetos | `devcli projeto --paralelismo` (de 1 a 8) |
+| O Board no site e no celular, as decisões com segundo fator, o "Texto do chat não aprova" e a notificação | `web/src/paginas/Board.tsx`, `componentes/DecisoesRemotas.tsx`, `public/board-sw.js` e [decisões remotas](decisoes-remotas.md) |
+
+**O que os testes seguram** (`conteudo/landing.test.ts`): o resumo de cada braço tem até 80 caracteres (os quatro
+cabem na dobra do notebook), o rótulo de cada aba do tour tem até 14 (as oito cabem numa linha), a notificação
+da ilustração é o texto fixo do `board-sw.js`, e o subtítulo do catálogo conta os fluxos pela própria lista.
+
 ## Referências de mercado
 
 | Produto | O que a landing dele faz bem | O que trouxemos |
@@ -48,12 +76,22 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
 
 ## A mensagem
 
-- **Proposta de valor (hero):** *O agente de IA que leva a sua task do work item à Pull Request* —
-  com as regras do time, avaliadores com nota mínima e você aprovando.
-- **Benefícios (verificáveis no produto, sem número inventado):**
-  1. Da task à PR sem trocar de janela.
-  2. Qualidade com nota mínima — o objetivo só é aceito com a nota de cada avaliador.
-  3. Horas lançadas sozinhas, rateadas pelos turnos do agente.
+- **Proposta de valor (hero):** *Do work item à Pull Request, com um time de agentes de IA* — com as Rules do
+  time, avaliadores com nota mínima, o Orquestrador acompanhando e você decidindo no desktop ou no celular. Até a
+  landing refeita: *O agente de IA que leva a sua task do work item à Pull Request*.
+- **Os quatro braços (a primeira dobra e a seção Produto):** o Desktop (o app do Windows, com o agente em clones
+  na sua máquina), o Serviço (agenda, vigia o board e liga o dev.kit com o app fechado), o Board (no site e no
+  celular: a conversa com o Orquestrador e a aprovação com segundo fator) e o devcli (mais de 50 comandos e o
+  servidor MCP: o agente opera o dev.kit como você, simulando antes de gravar).
+- **Benefícios (o bento, verificáveis no produto, sem número inventado):**
+  1. Qualidade com nota mínima — o objetivo só é aceito com a nota de cada avaliador (o placar de exemplo usa os
+     avaliadores das Rules do catálogo: arquitetura, testes e reuso).
+  2. Da task à PR sem trocar de janela.
+  3. Um árbitro que destrava — no limite de uso, a task troca de agente e segue.
+  4. O melhor provedor para cada papel.
+  5. Horas lançadas sozinhas, rateadas pelos turnos do agente.
+  6. Do jeito do seu time — as Rules e as skills do catálogo.
+  7. Evidência em cada entrega — o pedido, o resumo, os logs, os diffs e as capturas.
 - **Como funciona (o fluxo, em sete etapas nomeadas):** work item → executor → avaliadores com nota
   mínima → gatilhos entre agentes (ao enviar, ao revisar, ao cumprir o objetivo, ao aprovar) → objetivo
   cumprido → sua aprovação → fechamento com a PR.
@@ -73,15 +111,20 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
   não "o" agente; a página só cita provedor que o produto suporta.
 - **Nomes do produto:** Rules (o antigo Tech Plan; o tipo `plan` do contrato não muda), skill, fluxo, gatilho,
   avaliador e nota mínima, Orquestrador, catálogo (básico e da empresa), Design, entrega.
-- **Integrações:** Azure DevOps, GitHub, os provedores cognitivos (Claude Code, Codex, Kiro, Kimi e GLM),
-  TortoiseGit, o serviço do Windows.
-- **Segurança e privacidade:** o agente nunca vê o token; gravar é explícito (simula por padrão);
-  o código fica na máquina; a telemetria é anônima, vem ligada e o usuário a desliga — o trace de erro
-  vai sem caminhos, e-mails nem URLs, e o nome só é compartilhado com o gestor com o consentimento.
+- **Integrações:** Azure DevOps (Boards, Repos e Pipelines), GitHub (com o Actions), os provedores cognitivos
+  (Claude Code, Codex, Kiro, Kimi e GLM), o Azure (App Service e Static Web Apps, pelos fluxos prontos, com a
+  produção só com aprovação), o MCP (o devcli no Claude Code, no VS Code e no Cursor) e o TortoiseGit. O serviço
+  do Windows saiu das integrações: é um dos quatro braços.
+- **Segurança e privacidade:** o agente nunca vê o token; gravar é explícito (simula por padrão, e os comandos
+  destrutivos ficam sempre bloqueados); o código fica na máquina; a aprovação pelo site pede o segundo fator e vale
+  só para o SHA avaliado; os segredos não aparecem nos logs da entrega; a telemetria é anônima, vem ligada e o
+  usuário a desliga — o trace de erro vai sem caminhos, e-mails nem URLs, e o nome só é compartilhado com o gestor
+  com o consentimento.
 - **Contato:** o formulário *Quero uma demonstração* (nome, e-mail, empresa e mensagem opcionais,
   consentimento LGPD obrigatório) — ver [arquitetura](arquitetura.md#pedido-de-demonstração).
 - **FAQ:** processo no Azure DevOps, provedores suportados, commit e push sozinho, onde o código roda,
-  como funciona o plano para empresas, o que acontece com os dados do pedido.
+  acompanhar e aprovar pelo celular, o dev.kit fechado (o serviço), os agentes operando o dev.kit (o devcli),
+  o teste grátis, a compra e o cancelamento, o catálogo, o plano para empresas e os dados do pedido.
 
 ## Roteiro das mídias
 
@@ -113,6 +156,13 @@ primeiro quadro como poster (`orquestrador.jpg`, o que fica parado com *prefers-
 do `codex` e do `design` são as **escuras** (v001) do projeto de design do git.kit @ `feature/dev/semana4`,
 recortadas sem a margem branca — nunca a v002 do login do app, que mostra um usuário real. O hero ganhou a
 fala do Orquestrador no topo da amostra do Board.
+
+**Desde a landing refeita** o tour tem OITO recursos, em abas (uma aberta por vez): o recurso **Projetos** (novo)
+entrou como a aba 02, com uma **captura estática** e real do app — o plano do projeto, com dados de demonstração
+(`public/capturas/tela-projetos.png`, 760 × 428, recortada sem a barra de título da captura `plano-do-projeto`
+v037 do projeto de design do git.kit). Não é vídeo, então não entra no roteiro nem em `public/midia`. Os rótulos das
+abas ficaram curtos (o título do painel diz o resto), e ninguém mais está marcado "novo" além dos Projetos: o
+Orquestrador, o provedor cognitivo e o Design eram as novidades da versão 5.
 
 O texto alternativo completo de cada uma está no campo `alt` da mídia em `landing.ts`, e a legenda no
 campo `legenda` do recurso.

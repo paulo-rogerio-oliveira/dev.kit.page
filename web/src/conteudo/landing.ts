@@ -17,9 +17,10 @@ export interface Midia {
 }
 
 /**
- * Um recurso do dev.kit (US #467, a proposta da home): o número e o rótulo curto da aba (01–07), o texto com os
- * marcadores, a mídia numa moldura de janela do app ("dev.kit - Agente") e a legenda curta abaixo dela — a
- * legenda saiu de cima do vídeo e veio para a página. `novo` marca na aba o que chegou na versão 5.
+ * Um recurso do tour (as abas 01–08 da seção Recursos): o número e o rótulo CURTO da aba (as oito cabem numa linha da
+ * tela larga; o título do painel diz o resto), o texto com os marcadores,
+ * a mídia numa moldura de janela do app ("dev.kit - Agente") e a legenda curta abaixo dela. `novo` marca na aba o que
+ * chegou nas versões 6 e 7.
  */
 export interface Recurso {
   id: string;
@@ -38,6 +39,25 @@ export interface Recurso {
 export interface Beneficio {
   titulo: string;
   texto: string;
+}
+
+/** Os ícones de traço da landing (o componente Icone da Landing.tsx). */
+export type NomeDoIcone = 'monitor' | 'servico' | 'celular' | 'terminal' | 'nota' | 'ramo' | 'relogio' | 'arbitro' | 'camadas' | 'livro' | 'entrega';
+
+/**
+ * Um BRAÇO do dev.kit. O produto tem quatro — o app desktop, o serviço do Windows, o Board do dev.kit.page (no site e
+ * no celular) e o devcli —, e a primeira dobra mostra os quatro: o `resumo` é a linha de cada um ali; o título, o
+ * texto e os marcadores são o detalhe da seção "Produto".
+ */
+export interface Braco {
+  id: 'desktop' | 'servico' | 'board' | 'devcli';
+  nome: string;
+  icone: NomeDoIcone;
+  novo?: boolean;
+  resumo: string;
+  titulo: string;
+  texto: string;
+  marcadores: string[];
 }
 
 /** Uma etapa nomeada do "como funciona" — do work item à Pull Request (US #381: o fluxo novo). */
@@ -109,18 +129,28 @@ function gif(nome: string, alt: string, largura: number, altura: number): Midia 
   return { poster: `/midia/${nome}.jpg`, captura: `/midia/${nome}.gif`, alt, largura, altura };
 }
 
-/** O título da moldura de janela do app ("dev.kit - Agente"), o mesmo na amostra do hero e nos recursos. */
+/**
+ * Uma mídia que é uma CAPTURA estática do app (public/capturas/tela-NOME.png), sem vídeo: a mesma imagem é o poster e
+ * a captura. É a do recurso Projetos — a tela real do plano, com dados de demonstração, recortada em 16:9.
+ */
+function captura(nome: string, alt: string, largura: number, altura: number): Midia {
+  return { poster: `/capturas/tela-${nome}.png`, captura: `/capturas/tela-${nome}.png`, alt, largura, altura };
+}
+
+/** O título da moldura de janela do app ("dev.kit - Agente"), o mesmo na vitrine do hero e nos recursos. */
 export const tituloDaJanela = (tela: string) => `dev.kit - ${tela}`;
 
 /**
- * As seções, NA ORDEM da página — a landing e o teste usam esta lista. A ordem segue a proposta da home
- * (US #467): hero → como funciona (as sete etapas) → recursos (as quatro demonstrações) → por que o dev.kit
- * (os três cartões) → as seções que o menu, o rodapé e o "Quero uma demonstração" apontam (catálogo,
- * comparativo, integrações, segurança, empresas, planos, contato, FAQ) → o CTA escuro.
+ * As seções, NA ORDEM da página — a landing e o teste usam esta lista. A landing refeita (12/11/2026): o hero com os
+ * quatro braços na primeira dobra → como funciona (as sete etapas) → produto (os quatro braços em detalhe) → recursos
+ * (o tour em abas) → por que o dev.kit (o bento) → conceitos e a fábrica agêntica → as seções que o menu, o rodapé e o
+ * "Quero uma demonstração" apontam (catálogo, comparativo, integrações, segurança, empresas, planos, contato, FAQ) →
+ * o CTA escuro.
  */
 export const SECOES: SecaoDaLanding[] = [
   { id: 'inicio', rotulo: 'Início' },
   { id: 'como-funciona', rotulo: 'Como funciona' },
+  { id: 'bracos', rotulo: 'Produto' },
   { id: 'recursos', rotulo: 'Recursos' },
   { id: 'beneficios', rotulo: 'Por que o dev.kit' },
   { id: 'conceitos', rotulo: 'Conceitos' },
@@ -136,56 +166,166 @@ export const SECOES: SecaoDaLanding[] = [
   { id: 'comecar', rotulo: 'Começar' },
 ];
 
-/** As seções do menu do topo (a proposta da US #405, com o Catálogo e os Planos da US #425 e os Conceitos), na ordem. */
-export const MENU = ['como-funciona', 'recursos', 'conceitos', 'catalogo', 'integracoes', 'seguranca', 'planos', 'faq'] as const;
+/** As seções do menu do topo, na ordem. */
+export const MENU = ['como-funciona', 'bracos', 'recursos', 'catalogo', 'seguranca', 'planos', 'faq'] as const;
 
-/** As seções dos links do rodapé (a proposta da US #405, com os Conceitos e a Fábrica agêntica), na ordem. */
-export const RODAPE = ['conceitos', 'fabrica', 'seguranca', 'comparativo', 'empresas', 'faq'] as const;
+/** As seções dos links do rodapé, na ordem. */
+export const RODAPE = ['bracos', 'conceitos', 'fabrica', 'integracoes', 'seguranca', 'comparativo', 'empresas', 'faq'] as const;
 
 /** O rótulo de uma seção (o do menu e o do rodapé). */
 export const rotuloDaSecao = (id: string) => SECOES.find((s) => s.id === id)?.rotulo ?? id;
 
 export const HERO = {
   selo: 'Para times no Azure DevOps',
-  titulo: 'O agente de IA que leva a sua task do work item à Pull Request',
-  /** O trecho do título em destaque (a cor da marca). */
+  titulo: 'Do work item à Pull Request, com um time de agentes de IA',
+  /** O trecho do título em destaque (a cor da marca, sem quebra de linha no meio). */
   destaque: 'Pull Request',
   texto:
-    'O dev.kit clona os repositórios, implementa, compila e testa com as regras do seu time. Cada entrega passa por avaliadores com nota mínima antes do commit, do push e do PR. Você acompanha e aprova.',
+    'O dev.kit clona os repositórios, implementa, compila e testa com as Rules do seu time. Avaliadores dão nota de 0 a 100, o Orquestrador acompanha cada task — e você só decide o que importa, no desktop ou no celular.',
 };
 
 /**
- * O "Board" do hero (US #405): uma amostra estática do que o dev.kit mostra — desde a versão 5, com a fala do
- * Orquestrador no topo (ele destravou uma task e só repassa o que precisa de você), o "Precisa de você" com o
- * que espera o dev, a nota do avaliador e as horas do dia. Dados de demonstração, como as mídias.
+ * Os QUATRO braços do dev.kit (a regra do projeto: serviço, app desktop, Board e devcli). Os fatos vêm do git.kit (o
+ * GitKit.Scheduler, o devcli e as Novidades das versões 6 e 7) e do dev.kit.page (o Board remoto, as decisões e o push).
+ */
+export const BRACOS: Braco[] = [
+  {
+    id: 'desktop',
+    nome: 'Desktop',
+    icone: 'monitor',
+    resumo: 'O app do Windows, com o agente trabalhando em clones na sua máquina.',
+    titulo: 'O app do Windows, onde o trabalho acontece',
+    texto:
+      'O Board mostra o que precisa de você, e cada task tem a sua janela: Agente, Git, Task, Entrega, Depuração e Terminal. Os fluxos, os Projetos e o Design ficam a um clique.',
+    marcadores: [
+      'O Orquestrador no centro do Board: responde aos agentes e abre execuções pelo chat',
+      'A entrega de cada task com o pedido, o resumo, os logs, os diffs e as capturas',
+      'O agente roda no provedor que você escolher, em clones no branch da task',
+    ],
+  },
+  {
+    id: 'servico',
+    nome: 'Serviço',
+    icone: 'servico',
+    resumo: 'Agenda, vigia o board e liga o dev.kit, mesmo com o app fechado.',
+    titulo: 'O serviço do Windows, que não para',
+    texto:
+      'Roda com a máquina ligada, mesmo sem o dev.kit aberto: é o relógio dos agendamentos e o elo da máquina com o site.',
+    marcadores: [
+      'Dispara os agendamentos no horário, e o job vai até o fim mesmo se o serviço reiniciar',
+      'Vigia o board: o comentário /devkit executar num work item abre a task',
+      'Liga e reinicia o dev.kit quando você pede pelo site, e mantém a máquina visível no Board',
+    ],
+  },
+  {
+    id: 'board',
+    nome: 'Board',
+    icone: 'celular',
+    novo: true,
+    resumo: 'No site e no celular: fale com o Orquestrador e aprove com segundo fator.',
+    titulo: 'O Board no site e no celular',
+    texto: 'Acompanhe e comande as suas máquinas pelo dev.kit.page — no navegador ou instalado como app no celular.',
+    marcadores: [
+      'A mesma conversa do Orquestrador do desktop, com o fluxo, o work item e o repositório',
+      'Aprovação com segundo fator, presa ao SHA que foi avaliado; o texto do chat nunca aprova',
+      'Notificação no celular quando uma decisão espera por você',
+      'Projetos e projetos de design criados pelo site viram pedido na máquina',
+    ],
+  },
+  {
+    id: 'devcli',
+    nome: 'devcli',
+    icone: 'terminal',
+    resumo: 'Mais de 50 comandos e servidor MCP: o agente opera o dev.kit como você.',
+    titulo: 'O devcli: o dev.kit na linha de comando',
+    texto:
+      'As ações da tela têm o seu comando, e é por ele que os agentes operam o dev.kit — com a sua credencial e as regras da tela, sem nunca ver o token.',
+    marcadores: [
+      'Mais de 50 comandos: work items, horas, fluxos, projetos, entrega, design e o depurador',
+      'Servidor MCP para o Claude Code, o VS Code (Copilot) e o Cursor',
+      'O que grava simula por padrão: só o --aplicar grava',
+    ],
+  },
+];
+
+/** O que a entrega de uma task guarda (a pasta entrega/): a janela do desktop e o bento mostram a mesma lista. */
+export const EVIDENCIAS = ['pedido.md', 'resumo', 'logs', 'diffs', 'capturas'];
+
+/**
+ * As ilustrações de cada braço na seção Produto (dados de demonstração, como a vitrine): as abas da janela da task, o
+ * que o serviço fez, a notificação e a conversa do Board no celular e os comandos do devcli.
+ */
+export const DEMONSTRACAO_DOS_BRACOS = {
+  desktop: { abas: ['Agente', 'Git', 'Task', 'Entrega', 'Depuração', 'Terminal'], ativa: 'Entrega' },
+  servico: {
+    estado: 'Serviço ativo · dev.kit fechado',
+    linhas: [
+      { quando: '22:00', texto: 'Agendamento: Compilação noturna' },
+      { quando: '09:14', texto: '/devkit executar no #1234: task aberta' },
+      { quando: '09:30', texto: 'Ligar dev.kit, pedido pelo site' },
+    ],
+  },
+  board: {
+    notificacao: { titulo: 'dev.kit · decisão pendente', texto: 'Há uma decisão pendente. Abra o dev.kit para conferir.' },
+    conversa: [
+      { autor: 'Você · celular', texto: 'Como está a onda 2 do portal-web?', sua: true },
+      { autor: 'Orquestrador · dev.kit', texto: 'Os itens 5 e 9 integraram; o item 4 espera a sua aprovação.', sua: false },
+    ],
+  },
+  devcli: {
+    comandos: [
+      { comando: 'devcli horas', nota: 'simula o rateio do dia' },
+      { comando: 'devcli horas --aplicar', nota: 'grava no Azure Boards' },
+      { comando: 'devcli mcp', nota: 'servidor MCP (stdio)' },
+    ],
+  },
+};
+
+/**
+ * A vitrine do hero (desde a US #405, "Amostra do Board"): o Board do desktop — a fala do Orquestrador, o projeto em
+ * ondas, o "Precisa de você" e a avaliação com a nota — com o Board do celular por cima. Dados de demonstração.
  */
 export const AMOSTRA_DO_BOARD = {
   titulo: tituloDaJanela('Board'),
   orquestrador: { autor: 'Orquestrador', texto: 'Destravei a #509: respondi pela fila com o que o pedido.md já dizia.' },
+  projeto: { nome: 'portal-web', onda: 'onda 2 de 3', ondas: ['integrada', 'rodando', 'proxima'] as const, detalhe: '3 itens em paralelo · 4 de 9 integrados' },
   precisaDeVoce: [
     { titulo: 'US #393 — Agente: diretório de trabalho e multimídia', estado: 'pronto para revisão · PR aberta', acao: 'Aprovar' },
     { titulo: 'Fluxo “planejar e executar”', estado: 'aguardando interação', acao: 'Abrir' },
   ],
-  avaliador: { titulo: 'Avaliador da entrega', notas: [93, 45, 92], gatilho: 'ao enviar' },
+  avaliador: { titulo: 'Avaliador da entrega', notas: [93, 45, 92], gatilho: 'ao enviar', minima: 90 },
   nota: { valor: 'Nota 92/100', texto: 'Aceito: acima da nota mínima' },
-  horas: { titulo: 'Horas de hoje', texto: '8h rateadas em 4 work items', partes: [40, 28, 16, 16] },
 };
 
-/** O cabeçalho de "Como funciona", de "Recursos" e de "Por que o dev.kit" (o rótulo pequeno acima do título). */
+/** O Board do dev.kit.page no celular, na vitrine: a máquina, a decisão que pede o segundo fator e a fala do Orquestrador. */
+export const AMOSTRA_DO_CELULAR = {
+  maquina: 'Notebook · serviço ativo',
+  pendencias: 'Precisa de você · 1',
+  decisao: { pergunta: 'Integrar o item 4 no projeto portal-web?', detalhe: 'Nota 94 · regressão sem falhas', acao: 'Aprovar com segundo fator' },
+  fala: { autor: 'Orquestrador · dev.kit', texto: 'Só falta a sua aprovação para a onda 3 começar.' },
+  aviso: 'Texto do chat não aprova',
+};
+
+/** O cabeçalho das seções (o rótulo pequeno acima do título) e o texto do CTA final e do rodapé. */
 export const CABECALHOS = {
   comoFunciona: {
     rotulo: 'Como funciona',
     titulo: 'Do work item à Pull Request, em sete etapas',
     subtitulo: 'O agente faz o trabalho repetitivo, o Orquestrador acompanha e destrava. A decisão final é sua.',
   },
+  bracos: {
+    rotulo: 'Produto',
+    titulo: 'Um produto, quatro braços',
+    subtitulo: 'O mesmo trabalho onde for mais prático: no app, pelo serviço do Windows, no navegador e no celular, ou na linha de comando.',
+  },
   recursos: {
     rotulo: 'Recursos',
-    titulo: 'Cada recurso com a sua demonstração',
-    subtitulo: 'Novo na versão 5: o Orquestrador, a escolha do provedor cognitivo e o Design.',
+    titulo: 'Veja cada recurso funcionando',
+    subtitulo: 'Telas do app com dados de demonstração. Novo: os Projetos, com o plano em ondas e os itens em paralelo.',
   },
   porQue: {
     rotulo: 'Por que o dev.kit',
-    titulo: 'O trabalho repetitivo com o agente. As decisões com o time.',
+    titulo: 'O trabalho repetitivo com os agentes. As decisões com o time.',
   },
   ctaFinal: {
     titulo: 'Veja o dev.kit numa task do seu time',
@@ -194,8 +334,29 @@ export const CABECALHOS = {
   rodape: 'desenvolvido por Paulo Rogério',
 };
 
-/** Os três cartões de "Por que o dev.kit", cada um com o seu ícone. */
-export const BENEFICIOS: (Beneficio & { icone: 'ramo' | 'nota' | 'relogio' })[] = [
+/** O placar do cartão "Qualidade com nota mínima": os avaliadores das Rules do catálogo e a nota de cada um. */
+export const PLACAR = {
+  minima: 90,
+  avaliadores: [
+    { nome: 'Arquitetura', nota: 93 },
+    { nome: 'Testes', nota: 45 },
+    { nome: 'Reuso', nota: 92 },
+  ],
+};
+
+/**
+ * "Por que o dev.kit", em bento: sete cartões, cada um com o seu ícone. Os `largo` ocupam duas colunas na tela larga, e
+ * o `extra` é a ilustração do cartão (o placar dos avaliadores ou as evidências da entrega).
+ */
+export const BENEFICIOS: (Beneficio & { icone: NomeDoIcone; largo?: boolean; extra?: 'placar' | 'evidencias' })[] = [
+  {
+    icone: 'nota',
+    largo: true,
+    extra: 'placar',
+    titulo: 'Qualidade com nota mínima',
+    texto:
+      'Cada entrega passa por avaliadores que dão nota de 0 a 100. O objetivo só é aceito com a nota mínima de cada um, dada depois da última alteração.',
+  },
   {
     icone: 'ramo',
     titulo: 'Da task à PR sem trocar de janela',
@@ -203,16 +364,33 @@ export const BENEFICIOS: (Beneficio & { icone: 'ramo' | 'nota' | 'relogio' })[] 
       'Work item, repositórios, branch, compilação, testes, commit e push no mesmo lugar. O agente faz o trabalho repetitivo; você decide o que entra.',
   },
   {
-    icone: 'nota',
-    titulo: 'Qualidade com nota mínima',
-    texto:
-      'Cada entrega passa por avaliadores que dão nota de 0 a 100. O objetivo só é aceito com a nota mínima de cada um, dada depois da última alteração.',
+    icone: 'arbitro',
+    titulo: 'Um árbitro que destrava',
+    texto: 'A execução parada é retomada sozinha: no limite de uso, a task troca de agente e segue; o impasse chega a você com a causa.',
+  },
+  {
+    icone: 'camadas',
+    titulo: 'O melhor provedor para cada papel',
+    texto: 'Um provedor para implementar, outro para avaliar, outro para o Orquestrador — sem prender o time a um modelo.',
   },
   {
     icone: 'relogio',
     titulo: 'Horas lançadas sozinhas',
     texto:
       'As horas do dia vão para os work items trabalhados, rateadas pelos turnos do agente e divididas entre as tasks filhas — sem planilha no fim do dia.',
+  },
+  {
+    icone: 'livro',
+    titulo: 'Do jeito do seu time',
+    texto: 'As Rules dizem o que nunca muda e as skills ensinam como fazer: escritas uma vez, versionadas no catálogo e usadas por todo agente.',
+  },
+  {
+    icone: 'entrega',
+    largo: true,
+    extra: 'evidencias',
+    titulo: 'Evidência em cada entrega',
+    texto:
+      'O pedido, o resumo item a item, os logs de build e testes, os diffs do SHA enviado e as capturas da tela: tudo guardado na entrega de cada task, para você conferir antes de aprovar.',
   },
 ];
 
@@ -306,7 +484,8 @@ export const CONCEITOS = {
 
 /**
  * A FÁBRICA AGÊNTICA e o TIME AGÊNTICO: como os agentes se organizam além de uma task — em estações de uma linha
- * de produção (os fluxos com gatilhos, avaliadores e árbitro) e, com as pessoas, em papéis de um mesmo time.
+ * de produção (os fluxos com gatilhos, avaliadores e árbitro, e os Projetos em ondas) e, com as pessoas, em papéis de
+ * um mesmo time.
  */
 export const FABRICA = {
   rotulo: 'Fábrica agêntica',
@@ -325,6 +504,7 @@ export const FABRICA = {
       { titulo: 'Entregar', texto: 'Commit, push e Pull Request — para a pessoa revisar e aprovar.' },
     ] satisfies Passo[],
     marcadores: [
+      'Projetos: o Orquestrador planeja em ondas e dispara os itens em paralelo, cada um no seu branch',
       'Medida de ponta a ponta: falhas por causa, notas, impasses e custo por objetivo',
       'Best-of-N: a mesma task em 2 a 4 agentes, e fica a execução de maior nota',
       'Cada estação é trocável: outro agente, outro provedor cognitivo, outra skill',
@@ -360,34 +540,48 @@ export const PASSOS: Passo[] = [
 ];
 
 /**
- * Os recursos da home (US #467, a proposta; a versão 5 trouxe o Orquestrador, a escolha do provedor cognitivo — o
- * Codex entrou como um dos provedores — e o Design): as abas 01–07
- * apontam para eles, e cada um traz a mídia do app atual sem legenda sobreposta — a legenda é a deste arquivo,
- * abaixo da moldura. O Orquestrador usa o GIF das Novidades da versão 5; os demais, os vídeos gravados por
- * web/midia/roteiro.mjs. Agendamento, depurador e devcli saíram da home: continuam no comparativo e nas integrações.
+ * O tour dos recursos (as abas 01–08). O Orquestrador usa o GIF das Novidades da versão 5; os Projetos (versões 6 e
+ * 7), a captura real do plano; os demais, os vídeos gravados por web/midia/roteiro.mjs. Agendamento, depurador e
+ * devcli estão nos braços, no comparativo e nas integrações.
  */
 export const RECURSOS: Recurso[] = [
   {
     id: 'orquestrador',
     numero: '01',
     aba: 'Orquestrador',
-    novo: true,
     titulo: 'O Orquestrador acompanha todas as tasks',
     texto:
       'O chat no centro do Board vê todos os processos e agentes. Ele responde e destrava as perguntas deles com o que o pedido já diz, abre execuções e fluxos quando você pede e só repassa a você o que precisa de você.',
     marcadores: [
       'Responde pela fila o que o pedido.md já responde, sem parar a task',
       'Os pedidos de comando (Executar, Permitir sempre, Cancelar) aparecem ali mesmo',
-      'Abre a execução ou o fluxo que você pede no chat',
+      'A mesma conversa no site e no celular, pelo Board do dev.kit.page',
     ],
     janela: 'Orquestrador',
     legenda: 'Destravou a task e só chamou você para o que é seu',
     midia: gif('orquestrador', 'O Orquestrador acompanha as tasks no Board, responde ao agente o que o pedido já diz e mostra o pedido de comando para executar ou permitir sempre.', 820, 560),
   },
   {
-    id: 'agente',
+    id: 'projetos',
     numero: '02',
-    aba: 'O agente sobre a task',
+    aba: 'Projetos',
+    novo: true,
+    titulo: 'Projetos: o plano em ondas, os itens em paralelo',
+    texto:
+      'Descreva o que o time quer entregar: o Orquestrador quebra em itens, monta o plano em ondas e, com a sua aprovação, dispara os itens em paralelo — cada um no seu branch, com o fluxo e o agente dele.',
+    marcadores: [
+      'As ondas respeitam as dependências; até 8 itens rodam ao mesmo tempo',
+      'Cada item é integrado pelo próprio dev.kit no branch do projeto',
+      'Um fechamento único, com a PR do projeto para você revisar',
+    ],
+    janela: 'Projetos',
+    legenda: 'O plano proposto pelo Orquestrador: 16 de 20 itens integrados, até 3 em paralelo',
+    midia: captura('projetos', 'O plano de um projeto no dev.kit: 16 de 20 itens integrados, a onda 9 de 10 com até 3 itens em paralelo, o andamento de cada onda e os botões Pausar e Aprovar e disparar.', 760, 428),
+  },
+  {
+    id: 'agente',
+    numero: '03',
+    aba: 'O agente',
     titulo: 'O agente sobre a sua task',
     texto:
       'Escolha a US, o Bug ou uma tarefa avulsa, marque os repositórios e descreva o que precisa ser feito. O agente trabalha turno a turno até o commit, o push e a Pull Request.',
@@ -401,44 +595,9 @@ export const RECURSOS: Recurso[] = [
     midia: midia('agente', 'O agente pede para executar a compilação, roda a suíte de testes e propõe a mensagem de commit para aprovação.', '/capturas/tela-agente.png'),
   },
   {
-    id: 'provedor',
-    numero: '03',
-    aba: 'Provedor cognitivo',
-    novo: true,
-    titulo: 'Você escolhe o melhor provedor cognitivo',
-    texto:
-      'O dev.kit não prende o time a um modelo: escolha o provedor e o modelo de cada papel — o agente que implementa, o avaliador que dá a nota e o Orquestrador. Claude Code, Codex (OpenAI), Kiro, Kimi e GLM estão no mesmo seletor.',
-    marcadores: [
-      'Escolhido na pré-execução da task e em cada agente do fluxo',
-      'O dev.kit monta as regras próprias do ambiente de cada provedor: shell, sandbox e skills',
-      'Novo na versão 5: o Codex (OpenAI) entrou entre os provedores',
-    ],
-    janela: 'Tarefa avulsa',
-    legenda: 'O provedor e o modelo da task, no resumo antes de executar',
-    // A mídia segue com o nome do arquivo gravado (codex): é a pré-execução com o seletor de modelo.
-    midia: midia('codex', 'A pré-execução de uma tarefa avulsa: o vínculo, o repositório, o planejamento e o provedor escolhido no seletor de modelo, com o resumo e o botão Executar com o agente.', '/capturas/tela-codex.png'),
-  },
-  {
-    id: 'design',
-    numero: '04',
-    aba: 'Design',
-    novo: true,
-    titulo: 'Design: da captura real à proposta e à implementação',
-    texto:
-      'Capture as telas reais da web e do desktop, peça a mudança no chat do Orquestrador e receba a proposta visual como versão nova, lado a lado com a original.',
-    marcadores: [
-      'Capturas reais versionadas por repositório e branch',
-      'Propostas pedidas pelo chat do Orquestrador, com as telas selecionadas',
-      'O fluxo Design vai da proposta à implementação e à recaptura',
-    ],
-    janela: 'Orquestrador · Design',
-    legenda: 'A proposta aparece como versão nova, ao lado da captura',
-    midia: midia('design', 'O painel Design do Orquestrador: as telas do projeto, a captura real e a proposta lado a lado, e o agente avisando que gravou as propostas pedidas.', '/capturas/tela-design.png'),
-  },
-  {
     id: 'fluxos',
-    numero: '05',
-    aba: 'Fluxos com avaliadores',
+    numero: '04',
+    aba: 'Fluxos',
     titulo: 'Fluxos com avaliadores, gatilhos e objetivo',
     texto:
       'Encadeie agentes num fluxo: um planeja, outro implementa e os avaliadores dão nota ao trabalho. Exporte e importe fluxos para levá-los a outro time.',
@@ -452,8 +611,41 @@ export const RECURSOS: Recurso[] = [
     midia: midia('fluxos', 'A aba Atividades com as tasks do fluxo em execução, aguardando interação e prontas para enviar.', '/capturas/tela-atividades.png'),
   },
   {
-    id: 'replicacao',
+    id: 'provedor',
+    numero: '05',
+    aba: 'Provedores',
+    titulo: 'Você escolhe o melhor provedor cognitivo',
+    texto:
+      'O dev.kit não prende o time a um modelo: escolha o provedor e o modelo de cada papel — o agente que implementa, o avaliador que dá a nota e o Orquestrador. Claude Code, Codex (OpenAI), Kiro, Kimi e GLM estão no mesmo seletor.',
+    marcadores: [
+      'Escolhido na pré-execução da task e em cada agente do fluxo',
+      'O dev.kit monta as regras próprias do ambiente de cada provedor: shell, sandbox e skills',
+      'No limite de uso, a task troca de agente e retoma sozinha',
+    ],
+    janela: 'Tarefa avulsa',
+    legenda: 'O provedor e o modelo da task, no resumo antes de executar',
+    // A mídia segue com o nome do arquivo gravado (codex): é a pré-execução com o seletor de modelo.
+    midia: midia('codex', 'A pré-execução de uma tarefa avulsa: o vínculo, o repositório, o planejamento e o provedor escolhido no seletor de modelo, com o resumo e o botão Executar com o agente.', '/capturas/tela-codex.png'),
+  },
+  {
+    id: 'design',
     numero: '06',
+    aba: 'Design',
+    titulo: 'Design: da captura real à proposta e à implementação',
+    texto:
+      'Capture as telas reais da web e do desktop, peça a mudança no chat do Orquestrador e receba a proposta visual como versão nova, lado a lado com a original.',
+    marcadores: [
+      'Capturas reais versionadas por repositório e branch',
+      'Propostas pedidas pelo chat do Orquestrador, com as telas selecionadas',
+      'As versões sobem ao dev.kit.page, com o link estável que a PR cita',
+    ],
+    janela: 'Orquestrador · Design',
+    legenda: 'A proposta aparece como versão nova, ao lado da captura',
+    midia: midia('design', 'O painel Design do Orquestrador: as telas do projeto, a captura real e a proposta lado a lado, e o agente avisando que gravou as propostas pedidas.', '/capturas/tela-design.png'),
+  },
+  {
+    id: 'replicacao',
+    numero: '07',
     aba: 'Cherry-pick',
     titulo: 'Cherry-pick e replicação de branch',
     texto: 'Replique commits entre branches numa cópia temporária, sem trocar o branch do seu projeto.',
@@ -467,7 +659,7 @@ export const RECURSOS: Recurso[] = [
   },
   {
     id: 'board',
-    numero: '07',
+    numero: '08',
     aba: 'Horas',
     titulo: 'Horas lançadas sozinhas',
     texto:
@@ -480,11 +672,12 @@ export const RECURSOS: Recurso[] = [
 ];
 
 export const INTEGRACOES: Integracao[] = [
-  { nome: 'Azure DevOps', texto: 'Boards (work items, iterações, horas) e Repos.' },
-  { nome: 'GitHub', texto: 'Clone, push e Pull Request pelo gh.' },
+  { nome: 'Azure DevOps', texto: 'Boards (work items, iterações, horas), Repos e Pipelines.' },
+  { nome: 'GitHub', texto: 'Clone, push e Pull Request pelo gh, e o GitHub Actions de cada commit.' },
   { nome: 'Provedores cognitivos', texto: 'Claude Code, Codex (OpenAI), Kiro, Kimi e GLM: o melhor para cada agente, com as regras do ambiente de cada um.' },
+  { nome: 'Azure', texto: 'Fluxos prontos criam e publicam no App Service e no Static Web Apps, em teste; produção só com a sua aprovação.' },
+  { nome: 'MCP', texto: 'O devcli como servidor MCP no Claude Code, no VS Code (Copilot) e no Cursor.' },
   { nome: 'TortoiseGit', texto: 'Diffs e o merge de conflitos arquivo por arquivo.' },
-  { nome: 'Serviço do Windows', texto: 'O agendador que roda as tasks no horário.' },
 ];
 
 export const SEGURANCA: Beneficio[] = [
@@ -494,11 +687,19 @@ export const SEGURANCA: Beneficio[] = [
   },
   {
     titulo: 'Gravar é explícito',
-    texto: 'Todo comando que grava simula por padrão. Apagar o que não tem volta só com pedido explícito.',
+    texto: 'Todo comando que grava simula por padrão. Apagar o que não tem volta só com pedido explícito, e os comandos destrutivos ficam sempre bloqueados.',
   },
   {
     titulo: 'Seu código fica com você',
-    texto: 'O agente trabalha em clones na sua máquina, no branch da task. Nada sai sem o seu commit e o seu push.',
+    texto: 'O agente trabalha em clones na sua máquina, no branch da task, e o dev.kit não leva o seu código para servidor nenhum. Commit e push só quando o fluxo permite.',
+  },
+  {
+    titulo: 'Aprovação com segundo fator',
+    texto: 'Pelo site, aprovar ou autorizar pede o segundo fator e vale só para o SHA que foi avaliado. O texto do chat nunca aprova.',
+  },
+  {
+    titulo: 'Segredos fora dos logs',
+    texto: 'Variáveis e segredos ficam nas Configurações; o devcli os entrega ao comando que precisa deles, e o valor de um segredo nunca aparece nos logs da entrega.',
   },
   {
     titulo: 'Telemetria anônima, que você desliga',
@@ -567,12 +768,21 @@ export const EMPRESAS = {
 };
 
 /**
+ * Os fluxos prontos do catálogo básico, na ordem em que um time costuma conhecê-los — os mesmos doze do
+ * CatalogoDosFluxosBasicos do git.kit. O subtítulo do Catálogo conta por esta lista.
+ */
+const FLUXOS_DO_CATALOGO = [
+  'Fluxo simples', 'Tarefa avulsa', 'Planejar e executar', 'Somente planejamento', 'Implementação de work item planejado', 'Tela', 'Design',
+  'Criar aplicação', 'Publicar no Azure', 'Deploy no Azure', 'Distribuição .NET', 'Fechamento do projeto',
+];
+
+/**
  * A seção "Catálogo" (US #425): o catálogo básico versionado, que chega sozinho às máquinas, e o catálogo da
  * empresa. A lista completa, por tecnologia, é a página pública /catalogo.
  */
 export const CATALOGO = {
   titulo: 'Catálogo de skills, Rules e fluxos',
-  subtitulo: 'O dev.kit chega com o catálogo básico, e ele se atualiza sozinho.',
+  subtitulo: `Mais de 60 skills, 20 Rules e ${FLUXOS_DO_CATALOGO.length} fluxos prontos no catálogo básico — e ele se atualiza sozinho.`,
   itens: [
     {
       titulo: 'Atualiza sozinho',
@@ -587,6 +797,7 @@ export const CATALOGO = {
       texto: 'Cada item tem versão e hash. O que muda no catálogo básico passa pela revisão do repositório antes de ser publicado.',
     },
   ] satisfies Beneficio[],
+  fluxos: FLUXOS_DO_CATALOGO,
 };
 
 /** Um plano da seção "Planos" (US #425): o teste grátis, a assinatura individual e o plano para empresas. */
@@ -621,6 +832,39 @@ export const PLANOS: Plano[] = [
 
 export const PERGUNTAS: PerguntaFrequente[] = [
   {
+    pergunta: 'Preciso trocar o meu processo no Azure DevOps?',
+    resposta: 'Não. O dev.kit lê os work items, as iterações e os campos do processo que você já usa, e respeita os campos obrigatórios dele.',
+  },
+  {
+    pergunta: 'Quais provedores de IA ele usa?',
+    resposta:
+      'O que você escolher, papel a papel — o agente que implementa, o avaliador e o Orquestrador: Claude Code, Codex (OpenAI), Kiro, Kimi ou GLM. A conta e o plano de cada provedor são os seus.',
+  },
+  {
+    pergunta: 'O agente faz commit e push sozinho?',
+    resposta:
+      'Só quando a regra do fluxo permite e com o trabalho compilando e os testes passando. Pull Request e aprovação ficam com o desenvolvedor.',
+  },
+  {
+    pergunta: 'Onde o código roda?',
+    resposta: 'Na sua máquina, em clones na pasta da task. O dev.kit não leva o seu código para servidor nenhum.',
+  },
+  {
+    pergunta: 'Consigo acompanhar e aprovar pelo celular?',
+    resposta:
+      'Sim. O Board do dev.kit.page mostra as suas máquinas, a conversa com o Orquestrador e o que precisa de você; ele instala como app no celular e avisa por notificação. Aprovar pede o segundo fator, e o texto do chat nunca aprova.',
+  },
+  {
+    pergunta: 'O dev.kit precisa ficar aberto?',
+    resposta:
+      'Não. O serviço do Windows dispara os agendamentos no horário, vigia os comentários /devkit executar e liga ou reinicia o dev.kit quando você pede pelo site. As tasks rodam no app, que o serviço abre quando precisa.',
+  },
+  {
+    pergunta: 'Os agentes podem operar o próprio dev.kit?',
+    resposta:
+      'Sim, pelo devcli: mais de 50 comandos com a sua credencial e as regras da tela, e ele também sobe como servidor MCP no Claude Code, no VS Code (Copilot) e no Cursor. O que grava simula antes: só o --aplicar grava.',
+  },
+  {
     pergunta: 'Como funciona o teste grátis?',
     resposta:
       'Baixe o dev.kit sem cadastro: os 14 dias contam da primeira abertura e ficam registrados também no servidor, então reinstalar não reinicia o prazo.',
@@ -638,24 +882,6 @@ export const PERGUNTAS: PerguntaFrequente[] = [
     pergunta: 'O que é o catálogo do dev.kit?',
     resposta:
       'As skills, as Rules e os fluxos que o agente usa. O básico vem com o dev.kit e se atualiza sozinho; a sua empresa pode publicar os dela para o time assinar.',
-  },
-  {
-    pergunta: 'Preciso trocar o meu processo no Azure DevOps?',
-    resposta: 'Não. O dev.kit lê os work items, as iterações e os campos do processo que você já usa, e respeita os campos obrigatórios dele.',
-  },
-  {
-    pergunta: 'Quais provedores de IA ele usa?',
-    resposta:
-      'O que você escolher, papel a papel — o agente que implementa, o avaliador e o Orquestrador: Claude Code, Codex (OpenAI), Kiro, Kimi ou GLM. A conta e o plano de cada provedor são os seus.',
-  },
-  {
-    pergunta: 'O agente faz commit e push sozinho?',
-    resposta:
-      'Só quando a regra do fluxo permite e com o trabalho compilando e os testes passando. Pull Request e aprovação ficam com o desenvolvedor.',
-  },
-  {
-    pergunta: 'Onde o código roda?',
-    resposta: 'Na sua máquina, em clones na pasta da task. O dev.kit não leva o seu código para servidor nenhum.',
   },
   {
     pergunta: 'Como funciona o plano para empresas?',

@@ -115,7 +115,8 @@ publica os resultados.
 ## Como verificar cada critério da US #283
 
 1. **A landing, nesta ordem: hero com mídia em movimento, benefícios, como funciona, recursos,
-   integrações, segurança, contato, FAQ e CTA final** — abra `/`; `Landing.test.tsx` (`abre sem login
+   integrações, segurança, contato, FAQ e CTA final** (a ordem de hoje é a da [landing refeita](#a-landing-refeita-tarefa-avulsa-de-12112026))
+   — abra `/`; `Landing.test.tsx` (`abre sem login
    com as seções na ordem do critério 1`) e `conteudo/landing.test.ts`; o cenário Playwright
    `landing.spec.ts`.
 2. **Cada recurso principal com mídia animada, poster, texto alternativo e fallback para a captura** —
@@ -138,6 +139,22 @@ publica os resultados.
 8. **README, arquitetura e publicação atualizados** — esta seção, a tabela de configuração,
    [docs/arquitetura.md](docs/arquitetura.md#a-landing-us-283), [docs/landing-conteudo.md](docs/landing-conteudo.md)
    e [docs/publicacao-azure.md](docs/publicacao-azure.md#atualizar-uma-base-azure-sql-que-já-existe-us-283).
+
+## A landing refeita (tarefa avulsa de 12/11/2026)
+
+A landing foi refeita sobre o produto da versão 7, contado pelos quatro braços (o app desktop, o serviço do Windows,
+o Board do dev.kit.page e o devcli), com o principal na primeira dobra. A mensagem e a fonte de cada fato estão em
+[docs/landing-conteudo.md](docs/landing-conteudo.md#a-landing-refeita-tarefa-avulsa-de-12112026); a disposição, em
+[docs/arquitetura.md](docs/arquitetura.md#a-landing-us-283).
+
+1. **A primeira dobra tem a promessa, os CTAs, o download, a vitrine do desktop com o celular e os quatro braços** —
+   abra `/` em 1440 × 900 (e no notebook, 1366 × 650 úteis); `Landing.test.tsx` (`a primeira dobra…` e `os quatro
+   braços estão na primeira dobra…`) e o cenário Playwright `landing.spec.ts`, que confere a faixa dos braços dentro
+   da dobra no desktop e os CTAs no celular.
+2. **O tour dos recursos em abas, acessível pelo teclado** — `Landing.test.tsx` (`o tour dos recursos é um tablist…`,
+   `as setas, o Home e o End…` e `o endereço antigo de um recurso…`).
+3. **Os fatos do produto conferidos** — `conteudo/landing.test.ts` (os braços, a vitrine com o texto fixo do push do
+   `board-sw.js`, os doze fluxos prontos do catálogo e os rótulos curtos).
 
 ## Como verificar cada critério da US #491
 

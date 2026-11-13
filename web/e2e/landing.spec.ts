@@ -2,56 +2,76 @@ import { expect, test } from '@playwright/test';
 import { garantirSenhaDefinitiva } from './admin';
 import { NOVA_SENHA } from './ambiente';
 
-/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da home da US #467). */
+/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a landing refeita em 12/11/2026). */
 const ORDEM = [
-  'inicio', 'como-funciona', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas',
-  'planos', 'contato', 'faq', 'comecar',
+  'inicio', 'como-funciona', 'bracos', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes', 'seguranca',
+  'empresas', 'planos', 'contato', 'faq', 'comecar',
 ];
 
-/** A home inteira nas quatro combinações da entrega (US #467): desktop e celular, claro e escuro. */
-test('a home da proposta (US #467) em desktop e celular, nos temas claro e escuro', async ({ page }) => {
+/** A home inteira em desktop e celular, claro e escuro — e a primeira dobra com a promessa, os CTAs e os quatro braços. */
+test('a home refeita em desktop e celular, nos temas claro e escuro, com o principal na primeira dobra', async ({ page }) => {
   for (const [tela, largura, altura] of [['desktop', 1440, 900], ['celular', 390, 844]] as const) {
     for (const tema of ['light', 'dark'] as const) {
       await page.setViewportSize({ width: largura, height: altura });
       await page.emulateMedia({ colorScheme: tema, reducedMotion: 'reduce' });
       await page.goto('/');
-      // Os sete recursos desde a versão 5 (o Orquestrador, o provedor cognitivo e o Design entraram). O site é só escuro desde a
-      // marca da versão 5: o tema claro do sistema dá a mesma página.
-      await expect(page.locator('#recursos article')).toHaveCount(7);
-      // Com menos movimento entra o poster (o primeiro quadro, também o do GIF do Orquestrador): a captura não depende do vídeo carregar.
-      await expect(page.locator('#recursos .janela img')).toHaveCount(7);
+      // A primeira dobra: no desktop, a promessa, os CTAs e os quatro braços inteiros; no celular, a promessa e os CTAs.
+      await expect(page.getByRole('navigation', { name: 'Os quatro braços do dev.kit' }).getByRole('link')).toHaveCount(4);
+      const dobra = await page.locator(tela === 'desktop' ? '#inicio .lp-faixa' : '#inicio .ctas').boundingBox();
+      expect(dobra!.y + dobra!.height).toBeLessThanOrEqual(altura);
+      // Os oito recursos do tour, um painel por aba; só o aberto aparece, e com menos movimento entra o poster (o primeiro quadro,
+      // também o do GIF do Orquestrador): a captura não depende do vídeo carregar. O site é só escuro: o tema claro dá a mesma página.
+      await expect(page.locator('#recursos [role="tabpanel"]')).toHaveCount(8);
+      await expect(page.locator('#recursos [role="tabpanel"]:not([hidden]) .janela img')).toHaveCount(1);
       await page.screenshot({ path: `test-results/capturas/16-home-${tela}-${tema === 'light' ? 'claro' : 'escuro'}.png`, fullPage: true });
     }
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.goto('/');
+  await page.screenshot({ path: 'test-results/capturas/15-primeira-dobra.png' });
   await page.locator('#recursos').screenshot({ path: 'test-results/capturas/17-recursos.png' });
+  await page.locator('#bracos').screenshot({ path: 'test-results/capturas/20-produto-quatro-bracos.png' });
 });
 
 test('landing → seções e recursos da proposta → pedido de demonstração → o admin vê e exclui no dashboard', async ({ page, request }) => {
   const nome = `Visitante E2E ${Date.now()}`;
 
-  // 1. A landing de venda, na ordem da proposta da home (US #467).
+  // 1. A landing de venda, na ordem da landing refeita.
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('time de agentes de IA');
   await expect(page.locator('main > section')).toHaveCount(ORDEM.length);
   expect(await page.locator('main > section').evaluateAll((secoes) => secoes.map((s) => s.id))).toEqual(ORDEM);
-  // O hero da proposta: o selo e a amostra do Board com a nota. "Como funciona" ficou só com as sete etapas.
+  // O hero: o selo, a vitrine do desktop com o celular e os quatro braços. "Como funciona" ficou só com as sete etapas.
   await expect(page.locator('#inicio')).toContainText('Para times no Azure DevOps');
-  await expect(page.getByRole('img', { name: /Amostra do Board/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /Amostra do dev\.kit no desktop e no celular/ })).toBeVisible();
   await expect(page.locator('#como-funciona ol > li')).toHaveCount(7);
   await expect(page.locator('#como-funciona video')).toHaveCount(0);
-  // Os sete recursos, com as abas 01–07: a aba leva ao bloco, e a mídia toca dentro da moldura de janela (seis vídeos e o
-  // GIF do Orquestrador).
-  await expect(page.locator('#recursos video')).toHaveCount(6);
+  // A faixa dos braços leva ao detalhe do Board, na seção Produto.
+  await page.getByRole('navigation', { name: 'Os quatro braços do dev.kit' }).getByRole('link', { name: /^Board/ }).click();
+  await expect(page).toHaveURL(/#braco-board$/);
+  await expect(page.getByRole('article', { name: 'O Board no site e no celular' })).toBeInViewport();
+  // O tour dos recursos: oito abas, uma aberta por vez — o Orquestrador (o GIF) abre, e o Cherry-pick, pela aba, toca o vídeo
+  // dentro da moldura de janela.
+  const abas = page.getByRole('tablist', { name: 'Recursos em destaque' });
+  await expect(abas.getByRole('tab')).toHaveCount(8);
   await expect(page.locator('#recurso-orquestrador img')).toHaveAttribute('src', '/midia/orquestrador.gif');
-  await page.getByRole('navigation', { name: 'Recursos em destaque' }).getByRole('link', { name: '06 Cherry-pick' }).click();
-  await expect(page).toHaveURL(/#recurso-replicacao$/);
+  await expect(page.locator('#recursos video')).toHaveCount(0);
+  await abas.getByRole('tab', { name: /07 Cherry-pick/ }).click();
+  await expect(abas.getByRole('tab', { name: /07 Cherry-pick/ })).toHaveAttribute('aria-selected', 'true');
   const cherryPick = page.locator('#recurso-replicacao');
+  await expect(cherryPick).toBeVisible();
   await expect(cherryPick.locator('.janela-barra')).toHaveText('dev.kit - Cherry-pick');
   await expect(cherryPick.locator('figcaption')).toHaveText('Marque os commits a replicar');
   await expect(cherryPick.locator('video source[type="video/webm"]')).toHaveAttribute('src', '/midia/replicacao.webm');
+  await expect(page.locator('#recursos video')).toHaveCount(1);
+  // A seta leva à aba seguinte (o foco junto), e o endereço antigo de um recurso abre a aba dele.
+  await page.keyboard.press('ArrowRight');
+  await expect(abas.getByRole('tab', { name: /08 Horas/ })).toBeFocused();
+  await expect(page.locator('#recurso-board')).toBeVisible();
+  await page.goto('/#recurso-design');
+  await expect(abas.getByRole('tab', { name: /06 Design/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#recurso-design')).toBeVisible();
   await expect(page.locator('body')).not.toContainText(/dashboard/i);
   // A API do e2e não tem REPO_KEY: o botão de download diz que está indisponível, sem quebrar a página.
   await expect(page.getByRole('group', { name: 'Download do dev.kit', exact: true })).toContainText('Download indisponível no momento.');
@@ -67,8 +87,8 @@ test('landing → seções e recursos da proposta → pedido de demonstração �
   await page.locator('#empresas').screenshot({ path: 'test-results/capturas/14-para-empresas.png' });
   await page.locator('#como-funciona').screenshot({ path: 'test-results/capturas/15-como-funciona.png' });
 
-  // 1c. Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico.
-  await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Conceitos' }).click();
+  // 1c. Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico, pelo rodapé.
+  await page.getByRole('navigation', { name: 'Rodapé' }).getByRole('link', { name: 'Conceitos' }).click();
   await expect(page).toHaveURL(/#conceitos$/);
   await expect(page.locator('#conceitos article')).toHaveCount(3);
   await expect(page.locator('#conceito-skill pre')).toContainText('name: compilar-angular');

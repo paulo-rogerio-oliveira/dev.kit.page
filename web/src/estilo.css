@@ -72,9 +72,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 .menu a { color: var(--texto-2); text-decoration: none; font-weight: 500; }
 .menu a:hover { color: var(--primaria); }
 
-.hero { display: grid; gap: 32px; padding: 40px 16px 48px; max-width: 1200px; margin: 0 auto; align-items: center; }
-.hero h1 { font-size: clamp(1.9rem, 4.5vw, 3rem); margin: 0 0 16px; letter-spacing: -0.01em; }
-.hero p { font-size: 1.1rem; color: var(--texto-2); margin: 0 0 28px; line-height: 1.6; }
 .ctas { display: flex; flex-wrap: wrap; gap: 12px; }
 .cta { padding: 12px 20px; }
 
@@ -87,21 +84,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 .cartao h3 { margin: 0 0 8px; font-size: 1.1rem; }
 .cartao p { margin: 0; color: var(--texto-2); line-height: 1.6; }
 
-.grade-cartoes, .passos { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: 1fr; }
-.passos { counter-reset: passo; }
-.passos li { counter-increment: passo; position: relative; padding-top: 56px; }
-.passos li::before {
-  content: counter(passo); position: absolute; top: 20px; left: 28px; width: 28px; height: 28px; border-radius: 50%;
-  background: var(--primaria-botao); color: #ffffff; font-weight: 700; display: grid; place-items: center;
-}
-
-.recursos { display: grid; gap: 24px; }
-.recurso {
-  display: grid; grid-template-columns: 1fr; gap: 24px; align-items: center;
-  background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 20px;
-}
-.recurso h3 { margin: 0 0 12px; font-size: 1.3rem; }
-.recurso p { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.grade-cartoes { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: 1fr; }
 
 .formulario.formulario-contato { max-width: 640px; }
 textarea {
@@ -141,17 +124,12 @@ input[aria-invalid='true'], textarea[aria-invalid='true'] { border-color: var(--
 
 @media (min-width: 760px) {
   .landing .topo { padding: 14px 32px; }
-  .hero { grid-template-columns: 1fr 1.15fr; padding: 64px 32px; }
   .secao { padding: 64px 32px; }
   .grade-cartoes { grid-template-columns: repeat(2, 1fr); }
-  .passos { grid-template-columns: repeat(2, 1fr); }
-  .recurso { grid-template-columns: 1fr 1.3fr; padding: 28px; gap: 32px; }
-  .recurso:nth-child(even) > div { order: 2; }
 }
 
 @media (min-width: 1100px) {
   .menu { display: flex; }
-  .passos { grid-template-columns: repeat(4, 1fr); }
   .integracoes { grid-template-columns: repeat(3, 1fr); }
 }
 
@@ -279,8 +257,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .link-entrar:hover { color: var(--primaria); }
 .landing .topo .cta { padding: 9px 16px; }
 
-.landing .hero { max-width: none; padding: 56px max(16px, calc((100% - 1200px) / 2)) 64px; background: var(--tinta-da-secao); border-bottom: 1px solid var(--borda); }
-.landing .hero h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; margin: 18px 0 22px; }
 .destaque { color: var(--primaria); }
 .selo {
   display: inline-flex !important; align-items: center; gap: 8px; margin: 0 !important; padding: 5px 12px; border-radius: 999px;
@@ -300,7 +276,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .baixar-endereco { flex-basis: 100%; color: var(--texto-mudo); font-size: 0.85rem; }
 .baixar-endereco code { user-select: all; word-break: break-all; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--borda); background: var(--superficie); color: var(--texto-2); }
 
-/* A MOLDURA de janela do app (componente Janela, US #467): a da amostra do Board e a das mídias dos recursos. */
+/* A MOLDURA de janela do app (componente Janela, US #467): a da vitrine do hero e a das mídias dos recursos. */
 .janela { background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.12); overflow: hidden; }
 .janela-barra { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--borda); background: var(--tinta-da-secao); font-size: 0.8rem; }
 .janela-barra span { width: 9px; height: 9px; border-radius: 50%; background: var(--grade); }
@@ -310,40 +286,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .janela-escura .janela-barra span { background: #383835; }
 .janela-escura .janela-barra em { color: #c3c2b7; }
 .janela .midia { border: 0; border-radius: 0; }
-
-/* A amostra do Board: a janela do app feita de HTML, com o selo da nota por cima. */
-.amostra { position: relative; margin: 0; }
-.amostra-janela { font-size: 0.8rem; }
-.amostra-corpo { display: flex; }
-.amostra-lateral { display: flex; flex-direction: column; gap: 10px; padding: 12px 8px; border-right: 1px solid var(--borda); }
-.amostra-lateral span { width: 18px; height: 18px; border-radius: 5px; background: var(--grade); }
-.amostra-lateral span:first-child { background: var(--primaria-tinta); }
-.amostra-conteudo { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px; }
-.amostra-cartao { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--borda); border-radius: 8px; padding: 10px 12px; background: var(--superficie); }
-.amostra-contagem { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: #fff3cd; color: #8a5a00; font-size: 0.75rem; }
-.amostra-item { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid var(--grade); }
-.amostra-avatar { width: 18px; height: 18px; border-radius: 5px; background: #ece9fb; }
-.amostra-avatar-1 { background: #e3f4ec; }
-.amostra-texto { flex: 1; display: flex; flex-direction: column; }
-.amostra-texto b { font-weight: 600; }
-.amostra-texto small, .amostra-cartao small { color: var(--texto-mudo); font-size: 0.72rem; }
-.amostra-acao { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--borda); font-size: 0.72rem; }
-.amostra-acao-forte { background: var(--escuro); color: #ffffff; border-color: var(--escuro); }
-.amostra-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.amostra-notas { display: flex; gap: 6px; }
-.amostra-notas span { padding: 1px 7px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-.nota-boa { background: #e3f4ec; color: #1b7a43; }
-.nota-baixa { background: var(--primaria-tinta); color: var(--primaria-botao-hover); }
-.amostra-horas { display: flex; gap: 3px; height: 6px; }
-.amostra-horas span { border-radius: 3px; }
-.hora-0 { background: #2a78d6; } .hora-1 { background: #7c5bd6; } .hora-2 { background: #1f9d8a; } .hora-3 { background: var(--grade); }
-.amostra-selo {
-  position: absolute; left: -28px; bottom: 40px; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14); font-size: 0.8rem;
-}
-.amostra-selo span:last-child { display: flex; flex-direction: column; }
-.amostra-selo small { color: var(--texto-mudo); }
-.amostra-check { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #e3f4ec; color: #1b7a43; font-weight: 700; }
 
 /* O rótulo pequeno acima do título ("COMO FUNCIONA"). */
 .secao-rotulo {
@@ -364,28 +306,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .etapas h3, .etapas h4 { margin: 0 0 6px; font-size: 1rem; }
 .etapas p { margin: 0; color: var(--texto-2); font-size: 0.9rem; line-height: 1.5; }
 
-/* Os recursos da proposta (US #467): as abas 01–04 e os blocos alternados, separados por um fio. */
-.abas-dos-recursos ol { list-style: none; margin: 0 0 8px; padding: 0 0 28px; display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--borda); }
-.abas-dos-recursos a {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--borda);
-  background: var(--superficie); color: var(--texto-2); text-decoration: none; font-size: 0.85rem;
-}
-.abas-dos-recursos a:hover { border-color: var(--primaria); color: var(--texto); }
-.aba-numero, .recurso-numero { color: var(--primaria); font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; }
-.landing .recursos { gap: 0; }
-.landing .recurso { background: none; border: 0; border-radius: 0; padding: 40px 0; border-bottom: 1px solid var(--borda); scroll-margin-top: 80px; }
-.landing .recurso:last-child { border-bottom: 0; }
-.recurso-numero { margin: 0 0 10px !important; }
-.landing .recurso h3 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.015em; }
+/* O número do recurso no painel do tour (as abas e o painel moram em paginas/Landing.css) e os marcadores com o visto. */
+.recurso-numero { margin: 0 0 10px !important; color: var(--primaria); font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; }
 .marcadores { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
 .marcadores li { position: relative; padding-left: 26px; color: var(--texto-2); line-height: 1.5; font-size: 0.95rem; }
 .marcadores li::before {
   content: ''; position: absolute; left: 3px; top: 0.3em; width: 10px; height: 5px; transform: rotate(-45deg);
   border-left: 2px solid var(--primaria); border-bottom: 2px solid var(--primaria);
 }
-.recurso-midia { margin: 0; min-width: 0; }
-.recurso-midia figcaption { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--texto-mudo); font-size: 0.85rem; }
-.recurso-midia figcaption::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--primaria); }
 
 .grade-tres .cartao { padding: 26px; }
 .icone { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 9px; background: var(--primaria-tinta); color: var(--primaria); margin-bottom: 18px; }
@@ -409,12 +337,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .rodape a:hover { color: var(--primaria); }
 
 @media (min-width: 760px) {
-  .landing .hero { grid-template-columns: 1fr 1.05fr; gap: 56px; }
   .etapas { grid-template-columns: repeat(4, 1fr); }
   .grade-tres { grid-template-columns: repeat(3, 1fr); }
-  /* A mídia ganha mais da metade do bloco: a captura do app em tamanho maior, como na proposta. */
-  .landing .recurso { grid-template-columns: 1fr 1.45fr; gap: 56px; padding: 56px 0; }
-  .landing .recurso:nth-child(even) { grid-template-columns: 1.45fr 1fr; }
 }
 
 /* Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico. */
@@ -446,7 +370,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .amostra-selo { left: 8px; bottom: -18px; }
   .nav-landing { margin-left: 0; }
 }
 
@@ -938,8 +861,6 @@ label.opcao-da-retirada { flex-direction: row; align-items: flex-start; gap: 8px
 
 /* ---------- A landing na marca ---------- */
 .landing .topo { background: rgba(13, 13, 14, 0.82); }
-.landing .hero { background: transparent; }
-.landing .hero h1 { font-weight: 900; letter-spacing: -0.045em; line-height: 1.04; }
 .landing .secao-cabecalho h2 { font-weight: 900; letter-spacing: -0.035em; }
 .secao-rotulo { font-weight: 700; letter-spacing: 0.18em; }
 .secao-tinta { background: rgba(255, 255, 255, 0.012); box-shadow: 0 0 0 100vmax rgba(255, 255, 255, 0.012); }
@@ -949,27 +870,13 @@ label.opcao-da-retirada { flex-direction: row; align-items: flex-start; gap: 8px
 .selo { background: rgba(21, 21, 23, 0.8); border-color: rgba(255, 255, 255, 0.14); }
 .janela { border-radius: 16px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
 .janela-escura { background: #0d0d0e; border-color: rgba(255, 255, 255, 0.09); }
-.abas-dos-recursos a { padding: 8px 16px; font-weight: 600; }
-.abas-dos-recursos a:hover { border-color: var(--marca); }
 .recurso-novo { margin-left: 4px; padding: 1px 7px; border-radius: 999px; background: var(--marca); color: #ffffff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
-.etapas li::before, .passos li::before { box-shadow: 0 4px 14px rgba(226, 38, 28, 0.35); }
+.etapas li::before { box-shadow: 0 4px 14px rgba(226, 38, 28, 0.35); }
 .landing .cta-final {
   border: 1px solid rgba(226, 38, 28, 0.35);
   background: radial-gradient(640px 320px at 100% 0%, rgba(226, 38, 28, 0.28), transparent 70%), var(--escuro);
 }
 .comparativo thead th:nth-child(2), .comparativo td:nth-child(2) { background: var(--marca-tinta); }
-
-/* A amostra do Board no hero, no escuro: o contador âmbar, a nota verde e a fala do Orquestrador. */
-.amostra-contagem { background: var(--alerta-tinta); color: var(--alerta); border: 1px solid rgba(247, 193, 77, 0.35); }
-.amostra-avatar { background: #2a2a30; }
-.amostra-avatar-1 { background: #1d3a2a; }
-.amostra-acao-forte { background: var(--marca); border-color: var(--marca); }
-.nota-boa { background: var(--sucesso-tinta); color: var(--sucesso); }
-.nota-baixa { background: var(--marca-tinta); color: var(--marca-texto); }
-.amostra-check { background: var(--sucesso-tinta); color: var(--sucesso); }
-.amostra-orquestrador { display: flex; flex-direction: row; gap: 10px; align-items: center; border-color: rgba(226, 38, 28, 0.35); background: linear-gradient(180deg, rgba(226, 38, 28, 0.08), transparent), var(--superficie); }
-.amostra-orquestrador .amostra-texto b { color: var(--primaria); }
-.amostra-o { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #1d2b44; color: #8dbdf5; font-weight: 800; font-size: 0.7rem; }
 
 /* O design compartilhado (US #669): a aba Design de /empresa/conhecimento e a página /design (a proposta v002). */
 .design { display: flex; flex-direction: column; gap: 16px; }
@@ -1042,14 +949,10 @@ label.opcao-da-retirada { flex-direction: row; align-items: flex-start; gap: 8px
   .design-uso { margin-left: 0; text-align: left; }
 }
 
-/* A home no celular (390px): o título e os botões inteiros, sem corte. */
+/* O topo e as telas logadas no celular (390px); o hero da landing no celular mora em paginas/Landing.css. */
 @media (max-width: 560px) {
   .topo { padding: 12px 16px; }
   .nav-acoes .cta { display: none; }
-  .landing .hero { padding-top: 28px; gap: 28px; }
-  .landing .hero h1 { font-size: 2.15rem; margin: 14px 0 16px; }
-  .hero .ctas { flex-direction: column; align-items: stretch; }
-  .hero .ctas .cta { width: 100%; }
   .painel { padding: 28px 16px 56px; }
   .formulario-de-acesso { padding: 36px 20px 28px; }
 }
@@ -1104,8 +1007,8 @@ label.opcao-da-retirada { flex-direction: row; align-items: flex-start; gap: 8px
 .grafico-topo figcaption { margin: 0; }
 .legenda { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; font-size: 0.78rem; color: var(--texto-2); }
 .legenda li { display: inline-flex; align-items: center; gap: 6px; }
-/* A cor da camada na legenda e na dica. NÃO é `.amostra`: esse nome é a figura do Board no hero da landing, e a regra
-   de 10px dele aqui encolhia a amostra inteira (a home fora do layout). */
+/* A cor da camada na legenda e na dica. NÃO é `.amostra`: esse nome já foi a figura do Board no hero da landing, e a
+   regra de 10px dele aqui encolhia a amostra inteira (a home fora do layout). A landing refeita usa o prefixo lp-. */
 .legenda-cor { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .camada-trabalhou { fill: var(--serie-1); background: var(--serie-1); }
 .camada-esperou { fill: var(--alerta); background: var(--alerta); }

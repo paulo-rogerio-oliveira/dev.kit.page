@@ -43,13 +43,24 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 
 ## A landing (US #283)
 
-A landing é a página de venda, na disposição da proposta da home (US #467, que reorganizou a da US #405):
-hero (selo "Para times no Azure DevOps", o título com "Pull Request" em destaque, os dois botões, o link
-discreto "Baixar o dev.kit versão N" e a amostra do Board feita em HTML) → como funciona (sete etapas, de
-Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Provedor cognitivo e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
-mídia numa moldura de janela do app — o componente `Janela`, o mesmo da amostra do Board —, com a legenda
-abaixo) → por que o dev.kit (três cartões) → catálogo → comparativo → integrações → segurança → para
-empresas → planos → contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit"
+A landing é a página de venda. **Refeita em 12/11/2026** (tarefa avulsa) a partir dos recursos do projeto — os
+quatro braços do produto: o app desktop, o serviço do Windows, o Board do dev.kit.page e o devcli — e do que o
+site oferece (o Board no site e no celular, as decisões com segundo fator, o push), com o principal na
+**primeira dobra**: o selo "Para times no Azure DevOps", o título "Do work item à Pull Request, com um time de
+agentes de IA" ("Pull Request" em destaque e sem quebra), o texto, os dois botões, o link discreto "Baixar o
+dev.kit versão N", a vitrine (o Board do desktop feito de HTML, com o Board do celular por cima pedindo o
+segundo fator e a nota aceita) e a faixa dos quatro braços (`FaixaDosBracos`, um resumo de cada um que leva ao
+detalhe). Depois: como funciona (sete etapas) → produto (os quatro braços em detalhe, cada um com uma
+ilustração decorativa) → recursos (o tour `TourDosRecursos`: um tablist com as abas 01–08 — setas, Home e End
+trocam de aba, só a mídia da aba aberta é montada, e o endereço antigo `#recurso-<id>` abre a aba dele; a mídia
+numa moldura de janela do app — o componente `Janela` — com a legenda abaixo) → por que o dev.kit (o bento, com
+o placar dos avaliadores e as evidências da entrega) → conceitos → fábrica agêntica → catálogo (com os fluxos
+prontos) → comparativo → integrações → segurança → para empresas → planos → contato (pedido de demonstração) →
+FAQ → CTA escuro → rodapé. O estilo da landing refeita mora em `web/src/paginas/Landing.css`, com o prefixo
+`lp-`: os nomes genéricos (`.secao`, `.cartao`, `.etapas`, `.marcadores`, `.janela`…) continuam em
+`estilo.css`, e nenhum nome novo colide com o resto do site. Até a landing refeita, a disposição era a da
+proposta da home (US #467, que reorganizou a da US #405), com a amostra do Board no hero e os recursos em
+blocos alternados. O "Baixar o dev.kit"
 (`BaixarDevKit`) lê `/api/versoes/ultima` e, desde a US #467, é um **link de verdade** (`<a href>`) para o
 alias permanente `/api/versoes/ultima/download`, com o endereço absoluto escrito abaixo dele: o
 navegador mostra a URL, o "Copiar endereço do link" funciona e ela cola em outra aba — o `fetch` + blob
@@ -63,11 +74,14 @@ anterior só deixava um `blob:` passageiro. A ordem é a lista `SECOES` de
   `RECURSOS` da `Landing.tsx`. Trocar um texto ou um vídeo não toca nos componentes.
 - **Componentes reutilizáveis** em `web/src/componentes`: `Secao` (âncora + título por
   `aria-labelledby`), `Cta` (âncora da página ou rota do app), `Midia` e o hook
-  `usePrefereMenosMovimento`, `FormularioDeDemonstracao` e `PedidosDeDemonstracao` (o dashboard).
+  `usePrefereMenosMovimento`, `FormularioDeDemonstracao` e `PedidosDeDemonstracao` (o dashboard). Os da
+  própria landing (a vitrine, a faixa e os braços, o tour em abas, o placar e os ícones de traço) ficam em
+  `paginas/Landing.tsx`, que só a landing usa.
 - **Mídia sem pesar no carregamento.** `<video muted loop playsInline autoPlay preload="none">` com
   poster, largura e altura fixas (sem deslocar o layout); as `<source>` (WebM, depois MP4) só entram
   quando o vídeo se aproxima da tela (`IntersectionObserver`). Com `prefers-reduced-motion` fica só
-  o poster; sem vídeo ou com falha, a captura estática.
+  o poster; sem vídeo ou com falha, a captura estática. No tour em abas, só a aba aberta monta a mídia:
+  um vídeo por vez, e a vitrine do hero é HTML (nenhuma imagem a baixar na primeira dobra).
 - **SEO e compartilhamento** no `index.html`: título e descrição de venda, canonical, Open Graph e
   Twitter card (`compartilhar.jpg`, 1200×630), favicon e `theme-color`. A URL absoluta vem de
   `VITE_SITE_URL` no build (o plugin `url-do-site` do `vite.config.ts`).

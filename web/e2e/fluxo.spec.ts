@@ -11,7 +11,7 @@ const evento = (id: string, tipo: string, valor: number | null = null, detalhe =
 test('base nova → admin troca a senha → a máquina envia → os números aparecem no dashboard', async ({ page, request }) => {
   // 1. A landing abre sem login e leva ao login.
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Pull Request');
   await page.screenshot({ path: 'test-results/capturas/01-landing.png', fullPage: true });
   await page.getByRole('link', { name: 'Entrar' }).first().click();
 

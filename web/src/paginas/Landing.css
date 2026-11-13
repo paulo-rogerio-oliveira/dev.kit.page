@@ -1,0 +1,263 @@
+/*
+  A landing refeita (tarefa avulsa de 12/11/2026). A primeira dobra traz a promessa, os CTAs, o download e os QUATRO
+  braços do produto (desktop, serviço, Board e devcli); a vitrine é o Board do desktop com o Board do celular por cima.
+  Depois: os braços em detalhe, o tour dos recursos em abas e o "por que" em bento. Os nomes daqui têm o prefixo lp-
+  (landing page): os genéricos (.secao, .cartao, .etapas, .marcadores, .janela...) continuam os de estilo.css, e nada
+  daqui colide com o resto do site (.legenda e .amostra, por exemplo, já são do painel).
+*/
+
+/* ---------- A primeira dobra ---------- */
+.lp-hero { position: relative; max-width: 1240px; margin: 0 auto; padding: 36px 16px 56px; display: flex; flex-direction: column; gap: 36px; }
+.lp-hero::before {
+  content: ''; position: absolute; inset: -80px 0 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(680px 420px at 80% 34%, rgba(226, 38, 28, 0.16), transparent 70%);
+}
+.lp-hero-grade { display: grid; gap: 44px; align-items: center; }
+.lp-hero-texto { min-width: 0; }
+.lp-hero h1 {
+  margin: 18px 0; font-size: clamp(2.2rem, 4.1vw, 3.6rem); line-height: 1.04; font-weight: 900; letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+.lp-hero h1 .destaque { white-space: nowrap; }
+.lp-lead { margin: 0; max-width: 620px; color: var(--texto-2); font-size: 1.1rem; line-height: 1.6; }
+.lp-hero .ctas { margin-top: 26px; }
+.lp-hero .baixar { margin-top: 16px; }
+
+/*
+  A vitrine: o Board do desktop (feito de HTML, nítido em qualquer tela) com o celular por cima, à direita, e a nota
+  embaixo, à esquerda. O que importa em cada cartão fica à esquerda: a direita é a que o celular cobre.
+*/
+.lp-vitrine { position: relative; min-width: 0; margin: 0; padding: 0 64px 72px 0; }
+.lp-desktop { font-size: 0.74rem; }
+.lp-desktop-corpo { display: flex; }
+.lp-desktop-lateral { display: flex; flex-direction: column; gap: 10px; padding: 12px 9px; border-right: 1px solid var(--borda); background: rgba(0, 0, 0, 0.2); }
+.lp-desktop-lateral span { width: 18px; height: 18px; border-radius: 5px; background: var(--grade); }
+.lp-desktop-lateral span:first-child { background: var(--marca); }
+.lp-desktop-conteudo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px; padding: 12px; }
+.lp-cartao { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 9px 11px; border: 1px solid var(--borda); border-radius: 9px; background: var(--superficie); }
+.lp-cartao strong { font-size: 0.78rem; }
+.lp-cartao small { color: var(--texto-mudo); font-size: 0.68rem; }
+.lp-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lp-texto b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-texto small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-orquestrador { flex-direction: row; align-items: center; gap: 10px; border-color: rgba(226, 38, 28, 0.38); background: linear-gradient(180deg, rgba(226, 38, 28, 0.1), transparent), var(--superficie); }
+.lp-orquestrador .lp-texto b { color: var(--primaria); }
+.lp-orquestrador .lp-texto small { white-space: normal; }
+.lp-avatar { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: #1d2b44; color: #8dbdf5; font-weight: 800; font-size: 0.7rem; }
+.lp-linha { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.lp-ondas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.lp-ondas span { height: 5px; border-radius: 3px; background: var(--grade); }
+.lp-ondas .lp-onda-integrada { background: var(--sucesso); }
+.lp-ondas .lp-onda-rodando { background: linear-gradient(90deg, var(--alerta) 0 60%, var(--grade) 60%); }
+.lp-contagem { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid rgba(247, 193, 77, 0.35); border-radius: 999px; background: var(--alerta-tinta); color: var(--alerta); font-size: 0.68rem; }
+.lp-item { display: flex; align-items: center; gap: 9px; padding-top: 7px; border-top: 1px solid var(--grade); }
+.lp-item-avatar { flex: none; width: 18px; height: 18px; border-radius: 5px; background: #2a2a30; }
+.lp-item-avatar-1 { background: #1d3a2a; }
+.lp-acao { flex: none; padding: 3px 9px; border: 1px solid var(--borda); border-radius: 5px; font-size: 0.68rem; }
+.lp-acao-forte { border-color: var(--marca); background: var(--marca); color: #ffffff; }
+.lp-notas { display: flex; gap: 5px; }
+.lp-notas span { padding: 1px 7px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
+.lp-nota-boa { background: var(--sucesso-tinta); color: var(--sucesso); }
+.lp-nota-baixa { background: var(--marca-tinta); color: var(--marca-texto); }
+
+/* O celular: o Board do dev.kit.page no tema escuro (as cores do Board.css), com a decisão que pede o segundo fator. */
+.lp-celular {
+  position: absolute; right: 0; top: 92px; width: 212px; padding: 7px; border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.16); background: linear-gradient(160deg, #2b2b30, #0a0a0c 42%);
+  box-shadow: 0 34px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+.lp-celular-tela { position: relative; overflow: hidden; border-radius: 26px; background: #1b1e24; color: #f1f2f5; font-size: 0.66rem; line-height: 1.35; }
+.lp-celular-ilha { width: 62px; height: 16px; margin: 7px auto 2px; border-radius: 10px; background: #050506; }
+.lp-celular-topo { display: flex; flex-direction: column; gap: 2px; padding: 4px 12px 8px; border-bottom: 1px solid #343943; }
+.lp-celular-topo b { font-size: 0.82rem; font-weight: 800; }
+.lp-celular-maquina { display: flex; align-items: center; gap: 5px; color: #83d7a2; font-size: 0.6rem; }
+.lp-celular-maquina i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.lp-celular-abas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid #343943; color: #b5bcc8; text-align: center; }
+.lp-celular-abas span { padding: 7px 0 6px; }
+.lp-celular-abas .lp-ativa { color: #ff786e; font-weight: 700; box-shadow: inset 0 -2px 0 #ff786e; }
+.lp-celular-corpo { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.lp-celular-rotulo { margin: 0; color: #a1aabb; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.lp-decisao { display: flex; flex-direction: column; gap: 5px; padding: 9px; border: 1px solid #73514b; border-radius: 9px; background: #352323; }
+.lp-decisao b { font-size: 0.7rem; line-height: 1.3; }
+.lp-decisao small { color: #b5bcc8; font-size: 0.6rem; }
+.lp-botao-celular { display: block; margin-top: 3px; padding: 6px 4px; border-radius: 6px; background: #ff786e; color: #1b1e24; font-size: 0.62rem; font-weight: 800; text-align: center; }
+.lp-fala { padding: 7px 9px; border: 1px solid #343943; border-radius: 9px; background: #242830; }
+.lp-fala small { display: block; margin-bottom: 2px; color: #a1aabb; font-size: 0.56rem; }
+.lp-celular-aviso { margin: 0; color: #a1aabb; font-size: 0.56rem; text-align: center; }
+
+.lp-selo-nota {
+  position: absolute; left: 28px; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border: 1px solid var(--borda); border-radius: 12px; background: rgba(21, 21, 23, 0.94); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55); font-size: 0.8rem;
+}
+.lp-selo-nota span:last-child { display: flex; flex-direction: column; }
+.lp-selo-nota small { color: var(--texto-mudo); }
+.lp-check { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--sucesso-tinta); color: var(--sucesso); font-weight: 800; }
+
+/* Os quatro braços na primeira dobra: um resumo de cada, que leva ao detalhe. */
+.lp-faixa ul {
+  list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden;
+  border: 1px solid var(--borda); border-radius: 16px; background: rgba(21, 21, 23, 0.74); backdrop-filter: blur(8px);
+}
+.lp-faixa li { min-width: 0; }
+.lp-faixa li:nth-child(even) { border-left: 1px solid var(--borda); }
+.lp-faixa li:nth-child(n + 3) { border-top: 1px solid var(--borda); }
+.lp-faixa a {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px 12px; height: 100%; padding: 16px 18px;
+  color: var(--texto); text-decoration: none; transition: background-color 0.15s;
+}
+.lp-faixa a:hover { background: rgba(255, 255, 255, 0.03); }
+.lp-faixa-icone { grid-row: span 2; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid rgba(226, 38, 28, 0.35); border-radius: 10px; background: var(--marca-tinta); color: var(--primaria); }
+.lp-faixa-nome { display: flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 800; }
+.lp-faixa-nome .recurso-novo { margin-left: 0; }
+.lp-faixa-texto { color: var(--texto-2); font-size: 0.84rem; line-height: 1.45; }
+
+/* Numa coluna só (celular e tablet), os braços vêm logo depois do texto, e a vitrine depois deles. */
+@media (max-width: 999px) {
+  .lp-hero-grade { display: contents; }
+  .lp-hero-texto { order: 1; }
+  .lp-faixa { order: 2; }
+  .lp-vitrine { order: 3; align-self: center; width: min(100%, 640px); }
+}
+
+@media (max-width: 559px) {
+  .lp-hero { padding-top: 24px; gap: 28px; }
+  .lp-hero h1 { font-size: 2.2rem; margin: 14px 0; }
+  .lp-lead { font-size: 1.02rem; }
+  .lp-hero .ctas { flex-direction: column; align-items: stretch; }
+  .lp-hero .ctas .cta { width: 100%; }
+  .lp-vitrine { padding: 0 40px 64px 0; }
+  .lp-desktop { font-size: 0.66rem; }
+  .lp-desktop-lateral { display: none; }
+  .lp-celular { top: 104px; width: 150px; padding: 5px; border-radius: 24px; }
+  .lp-celular-tela { border-radius: 20px; font-size: 0.56rem; }
+  .lp-celular-corpo .lp-fala, .lp-celular-aviso { display: none; }
+  .lp-selo-nota { left: 8px; padding: 8px 10px; font-size: 0.72rem; }
+  .lp-faixa a { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+  .lp-faixa-icone { grid-row: auto; width: 32px; height: 32px; }
+}
+
+@media (min-width: 1000px) {
+  .lp-hero { padding: 40px 24px 64px; }
+  .lp-hero-grade { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; }
+  .lp-faixa ul { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .lp-faixa li:nth-child(n + 3) { border-top: 0; }
+  .lp-faixa li + li { border-left: 1px solid var(--borda); }
+}
+
+/* Na tela de notebook (pouca altura), a dobra aperta para os braços continuarem à vista. */
+@media (min-width: 1000px) and (max-height: 820px) {
+  .lp-hero { padding-top: 14px; gap: 16px; }
+  .lp-hero h1 { font-size: clamp(2.1rem, 3.4vw, 2.9rem); margin: 12px 0; }
+  .lp-lead { font-size: 1rem; line-height: 1.55; }
+  .lp-hero .ctas { margin-top: 18px; }
+  .lp-hero .baixar { margin-top: 10px; }
+  .lp-vitrine { padding-bottom: 40px; }
+  .lp-faixa a { padding: 10px 16px; }
+}
+
+/* ---------- Os quatro braços em detalhe ---------- */
+.lp-bracos { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.lp-braco { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--borda); border-radius: 18px; background: var(--superficie); scroll-margin-top: 96px; }
+.lp-braco-visual {
+  position: relative; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 184px; padding: 20px 22px; overflow: hidden;
+  border-bottom: 1px solid var(--borda); background: radial-gradient(420px 200px at 85% 0%, rgba(226, 38, 28, 0.14), transparent 70%), #101012; font-size: 0.78rem;
+}
+.lp-braco-texto { display: flex; flex-direction: column; gap: 10px; padding: 22px 24px 26px; }
+.lp-braco-nome { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--primaria); font-family: var(--mono); font-size: 0.74rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.lp-braco-nome .recurso-novo { margin-left: 0; letter-spacing: 0.04em; }
+.lp-braco h3 { margin: 0; font-size: 1.3rem; font-weight: 900; letter-spacing: -0.02em; }
+.lp-braco-texto > p:not(.lp-braco-nome) { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.lp-braco .marcadores { margin-top: 4px; }
+
+/* Desktop: as abas da janela da task e a entrega com as evidências. */
+.lp-abas-da-task { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--borda); }
+.lp-abas-da-task span { padding: 4px 9px; border-radius: 6px; color: var(--texto-mudo); }
+.lp-abas-da-task .lp-ativa { background: var(--superficie-2); color: var(--texto); font-weight: 700; box-shadow: inset 0 -2px 0 var(--marca); }
+.lp-evidencias { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-evidencias li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid rgba(95, 224, 143, 0.3); border-radius: 999px; background: var(--sucesso-tinta); color: var(--sucesso); font-size: 0.74rem; }
+.lp-evidencias li::before { content: '✓'; font-weight: 900; }
+
+/* Serviço: o estado da máquina e o que ele fez, também com o app fechado. */
+.lp-estado-do-servico { display: inline-flex; align-items: center; gap: 7px; color: var(--sucesso); font-weight: 700; }
+.lp-estado-do-servico i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(95, 224, 143, 0.15); }
+.lp-linhas-do-servico { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-linhas-do-servico li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 7px 10px; border: 1px solid var(--borda); border-radius: 8px; background: var(--superficie); }
+.lp-linhas-do-servico time { color: var(--texto-mudo); font-family: var(--mono); font-size: 0.72rem; }
+
+/* Board: a conversa no celular e a notificação da decisão. */
+.lp-notificacao { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; background: rgba(36, 40, 48, 0.92); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
+.lp-notificacao .marca-icone { width: 26px; height: 26px; border-radius: 7px; font-size: 0.62rem; }
+.lp-notificacao span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.lp-notificacao small { color: var(--texto-2); }
+.lp-conversa { display: flex; flex-direction: column; gap: 6px; }
+.lp-conversa p { margin: 0; max-width: 88%; padding: 7px 10px; border: 1px solid var(--borda); border-radius: 10px; background: var(--superficie); line-height: 1.4; }
+.lp-conversa small { display: block; color: var(--texto-mudo); font-size: 0.66rem; }
+.lp-conversa .lp-sua-fala { align-self: flex-end; border-color: rgba(141, 189, 245, 0.25); background: var(--info-tinta); }
+
+/* devcli: o terminal com os comandos e o que cada um faz. */
+.lp-terminal { margin: 0; padding: 12px 14px; border: 1px solid var(--borda); border-radius: 10px; background: #0a0a0b; font-family: var(--mono); font-size: 0.76rem; line-height: 1.8; overflow-x: auto; }
+.lp-terminal div { white-space: nowrap; }
+.lp-terminal span { color: var(--primaria); }
+.lp-terminal em { color: var(--texto-mudo); font-style: normal; }
+
+@media (min-width: 900px) { .lp-bracos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---------- O tour dos recursos, em abas ---------- */
+.lp-tour { display: flex; flex-direction: column; gap: 28px; }
+.lp-abas { display: flex; gap: 8px; margin: 0; padding: 2px 2px 18px; overflow-x: auto; border-bottom: 1px solid var(--borda); scrollbar-width: thin; }
+.lp-aba {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border: 1px solid var(--borda); border-radius: 999px;
+  background: var(--superficie); color: var(--texto-2); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.lp-aba:hover { border-color: rgba(226, 38, 28, 0.55); color: var(--texto); }
+.lp-aba:focus-visible { outline: 2px solid var(--primaria); outline-offset: 3px; }
+.lp-aba[aria-selected='true'] { border-color: var(--marca); background: var(--marca); color: #ffffff; box-shadow: 0 8px 22px rgba(226, 38, 28, 0.32); }
+.lp-aba-numero { color: var(--primaria); font-family: var(--mono); font-size: 0.76rem; }
+.lp-aba[aria-selected='true'] .lp-aba-numero { color: rgba(255, 255, 255, 0.82); }
+.lp-aba .recurso-novo { margin-left: 0; }
+.lp-aba[aria-selected='true'] .recurso-novo { background: #ffffff; color: var(--marca); }
+.lp-painel { display: grid; gap: 28px; align-items: center; }
+.lp-painel[hidden] { display: none; }
+.lp-painel-texto { min-width: 0; }
+.lp-painel h3 { margin: 0 0 12px; font-size: 1.6rem; font-weight: 900; letter-spacing: -0.02em; }
+.lp-painel-texto > p:not(.recurso-numero) { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.lp-painel figure { min-width: 0; margin: 0; }
+.lp-painel figcaption { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--texto-mudo); font-size: 0.85rem; }
+.lp-painel figcaption::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--primaria); }
+@media (min-width: 1000px) { .lp-painel { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.45fr); gap: 56px; } }
+
+/* ---------- Por que o dev.kit: o bento ---------- */
+.lp-bento { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+.lp-bento > li { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 26px; border: 1px solid var(--borda); border-radius: 18px; background: var(--superficie); }
+.lp-bento > li.lp-bento-largo { border-color: rgba(226, 38, 28, 0.32); background: radial-gradient(520px 240px at 100% 0%, rgba(226, 38, 28, 0.15), transparent 70%), var(--superficie); }
+.lp-bento h3 { margin: 0; font-size: 1.15rem; font-weight: 800; }
+.lp-bento p { margin: 0; color: var(--texto-2); line-height: 1.6; }
+.lp-icone { display: inline-grid; place-items: center; flex: none; width: 42px; height: 42px; border: 1px solid rgba(226, 38, 28, 0.3); border-radius: 11px; background: var(--marca-tinta); color: var(--primaria); }
+.lp-placar { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 0.82rem; }
+.lp-placar li { display: grid; grid-template-columns: 96px minmax(0, 1fr) 30px 54px; align-items: center; gap: 10px; }
+.lp-placar-trilho { position: relative; height: 8px; border-radius: 4px; background: var(--grade); }
+.lp-placar-trilho i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--sucesso); }
+.lp-placar-trilho::after { content: ''; position: absolute; top: -4px; bottom: -4px; left: var(--minima); width: 2px; background: var(--texto-2); }
+.lp-placar .lp-abaixo i { background: var(--marca); }
+.lp-placar b { font-variant-numeric: tabular-nums; text-align: right; }
+.lp-placar small { color: var(--sucesso); font-weight: 700; }
+.lp-placar .lp-abaixo small { color: var(--marca-texto); }
+.lp-placar-nota { margin: 0; color: var(--texto-mudo) !important; font-size: 0.78rem; }
+@media (min-width: 760px) { .lp-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1100px) {
+  .lp-bento { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lp-bento > li.lp-bento-largo { grid-column: span 2; }
+}
+
+/* ---------- Ajustes das seções que continuam ---------- */
+.lp-fluxos { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-fluxos li { padding: 6px 12px; border: 1px solid var(--borda); border-radius: 999px; background: var(--superficie); color: var(--texto-2); font-size: 0.84rem; }
+.lp-fluxos-titulo { margin: 28px 0 0; color: var(--texto-mudo); font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; }
+@media (min-width: 1000px) {
+  .landing .faq { max-width: none; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-faixa a, .lp-aba { transition: none; }
+}

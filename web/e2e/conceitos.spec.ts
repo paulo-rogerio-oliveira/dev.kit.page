@@ -28,10 +28,10 @@ test('landing e catálogo com os nomes do produto: Rules no lugar de Tech Plans 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route(`${API}/api/catalogo/base/vitrine`, (rota) => rota.fulfill({ json: VITRINE, headers: { 'Access-Control-Allow-Origin': '*' } }));
 
-  // 1. A landing: o recurso 03 é o provedor cognitivo, e nenhum texto fala em Tech Plan.
+  // 1. A landing: a aba 05 do tour é o provedor cognitivo, e nenhum texto fala em Tech Plan.
   await page.goto('/');
   await expect(page.locator('body')).not.toContainText(/tech ?plans?/i);
-  await page.getByRole('navigation', { name: 'Recursos em destaque' }).getByRole('link', { name: '03 Provedor cognitivo' }).click();
+  await page.getByRole('tablist', { name: 'Recursos em destaque' }).getByRole('tab', { name: /05 Provedores/ }).click();
   const provedor = page.locator('#recurso-provedor');
   await expect(provedor.getByRole('heading', { name: 'Você escolhe o melhor provedor cognitivo' })).toBeVisible();
   for (const nome of ['Claude Code', 'Codex (OpenAI)', 'Kiro', 'Kimi', 'GLM']) await expect(provedor).toContainText(nome);
