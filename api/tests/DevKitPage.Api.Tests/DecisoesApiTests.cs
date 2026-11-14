@@ -111,7 +111,7 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
-    public async Task Autorizar_exige_o_segundo_fator_vale_so_para_o_escopo_revisado_e_vai_a_maquina_como_o_aprovar()
+    public async Task Autorizar_com_o_login_sem_codigo_vale_so_para_o_escopo_revisado_e_vai_a_maquina_como_o_aprovar()
     {
         using var original = new ApiDeTeste(); var relogio = new Relogio();
         using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
@@ -126,25 +126,25 @@ public sealed class DecisoesApiTests
         Assert.Null(d.Bloqueio);
         Assert.Equal("dotnet test", d.Pendencia.Escopo!.Comando);
 
-        // Sem o código (ou com o autenticador desligado), nada é autorizado; responder e aprovar não valem para a autorização.
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar))).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAprovar, Codigo: "123456"))).StatusCode);
-        var chave = await Ativar(c, relogio);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: "000000"))).StatusCode);
+        // Responder e aprovar não valem para a autorização.
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAprovar))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoResponder, "Sim"))).StatusCode);
 
         // O escopo mudou depois da revisão (outro comando): a autorização revisada não vale para ele.
         await Retrato(c, pedido with { Escopo = pedido.Escopo! with { Comando = "rm -rf build" } });
-        relogio.Avancar();
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/pendencia-comando",
-            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar))).StatusCode);
+        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
 
-        // Com o escopo de agora e o código válido, a autorização é gravada com o segundo fator e a máquina a consome uma vez.
+        // Com o escopo de agora e só o login (sem código, sem autenticador configurado), a autorização é gravada — sem o
+        // segundo fator na auditoria, que não houve — e a máquina a consome uma vez.
         await Retrato(c, pedido);
-        relogio.Avancar();
-        var r = await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo)));
+        var r = await c.PostAsJsonAsync(Rota + "/pendencia-comando", new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Dispositivo: ConversaV1.DispositivoNavegador));
         r.EnsureSuccessStatusCode();
         var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
-        Assert.Equal((DecisoesV1.AcaoAutorizar, true), (autorizacao.Acao, autorizacao.SegundoFator));
+        Assert.Equal((DecisoesV1.AcaoAutorizar, false), (autorizacao.Acao, autorizacao.SegundoFator));
+        Assert.Equal((relogio.GetUtcNow(), ConversaV1.DispositivoNavegador, d.SnapshotId), (autorizacao.Em, autorizacao.Dispositivo, autorizacao.SnapshotId));
+        Assert.False((await c.GetFromJsonAsync<EstadoDoAutenticadorV1>("/api/remoto/segundo-fator"))!.Ativo);
         Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
         Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
@@ -168,19 +168,18 @@ public sealed class DecisoesApiTests
         await PrepararMaquina(c); await Retrato(c, arquivar, Pergunta);
         var d = await Ler(c, "autorizacao-arquivar");
         Assert.Null(d.Bloqueio);
-        var chave = await Ativar(c, relogio);
 
-        // Fora da lista, recusa sem gravar nada (nem gastar o código).
+        // Fora da lista, recusa sem gravar nada.
         Assert.Equal(HttpStatusCode.BadRequest, (await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
-            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: "tablet"))).StatusCode);
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Dispositivo: "tablet"))).StatusCode);
         Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
 
         // O celular (com caixa e espaço, normalizado) vem na resposta, na caixa de saída da máquina e no consumo único.
         var r = await c.PostAsJsonAsync(Rota + "/autorizacao-arquivar",
-            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Codigo: Totp.Codigo(chave, relogio.Passo), Dispositivo: " Celular "));
+            new ResponderDecisaoV1(d.SnapshotId, DecisoesV1.AcaoAutorizar, Dispositivo: " Celular "));
         r.EnsureSuccessStatusCode();
         var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
-        Assert.Equal((DecisoesV1.AcaoAutorizar, true, ConversaV1.DispositivoCelular), (autorizacao.Acao, autorizacao.SegundoFator, autorizacao.Dispositivo));
+        Assert.Equal((DecisoesV1.AcaoAutorizar, false, ConversaV1.DispositivoCelular), (autorizacao.Acao, autorizacao.SegundoFator, autorizacao.Dispositivo));
         Assert.Contains("\"dispositivo\":\"celular\"", await r.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         Assert.Equal(ConversaV1.DispositivoCelular, Assert.Single((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!).Dispositivo);
         Assert.Equal(ConversaV1.DispositivoCelular, (await Ler(c, "autorizacao-arquivar")).Resposta!.Dispositivo);
@@ -195,7 +194,7 @@ public sealed class DecisoesApiTests
     }
 
     [Fact]
-    public async Task Mensagem_aprovo_nao_autoriza_e_aprovacao_exige_codigo_valido_nao_reutilizado()
+    public async Task Mensagem_aprovo_nao_autoriza_e_aprovacao_vale_com_o_login_ignorando_o_codigo_do_cliente_antigo()
     {
         using var original = new ApiDeTeste(); var relogio = new Relogio();
         using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
@@ -215,19 +214,54 @@ public sealed class DecisoesApiTests
         }
         Assert.Equal(HttpStatusCode.Accepted, (await c.PostAsJsonAsync("/api/remoto/comandos", new ComandoNovoV1(null, "notebook", "mensagem", "aprovo"))).StatusCode);
         Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar"))).StatusCode);
-        var chave = await Ativar(c, relogio);
-        var expirado = Totp.Codigo(chave, relogio.Passo - 4);
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: expirado))).StatusCode);
-        var codigo = Totp.Codigo(chave, relogio.Passo);
-        var r = await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: codigo)); r.EnsureSuccessStatusCode();
+
+        // O cliente antigo ainda manda o código (até um inválido ou fora do tamanho): ele é ignorado — nem valida, nem recusa.
+        var r = await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: "abc1234567", Dispositivo: ConversaV1.DispositivoCelular));
+        r.EnsureSuccessStatusCode();
         var autorizacao = (await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
-        Assert.True(autorizacao.SegundoFator); Assert.Equal(Snapshot.Sha, autorizacao.Sha); Assert.Equal(Snapshot.Destino, autorizacao.Destino);
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+        // A auditoria: a origem, o destino e o SHA revisados, o dispositivo, o horário — e SegundoFator falso, porque não houve.
+        Assert.False(autorizacao.SegundoFator);
+        Assert.Equal((Snapshot.Origem, Snapshot.Destino, Snapshot.Sha), (autorizacao.Origem, autorizacao.Destino, autorizacao.Sha));
+        Assert.Equal((ConversaV1.DispositivoCelular, relogio.GetUtcNow()), (autorizacao.Dispositivo, autorizacao.Em));
+        using (var escopo = api.Services.CreateScope())
+        {
+            var gravada = await escopo.ServiceProvider.GetRequiredService<DevKitPageDb>().RespostasDasDecisoes.AsNoTracking().SingleAsync(x => x.Id == autorizacao.Id);
+            Assert.Equal(("aprovar", false, Snapshot.Origem, ConversaV1.DispositivoCelular), (gravada.Acao, gravada.SegundoFator, gravada.Origem, gravada.Dispositivo));
+            Assert.Equal(relogio.GetUtcNow().UtcDateTime, gravada.EmUtc);
+        }
+        var recebida = await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null);
+        Assert.Equal(HttpStatusCode.OK, recebida.StatusCode);
+        Assert.Equal("recebida", (await recebida.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.Estado);
+
+        // Outra pendência, sem código nenhum: só o login basta. O consumo segue único.
         await Retrato(c, Aprovacao with { Id = "outra" });
         var outra = await Ler(c, "outra");
-        Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/outra", new ResponderDecisaoV1(outra.SnapshotId, "aprovar", Codigo: codigo))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync(Rota + "/outra", new ResponderDecisaoV1(outra.SnapshotId, "aprovar"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsync($"{Rota}/respostas/{autorizacao.Id}/recebida", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Com_o_autenticador_ativo_o_aprovar_tambem_dispensa_o_codigo_e_nao_gasta_tentativas()
+    {
+        using var original = new ApiDeTeste(); var relogio = new Relogio();
+        using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
+        var login = await original.AdminAsync();
+        var c = api.CreateClient(); c.DefaultRequestHeaders.Authorization = login.DefaultRequestHeaders.Authorization;
+        await Ativar(c, relogio);   // o autenticador da Provisão, ligado
+        await PrepararMaquina(c); await Retrato(c, Aprovacao);
+        var d = await Ler(c, "aprovacao");
+        async Task<AutenticadorDoUsuario> Autenticador()
+        {
+            using var escopo = api.Services.CreateScope();
+            return await escopo.ServiceProvider.GetRequiredService<DevKitPageDb>().Autenticadores.AsNoTracking().SingleAsync();
+        }
+        var antes = await Autenticador();
+        var r = await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: "000000"));
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        Assert.False((await r.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!.SegundoFator);
+        // O código ignorado não conta como tentativa do TOTP nem gasta o passo: o autenticador da Provisão fica como estava.
+        var depois = await Autenticador();
+        Assert.Equal((antes.Tentativas, antes.UltimoPasso), (depois.Tentativas, depois.UltimoPasso));
     }
 
     [Theory]
@@ -242,9 +276,9 @@ public sealed class DecisoesApiTests
         var login = await original.AdminAsync();
         var c = api.CreateClient(); c.DefaultRequestHeaders.Authorization = login.DefaultRequestHeaders.Authorization;
         await PrepararMaquina(c); await Retrato(c, aprovar ? Aprovacao : Pergunta);
-        var chave = aprovar ? await Ativar(c, relogio) : null;
         var d = await Ler(c, aprovar ? "aprovacao" : "pergunta");
-        ResponderDecisaoV1 Pedido() => new(d.SnapshotId, aprovar ? "aprovar" : "responder", aprovar ? null : "Manter", chave is null ? null : Totp.Codigo(chave, relogio.Passo));
+        // O aprovar vale com o login: sem código (semana 7).
+        ResponderDecisaoV1 Pedido() => new(d.SnapshotId, aprovar ? "aprovar" : "responder", aprovar ? null : "Manter");
         var primeira = await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido()); primeira.EnsureSuccessStatusCode();
         var anterior = (await primeira.Content.ReadFromJsonAsync<RespostaDaDecisaoV1>())!;
         Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync(Rota + "/" + d.Pendencia.Id, Pedido())).StatusCode);
@@ -293,19 +327,21 @@ public sealed class DecisoesApiTests
         using var api = original.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton<TimeProvider>(relogio)));
         var login = await original.AdminAsync();
         var c = api.CreateClient(); c.DefaultRequestHeaders.Authorization = login.DefaultRequestHeaders.Authorization;
+        // O autenticador segue existindo para a Provisão (semana 7: a decisão remota não o usa): o limite de tentativas vale
+        // na confirmação dele.
         Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync("/api/remoto/segundo-fator/preparar", new PrepararAutenticadorV1("errada"))).StatusCode);
-        var chave = await Ativar(c, relogio);
-        Assert.True((await c.GetFromJsonAsync<EstadoDoAutenticadorV1>("/api/remoto/segundo-fator"))!.Ativo);
-        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/api/remoto/segundo-fator/preparar", new PrepararAutenticadorV1(ApiDeTeste.NovaSenha))).StatusCode);
-        await PrepararMaquina(c); await Retrato(c, Aprovacao);
-        var d = await Ler(c, "aprovacao");
-        for (var i = 0; i < 4; i++)
-            Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: "abcdef"))).StatusCode);
-        var bloqueada = await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: Totp.Codigo(chave, relogio.Passo)));
+        var preparo = await c.PostAsJsonAsync("/api/remoto/segundo-fator/preparar", new PrepararAutenticadorV1(ApiDeTeste.NovaSenha));
+        preparo.EnsureSuccessStatusCode();
+        var chave = (await preparo.Content.ReadFromJsonAsync<AutenticadorPreparadoV1>())!.Chave;
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.Forbidden, (await c.PostAsJsonAsync("/api/remoto/segundo-fator/confirmar", new ConfirmarAutenticadorV1("abcdef"))).StatusCode);
+        var bloqueada = await c.PostAsJsonAsync("/api/remoto/segundo-fator/confirmar", new ConfirmarAutenticadorV1(Totp.Codigo(chave, relogio.Passo)));
         Assert.Equal(HttpStatusCode.Forbidden, bloqueada.StatusCode);
         Assert.Contains("Limite de tentativas", await bloqueada.Content.ReadAsStringAsync());
-        Assert.Empty((await c.GetFromJsonAsync<RespostaDaDecisaoV1[]>(Rota + "/respostas"))!);
-        relogio.Avancar(301); await PrepararMaquina(c);
-        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync(Rota + "/aprovacao", new ResponderDecisaoV1(d.SnapshotId, "aprovar", Codigo: Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+        Assert.False((await c.GetFromJsonAsync<EstadoDoAutenticadorV1>("/api/remoto/segundo-fator"))!.Ativo);
+        relogio.Avancar(301);
+        Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/api/remoto/segundo-fator/confirmar", new ConfirmarAutenticadorV1(Totp.Codigo(chave, relogio.Passo)))).StatusCode);
+        Assert.True((await c.GetFromJsonAsync<EstadoDoAutenticadorV1>("/api/remoto/segundo-fator"))!.Ativo);
+        Assert.Equal(HttpStatusCode.Conflict, (await c.PostAsJsonAsync("/api/remoto/segundo-fator/preparar", new PrepararAutenticadorV1(ApiDeTeste.NovaSenha))).StatusCode);
     }
 }

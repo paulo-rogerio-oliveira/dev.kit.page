@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { renderizar } from '../testes/renderizar';
 import { API, servidor, tokenValido } from '../testes/servidor';
+import { destinoDa } from '../sessao';
 
 async function entrar(senha: string) {
   await userEvent.type(screen.getByLabelText('Login'), 'admin');
@@ -11,6 +12,9 @@ async function entrar(senha: string) {
 }
 
 describe('Login', () => {
+  it('a reentrada do dev retorna à matriz do projeto para recuperar o rascunho da aba', () => {
+    expect(destinoDa({ ...tokenValido(), papel: 'dev' }, '/projetos?slug=matrix&visao=impactos')).toBe('/projetos?slug=matrix&visao=impactos');
+  });
   it('login válido vai ao dashboard', async () => {
     renderizar('/login');
 

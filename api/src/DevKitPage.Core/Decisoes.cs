@@ -24,6 +24,7 @@ public interface IDecisoesRemotas
     Task<IReadOnlyList<RespostaDaDecisaoV1>> RespostasAsync(int usuario, string maquina, CancellationToken ct);
     Task<ResultadoDaDecisao<RespostaDaDecisaoV1>> ReceberAsync(int usuario, string maquina, long id, CancellationToken ct);
 }
+/// <summary>O autenticador TOTP do usuário. (semana 7) Só a Provisão o exige; a decisão remota não o usa mais.</summary>
 public interface ISegundoFator
 {
     Task<bool> AtivoAsync(int usuario, CancellationToken ct);
@@ -56,6 +57,11 @@ public sealed class RespostaDaDecisao
     public string? Destino { get; set; }
     public string? Sha { get; set; }
     public DateTime EmUtc { get; set; }
+
+    /// <summary>
+    /// O TOTP foi conferido nesta decisão. (semana 7) A decisão remota não pede mais o segundo fator — o login confirmado basta —,
+    /// então a decisão nova grava falso; a coluna fica para a auditoria das decisões antigas (sem migration).
+    /// </summary>
     public bool SegundoFator { get; set; }
     public string Estado { get; set; } = "registrada";
 

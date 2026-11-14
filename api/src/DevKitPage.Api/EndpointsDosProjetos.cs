@@ -8,6 +8,7 @@ public static class EndpointsDosProjetos
 {
     public static void MapearProjetos(this IEndpointRouteBuilder app)
     {
+        app.MapearMatrix();
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
         grupo.MapearAcessosDosProjetos();
         grupo.MapGet("", (string? time, DateTimeOffset? desde, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)

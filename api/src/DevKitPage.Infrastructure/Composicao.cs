@@ -106,6 +106,7 @@ public static class Composicao
                 ? new ArmazemDeArtefatosNoBlob(sp.GetRequiredService<IOptions<OpcoesDosArtefatos>>())
                 : ActivatorUtilities.CreateInstance<ArmazemDeArtefatosEmDisco>(sp));
         servicos.AddScoped<IArtefatosDosProjetos, ArtefatosDosProjetosNoBanco>();
+        servicos.AddScoped<IMatrizes, MatrizesNoBanco>();
         // O controle remoto, fase 1: o heartbeat e o retrato das máquinas, por usuário.
         servicos.Configure<OpcoesDoRemoto>(configuracao.GetSection(OpcoesDoRemoto.Secao));
         servicos.AddScoped<IRemoto, Remoto>();

@@ -14,6 +14,10 @@ public sealed record CapturaDaDecisaoV1(string Titulo, string Url);
 public sealed record DecisaoPendenteV1(PendenciaNoRetratoV1 Pendencia, string SnapshotId, string? Bloqueio, RespostaDaDecisaoV1? Resposta, bool Dispensada = false);
 
 /// <param name="SnapshotId">O snapshot revisado; dispensável só no <see cref="DecisoesV1.AcaoDispensar"/> e no <see cref="DecisoesV1.AcaoRestaurar"/>.</param>
+/// <param name="Codigo">
+/// (semana 7) OPCIONAL E IGNORADO: o aprovar e o autorizar valem com o login confirmado, sem o segundo fator. O campo fica no
+/// V1 para o cliente antigo, que ainda o manda: o código recebido não é validado nem recusado (regra #2).
+/// </param>
 /// <param name="Dispositivo">
 /// (controle-v4, item 3; campo novo e opcional, regra #2) De onde o dev decidiu: <see cref="ConversaV1.DispositivoCelular"/> ou
 /// <see cref="ConversaV1.DispositivoNavegador"/>. Sem ele, a decisão vale como antes e a resposta vai sem o dispositivo.
@@ -37,8 +41,8 @@ public static class DecisoesV1
     public const string AcaoRestaurar = "restaurar";
 
     /// <summary>
-    /// (ajuste 9) A AUTORIZAÇÃO da pendência <see cref="RemotoV1.PendenciaAutorizacao"/>: exige o segundo fator, como o aprovar,
-    /// e vale só para o escopo revisado (o id do snapshot inclui o escopo).
+    /// (ajuste 9) A AUTORIZAÇÃO da pendência <see cref="RemotoV1.PendenciaAutorizacao"/>: com o login confirmado, como o aprovar
+    /// (sem segundo fator desde a semana 7), e vale só para o escopo revisado (o id do snapshot inclui o escopo).
     /// </summary>
     public const string AcaoAutorizar = "autorizar";
 
@@ -59,6 +63,10 @@ public static class DecisoesV1
 /// o SHA quando o ato é sobre um commit, os itens listados e o comando exato.
 /// </summary>
 public sealed record EscopoDaAutorizacaoV1(string Ato, string Alvo, string? Sha = null, IReadOnlyList<string>? Itens = null, string? Comando = null);
+/// <param name="SegundoFator">
+/// (semana 7) Só auditoria, e o cliente o ignora: verdadeiro só na decisão gravada quando o aprovar exigia o TOTP; a decisão
+/// nova grava falso (não houve segundo fator: o login confirmado basta). Fica no V1 para o cliente antigo (regra #2).
+/// </param>
 /// <param name="Dispositivo">
 /// (controle-v4, item 3; campo novo e opcional, regra #2) O dispositivo da decisão (<c>celular</c> ou <c>navegador</c>), para a
 /// auditoria da máquina; nulo na decisão gravada antes do campo ou mandada sem ele. Fica no fim: o dev.kit antigo o ignora.

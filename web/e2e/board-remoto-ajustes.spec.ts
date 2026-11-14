@@ -177,11 +177,13 @@ test('correções do board remoto: layout v016, imagens com modal, fluxo com mod
   await page.screenshot({ path: `${pasta}/15-projetos-mostrar-concluidos.png` });
   await painel.getByRole('checkbox', { name: /Mostrar concluídos/ }).uncheck();
 
-  // 8. (ajuste 9) A autorização do comando bloqueado: o escopo exato e o segundo fator, como o aprovar.
+  // 8. (ajuste 9) A autorização do comando bloqueado: o escopo exato e o login confirmado, como o aprovar (sem segundo fator
+  // desde a semana 7). Só a revisão: o clique de autorizar não é dado aqui.
   await painel.getByRole('button', { name: 'Autorizar' }).click();
   await expect(page.getByLabel('Escopo da autorização')).toContainText('dotnet test tests/GitKit.Core.Tests/GitKit.Core.Tests.csproj');
-  await page.getByRole('button', { name: 'Autorizar com segundo fator' }).click();
-  await page.screenshot({ path: `${pasta}/16-autorizacao-com-segundo-fator.png` });
+  await expect(page.getByRole('button', { name: 'Autorizar este pedido' })).toBeEnabled();
+  await expect(page.getByLabel('Código de 6 dígitos')).toHaveCount(0);
+  await page.screenshot({ path: `${pasta}/16-autorizacao-com-login-confirmado.png` });
   await page.getByRole('button', { name: '‹ Voltar ao Board' }).click();
 
   // 9. (complemento do ajuste 5) A caixa começa com 3 linhas e cresce até 8, depois rola.

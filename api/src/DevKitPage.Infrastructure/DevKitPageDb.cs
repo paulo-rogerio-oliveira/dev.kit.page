@@ -65,6 +65,27 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<AssercaoDoCliente> AssercoesDoCliente => Set<AssercaoDoCliente>();
     public DbSet<ArtefatoDoProjeto> ArtefatosDosProjetos => Set<ArtefatoDoProjeto>();
 
+    private void ConfigurarMatrix(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<RevisaoMatrixNoBanco>(e =>
+        {
+            e.ToTable("RevisoesMatrix");
+            e.Property(r => r.Espaco).HasMaxLength(80);
+            e.Property(r => r.Aplicacao).HasMaxLength(100);
+            e.Property(r => r.Tipo).HasMaxLength(12);
+            e.Property(r => r.DocumentoId).HasMaxLength(100);
+            e.HasIndex(r => new { r.Espaco, r.Aplicacao, r.Tipo, r.DocumentoId, r.Versao }).IsUnique();
+            e.HasIndex(r => r.ProjetoId);
+            if (Database.IsSqlServer())
+            {
+                e.Property(r => r.Espaco).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.Aplicacao).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.Tipo).UseCollation("Latin1_General_100_BIN2");
+                e.Property(r => r.DocumentoId).UseCollation("Latin1_General_100_BIN2");
+            }
+        });
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ConfigurarUs687(modelBuilder);
@@ -75,6 +96,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         ConfigurarConversa(modelBuilder);
         ConfigurarDecisoes(modelBuilder);
         ConfigurarPush(modelBuilder);
+        ConfigurarMatrix(modelBuilder);
 
         modelBuilder.Entity<Usuario>(e =>
         {
@@ -755,10 +777,14 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.Property(f => f.ComandoId).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId);
             // (correções do board remoto) As imagens da fala; no Azure SQL a coluna vem de api/scripts/sqlserver/BoardRemoto.sql.
             e.Property(f => f.Anexos).HasDefaultValue("");
+            // (semana 7) A task da fala; no Azure SQL a coluna e o índice vêm de api/scripts/sqlserver/ConversaDaTask.sql.
+            e.Property(f => f.Sessao).HasMaxLength(Contracts.V1.RemotoV1.TamanhoMaximoDoId).HasDefaultValue("");
             // O reenvio do dev.kit não duplica a fala.
             e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.FalaId }).IsUnique();
             // O histórico por máquina, na ordem em que foram ditas.
             e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.DitaEmUtc });
+            // A conversa de uma task, na mesma ordem.
+            e.HasIndex(f => new { f.UsuarioId, f.MaquinaId, f.Sessao, f.DitaEmUtc });
             e.HasIndex(f => f.RecebidaEmUtc);
             e.HasOne<Usuario>().WithMany().HasForeignKey(f => f.UsuarioId).OnDelete(DeleteBehavior.Cascade);
         });

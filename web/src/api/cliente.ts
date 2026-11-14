@@ -11,6 +11,7 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { ArtefatosDoProjeto, Projeto } from './projetos';
+import { rotaMatrix } from './matrix';
 import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
 
@@ -63,6 +64,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (opcoes.corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
   if (opcoes.ultimoEvento !== undefined) cabecalhos['Last-Event-ID'] = String(opcoes.ultimoEvento);
+  if (caminho.startsWith('/api/matrix')) cabecalhos['X-DevKit-Matrix-Avaliacao'] = '1';
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
     signal: opcoes.signal,
@@ -129,6 +131,11 @@ const rotaDosAcessos = (recurso: 'design' | 'projeto', projeto: number) =>
   `${recurso === 'design' ? '/api/design/projetos' : '/api/projetos'}/${projeto}/acessos`;
 
 export const api = {
+  matrizes: (token: string, signal?: AbortSignal) => chamar<import('./matrix').CabecalhoMatrix[]>('/api/matrix', { token, signal }),
+  historicoMatrix: (token: string, alvo: Pick<import('./matrix').CabecalhoMatrix, 'aplicacao' | 'tipo' | 'id'>, signal?: AbortSignal) =>
+    chamar<import('./matrix').RevisaoMatrix[]>(rotaMatrix(alvo), { token, signal }),
+  editarMatrix: (token: string, edicao: import('./matrix').EdicaoMatrix, aplicar = false) =>
+    chamar<import('./matrix').ResultadoMatrix>(`${rotaMatrix(edicao.documento)}?aplicar=${aplicar}`, { token, metodo: 'PUT', corpo: edicao }),
   configuracaoDoPush: (token: string, signal?: AbortSignal) =>
     chamar<{ disponivel: boolean; chavePublica: string | null }>('/api/remoto/push', { token, signal }),
   assinarPush: (token: string, corpo: PushSubscriptionJSON) =>
@@ -155,6 +162,9 @@ export const api = {
     (await requisitar(caminho, { token, signal, aceita: 'image/png' })).blob(),
   conversaRemota: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/conversa`, { token, signal }),
+  /** (semana 7) A conversa com o agente de UMA task da máquina: a sessão é o id da execução no retrato. */
+  conversaDaTask: (token: string, maquina: string, sessao: string, signal?: AbortSignal) =>
+    chamar<ConversaRemota>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/sessoes/${encodeURIComponent(sessao)}/conversa`, { token, signal }),
   /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
   enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
     chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),

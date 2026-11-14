@@ -65,4 +65,13 @@ public sealed class EsquemaDoBancoTests
     {
         Assert.Empty(new EsquemaDoBanco().Descrever());
     }
+
+    [Fact]
+    public void Base_anterior_a_matrix_indica_o_script_sem_exigir_migracao_destrutiva()
+    {
+        var modelo = Modelo();
+        var existentes = ColunasDoModelo(modelo).Where(c => c.Tabela != "RevisoesMatrix");
+        var falta = Assert.Single(EsquemaDoBanco.Comparar(modelo, existentes));
+        Assert.Equal("a tabela RevisoesMatrix (Matrix.sql)", falta.ToString());
+    }
 }

@@ -81,7 +81,9 @@ public sealed class ConversaRemota(
             CriadoEmUtc = agora,
             ExpiraEmUtc = agora.Add(RegrasDaConversa.Ttl(pedido.TtlSegundos, cfg)),
             AtualizadoEmUtc = agora,
-            Contexto = pedido.Fluxo is > 0 ? JsonSerializer.Serialize(new ContextoDoComando(pedido.Fluxo, pedido.Agente, pedido.Parametros), Json) : string.Empty,
+            // (semana 7) A task de destino vai no mesmo JSON, sem coluna: a conversa da task a acha pelo trecho "sessao".
+            Contexto = pedido.Fluxo is > 0 || pedido.Sessao is not null
+                ? JsonSerializer.Serialize(new ContextoDoComando(pedido.Fluxo, pedido.Agente, pedido.Parametros, pedido.Sessao), Json) : string.Empty,
         };
         db.ComandosRemotos.Add(comando);
         try
@@ -131,7 +133,7 @@ public sealed class ConversaRemota(
         var mensagem = JsonSerializer.Serialize(new MensagemDaFilaV1(RemotoV1.Contrato, comando.ComandoId, comando.MaquinaId, comando.Tipo, comando.Texto,
             ConversaV1.OrigemRemoto, comando.Dispositivo, DevKitPageDb.Utc(comando.CriadoEmUtc), DevKitPageDb.Utc(comando.ExpiraEmUtc),
             comando.Tipo == ConversaV1.ComandoReiniciar && confirmarReinicio, contexto?.Fluxo, contexto?.Agente,
-            contexto?.Parametros is { Count: > 0 } parametros ? parametros : null), JsonDaFila);
+            contexto?.Parametros is { Count: > 0 } parametros ? parametros : null, contexto?.Sessao), JsonDaFila);
         string? erro = null;
         try
         {
@@ -171,13 +173,42 @@ public sealed class ConversaRemota(
         await ExpirarVencidosAsync(usuarioId, ct);
         // O último evento ANTES do histórico: o que mudar entre as duas leituras chega de novo pelo SSE (o site junta pelo id).
         var ultimo = await db.EventosDaConversa.AsNoTracking().Where(e => e.UsuarioId == usuarioId).MaxAsync(e => (long?)e.Id, ct) ?? 0;
-        var comandos = await db.ComandosRemotos.AsNoTracking().Where(c => c.UsuarioId == usuarioId && c.MaquinaId == maquinaId)
+        // (semana 7) O chat do Orquestrador não mostra a conversa das tasks: nem as mensagens com destino, nem as falas delas.
+        var comandos = await db.ComandosRemotos.AsNoTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == maquinaId && !c.Contexto.Contains(TrechoDoDestino))
             .OrderByDescending(c => c.CriadoEmUtc).ThenByDescending(c => c.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         var respostas = await db.RespostasRemotas.AsNoTracking().Where(r => r.UsuarioId == usuarioId && r.MaquinaId == maquinaId)
             .OrderByDescending(r => r.RecebidaEmUtc).ThenByDescending(r => r.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
         // As falas na ordem em que foram ditas: a que chega atrasada (o reenvio do dev.kit) entra no lugar dela.
-        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId)
+        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId && f.Sessao == "")
             .OrderByDescending(f => f.DitaEmUtc).ThenByDescending(f => f.Id).Take(ConversaV1.MaximoDoHistorico).ToListAsync(ct);
+        return new ConversaDaMaquinaV1(
+            comandos.AsEnumerable().Reverse().Select(Leitura).ToArray(),
+            respostas.AsEnumerable().Reverse().Select(Leitura).ToArray(),
+            ultimo,
+            falas.AsEnumerable().Reverse().Select(Leitura).ToArray());
+    }
+
+    /// <summary>O trecho do <see cref="ComandoRemoto.Contexto"/> da mensagem com destino a uma task.</summary>
+    private const string TrechoDoDestino = "\"sessao\":\"";
+
+    public async Task<ConversaDaMaquinaV1?> ConversaDaTaskAsync(int usuarioId, string maquinaId, string sessao, CancellationToken ct)
+    {
+        if (!await db.MaquinasRemotas.AsNoTracking().AnyAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == maquinaId, ct))
+            return null;
+        await ExpirarVencidosAsync(usuarioId, ct);
+        var ultimo = await db.EventosDaConversa.AsNoTracking().Where(e => e.UsuarioId == usuarioId).MaxAsync(e => (long?)e.Id, ct) ?? 0;
+        // A sessão já foi validada (letras, dígitos e hífen): o trecho do JSON não escapa nada.
+        var destino = TrechoDoDestino + sessao + "\"";
+        var comandos = await db.ComandosRemotos.AsNoTracking()
+            .Where(c => c.UsuarioId == usuarioId && c.MaquinaId == maquinaId && c.Contexto.Contains(destino))
+            .OrderByDescending(c => c.CriadoEmUtc).ThenByDescending(c => c.Id).Take(ConversaV1.MaximoDaConversaDaTask).ToListAsync(ct);
+        var ids = comandos.Select(c => c.ComandoId).ToArray();
+        var respostas = await db.RespostasRemotas.AsNoTracking()
+            .Where(r => r.UsuarioId == usuarioId && r.MaquinaId == maquinaId && ids.Contains(r.ComandoId))
+            .OrderByDescending(r => r.RecebidaEmUtc).ThenByDescending(r => r.Id).Take(ConversaV1.MaximoDaConversaDaTask).ToListAsync(ct);
+        var falas = await db.FalasRemotas.AsNoTracking().Where(f => f.UsuarioId == usuarioId && f.MaquinaId == maquinaId && f.Sessao == sessao)
+            .OrderByDescending(f => f.DitaEmUtc).ThenByDescending(f => f.Id).Take(ConversaV1.MaximoDaConversaDaTask).ToListAsync(ct);
         return new ConversaDaMaquinaV1(
             comandos.AsEnumerable().Reverse().Select(Leitura).ToArray(),
             respostas.AsEnumerable().Reverse().Select(Leitura).ToArray(),
@@ -317,6 +348,7 @@ public sealed class ConversaRemota(
             ComandoId = fala.ComandoId ?? string.Empty,
             DitaEmUtc = fala.DitaEm.UtcDateTime,
             Anexos = fala.Anexos is { Count: > 0 } anexos ? JsonSerializer.Serialize(anexos, Json) : string.Empty,
+            Sessao = fala.Sessao ?? string.Empty,
         };
         if (await FalaGravadaAsync(linha, ct) is { } gravada)
             return gravada;
@@ -358,7 +390,7 @@ public sealed class ConversaRemota(
         if (gravada is null)
             return null;
         if (gravada.Autor != nova.Autor || gravada.Origem != nova.Origem || gravada.Texto != nova.Texto || gravada.ComandoId != nova.ComandoId
-            || gravada.Anexos != nova.Anexos)
+            || gravada.Anexos != nova.Anexos || gravada.Sessao != nova.Sessao)
             return ResultadoDaConversa<FalaRecebidaV1>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outra fala desta máquina. Mande a fala nova com outro id.");
         return new(new FalaRecebidaV1(gravada.FalaId, Repetida: true, DevKitPageDb.Utc(gravada.RecebidaEmUtc)));
     }
@@ -429,14 +461,15 @@ public sealed class ConversaRemota(
         => new(c.ComandoId, c.MaquinaId, c.Tipo, c.Texto, c.Dispositivo, c.Estado, DevKitPageDb.Utc(c.CriadoEmUtc), DevKitPageDb.Utc(c.ExpiraEmUtc),
             c.EntregueEmUtc is { } entregue ? DevKitPageDb.Utc(entregue) : null,
             c.ConcluidoEmUtc is { } concluido ? DevKitPageDb.Utc(concluido) : null,
-            c.Erro);
+            c.Erro, c.Contexto.Contains(TrechoDoDestino, StringComparison.Ordinal) ? JsonSerializer.Deserialize<ContextoDoComando>(c.Contexto, Json)?.Sessao : null);
 
     internal static RespostaRemotaV1 Leitura(RespostaRemota r)
         => new(r.RespostaId, r.MaquinaId, r.ComandoId.Length == 0 ? null : r.ComandoId, r.Tipo, r.Texto, DevKitPageDb.Utc(r.GeradaEmUtc), DevKitPageDb.Utc(r.RecebidaEmUtc));
 
     internal static FalaRemotaV1 Leitura(FalaRemota f)
         => new(f.FalaId, f.MaquinaId, f.Autor, f.Origem, f.Texto, f.ComandoId.Length == 0 ? null : f.ComandoId, DevKitPageDb.Utc(f.DitaEmUtc),
-            DevKitPageDb.Utc(f.RecebidaEmUtc), f.Anexos.Length == 0 ? null : JsonSerializer.Deserialize<AnexoDaFalaV1[]>(f.Anexos, Json));
+            DevKitPageDb.Utc(f.RecebidaEmUtc), f.Anexos.Length == 0 ? null : JsonSerializer.Deserialize<AnexoDaFalaV1[]>(f.Anexos, Json),
+            f.Sessao.Length == 0 ? null : f.Sessao);
 }
 
 /// <summary>A retenção da conversa (<see cref="OpcoesDoRemoto.RetencaoDaConversaDias"/>): o comando, a resposta, a fala e o evento, pela data deles.</summary>

@@ -23,8 +23,17 @@ public interface IConversaRemota
     /// <summary>O comando do usuário; nulo quando não é dele.</summary>
     Task<ComandoRemotoV1?> ComandoAsync(int usuarioId, string comandoId, CancellationToken ct);
 
-    /// <summary>O histórico com a máquina e o último evento; nulo quando a máquina não é do usuário.</summary>
+    /// <summary>
+    /// O histórico com a máquina (o chat do Orquestrador) e o último evento; nulo quando a máquina não é do usuário. (semana 7)
+    /// Sem as falas e as mensagens das tasks: essas vão na <see cref="ConversaDaTaskAsync"/>.
+    /// </summary>
     Task<ConversaDaMaquinaV1?> ConversaAsync(int usuarioId, string maquinaId, CancellationToken ct);
+
+    /// <summary>
+    /// (semana 7) A conversa com o agente de UMA task da máquina: as últimas falas dela (<see cref="ConversaV1.MaximoDaConversaDaTask"/>),
+    /// as mensagens que o site mandou a ela e as respostas a essas mensagens; nulo quando a máquina não é do usuário.
+    /// </summary>
+    Task<ConversaDaMaquinaV1?> ConversaDaTaskAsync(int usuarioId, string maquinaId, string sessao, CancellationToken ct);
 
     /// <summary>Os eventos do usuário depois de <paramref name="depoisDe"/> (de uma máquina, ou de todas), os mais antigos primeiro.</summary>
     Task<IReadOnlyList<EventoDaConversaV1>> EventosAsync(int usuarioId, string? maquinaId, long depoisDe, int maximo, CancellationToken ct);
@@ -168,8 +177,28 @@ public static class RegrasDaConversa
             return $"O dispositivo é um de: {string.Join(", ", ConversaV1.Dispositivos)}.";
         if (comando.TtlSegundos is { } ttl && (ttl < TtlMinimo(opcoes) || ttl > TtlMaximo(opcoes)))
             return $"O ttlSegundos vai de {TtlMinimo(opcoes)} a {TtlMaximo(opcoes)}.";
-        return ValidarFluxo(comando, tipo);
+        return ValidarDestino(comando, tipo) is { Length: > 0 } destino ? destino : ValidarFluxo(comando, tipo);
     }
+
+    /// <summary>
+    /// (semana 7) A task de destino da mensagem: só na mensagem, sem fluxo (o fluxo abre execução, e a conversa da task não
+    /// abre), com o id da execução do retrato. Vazio quando vale ou quando não há destino.
+    /// </summary>
+    private static string ValidarDestino(ComandoNovoV1 comando, string tipo)
+    {
+        if (comando.Sessao is null)
+            return string.Empty;
+        if (tipo != ConversaV1.ComandoMensagem)
+            return "A task de destino (sessao) vai só na mensagem.";
+        if (!SessaoValida(comando.Sessao))
+            return $"A sessao é o id da execução: letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
+        if (comando.Fluxo is not null || comando.Agente is not null || comando.Parametros is { Count: > 0 })
+            return "A mensagem à task não leva fluxo, agente nem parâmetros: eles abrem execução, e a conversa da task é só texto.";
+        return string.Empty;
+    }
+
+    /// <summary>(semana 7) O id da task (a execução do retrato) na conversa: a regra do id do comando.</summary>
+    public static bool SessaoValida(string? sessao) => IdValido(sessao);
 
     /// <summary>
     /// (correções do board remoto) O fluxo escolhido no chat: só na mensagem, com id positivo; o agente (<c>cli</c> ou
@@ -284,6 +313,14 @@ public static class RegrasDaConversa
             return $"O comandoId usa letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
         if (origem == ConversaV1.OrigemRemoto && string.IsNullOrEmpty(fala.ComandoId))
             return "A fala de origem remoto diz de qual comando veio (comandoId).";
+        // (semana 7) O agente fala só na conversa de uma task; o Orquestrador, só fora dela.
+        var autor = RegrasDoRemoto.Normalizar(fala.Autor);
+        if (fala.Sessao is not null && !SessaoValida(fala.Sessao))
+            return $"A sessao é o id da execução: letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
+        if (autor == ConversaV1.AutorAgente && fala.Sessao is null)
+            return "A fala do agente diz de qual task é (sessao).";
+        if (autor == ConversaV1.AutorOrquestrador && fala.Sessao is not null)
+            return "A fala do Orquestrador não é de uma task: mande-a sem sessao.";
         var texto = (fala.Texto ?? string.Empty).Trim();
         if (texto.Length == 0)
             return "Escreva a fala.";
