@@ -9,7 +9,7 @@ async function abrirCelula(page: Page, largura: number, layer = 'Page') {
   if (largura === 390) await page.getByRole('button', { name: 'Abrir editor completo →' }).click();
 }
 
-test('Matrix: persistência, concorrência real, mapa e recorte nas duas larguras', async ({ page, request }) => {
+test('Matrix: persistência, concorrência real, mapa e recorte nas duas larguras', async ({ page, request }, info) => {
   const c = await prepararMatrix(request);
   await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), c.sessao);
   let versao = 4;
@@ -22,9 +22,29 @@ test('Matrix: persistência, concorrência real, mapa e recorte nas duas largura
     await page.getByRole('button', { name: 'Minha task', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Matriz de impacto × API · imp-0-2' }).filter({ visible: true })).toBeVisible();
     const dimensoes = await page.evaluate(() => ({ viewport: innerWidth, documento: document.documentElement.scrollWidth,
-      excedentes: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && e.getBoundingClientRect().width > 0)
-        .slice(0, 10).map(e => ({ tag: e.tagName, classe: String(e.className), direita: e.getBoundingClientRect().right })) }));
+      excedentes: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right + scrollX > innerWidth && e.getBoundingClientRect().width > 0)
+        .slice(0, 10).map(e => ({ tag: e.tagName, classe: String(e.className), direita: e.getBoundingClientRect().right + scrollX })) }));
     expect(dimensoes.documento, JSON.stringify(dimensoes)).toBeLessThanOrEqual(dimensoes.viewport);
+    if (width === 390) {
+      const acesso = page.getByRole('form', { name: 'Dar acesso' });
+      await expect(acesso).toBeVisible();
+      // Uma fonte larga exercita o tamanho intrínseco dos selects em qualquer sistema operacional.
+      const fonte = await page.addStyleTag({ content: '.design-acesso-dar { font-family: monospace; }' });
+      try {
+        const papel = acesso.getByRole('combobox', { name: 'Papel do acesso' });
+        await papel.selectOption('editor');
+        await expect(papel).toHaveValue('editor');
+        await expect(papel.getByRole('option', { name: 'Editor — altera, aprova e dispara', exact: true })).toHaveCount(1);
+        const limites = await acesso.locator('select').evaluateAll(controles => controles.map(e => ({
+          direita: e.getBoundingClientRect().right, limite: e.parentElement!.getBoundingClientRect().right,
+        })));
+        for (const limite of limites) expect(limite.direita, JSON.stringify(limite)).toBeLessThanOrEqual(limite.limite);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await acesso.screenshot({ path: info.outputPath('acesso-390-fonte-larga.png') });
+        await papel.selectOption('leitor');
+      } finally { await fonte.evaluate(e => e.parentNode?.removeChild(e)); }
+      await page.screenshot({ path: info.outputPath('projeto-matrix-390.png'), fullPage: true });
+    }
     await abrirCelula(page, width);
     const d = page.getByRole('dialog').last();
     await expect(d).toBeVisible();

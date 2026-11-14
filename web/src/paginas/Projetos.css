@@ -9,6 +9,7 @@
 .projeto-resumo progress { width: 100%; height: 6px; accent-color: #4ade80; }
 .projeto-detalhe { min-width: 0; }
 .projeto-detalhe h2 { margin-top: 0; }
+.projeto-detalhe .design-acesso-dar select { min-width: 0; max-width: 100%; }
 .projeto-branch, .projeto-item code { display: block; font-size: .75rem; overflow-wrap: anywhere; }
 .projeto-situacoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
 .projeto-situacao { border-radius: 8px; padding: 7px 10px; background: rgb(128 128 128 / .1); font-size: .75rem; }
