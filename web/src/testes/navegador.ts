@@ -74,6 +74,8 @@ export function instalarNavegador() {
   });
   Object.defineProperty(window, 'IntersectionObserver', { configurable: true, value: ObservadorDeMentira });
   Object.defineProperty(globalThis, 'IntersectionObserver', { configurable: true, value: ObservadorDeMentira });
+  // O jsdom não abre dialog nativo; Board e editores usam o mesmo comportamento de teste.
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLMediaElement.prototype.load = vi.fn();
   HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve());
   HTMLMediaElement.prototype.pause = vi.fn();

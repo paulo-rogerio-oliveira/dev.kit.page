@@ -163,7 +163,7 @@ public static class RemotoV1
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
     public static IReadOnlyList<string> RecursosDaApi { get; } =
-        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, RecursoConversaDaTask];
+        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask];
 
     /// <summary>
     /// (semana 7) A API guarda as falas POR TASK (<see cref="FalaDoDevKitV1.Sessao"/>), as devolve na conversa da task

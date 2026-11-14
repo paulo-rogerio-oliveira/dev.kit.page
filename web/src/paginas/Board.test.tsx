@@ -49,9 +49,11 @@ describe('Board remoto · conversa da task (semana 7, item 4)', () => {
   it('a task conversável abre o chat DELA com as últimas falas, e a mensagem vai só como texto com o destino', async () => {
     responder();
     let enviado: Record<string, unknown> | undefined;
+    const pedidos: Record<string, unknown>[] = [];
     const agora = Date.now();
     servidor.use(
       http.get(`${API}/api/remoto/maquinas/:id/retrato`, ({ params }) => HttpResponse.json(comTask(maquina(String(params.id))))),
+      http.get(`${API}/api/matrix`, () => HttpResponse.json([])),
       http.get(`${API}/api/remoto/maquinas/:id/sessoes/:sessao/conversa`, ({ params }) => HttpResponse.json({
         comandos: [], respostas: [], ultimoEvento: 0, falas: params.sessao !== 'exec-7a1' ? [] : [
           { id: 'ft-1', maquinaId: 'notebook', autor: 'dev', origem: 'desktop', texto: 'Comece pelo contrato da API.', comandoId: null, ditaEm: new Date(agora - 120_000).toISOString(), recebidaEm: new Date().toISOString(), sessao: 'exec-7a1' },
@@ -60,8 +62,9 @@ describe('Board remoto · conversa da task (semana 7, item 4)', () => {
       })),
       http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
         enviado = await request.json() as Record<string, unknown>;
-        return HttpResponse.json({ id: enviado.id, maquinaId: 'notebook', tipo: 'mensagem', texto: enviado.texto, dispositivo: 'navegador', estado: 'na-fila',
-          criadoEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 600_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '', sessao: 'exec-7a1' }, { status: 202 });
+        pedidos.push(enviado);
+        return HttpResponse.json({ id: enviado.id, maquinaId: 'notebook', tipo: enviado.tipo, texto: enviado.texto, dispositivo: 'navegador', estado: 'na-fila',
+          criadoEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 600_000).toISOString(), entregueEm: null, concluidoEm: null, erro: '', sessao: enviado.sessao ?? null }, { status: 202 });
       }),
     );
     renderizar('/board', tokenDoDev());
@@ -69,6 +72,14 @@ describe('Board remoto · conversa da task (semana 7, item 4)', () => {
     // A execução do dev.kit antigo não abre conversa: fica como antes, só informativa.
     expect(await board.findByText('Execução do dev.kit antigo')).toBeInTheDocument();
     expect(board.queryByRole('button', { name: 'Conversar com a task Execução do dev.kit antigo' })).not.toBeInTheDocument();
+
+    // Impactos mantém sua ação própria: abrir o recorte não abre a conversa nem envia mensagem.
+    await userEvent.click(board.getAllByRole('button', { name: 'Impactos' })[0]);
+    const impactos = within(await screen.findByRole('dialog', { name: 'Impactos da task' }));
+    expect(await impactos.findByText(/Nenhum recorte vinculado/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Conversa da task Item 4 · chat da task' })).not.toBeInTheDocument();
+    expect(pedidos.filter(p => p.tipo !== 'catalogo')).toEqual([]);
+    await userEvent.click(impactos.getByRole('button', { name: 'Fechar painel' }));
 
     await userEvent.click(board.getByRole('button', { name: 'Conversar com a task Item 4 · chat da task' }));
     const chat = within(await screen.findByRole('region', { name: 'Conversa da task Item 4 · chat da task' }));

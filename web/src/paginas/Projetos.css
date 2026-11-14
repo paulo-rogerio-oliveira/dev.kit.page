@@ -9,6 +9,7 @@
 .projeto-resumo progress { width: 100%; height: 6px; accent-color: #4ade80; }
 .projeto-detalhe { min-width: 0; }
 .projeto-detalhe h2 { margin-top: 0; }
+.projeto-detalhe .design-acesso-dar select { min-width: 0; max-width: 100%; }
 .projeto-branch, .projeto-item code { display: block; font-size: .75rem; overflow-wrap: anywhere; }
 .projeto-situacoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
 .projeto-situacao { border-radius: 8px; padding: 7px 10px; background: rgb(128 128 128 / .1); font-size: .75rem; }
@@ -24,3 +25,7 @@
 .projeto-item span, .projeto-item p, .projeto-item small { font-size: .75rem; }
 .projetos-nota { opacity: .65; font-size: .75rem; margin-top: 20px; }
 @media (max-width: 850px) { .projetos-board { grid-template-columns: 1fr; } .projetos-lista { flex-direction: row; overflow-x: auto; } .projeto-resumo { min-width: 240px; } }
+@media (max-width: 700px) {
+  .projeto-detalhe .design-acesso-lista li { flex-wrap: wrap; }
+  .projeto-detalhe .design-acesso-lista .login-com-iniciais { min-width: 0; overflow-wrap: anywhere; }
+}

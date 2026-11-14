@@ -20,6 +20,7 @@ import { DesfechoDaCriacao, ehGerarArtefato, NovoDesignNoBoard, NovoProjetoNoBoa
 import { ArtefatosDoCard, useArtefatosDoBoard } from '../componentes/ArtefatosDoProjeto';
 import type { Artefato } from '../api/projetos';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
+import { ImpactosDaTask } from '../componentes/matrix/Impactos';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
@@ -62,7 +63,7 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]>; abrirTask: (id: string) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todosOsDesigns, setTodosOsDesigns] = useState(false);
@@ -145,11 +146,14 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
         <div><span>{f.nome}</span>{f.etapa && <small>{f.etapa}{f.agente ? ` · ${f.agente}` : ''}</small>}</div>
         <span className={`br-chip${f.situacao === 'fila' || f.situacao === 'na-fila' ? ' br-warn' : ''}`}>{f.situacao === 'fila' || f.situacao === 'na-fila' ? 'na fila' : f.situacao}</span>
       </>;
-      // (semana 7, item 4) A task que aceita conversa (o dev.kit novo) abre o chat dela; a do dev.kit antigo fica só informativa.
-      return f.conversavel
-        ? <button type="button" className="br-item br-item-task" key={f.id} onClick={() => abrirTask(f.id)} aria-label={`Conversar com a task ${f.nome}`}
-            title="Abrir a conversa com o agente desta task">{conteudo}</button>
-        : <div className="br-item" key={f.id}>{conteudo}</div>;
+      // Conversa e Impactos são ações independentes da mesma task, sem controles interativos aninhados.
+      return <div className="br-item" key={f.id}>
+        {f.conversavel
+          ? <button type="button" className="br-item-task" onClick={() => abrirTask(f.id)} aria-label={`Conversar com a task ${f.nome}`}
+              title="Abrir a conversa com o agente desta task">{conteudo}</button>
+          : conteudo}
+        <ImpactosDaTask maquina={foto!.maquina.maquinaId} sessao={f.id} projeto={f.projeto} item={f.item} solicitar={motivo => solicitarImpactos(f.id, motivo)} />
+      </div>;
     })}</section>}
     <VerMais total={execucoes.length} todos={todasAsExecucoes} alternar={() => setTodasAsExecucoes(t => !t)} />
     {!execucoes.length && <p className="br-note">{recebidas.length ? 'Nenhuma execução neste período.' : 'Nenhuma execução recebida.'}</p>}
@@ -377,7 +381,11 @@ export function Board() {
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
-          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} abrirTask={abrirTask} />}
+          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} abrirTask={abrirTask}
+          solicitarImpactos={(id, motivo) => {
+            void conversa.enviar(`${motivo ?? 'Revisar explicitamente a matriz de impactos'} da task ${id}: novo impacto a apurar. Preserve as atribuições das demais tasks e os portões existentes.`)
+              .then(enviado => avisar(enviado ? 'Pedido de revisão da matriz enviado ao Orquestrador.' : 'Pedido não enviado. Confira a conexão e tente novamente.'));
+          }} />}
         {/* A chave é própria: o ConteudoDoBoard, irmão dele, já usa a da máquina. */}
         {maquina && <VinculoDoServico key={`vinculo-${selecionada}`} maquina={maquina} desvincular={desvincular} />}
         <HistoricoDeAvisos avisos={avisos} />
