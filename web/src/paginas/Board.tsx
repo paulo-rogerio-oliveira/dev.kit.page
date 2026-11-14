@@ -66,6 +66,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todosOsDesigns, setTodosOsDesigns] = useState(false);
   const [todasAsExecucoes, setTodasAsExecucoes] = useState(false);
+  const [projetoDasExecucoes, setProjetoDasExecucoes] = useState('');
   const [vistas, setVistas] = useState<'pendentes' | 'dispensadas'>('pendentes');
   const [ampliada, setAmpliada] = useState<{ titulo: string; link: string } | null>(null);
   // (ajuste 8) O painel lista os projetos em andamento; o "Mostrar concluídos" traz os concluídos e os em fechamento.
@@ -75,7 +76,10 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
   const projetos = comConcluidos ? todosOsRecebidos : todosOsRecebidos.filter(p => !projetoTerminando(p.situacao));
   const recebidas = retrato?.fluxos ?? [];
   // O filtro de dia vale para as execuções; as pendências nunca são escondidas por data — só a que o dev fechou no site.
-  const execucoes = filtrarPorDia(recebidas, periodo, agora);
+  const noPeriodo = filtrarPorDia(recebidas, periodo, agora);
+  const projetosEmExecucao = [...new Set(recebidas.map(f => f.projeto).filter((p): p is string => !!p))].sort();
+  const projetoAtivo = projetoDasExecucoes === '-' || projetosEmExecucao.includes(projetoDasExecucoes) ? projetoDasExecucoes : '';
+  const execucoes = noPeriodo.filter(f => !projetoAtivo || (f.projeto || '-') === projetoAtivo);
   const todas = retrato?.pendencias ?? [];
   const abertas = todas.filter(p => !dispensadas.has(p.id));
   const fechadas = todas.filter(p => dispensadas.has(p.id));
@@ -139,12 +143,21 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     {!designs.length && <p className="br-note">Nenhum projeto de design no catálogo da máquina.</p>}
     <p className="br-note">Criar pelo site vira um pedido na fila: o dev.kit executa como o devcli e devolve o resultado aqui. Aprovar e disparar continuam no dev.kit.</p>
     <h2>Executando · {execucoes.length}<span className="br-periodo"> {periodosDoDia.find(p => p.valor === periodo)!.rotulo.toLowerCase()}</span></h2>
+    {projetosEmExecucao.length > 0 && <label className="br-projeto-execucoes">Projetos em execução
+      <select value={projetoAtivo} onChange={e => { setProjetoDasExecucoes(e.target.value); setTodasAsExecucoes(false); }}>
+        <option value="">Todos os projetos · {noPeriodo.length}</option>
+        {projetosEmExecucao.map(slug => <option key={slug} value={slug}>
+          {todosOsRecebidos.find(p => p.slug === slug)?.nome ?? slug} · {noPeriodo.filter(f => f.projeto === slug).length}
+        </option>)}
+        {recebidas.some(f => !f.projeto) && <option value="-">Sem projeto · {noPeriodo.filter(f => !f.projeto).length}</option>}
+      </select>
+    </label>}
     {!!execucoes.length && <section className="br-card">{(todasAsExecucoes ? execucoes : execucoes.slice(0, primeirasEntradas)).map(f => <div className="br-item" key={f.id}>
       <div><span>{f.nome}</span>{f.etapa && <small>{f.etapa}{f.agente ? ` · ${f.agente}` : ''}</small>}</div>
       <span className={`br-chip${f.situacao === 'fila' || f.situacao === 'na-fila' ? ' br-warn' : ''}`}>{f.situacao === 'fila' || f.situacao === 'na-fila' ? 'na fila' : f.situacao}</span>
     </div>)}</section>}
     <VerMais total={execucoes.length} todos={todasAsExecucoes} alternar={() => setTodasAsExecucoes(t => !t)} />
-    {!execucoes.length && <p className="br-note">{recebidas.length ? 'Nenhuma execução neste período.' : 'Nenhuma execução recebida.'}</p>}
+    {!execucoes.length && <p className="br-note">{projetoAtivo ? 'Nenhuma execução deste projeto no período.' : recebidas.length ? 'Nenhuma execução neste período.' : 'Nenhuma execução recebida.'}</p>}
     <p className="br-note">Última atualização {idade(retrato?.geradoEm, agora)}.</p>
   </>;
 }
