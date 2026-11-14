@@ -106,6 +106,33 @@ describe('Board remoto · conversa da task (semana 7, item 4)', () => {
 });
 
 describe('Board remoto', () => {
+  it('selecionar projeto lista somente suas execuções e mantém as avulsas acessíveis', async () => {
+    responder();
+    const foto = retrato();
+    foto.retrato.projetos = [
+      { slug: 'alpha', nome: 'Projeto Alpha', situacao: 'aprovado', ondaAtual: 1, itens: [] },
+      { slug: 'beta', nome: 'Projeto Beta', situacao: 'aprovado', ondaAtual: 1, itens: [] },
+    ];
+    foto.retrato.fluxos = [
+      { id: 'a', nome: 'Task Alpha', etapa: 'Implementação', situacao: 'rodando', projeto: 'alpha' },
+      { id: 'b', nome: 'Task Beta', etapa: 'Implementação', situacao: 'rodando', projeto: 'beta' },
+      { id: 'c', nome: 'Task Avulsa', etapa: 'Implementação', situacao: 'rodando' },
+    ];
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => HttpResponse.json(foto)));
+    renderizar('/board', tokenDoDev());
+    const projetos = await screen.findByRole('combobox', { name: 'Projetos em execução' });
+    await userEvent.selectOptions(projetos, 'alpha');
+    expect(screen.getByText('Task Alpha')).toBeInTheDocument();
+    expect(screen.queryByText('Task Beta')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task Avulsa')).not.toBeInTheDocument();
+    await userEvent.selectOptions(projetos, '-');
+    expect(screen.getByText('Task Avulsa')).toBeInTheDocument();
+    expect(screen.queryByText('Task Alpha')).not.toBeInTheDocument();
+    await userEvent.selectOptions(projetos, '');
+    expect(screen.getByText('Task Alpha')).toBeInTheDocument();
+    expect(screen.getByText('Task Beta')).toBeInTheDocument();
+  });
+
   it('preserva a notificação após login e recusa destino externo', () => {
     expect(destinoDa(tokenDoDev(), '/board?notificacao=' + 'a'.repeat(32))).toBe('/board?notificacao=' + 'a'.repeat(32));
     expect(destinoDa(tokenDoDev(), '//evil.test/board')).toBe('/conta');
