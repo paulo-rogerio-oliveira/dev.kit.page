@@ -7,6 +7,14 @@
 .br-mensagens.br-conversa {flex-direction:column; align-items:stretch; justify-content:flex-start; padding:20px 24px; gap:12px; overflow:auto}
 .br-dia {text-align:center; color:var(--muted); font-size:11px; margin:0 0 4px; flex:none}
 .br-chat-vazio {margin:auto; color:var(--muted); text-align:center}
+.br-turno-ativo {display:flex; gap:12px; width:min(100%,800px); align-self:flex-start; flex:none; padding:8px 0; box-sizing:border-box}
+.br-turno-spinner {flex:none; width:24px; height:24px; border:2px solid var(--tint); border-right-color:var(--accent); border-bottom-color:var(--accent); border-radius:50%; animation:br-girar 1s linear infinite}
+.br-turno-fim {flex:none; width:24px}
+.br-turno-corpo {flex:1; min-width:0; display:flex; flex-direction:column; gap:8px}
+.br-turno-titulo {font-size:12px; color:var(--accent)}
+.br-turno-estado {font-size:12px; line-height:1.4; color:var(--muted); margin:0; overflow-wrap:anywhere}
+.board-remoto .br-cancelar-turno {align-self:flex-end; color:var(--accent); border-color:var(--needline); min-height:32px}
+@media (prefers-reduced-motion:reduce) {.br-turno-spinner {animation:none}}
 .br-msg {align-self:flex-start; width:fit-content; max-width:min(88%,760px); border:1px solid var(--line); border-radius:11px; background:var(--surface); padding:10px 12px; color:var(--ink); flex:none; overflow-wrap:anywhere}
 .br-msg p {font:13px/1.45 'Segoe UI',system-ui,sans-serif; margin:4px 0 0; color:var(--ink); white-space:pre-wrap}
 .br-voce {align-self:flex-end; background:var(--bluetint)}

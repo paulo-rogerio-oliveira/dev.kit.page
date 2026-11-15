@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ComandoRemoto, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
+import type { ComandoRemoto, MaquinaRemota, RetratoDaMaquina, TurnoDoChat } from '../api/remoto';
 import { useConversaRemota } from './useConversaRemota';
+import { TurnoAtivoDoChat } from './TurnoAtivoDoChat';
 
 /** Uma execução do "Executando" do retrato: a task cuja conversa abre aqui. */
 export type ExecucaoDoRetrato = NonNullable<NonNullable<RetratoDaMaquina['retrato']>['fluxos']>[number];
@@ -23,10 +24,12 @@ function estadoDaMensagem(c: ComandoRemoto): [string, boolean] {
  * o dev escreve entra na conversa da task como mensagem dele — como se digitasse na janela da task no desktop. O pedido é só
  * texto: aprovar, enviar e fazer merge seguem pelas decisões do painel.
  */
-export function ChatDaTask({ maquina, execucao, conectada, voltar }: {
+export function ChatDaTask({ maquina, execucao, conectada, voltar, turno }: {
   maquina: MaquinaRemota; execucao: ExecucaoDoRetrato; conectada: boolean; voltar: () => void;
+  turno?: TurnoDoChat;
 }) {
-  const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = useConversaRemota(maquina.maquinaId, execucao.id);
+  const conversaRemota = useConversaRemota(maquina.maquinaId, execucao.id);
+  const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
   const mensagens = useRef<HTMLDivElement>(null);
   const desabilitado = carregando || enviando;
@@ -38,7 +41,7 @@ export function ChatDaTask({ maquina, execucao, conectada, voltar }: {
       .map(f => ({ id: `f-${f.id}`, data: f.ditaEm, doDev: f.autor !== 'agente', texto: f.texto, onde: f.origem === 'remoto' ? 'pelo site' : 'no dev.kit', comando: null })),
   ].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.id.localeCompare(b.id));
   const ultima = linhas.at(-1)?.id;
-  useEffect(() => { if (mensagens.current) mensagens.current.scrollTop = mensagens.current.scrollHeight; }, [ultima, carregando]);
+  useEffect(() => { if (mensagens.current) mensagens.current.scrollTop = mensagens.current.scrollHeight; }, [ultima, carregando, turno?.id]);
   async function submeter() {
     if (desabilitado || !texto.trim()) return;
     if (await enviar(texto.trim())) setTexto('');
@@ -70,6 +73,7 @@ export function ChatDaTask({ maquina, execucao, conectada, voltar }: {
           {motivo && <p className="br-msg-status">{motivo}</p>}
         </article>;
       })}
+      <TurnoAtivoDoChat turno={turno} conversa={conversaRemota} disponivel={conectada && maquina.appAberto && !erro} />
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>

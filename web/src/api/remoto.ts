@@ -32,8 +32,12 @@ export interface RetratoDaMaquina {
       conversavel?: boolean | null;
     }> | null;
     pendencias: PendenciaRemota[] | null;
+    /** Recurso cancelar-turno-do-chat: somente turnos canceláveis publicados pelo host. */
+    turnos?: TurnoDoChat[] | null;
   };
 }
+
+export interface TurnoDoChat { id: string; desdeEm: string; sessao?: string | null }
 
 export interface PendenciaRemota {
   id: string; tipo: string; titulo: string; pergunta?: string | null; opcoes?: string[] | null;
@@ -96,7 +100,7 @@ export interface NovoDesignRemoto { repositorio: string }
  * atalhos do chat (o handshake, remote-control-v3) ou a criação de projeto e de projeto de design (item 4).
  */
 export interface ComandoNovo {
-  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | TipoDeCriacao; texto: string; dispositivo: Dispositivo;
+  id: string; maquinaId: string; tipo: 'mensagem' | 'ligar' | 'reiniciar' | 'catalogo' | 'cancelar-turno' | TipoDeCriacao; texto: string; dispositivo: Dispositivo;
   /** O usuário confirmou reiniciar com o turno em andamento (sem isto, a API responde 409 `turno-em-andamento`). */
   confirmarReinicio?: boolean;
   /** (correções do board remoto) O fluxo do catálogo escolhido no `/`, o agente `cli:modelo` e os parâmetros dele. */

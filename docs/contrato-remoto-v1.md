@@ -398,6 +398,34 @@ Campos novos, **todos opcionais**: o dev.kit e o site antigos seguem como antes 
 - **Azure SQL:** a tabela `PendenciasDispensadas` e as colunas `ComandosRemotos.Contexto`, `FalasRemotas.Anexos` e
   `RespostasDasDecisoes.Dispositivo` vêm de `api/scripts/sqlserver/BoardRemoto.sql` (idempotente). Sem configuração nova.
 
+## Cancelar o turno ativo de qualquer chat
+
+O recurso opcional `cancelar-turno-do-chat` entra em `HeartbeatRecebidoV1.recursos`. Somente após esse anúncio o host
+publica `retrato.turnos`: até um turno por conversa, no máximo 101 (100 execuções e o Orquestrador).
+Cada entrada tem `{ "id": "turno-<identidade opaca>", "desdeEm": "<UTC>", "sessao": "exec-<id>" }`;
+`sessao` ausente/nula identifica o Orquestrador, e na task corresponde a uma execução `conversavel` do mesmo retrato.
+A identidade muda em cada turno, também após restauração ou troca de agente. A lista é substituída a cada retrato;
+ausente significa host sem suporte. Não publicar caminhos, prompt ou id interno da sessão.
+
+O site envia `POST /api/remoto/comandos` com `tipo: "cancelar-turno"`, `texto` igual ao id do turno observado e
+`sessao` igual ao destino da entrada (ausente no Orquestrador). Usa JWT do usuário, máquina dele, origem/dispositivo,
+idempotência pelo id do comando e a mesma fila/TTL. O reenvio com outra conversa é `409 id-em-uso`.
+Não abre turno do agente e não conta no limite por hora de mensagens; mantém o limite de chamadas por minuto.
+A API exige host aberto/conectado e turno publicado para aquele destino; sem isso, `409 turno-indisponivel`.
+O host confere novamente antes de cancelar: se o turno acabou, mudou ou o pedido venceu, recusa sem cancelar outro.
+Outra instância pode receber a solicitação quando for a dona da conversa, respeitando o prazo.
+
+`202`/`na-fila` e `entregue` significam solicitação em trânsito, não cancelamento confirmado. O host usa o mesmo token
+do botão desktop e aguarda o término do turno exato; só então publica `concluido`. Sem confirmação no prazo, responde
+`recusado`, com motivo. Resposta e estado ficam duráveis e chegam pelo SSE/histórico da conversa correta. Repetir a fila
+não cancela o turno seguinte nem duplica o desfecho. Conversa, pasta e processo da task continuam disponíveis.
+
+No desktop e no Board web/celular, task e Orquestrador apresentam uma única ação textual **Cancelar** no canto inferior
+direito da mensagem ativa, abaixo da atividade. Não fica no compositor nem nas mensagens anteriores. O site mantém
+o estado de solicitação até o desfecho confirmado; sem host disponível, desabilita a ação. API/host antigos continuam
+compatíveis sem o campo opcional. Pelo devcli, a operação equivalente permanece
+`sessao --alvo <destino> --cancelar-turno --aplicar`, com consulta do recibo do host; nenhum texto do chat autoriza a parada.
+
 ## Retenção
 
 A máquina sem heartbeat nem retrato há mais de `Remoto:RetencaoDias` (padrão 30) sai do banco com o retrato, no

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ComandoRemoto, FalaRemota, MaquinaRemota, RespostaRemota } from '../api/remoto';
+import type { ComandoRemoto, FalaRemota, MaquinaRemota, RespostaRemota, TurnoDoChat } from '../api/remoto';
+import { TurnoAtivoDoChat } from './TurnoAtivoDoChat';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { AvisosDoCatalogo, ContextoDoChatRemoto, EstadoDoCatalogo, contextoVazio, fluxoDaMensagem, parametrosFaltando, textoComContexto } from './ContextoDoChatRemoto';
 import type { CatalogoDoChat } from './useCatalogoRemoto';
@@ -92,12 +93,13 @@ function semRepeticao(linhas: LinhaDoChat[]) {
  * Só a CONVERSA (remote-control-v3, item 3): as decisões e aprovações ficam no painel de decisões, com o segundo fator e o
  * SHA conferido, e os turnos automáticos e os avisos repetidos não entram.
  */
-export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo, acoes }: {
+export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo, acoes, turno }: {
   maquina: MaquinaRemota | undefined; conectada: boolean; agora: number; conversaRemota: ConversaDaMaquina;
   /** O catálogo da máquina, o MESMO do painel do Board (um handshake só por máquina). */
   catalogo: CatalogoDoChat;
   /** As ações do cabeçalho do Orquestrador (o Ligar/Reiniciar do dev.kit, proposta chat-remoto v016). */
   acoes?: ReactNode;
+  turno?: TurnoDoChat;
 }) {
   const { conversa, erro, falhaNoEnvio, carregando, enviando, enviar, recarregar } = conversaRemota;
   const [texto, setTexto] = useState('');
@@ -137,7 +139,7 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
   // A rolagem fica na última mensagem: na mensagem nova e quando a área do chat muda de altura (um aviso que entra ou sai).
   useEffect(() => {
     if (pertoDoFim.current && mensagens.current) mensagens.current.scrollTop = mensagens.current.scrollHeight;
-  }, [ultima, carregando]);
+  }, [ultima, carregando, turno?.id]);
   useEffect(() => {
     const area = mensagens.current;
     if (!area || typeof ResizeObserver === 'undefined') return;
@@ -206,6 +208,7 @@ export function ChatRemoto({ maquina, conectada, agora, conversaRemota, catalogo
           </article>
         </Fragment>;
       })}
+      <TurnoAtivoDoChat turno={turno} conversa={conversaRemota} disponivel={conectada && !!maquina?.appAberto && !erro} />
     </div>
     {falhaNoEnvio && <div className="br-chat-aviso" role="alert">{falhaNoEnvio}</div>}
     <form className="br-composer br-composer-ativo" onSubmit={e => { e.preventDefault(); void submeter(); }}>

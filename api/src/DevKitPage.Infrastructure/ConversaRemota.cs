@@ -34,11 +34,20 @@ public sealed class ConversaRemota(
 
         var existente = await db.ComandosRemotos.AsNoTracking().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
         if (existente is not null)
-            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
+            return await ReenviarAsync(existente, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, pedido.Sessao, ct);
 
         var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == pedido.MaquinaId, ct);
         if (maquina is null)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.NaoEncontrado, "Máquina não encontrada, ou não é sua.");
+        if (tipo == ConversaV1.ComandoCancelarTurno)
+        {
+            var retrato = maquina.Retrato.Length > 0 ? JsonSerializer.Deserialize<RetratoV1>(maquina.Retrato, Json) : null;
+            if (!maquina.AppAberto || maquina.UltimoHeartbeatEmUtc is not { } hb
+                || (agora - hb).TotalSeconds > RemotoV1.SegundosAteDesconectar
+                || retrato?.Turnos?.Any(t => t.Id == texto && t.Sessao == pedido.Sessao) != true)
+                return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.TurnoIndisponivel,
+                    "O turno não está disponível para cancelar nesta conversa. Atualize o Board; nenhum outro turno foi cancelado.");
+        }
         if (tipo == ConversaV1.ComandoReiniciar && maquina.TurnoEmAndamento && !pedido.ConfirmarReinicio)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.TurnoEmAndamento,
                 "Há um turno do agente em andamento nesta máquina: reiniciar o interrompe. Confirme para reiniciar assim mesmo.");
@@ -57,9 +66,10 @@ public sealed class ConversaRemota(
         // O limite por hora é de quem pode abrir turno do agente: o handshake não abre, e não conta nem é barrado por ele.
         var inicioDaJanela = agora.AddHours(-1);
         var naJanela = await db.ComandosRemotos.AsNoTracking()
-            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela && c.Tipo != ConversaV1.ComandoCatalogo)
+            .Where(c => c.UsuarioId == usuarioId && c.CriadoEmUtc > inicioDaJanela
+                && c.Tipo != ConversaV1.ComandoCatalogo && c.Tipo != ConversaV1.ComandoCancelarTurno)
             .Select(c => c.CriadoEmUtc).ToListAsync(ct);
-        if (tipo != ConversaV1.ComandoCatalogo && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
+        if (tipo is not (ConversaV1.ComandoCatalogo or ConversaV1.ComandoCancelarTurno) && RegrasDaConversa.LimiteCheio(naJanela.Count, cfg))
         {
             var espera = RegrasDaConversa.TenteEm(naJanela.Min(), agora);
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.Limite,
@@ -95,7 +105,7 @@ public sealed class ConversaRemota(
             // Dois envios com o mesmo id ao mesmo tempo: o índice único deixa um; o outro devolve o que ficou.
             db.ChangeTracker.Clear();
             var vencedor = await db.ComandosRemotos.AsNoTracking().FirstAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
-            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
+            return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, pedido.Sessao, ct);
         }
 
         return await EnfileirarAsync(comando, filaDoUsuario, novo: true, pedido.ConfirmarReinicio, ct);
@@ -107,9 +117,10 @@ public sealed class ConversaRemota(
     /// ela não é gravada, só levada na mensagem da fila.
     /// </summary>
     private async Task<ResultadoDaConversa<ComandoAceito>> ReenviarAsync(
-        ComandoRemoto existente, string maquinaId, string tipo, string texto, bool confirmarReinicio, CancellationToken ct)
+        ComandoRemoto existente, string maquinaId, string tipo, string texto, bool confirmarReinicio, string? sessao, CancellationToken ct)
     {
-        if (existente.MaquinaId != maquinaId || existente.Tipo != tipo || existente.Texto != texto)
+        var destino = existente.Contexto.Length > 0 ? JsonSerializer.Deserialize<ContextoDoComando>(existente.Contexto, Json)?.Sessao : null;
+        if (existente.MaquinaId != maquinaId || existente.Tipo != tipo || existente.Texto != texto || destino != sessao)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.IdEmUso, "Este id já é de outro comando seu. Mande o comando novo com outro id.");
         if (existente.Estado != ConversaV1.EstadoFalhou)
             return new(new ComandoAceito(Leitura(existente), Novo: false));

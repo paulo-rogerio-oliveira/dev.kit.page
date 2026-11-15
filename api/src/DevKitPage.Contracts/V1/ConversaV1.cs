@@ -174,6 +174,8 @@ public sealed record EventoDaConversaV1(
 public static class ConversaV1
 {
     public const string ComandoMensagem = "mensagem";
+    /// <summary>Cancelar o turno exato publicado no retrato: Texto é seu id e Sessao é o destino opcional.</summary>
+    public const string ComandoCancelarTurno = "cancelar-turno";
     public const string ComandoLigar = "ligar";
     public const string ComandoReiniciar = "reiniciar";
 
@@ -202,7 +204,7 @@ public static class ConversaV1
     /// de projeto e de projeto de design (o novo entra no fim).
     /// </summary>
     public static IReadOnlyList<string> TiposDeComando { get; } =
-        [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo, ComandoProjeto, ComandoDesign];
+        [ComandoMensagem, ComandoLigar, ComandoReiniciar, ComandoCatalogo, ComandoProjeto, ComandoDesign, ComandoCancelarTurno];
 
     /// <summary>Os comandos de CRIAÇÃO: o <c>texto</c> é o formulário em JSON, conferido pela API antes da fila.</summary>
     public static IReadOnlyList<string> TiposDeCriacao { get; } = [ComandoProjeto, ComandoDesign];

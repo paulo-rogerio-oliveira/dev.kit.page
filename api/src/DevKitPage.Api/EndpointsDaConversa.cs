@@ -217,6 +217,7 @@ public static class EndpointsDaConversa
             FalhaNaConversa.NaoEncontrado => (StatusCodes.Status404NotFound, (string?)null),
             FalhaNaConversa.SemFila => (StatusCodes.Status409Conflict, ConversaV1.CodigoSemFila),
             FalhaNaConversa.TurnoEmAndamento => (StatusCodes.Status409Conflict, ConversaV1.CodigoTurnoEmAndamento),
+            FalhaNaConversa.TurnoIndisponivel => (StatusCodes.Status409Conflict, "turno-indisponivel"),
             FalhaNaConversa.IdEmUso => (StatusCodes.Status409Conflict, ConversaV1.CodigoIdEmUso),
             FalhaNaConversa.OutraMaquina => (StatusCodes.Status409Conflict, ConversaV1.CodigoOutraMaquina),
             FalhaNaConversa.Limite => (StatusCodes.Status429TooManyRequests, ConversaV1.CodigoLimiteDeEnvio),

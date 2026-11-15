@@ -25,7 +25,12 @@ public sealed record HeartbeatV1(
 /// </summary>
 public sealed record RetratoV1(
     int Contrato, string MaquinaId, DateTimeOffset GeradoEm, IReadOnlyList<ProjetoNoRetratoV1>? Projetos,
-    IReadOnlyList<FluxoNoRetratoV1>? Fluxos, IReadOnlyList<PendenciaNoRetratoV1>? Pendencias);
+    IReadOnlyList<FluxoNoRetratoV1>? Fluxos, IReadOnlyList<PendenciaNoRetratoV1>? Pendencias,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<TurnoDoChatV1>? Turnos = null);
+
+/// <summary>Identidade opaca de um turno cancelável; sessão nula é a conversa do Orquestrador.</summary>
+public sealed record TurnoDoChatV1(string Id, DateTimeOffset DesdeEm, string? Sessao = null);
 
 /// <summary>Um projeto do Orquestrador no retrato: a situação (<see cref="ProjetosV1.Situacoes"/>), a onda corrente e os itens.</summary>
 public sealed record ProjetoNoRetratoV1(string Slug, string Nome, string Situacao, int OndaAtual, IReadOnlyList<ItemNoRetratoV1>? Itens);
@@ -163,7 +168,7 @@ public static class RemotoV1
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
     public static IReadOnlyList<string> RecursosDaApi { get; } =
-        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask];
+        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask, RecursoCancelarTurno];
 
     /// <summary>
     /// (semana 7) A API guarda as falas POR TASK (<see cref="FalaDoDevKitV1.Sessao"/>), as devolve na conversa da task
@@ -171,6 +176,7 @@ public static class RemotoV1
     /// (<see cref="ComandoNovoV1.Sessao"/>) na fila. Só com ele o dev.kit publica as falas da task e a marca de conversável.
     /// </summary>
     public const string RecursoConversaDaTask = "conversa-da-task";
+    public const string RecursoCancelarTurno = "cancelar-turno-do-chat";
 
     /// <summary>
     /// A API aceita o comando <see cref="ConversaV1.ComandoCatalogo"/> e guarda o catálogo da máquina

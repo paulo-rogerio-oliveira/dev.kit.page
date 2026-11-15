@@ -382,9 +382,10 @@ export function Board() {
     {/* Como no Board do dev.kit: o chat na coluna principal e o painel de auxílio à direita, na mesma ordem de leitura. */}
     <main className="br-main">
       {execucaoDaTask && maquina
-        ? <ChatDaTask key={`${selecionada}-${execucaoDaTask.id}`} maquina={maquina} execucao={execucaoDaTask} conectada={conectada} voltar={voltarAoOrquestrador} />
+        ? <ChatDaTask key={`${selecionada}-${execucaoDaTask.id}`} maquina={maquina} execucao={execucaoDaTask} conectada={conectada} voltar={voltarAoOrquestrador}
+          turno={foto?.retrato.turnos?.find(t => t.sessao === execucaoDaTask.id)} />
         : <ChatRemoto key={selecionada} maquina={maquina} conectada={conectada} agora={agora} conversaRemota={conversa} catalogo={catalogo}
-          acoes={<BotaoDoDevKit controle={controle} />} />}
+          turno={foto?.retrato.turnos?.find(t => !t.sessao)} acoes={<BotaoDoDevKit controle={controle} />} />}
       <aside className="br-side" aria-label="Board">
         <div className="br-readonly"><strong>Decisões remotas</strong><span>Fase 3</span></div>
         <Chips rotulo="Filtro de dia" opcoes={periodosDoDia} valor={periodo} aoMudar={valor => mudarParametro('dia', valor)} />

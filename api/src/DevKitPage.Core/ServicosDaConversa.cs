@@ -82,6 +82,7 @@ public enum FalhaNaConversa
 
     /// <summary>Reiniciar com o turno em andamento, sem a confirmação: 409 <c>turno-em-andamento</c>.</summary>
     TurnoEmAndamento,
+    TurnoIndisponivel,
 
     /// <summary>O reenvio com o mesmo id e outro conteúdo: 409 <c>id-em-uso</c>.</summary>
     IdEmUso,
@@ -168,6 +169,8 @@ public static class RegrasDaConversa
         var texto = (comando.Texto ?? string.Empty).Trim();
         if (tipo == ConversaV1.ComandoMensagem && texto.Length == 0)
             return "Escreva a mensagem.";
+        if (tipo == ConversaV1.ComandoCancelarTurno && (!IdValido(texto) || !texto.StartsWith("turno-", StringComparison.Ordinal)))
+            return "Informe o id do turno cancelável publicado no retrato.";
         if (texto.Length > ConversaV1.TamanhoMaximoDoTexto)
             return $"A mensagem tem até {ConversaV1.TamanhoMaximoDoTexto} caracteres.";
         if (ConversaV1.TiposDeCriacao.Contains(tipo) && RegrasDaCriacaoRemota.Validar(tipo, texto) is { Length: > 0 } formulario)
@@ -188,8 +191,8 @@ public static class RegrasDaConversa
     {
         if (comando.Sessao is null)
             return string.Empty;
-        if (tipo != ConversaV1.ComandoMensagem)
-            return "A task de destino (sessao) vai só na mensagem.";
+        if (tipo is not (ConversaV1.ComandoMensagem or ConversaV1.ComandoCancelarTurno))
+            return "A task de destino (sessao) vai só na mensagem ou no cancelamento de turno.";
         if (!SessaoValida(comando.Sessao))
             return $"A sessao é o id da execução: letras, dígitos e hífen (até {RemotoV1.TamanhoMaximoDoId}).";
         if (comando.Fluxo is not null || comando.Agente is not null || comando.Parametros is { Count: > 0 })

@@ -145,6 +145,58 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Forbidden, (await pendente.GetAsync("/api/remoto/conversa/eventos")).StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancelamento_vincula_turno_e_conversa_e_so_confirma_com_desfecho_do_host(bool daTask)
+    {
+        var (_, dev) = await DevComFilaAsync();
+        var sessao = daTask ? "exec-task" : null;
+        var retrato = new RetratoV1(1, Maquina, DateTimeOffset.UtcNow, [],
+            [new("exec-task", "Task de teste", "Implementar", "rodando", Conversavel: true)], [],
+            [new("turno-atual", DateTimeOffset.UtcNow, sessao)]);
+        (await dev.PutAsJsonAsync("/api/remoto/retrato", retrato)).EnsureSuccessStatusCode();
+        var pedido = new ComandoNovoV1("cancelar-1", Maquina, ConversaV1.ComandoCancelarTurno, "turno-atual", Sessao: sessao);
+        var outroAlvo = pedido with { Id = "alvo-errado", Sessao = daTask ? null : "exec-task" };
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", outroAlvo)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { Id = "turno-velho", Texto = "turno-anterior" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { Sessao = daTask ? null : "exec-task" })).StatusCode);
+        var (_, mensagem, _) = Assert.Single(_api.Fila.Enviadas);
+        var enfileirado = JsonSerializer.Deserialize<MensagemDaFilaV1>(mensagem, Json)!;
+        Assert.Equal((ConversaV1.ComandoCancelarTurno, "turno-atual", sessao), (enfileirado.Tipo, enfileirado.Texto, enfileirado.Sessao));
+        var antes = await dev.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/cancelar-1");
+        Assert.Equal(ConversaV1.EstadoNaFila, antes!.Estado);
+        (await dev.PostAsJsonAsync("/api/remoto/comandos/cancelar-1/recebido", new RecebimentoV1(1, Maquina))).EnsureSuccessStatusCode();
+        Assert.Equal(ConversaV1.EstadoEntregue, (await dev.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/cancelar-1"))!.Estado);
+        var fim = Resposta("fim-cancelar", "cancelar-1", ConversaV1.RespostaConcluido, "Turno finalizado; conversa preservada.");
+        (await dev.PostAsJsonAsync("/api/remoto/respostas", fim)).EnsureSuccessStatusCode();
+        (await dev.PostAsJsonAsync("/api/remoto/respostas", fim)).EnsureSuccessStatusCode();
+        Assert.Equal(ConversaV1.EstadoConcluido, (await dev.GetFromJsonAsync<ComandoRemotoV1>("/api/remoto/comandos/cancelar-1"))!.Estado);
+        var caminho = daTask ? $"/api/remoto/maquinas/{Maquina}/sessoes/{sessao}/conversa" : $"/api/remoto/maquinas/{Maquina}/conversa";
+        var conversa = await dev.GetFromJsonAsync<ConversaDaMaquinaV1>(caminho);
+        Assert.Single(conversa!.Comandos, c => c.Id == "cancelar-1");
+        Assert.Single(conversa.Respostas, r => r.Id == "fim-cancelar");
+    }
+
+    [Fact]
+    public async Task Cancelamento_recusa_host_sem_capacidade_desconectado_e_comando_de_outro_usuario()
+    {
+        var (admin, dev) = await DevComFilaAsync();
+        var pedido = new ComandoNovoV1("cancelar-1", Maquina, ConversaV1.ComandoCancelarTurno, "turno-atual");
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        var (outro, _) = await _api.UsuarioAsync(admin, "outra", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.NotFound, (await outro.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { Texto = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido with { Fluxo = 1 })).StatusCode);
+        var retrato = new RetratoV1(1, Maquina, DateTimeOffset.UtcNow, [], [], [], [new("turno-atual", DateTimeOffset.UtcNow)]);
+        (await dev.PutAsJsonAsync("/api/remoto/retrato", retrato)).EnsureSuccessStatusCode();
+        (await dev.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat() with { AppAberto = false })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
+        Assert.Empty(_api.Fila.Enviadas);
+    }
+
     [Fact]
     public async Task Ida_e_volta_o_site_manda_o_dev_kit_recebe_e_responde_e_o_historico_mostra()
     {
@@ -479,8 +531,8 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: preserva o prefixo publicado pela Matrix e acrescenta a conversa da task no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RemotoV1.RecursoConversaDaTask],
+            // Recursos são aditivos: preserva o prefixo publicado e acrescenta o cancelamento do turno no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RemotoV1.RecursoConversaDaTask, RemotoV1.RecursoCancelarTurno],
                  json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 

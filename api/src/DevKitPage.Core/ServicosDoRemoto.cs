@@ -111,6 +111,14 @@ public static partial class RegrasDoRemoto
                 return $"fluxos[{i}]: o item é positivo.";
         }
 
+        var turnos = retrato.Turnos ?? [];
+        if (turnos.Count > RemotoV1.MaximoDeFluxos + 1
+            || turnos.Select(t => t?.Sessao).Distinct(StringComparer.Ordinal).Count() != turnos.Count)
+            return "O retrato admite um turno por conversa, até o limite de fluxos mais o Orquestrador.";
+        if (turnos.Any(t => t is null || !MaquinaIdValido(t.Id) || !t.Id.StartsWith("turno-", StringComparison.Ordinal) || t.DesdeEm == default
+            || t.Sessao is not null && (!MaquinaIdValido(t.Sessao) || !fluxos.Any(f => f.Id == t.Sessao && f.Conversavel == true))))
+            return "Informe id e início válidos para cada turno e uma execução conversável para a task.";
+
         var pendencias = retrato.Pendencias ?? [];
         if (pendencias.Count > RemotoV1.MaximoDePendencias)
             return $"O retrato tem até {RemotoV1.MaximoDePendencias} pendências.";

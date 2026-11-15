@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import { lerEventosDaConversa } from '../api/eventosDaConversa';
 import {
-  dispositivoAtual, type ComandoNovo, type ComandoRemoto, type ConversaRemota, type NovoDesignRemoto, type NovoProjetoRemoto, type TipoDeCriacao,
+  dispositivoAtual, type ComandoNovo, type ComandoRemoto, type ConversaRemota, type NovoDesignRemoto, type NovoProjetoRemoto, type TipoDeCriacao, type TurnoDoChat,
 } from '../api/remoto';
 import type { AcaoNoProjetoRemoto } from '../api/projetos';
 import { useSessao } from '../sessao';
@@ -31,6 +31,7 @@ export function useConversaRemota(maquina: string, sessaoDaTask?: string) {
   const ocupado = useRef(false);
   const revisoes = useRef(new Map<string, number>());
   const pendente = useRef<ComandoNovo | null>(null);
+  const cancelamento = useRef<ComandoNovo | null>(null);
   // A conversa carregada é desta máquina E desta task: trocar de task não mostra a anterior.
   const chave = `${maquina}|${sessaoDaTask ?? ''}`;
 
@@ -210,9 +211,37 @@ export function useConversaRemota(maquina: string, sessaoDaTask?: string) {
   }, [sessao, maquina, sair]);
 
   const atual = carregadaPara === chave;
+  /** A solicitação fica vinculada ao turno observado; o desfecho é o comando/resposta confirmado pelo host. */
+  const cancelarTurno = useCallback(async (turno: TurnoDoChat): Promise<{ ok: boolean; mensagem?: string }> => {
+    const controller = ciclo.current;
+    if (!sessao || !maquina || !controller || controller.signal.aborted || (turno.sessao ?? '') !== (sessaoDaTask ?? ''))
+      return { ok: false, mensagem: 'A conversa mudou. Atualize antes de cancelar.' };
+    const anterior = conversa.comandos.find(c => c.tipo === 'cancelar-turno' && c.texto === turno.id);
+    const pedido: ComandoNovo = cancelamento.current?.maquinaId === maquina
+      && cancelamento.current.texto === turno.id && cancelamento.current.sessao === sessaoDaTask ? cancelamento.current : {
+        id: anterior?.id ?? crypto.randomUUID(), maquinaId: maquina, tipo: 'cancelar-turno', texto: turno.id,
+        dispositivo: dispositivoAtual(), ...(sessaoDaTask ? { sessao: sessaoDaTask } : {}),
+      };
+    cancelamento.current = pedido;
+    const revisao = revisoes.current.get(pedido.id);
+    try {
+      const comando = await api.enviarComandoRemoto(sessao.token, pedido, controller.signal);
+      if (controller.signal.aborted) return { ok: false };
+      if (revisao === revisoes.current.get(pedido.id))
+        setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, comando) }));
+      return { ok: true };
+    } catch (falha) {
+      if (controller.signal.aborted) return { ok: false };
+      if (falha instanceof ErroDaApi && falha.status === 401) { sair('expirou'); return { ok: false }; }
+      const gravado = falha instanceof ErroDaApi ? (falha.corpo as { comando?: ComandoRemoto } | null)?.comando : undefined;
+      if (gravado && revisao === revisoes.current.get(pedido.id))
+        setConversa(atual => ({ ...atual, comandos: juntar(atual.comandos, gravado) }));
+      return { ok: false, mensagem: `Cancelamento não confirmado. ${mensagemDaFalha(falha)}` };
+    }
+  }, [sessao, maquina, sessaoDaTask, conversa.comandos, sair]);
   return {
     conversa: atual ? conversa : vazia, erro: atual ? erro : '', falhaNoEnvio: atual ? falhaNoEnvio : '',
-    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, criar, recarregar: () => setTentativa(x => x + 1),
+    carregando: carregando || !atual, enviando, enviar, acionar, pedirCatalogo, criar, cancelarTurno, recarregar: () => setTentativa(x => x + 1),
   };
 }
 
