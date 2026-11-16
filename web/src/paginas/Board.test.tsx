@@ -46,6 +46,25 @@ describe('Board remoto · conversa da task (semana 7, item 4)', () => {
     ] } };
   };
 
+  it('preserva timeout, duração, limite e saída parcial no contrato textual existente da task', async () => {
+    responder();
+    const texto = 'Estado: falhou. Tempo de fila: 7200s; execução: 1s; limite: 1s; motivo: timeout. Saída parcial preservada; não repita o comando.';
+    servidor.use(
+      http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => HttpResponse.json(comTask())),
+      http.get(`${API}/api/remoto/maquinas/:id/sessoes/:sessao/conversa`, ({ params }) => HttpResponse.json({
+        comandos: [], respostas: [], ultimoEvento: 0, falas: [{ id: 'timeout-1', maquinaId: 'notebook', autor: 'dev', origem: 'desktop',
+          texto, comandoId: null, ditaEm: new Date().toISOString(), recebidaEm: new Date().toISOString(), sessao: params.sessao }],
+      })),
+    );
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('button', { name: 'Conversar com a task Item 4 · chat da task' }));
+    const chat = within(await screen.findByRole('region', { name: 'Conversa da task Item 4 · chat da task' }));
+    expect(await chat.findByText(texto)).toBeInTheDocument();
+    expect(chat.getByLabelText('Mensagem à task')).toBeEnabled();
+    expect(chat.queryByText('Processo concluído com sucesso')).not.toBeInTheDocument();
+  });
+
   it('a task conversável abre o chat DELA com as últimas falas, e a mensagem vai só como texto com o destino', async () => {
     responder();
     let enviado: Record<string, unknown> | undefined;
