@@ -28,7 +28,9 @@ public sealed record RetratoV1(
     IReadOnlyList<FluxoNoRetratoV1>? Fluxos, IReadOnlyList<PendenciaNoRetratoV1>? Pendencias);
 
 /// <summary>Um projeto do Orquestrador no retrato: a situação (<see cref="ProjetosV1.Situacoes"/>), a onda corrente e os itens.</summary>
-public sealed record ProjetoNoRetratoV1(string Slug, string Nome, string Situacao, int OndaAtual, IReadOnlyList<ItemNoRetratoV1>? Itens);
+public sealed record ProjetoNoRetratoV1(string Slug, string Nome, string Situacao, int OndaAtual, IReadOnlyList<ItemNoRetratoV1>? Itens,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    ArtefatosLocaisNoRetratoV1? ArtefatosLocais = null);
 
 /// <summary>Um item do plano no retrato: a situação é uma de <see cref="ProjetosV1.SituacoesDoItem"/>.</summary>
 public sealed record ItemNoRetratoV1(int Numero, string Titulo, string Situacao, int Onda);
@@ -163,7 +165,11 @@ public static class RemotoV1
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
     public static IReadOnlyList<string> RecursosDaApi { get; } =
-        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask];
+        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask, RecursoArtefatosLocais, RecursoOperacoesDePreview];
+
+    /// <summary>Retrato opcional de artefatos e preview locais; não concede ações nem acesso à URL de outra máquina.</summary>
+    public const string RecursoArtefatosLocais = "retrato-artefatos-locais-v1";
+    public const string RecursoOperacoesDePreview = "preview-local-v1";
 
     /// <summary>
     /// (semana 7) A API guarda as falas POR TASK (<see cref="FalaDoDevKitV1.Sessao"/>), as devolve na conversa da task

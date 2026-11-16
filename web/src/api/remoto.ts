@@ -1,3 +1,5 @@
+import type { ArtefatosLocais } from './artefatosLocais';
+
 /** Contrato de leitura da fase 1, espelhado de Contracts/V1/RemotoV1.cs. */
 export interface MaquinaRemota {
   maquinaId: string;
@@ -24,6 +26,7 @@ export interface RetratoDaMaquina {
     projetos: Array<{
       slug: string; nome: string; situacao: string; ondaAtual: number;
       itens: Array<{ numero: number; titulo: string; situacao: string; onda: number }> | null;
+      artefatosLocais?: ArtefatosLocais | null;
     }> | null;
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;

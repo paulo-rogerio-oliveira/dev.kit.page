@@ -40,11 +40,17 @@ public sealed record PreviewDoProjetoV1(string? Repositorio, string? Sha, string
 /// com <see cref="Acao"/> preenchida. Sem <c>acao</c>, o texto continua sendo o <see cref="NovoProjetoRemotoV1"/> (a criação):
 /// o contrato é opcional e o dev.kit antigo recusa a ação com o motivo, sem criar nada.
 /// </summary>
-/// <param name="Acao">Hoje só <see cref="ArtefatosV1.AcaoArtefato"/>.</param>
+/// <param name="Acao">Gerar artefato ou operar preview local; campos de alvo são opcionais somente para o contrato antigo.</param>
 /// <param name="Projeto">O slug do projeto (o do retrato da máquina).</param>
 /// <param name="Repositorio">O repositório do projeto (opcional: sem ele, o primeiro do projeto).</param>
 /// <param name="Sha">O commit (opcional: sem ele, o HEAD do branch do projeto).</param>
-public sealed record AcaoNoProjetoRemotoV1(string Acao, string Projeto, string? Repositorio = null, string? Sha = null);
+public sealed record AcaoNoProjetoRemotoV1(string Acao, string Projeto, string? Repositorio = null, string? Sha = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Artefato = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Receita = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Aplicacao = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Operacao = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] long? Versao = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] string? Conjunto = null);
 
 /// <summary>Os tipos e os tetos dos artefatos do projeto.</summary>
 public static class ArtefatosV1
@@ -57,6 +63,8 @@ public static class ArtefatosV1
 
     /// <summary>A ação do comando <see cref="ConversaV1.ComandoProjeto"/> que pede um artefato ao dev.kit da máquina.</summary>
     public const string AcaoArtefato = "artefato";
+
+    public const string AcaoPreviewLocal = "preview-local";
 
     /// <summary>O ambiente que o artefato NUNCA usa: o preview não vira produção.</summary>
     public const string AmbienteDeProducao = "production";

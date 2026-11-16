@@ -96,7 +96,10 @@ public sealed class RegrasDaConversaTests
         // (semana 7) O agente da task entra no fim: o site antigo não o conhece e segue com os dois de antes.
         Assert.Equal(["orquestrador", "dev", "agente"], ConversaV1.AutoresDaFala);
         Assert.Equal(["desktop", "remoto"], ConversaV1.OrigensDaFala);
-        Assert.Equal("conversa-da-task", RemotoV1.RecursosDaApi[^1]);
+        // Os sete recursos anteriores conservam posição; leitura/operação de preview entram somente depois deles.
+        Assert.Equal(["falas-do-desktop", "decisoes-com-snapshot", "catalogo-remoto", "decisoes-autorizar",
+            "matrix-v1", "matrix-avaliacao-v1", "conversa-da-task", "retrato-artefatos-locais-v1", "preview-local-v1"],
+            RemotoV1.RecursosDaApi);
     }
 
     [Fact]

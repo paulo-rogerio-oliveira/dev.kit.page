@@ -86,6 +86,8 @@ public static partial class RegrasDoRemoto
                 return $"projetos[{i}]: a situação é uma de: {string.Join(", ", ProjetosV1.Situacoes)}.";
             if (projeto.OndaAtual < 0)
                 return $"projetos[{i}]: a onda não é negativa.";
+            if (RegrasDosArtefatosLocais.Validar(projeto.ArtefatosLocais) is { Length: > 0 } erroArtefatos)
+                return $"projetos[{i}]: {erroArtefatos}";
             var itens = projeto.Itens ?? [];
             if (itens.Count > RemotoV1.MaximoDeItens)
                 return $"projetos[{i}]: até {RemotoV1.MaximoDeItens} itens.";
@@ -164,6 +166,9 @@ public static partial class RegrasDoRemoto
             yield return ($"projetos[{i}].slug", p.Slug);
             yield return ($"projetos[{i}].nome", p.Nome);
             yield return ($"projetos[{i}].situacao", p.Situacao);
+            if (p.ArtefatosLocais is { } locais)
+                foreach (var campo in RegrasDosArtefatosLocais.Textos(locais, $"projetos[{i}].artefatosLocais"))
+                    yield return campo;
             foreach (var (item, j) in (p.Itens ?? []).Select((x, j) => (x, j)))
             {
                 yield return ($"projetos[{i}].itens[{j}].titulo", item.Titulo);

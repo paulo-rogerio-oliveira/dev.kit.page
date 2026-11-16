@@ -63,7 +63,7 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos, consultarArtefatos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void; consultarArtefatos: () => void }) {
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todosOsDesigns, setTodosOsDesigns] = useState(false);
@@ -115,7 +115,9 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
         <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.get(p.slug) ?? []} gerar={slug => void criacao.gerarArtefato(slug)}
-          desabilitado={criacao.desabilitado} motivo={criacao.motivo} agora={agora} />
+          desabilitado={criacao.desabilitado} motivo={criacao.motivo} agora={agora} locais={p.artefatosLocais}
+          maquina={foto?.maquina} atualizado={!!foto && agora - Date.parse(foto.recebidoEm) < 90_000 && agora - Date.parse(foto.recebidoEm) >= -5000}
+          operarPreview={criacao.operarPreview} consultar={consultarArtefatos} />
       </div>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
@@ -395,6 +397,7 @@ export function Board() {
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
           designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} abrirTask={abrirTask}
+          consultarArtefatos={() => setTentativa(t => t + 1)}
           solicitarImpactos={(id, motivo) => {
             void conversa.enviar(`${motivo ?? 'Revisar explicitamente a matriz de impactos'} da task ${id}: novo impacto a apurar. Preserve as atribuições das demais tasks e os portões existentes.`)
               .then(enviado => avisar(enviado ? 'Pedido de revisão da matriz enviado ao Orquestrador.' : 'Pedido não enviado. Confira a conexão e tente novamente.'));

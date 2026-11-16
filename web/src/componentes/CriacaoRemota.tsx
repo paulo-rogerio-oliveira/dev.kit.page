@@ -3,6 +3,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, ComandoRemoto, ConversaRemota, MaquinaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
 import type { UsoDoDesign } from '../api/tipos';
 import type { AcaoNoProjetoRemoto } from '../api/projetos';
+import type { OperacaoDoPreviewRemoto } from '../api/artefatosLocais';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { tiposDeCriacao } from './useCatalogoRemoto';
 import { useSessao } from '../sessao';
@@ -18,14 +19,25 @@ export function ehGerarArtefato(comando: Pick<ComandoRemoto, 'tipo' | 'texto'>) 
   if (comando.tipo !== 'projeto') return false;
   try { return (JSON.parse(comando.texto) as { acao?: string } | null)?.acao === 'artefato'; } catch { return false; }
 }
+export function ehPreviewLocal(comando: Pick<ComandoRemoto, 'tipo' | 'texto'>) {
+  if (comando.tipo !== 'projeto') return false;
+  try { return (JSON.parse(comando.texto) as { acao?: string } | null)?.acao === 'preview-local'; } catch { return false; }
+}
 export function rotuloDaCriacao(tipo: string, texto = '') {
-  return ehGerarArtefato({ tipo, texto }) ? 'Gerar artefato' : tipo === 'projeto' ? 'Novo projeto' : 'Novo design';
+  return ehPreviewLocal({ tipo, texto }) ? 'Preview local' : ehGerarArtefato({ tipo, texto }) ? 'Gerar artefato' : tipo === 'projeto' ? 'Novo projeto' : 'Novo design';
 }
 
 /** Onde a criação está, com o texto do dev.kit quando ele já respondeu (o que criou, ou o motivo da recusa). */
 function situacao(comando: ComandoRemoto, conversa: ConversaRemota) {
   const resposta = conversa.respostas.filter(r => r.comandoId === comando.id).at(-1)?.texto ?? '';
   const artefato = ehGerarArtefato(comando);
+  if (ehPreviewLocal(comando)) {
+    switch (comando.estado) {
+      case 'pendente': case 'na-fila': return { classe: '', titulo: 'aguardando o host', texto: 'Pedido na fila da máquina. Isso não confirma prontidão, abertura ou parada.' };
+      case 'entregue': return { classe: '', titulo: 'recebido pelo host', texto: 'A operação foi entregue. Consulte o estado confirmado no card do preview.' };
+      case 'concluido': case 'respondido': return { classe: '', titulo: 'pedido processado', texto: resposta || 'Consulte o resultado confirmado no retrato do host; recebimento não comprova prontidão.' };
+    }
+  }
   switch (comando.estado) {
     case 'pendente': case 'na-fila': return { classe: '', titulo: 'aguardando o dev.kit', texto: artefato
       ? 'O pedido está na fila: quem gera é o dev.kit da máquina, no executor delegado, pelo mesmo caminho do devcli.'
@@ -48,6 +60,7 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
   const [aberta, setAberta] = useState<TipoDeCriacao | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [falha, setFalha] = useState('');
+  const recibosDePreview = useRef(new Map<string, string>());
   const ultima = conversa.conversa.comandos.filter(c => tiposDeCriacao.includes(c.tipo))
     .sort((a, b) => Date.parse(a.criadoEm) - Date.parse(b.criadoEm)).at(-1);
   const ocupado = enviando || (!!ultima && emCurso.includes(ultima.estado) && agora < Date.parse(ultima.expiraEm));
@@ -55,12 +68,12 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
     : ocupado ? 'Aguardando o dev.kit terminar a criação anterior.'
       : 'O dev.kit da máquina cria pelo mesmo caminho do devcli.';
 
-  useEffect(() => { setAberta(null); setFalha(''); }, [maquina?.maquinaId]);
+  useEffect(() => { setAberta(null); setFalha(''); recibosDePreview.current.clear(); }, [maquina?.maquinaId]);
 
-  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto) {
+  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto, id: string = crypto.randomUUID()) {
     setEnviando(true); setFalha('');
     try {
-      const desfecho = await conversa.criar(tipo, formulario, crypto.randomUUID());
+      const desfecho = await conversa.criar(tipo, formulario, id);
       // Aceito pela fila, o formulário fecha: o desfecho do dev.kit aparece no painel. A recusa da API (a antiga não conhece
       // o tipo, o formulário fora da regra) fica no formulário, com o motivo.
       if (desfecho.ok) setAberta(null);
@@ -72,6 +85,16 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
     maquina, aberta, enviando, falha, motivo, criar,
     /** (controle-v4, item 2) O "Gerar artefato" do card: a ação no projeto pela mesma fila, sem formulário. */
     gerarArtefato: (projeto: string) => criar('projeto', { acao: 'artefato', projeto }),
+    operarPreview: (pedido: OperacaoDoPreviewRemoto) => {
+      const chave = JSON.stringify(pedido);
+      let id = recibosDePreview.current.get(chave);
+      if (!id || pedido.operacao === 'consultar') {
+        id = crypto.randomUUID();
+        if (recibosDePreview.current.size >= 100) recibosDePreview.current.delete(recibosDePreview.current.keys().next().value!);
+        recibosDePreview.current.set(chave, id);
+      }
+      return criar('projeto', pedido, id);
+    },
     desabilitado: !maquina || ocupado,
     abrir: (tipo: TipoDeCriacao) => { setFalha(''); setAberta(tipo); },
     fechar: () => { setFalha(''); setAberta(null); },
@@ -84,11 +107,13 @@ export type CriacaoDoBoard = ReturnType<typeof useCriacaoRemota>;
 /** A faixa do painel: onde a última criação está e o desfecho que o dev.kit mandou. */
 export function DesfechoDaCriacao({ criacao }: { criacao: CriacaoDoBoard }) {
   const d = criacao.desfecho;
-  if (!d) return null;
-  return <div className={`br-criacao${d.classe}`} role="status" aria-label="Desfecho da criação">
+  return <>
+    {criacao.falha && !criacao.aberta && <p className="br-criacao br-recusa" role="alert">Envio não confirmado. {criacao.falha} Repetir o mesmo pedido de preview conserva o identificador.</p>}
+    {d && <div className={`br-criacao${d.classe}`} role="status" aria-label="Desfecho da criação">
     <strong>{d.comando.estado === 'concluido' ? '✓ ' : ''}{rotuloDaCriacao(d.comando.tipo, d.comando.texto)} · {hora(d.comando.criadoEm)} · {d.titulo}</strong>
     <span>{d.texto}</span>
-  </div>;
+    </div>}
+  </>;
 }
 
 /** O diálogo comum: o foco entra no primeiro campo, e o Escape cancela. */

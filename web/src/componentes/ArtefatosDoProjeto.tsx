@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
 import type { Artefato } from '../api/projetos';
+import type { ArtefatosLocais } from '../api/artefatosLocais';
+import { ArtefatosLocaisDoCard, type AcoesDePreviewNoCard } from './ArtefatosLocaisDoCard';
 
 /** Quanto tempo os links do card valem antes de o Board relê-los (o link de download vence; a API devolve um novo a cada leitura). */
 const releituraMs = 60_000;
@@ -53,29 +55,47 @@ function prazo(expiraEm: string, agora: number) {
   return minutos < 60 ? `expira em ${minutos} min` : `expira em ${Math.floor(minutos / 60)} h`;
 }
 
+/** O retrato identifica; somente a lista autorizada da API fornece o link e o prazo atuais. Ambiguidade não cria vínculo. */
+function geracaoDoPublicado(a: Artefato, locais?: ArtefatosLocais | null): number | null {
+  if (locais?.contrato !== 1) return null;
+  function corresponde(p: { idRemoto: number; tipo: string; sha: string; hash: string; tamanho: number }) {
+    return Number.isSafeInteger(p.idRemoto) && p.idRemoto > 0 && p.idRemoto === a.id && p.tipo === a.tipo
+      && /^[a-f0-9]{40}([a-f0-9]{24})?$/i.test(p.sha) && p.sha.toLowerCase() === a.sha.toLowerCase()
+      && p.hash.toLowerCase() === a.hash.toLowerCase() && p.tamanho === a.tamanho;
+  }
+  const geracoes = locais.artefatos.filter(g =>
+    (g.publicacao && corresponde(g.publicacao))
+    || (g.pacote && corresponde({ ...g.pacote, tipo: 'pacote' })));
+  return geracoes.length === 1 ? geracoes[0].id : null;
+}
+
 /**
  * A seção Artefatos do card do projeto: o "Gerar artefato" (o pedido vai pela fila ao dev.kit da máquina, que gera no
  * executor) e os últimos links — o pacote .NET para baixar e o preview da página estática. Nunca publica em produção.
  */
-export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, motivo, agora }: {
+export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, motivo, agora, locais, ...acoes }: AcoesDePreviewNoCard & {
   nome: string; slug: string; artefatos: Artefato[]; gerar: (slug: string) => void; desabilitado: boolean; motivo: string; agora: number;
+  locais?: ArtefatosLocais | null;
 }) {
   return <div className="br-artefatos" role="group" aria-label={`Artefatos de ${nome}`}>
-    <div className="br-artefatos-titulo"><span>Artefatos{artefatos.length > 0 && ` · ${artefatos.length}`}</span>
+    <div className="br-artefatos-titulo"><span>Artefatos{locais ? ` · ${locais.artefatos.length} conjunto(s)` : artefatos.length > 0 && ` · ${artefatos.length}`}</span>
       <button className="br-btn br-gerar" disabled={desabilitado} onClick={() => gerar(slug)}
         title={desabilitado ? motivo : 'O dev.kit da máquina gera no executor: pacote .NET para baixar ou preview da página estática. Nunca publica em produção.'}>
-        Gerar artefato</button></div>
+        {locais ? 'Gerar artefatos' : 'Gerar artefato'}</button></div>
+    {locais && <ArtefatosLocaisDoCard {...acoes} locais={locais} slug={slug} desabilitado={desabilitado} />}
+    {locais && artefatos.length > 0 && <p className="br-artefatos-aviso">Downloads e previews publicados · não alteram o pedido local</p>}
     {artefatos.map(a => {
       const preview = a.tipo === 'preview';
       const alvo = `${repositorioCurto(a.repositorio)} · ${a.sha.slice(0, 7)}`;
+      const geracao = geracaoDoPublicado(a, locais);
       return <a className="br-artefato" key={a.id} href={a.link} target="_blank" rel="noopener noreferrer"
-        aria-label={`${preview ? 'Abrir o preview' : 'Baixar o pacote'} de ${alvo}`}>
+        aria-label={`${preview ? 'Abrir o preview' : 'Baixar o pacote'} de ${alvo}${geracao !== null ? `, geração ${geracao}` : ''}`}>
         <span className={`br-chip${preview ? ' br-chip-preview' : ''}`}>{preview ? 'preview' : 'pacote .NET'}</span>
-        <span>{alvo}</span>
+        <span>{geracao !== null ? `Geração nº ${geracao} · ` : ''}{alvo}</span>
         <small><b>{preview ? 'Abrir preview' : 'Baixar'}</b> · {preview ? `ambiente ${a.ambiente}` : `${tamanhoDoArtefato(a.tamanho)} · ${a.expiraEm ? prazo(a.expiraEm, agora) : 'sem prazo'}`}</small>
       </a>;
     })}
-    <p className="br-artefatos-aviso">{artefatos.length
+    <p className="br-artefatos-aviso">{locais ? 'Preview local exige front, API e dependências prontos no host. Downloads publicados mantêm seus prazos.' : artefatos.length
       ? 'Só preview e download, nunca produção. O link de download vence no prazo.'
       : 'Nenhum artefato ainda: o pacote .NET ou o preview aparecem aqui. Nunca produção.'}</p>
   </div>;

@@ -149,8 +149,13 @@ public static class RegrasDosArtefatos
     {
         if (acao is null)
             return "Envie a ação no projeto.";
+        if (acao.Acao == ArtefatosV1.AcaoPreviewLocal)
+            return RegrasDosArtefatosLocais.ValidarAcao(acao);
         if (acao.Acao != ArtefatosV1.AcaoArtefato)
-            return $"A ação no projeto é {ArtefatosV1.AcaoArtefato}.";
+            return $"A ação no projeto é {ArtefatosV1.AcaoArtefato} ou {ArtefatosV1.AcaoPreviewLocal}.";
+        if (acao.Artefato is not null || acao.Receita is not null || acao.Aplicacao is not null || acao.Operacao is not null
+            || acao.Versao is not null || acao.Conjunto is not null)
+            return "Não combine geração com campos de operação do preview local.";
         if (string.IsNullOrWhiteSpace(acao.Projeto) || acao.Projeto.Length > ProjetosV1.TamanhoMaximoDoSlug)
             return "Informe o projeto (o slug).";
         if (acao.Repositorio is { Length: > ArtefatosV1.TamanhoMaximoDoRepositorio })

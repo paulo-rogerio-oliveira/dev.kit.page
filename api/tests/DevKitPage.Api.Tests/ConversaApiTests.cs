@@ -479,8 +479,9 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: preserva o prefixo publicado pela Matrix e acrescenta a conversa da task no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RemotoV1.RecursoConversaDaTask],
+            // Recursos são aditivos: preserva os sete anteriores e acrescenta leitura/operação de preview no fim.
+            Assert.Equal(["falas-do-desktop", "decisoes-com-snapshot", "catalogo-remoto", "decisoes-autorizar",
+                "matrix-v1", "matrix-avaliacao-v1", "conversa-da-task", "retrato-artefatos-locais-v1", "preview-local-v1"],
                  json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 

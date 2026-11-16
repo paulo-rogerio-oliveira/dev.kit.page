@@ -1,0 +1,60 @@
+{
+  "versao": 1,
+  "aplicacoes": [
+    {
+      "id": "page",
+      "front": "front",
+      "componentes": [
+        {
+          "id": "api",
+          "repositorio": "https://github.com/paulo-rogerio-oliveira/dev.kit.page",
+          "tecnologia": "dotnet",
+          "caminho": "api/src/DevKitPage.Api/DevKitPage.Api.csproj",
+          "assembly": "DevKitPage.Api",
+          "prontidao": "/health",
+          "ambiente": {
+            "Banco__Provider": "Sqlite",
+            "ConnectionStrings__DevKitPage": "Data Source={dados}/page.db",
+            "Jwt__Segredo": "{segredo-local}",
+            "Seed__AdminLogin": "preview-ficticio",
+            "Seed__AdminPassword": "{segredo-local}",
+            "Licencas__ChavePrivada": "{segredo-local}",
+            "Remoto__Fila": "simulado",
+            "Design__Armazem": "disco",
+            "Design__Pasta": "{dados}/design",
+            "Artefatos__Armazem": "disco",
+            "Artefatos__Pasta": "{dados}/artefatos",
+            "ProtecaoDeDados__Pasta": "{dados}/keyring",
+            "Cors__Origens__0": "{url:front}"
+          }
+        },
+        {
+          "id": "front",
+          "repositorio": "https://github.com/paulo-rogerio-oliveira/dev.kit.page",
+          "tecnologia": "vite",
+          "caminho": "web/package.json",
+          "prontidao": "/",
+          "dependencias": ["api"],
+          "ambiente": {
+            "VITE_API_URL": "{url:api}",
+            "VITE_SITE_URL": "{url}"
+          }
+        }
+      ],
+      "jornada": {
+        "caminho": "/#contato",
+        "api": "api",
+        "rotaDaApi": "/api/demonstracoes",
+        "marcador": "Pedido recebido!",
+        "passos": [
+          { "acao": "preencher", "seletor": "#demonstracao-nome", "valor": "Pessoa ficticia do preview" },
+          { "acao": "preencher", "seletor": "#demonstracao-email", "valor": "preview@example.invalid" },
+          { "acao": "preencher", "seletor": "#demonstracao-empresa", "valor": "Empresa ficticia local" },
+          { "acao": "preencher", "seletor": "#demonstracao-mensagem", "valor": "Verificacao local do preview; dados ficticios." },
+          { "acao": "clicar", "seletor": "#demonstracao-consentimento" },
+          { "acao": "clicar", "seletor": "form[aria-label='Pedido de demonstração'] button[type='submit']" }
+        ]
+      }
+    }
+  ]
+}
