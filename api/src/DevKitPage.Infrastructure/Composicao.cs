@@ -1,10 +1,10 @@
+using System.Diagnostics;
 using Azure.Core.Cryptography;
 using Azure.Security.KeyVault.Keys.Cryptography;
 using DevKitPage.Core;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -182,14 +182,15 @@ public static class Composicao
 /// </summary>
 public sealed class InicializadorDaBase(
     DevKitPageDb db, IPasswordHasher<Usuario> hasher, IOptions<OpcoesDaSemente> semente, TimeProvider relogio,
-    ILogger<InicializadorDaBase> log, EsquemaDoBanco esquema)
+    ILogger<InicializadorDaBase> log, EsquemaDoBanco esquema, IOptions<OpcoesDoBanco> banco)
 {
     public async Task InicializarAsync(CancellationToken ct = default)
     {
         if (db.Database.IsSqlite())
         {
-            CriarPastaDoArquivo(db.Database.GetConnectionString());
-            await db.Database.MigrateAsync(ct);
+            var arquivo = SqliteNaSubida.Arquivo(db.Database.GetConnectionString());
+            CriarPastaDoArquivo(arquivo);
+            await MigrarSqliteAsync(arquivo, ct);
         }
         else
         {
@@ -258,14 +259,54 @@ public sealed class InicializadorDaBase(
         }
     }
 
-    private static void CriarPastaDoArquivo(string? conexao)
+    /// <summary>
+    /// As migrations do SQLite (API fora do ar, 16/11 — ver <see cref="SqliteNaSubida"/>): antes, a trava de um processo morto sai;
+    /// depois, o journal se ajusta e o esquema é conferido como no Azure SQL — a migration perdida fica dita no log e no
+    /// <c>/health</c>, e não só no 500 da rota que a usa. O log diz onde a subida está: a que travou não deixou uma linha.
+    /// </summary>
+    private async Task MigrarSqliteAsync(string? arquivo, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(conexao))
-            return;
-        var arquivo = new SqliteConnectionStringBuilder(conexao).DataSource;
-        if (string.IsNullOrWhiteSpace(arquivo) || arquivo == ":memory:" || arquivo.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
-            return;
-        var pasta = Path.GetDirectoryName(Path.GetFullPath(arquivo));
+        var opcoes = banco.Value;
+        log.LogInformation("Base SQLite em {Arquivo}.", arquivo ?? "memória");
+        if (arquivo is not null && File.Exists(arquivo))
+        {
+            await db.Database.OpenConnectionAsync(ct);
+            try
+            {
+                await SqliteNaSubida.LiberarTravaAbandonadaAsync(db.Database.GetDbConnection(), relogio.GetUtcNow(),
+                    TimeSpan.FromMinutes(Math.Max(1, opcoes.TravaAbandonadaMinutos)), log, ct);
+            }
+            finally
+            {
+                await db.Database.CloseConnectionAsync();
+            }
+        }
+
+        var cronometro = Stopwatch.StartNew();
+        log.LogInformation("Aplicando as migrations do SQLite.");
+        await db.Database.MigrateAsync(ct);
+        log.LogInformation("Migrations do SQLite em dia em {Segundos:0.0} s.", cronometro.Elapsed.TotalSeconds);
+
+        if (arquivo is not null)
+        {
+            await db.Database.OpenConnectionAsync(ct);
+            try
+            {
+                await SqliteNaSubida.AjustarJournalAsync(db.Database.GetDbConnection(), opcoes.JournalDoSqlite,
+                    SqliteNaSubida.EmArmazenamentoDeRede(arquivo, Environment.GetEnvironmentVariable), log, ct);
+            }
+            finally
+            {
+                await db.Database.CloseConnectionAsync();
+            }
+        }
+
+        await esquema.VerificarAsync(db, log, ct);
+    }
+
+    private static void CriarPastaDoArquivo(string? arquivo)
+    {
+        var pasta = arquivo is null ? null : Path.GetDirectoryName(arquivo);
         if (!string.IsNullOrEmpty(pasta))
             Directory.CreateDirectory(pasta);
     }

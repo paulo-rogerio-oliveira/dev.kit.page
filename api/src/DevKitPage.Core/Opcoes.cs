@@ -486,6 +486,24 @@ public sealed class OpcoesDoBanco
 
     /// <summary><c>Sqlite</c> (padrão, base embarcada) ou <c>SqlServer</c> (Azure SQL).</summary>
     public string Provider { get; set; } = Sqlite;
+
+    /// <summary>O journal que o SQLite escolhe sozinho: o <c>DELETE</c> no armazenamento de rede, sem mexer nos demais.</summary>
+    public const string JournalAutomatico = "auto";
+
+    /// <summary>
+    /// (API fora do ar, 16/11) O journal do SQLite, aplicado na subida: <c>auto</c> (padrão) troca o WAL pelo <c>delete</c>
+    /// quando o arquivo está num compartilhamento de rede — o <c>/home</c> do App Service — e não mexe no resto; <c>wal</c>,
+    /// <c>delete</c>, <c>truncate</c> ou <c>persist</c> fixam o modo; vazio não mexe. O WAL não funciona em rede
+    /// (sqlite.org/wal.html), e o deploy e a troca de instância põem dois contêineres na mesma base.
+    /// </summary>
+    public string JournalDoSqlite { get; set; } = JournalAutomatico;
+
+    /// <summary>
+    /// (API fora do ar, 16/11) A idade a partir da qual a trava de migration do EF no SQLite (<c>__EFMigrationsLock</c>) é de um
+    /// processo que morreu com ela, e a subida a libera. As migrations levam segundos, e a plataforma derruba em 230 s o
+    /// contêiner que não abre a porta; abaixo de 1, vale 1.
+    /// </summary>
+    public int TravaAbandonadaMinutos { get; set; } = 5;
 }
 
 /// <summary>A semente da base (seção <c>Seed</c>).</summary>

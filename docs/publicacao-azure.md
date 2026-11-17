@@ -24,6 +24,9 @@ No App Service, além das variáveis da tabela abaixo:
   apagado a cada deploy e fica **somente leitura** no deploy por pacote (a API não sobe). Use
   `ConnectionStrings__DevKitPage=Data Source=/home/dados/devkitpage.db` (`/home` é persistente;
   no Windows, `D:\home\dados\devkitpage.db`), com uma instância só. Para uso real, Azure SQL.
+  O `/home` é um compartilhamento de rede: a API tira a base do WAL ali (`Banco__JournalDoSqlite`,
+  padrão `auto`) e libera na subida a trava de migration abandonada — ver
+  [A API não abre a porta na subida](#a-api-não-abre-a-porta-na-subida-sqlite-1611).
 - **Deploy manual**:
 
   ```bash
@@ -105,7 +108,9 @@ subida (*Log stream* / *Console logs*). O `Cors__Origens__0` é a origem exata d
 - **SQLite em volume**: válido para uma instância só (Container Apps com réplica única e um volume
   Azure Files em `/app/dados`). As migrations (inclusive a dos pedidos de demonstração) são
   aplicadas sozinhas na subida. Atenção: o SQLite sobre o SMB do Azure Files sofre com travas de
-  arquivo (`database is locked`) — serve para demonstração; para uso real, Azure SQL.
+  arquivo (`database is locked`) — serve para demonstração; para uso real, Azure SQL. Num volume de
+  rede fora do App Service, ponha `Banco__JournalDoSqlite=delete`: o WAL não funciona em rede, e o
+  `auto` só reconhece o `/home` do App Service e o caminho UNC.
 
 ### Atualizar uma base Azure SQL que já existe (US #283)
 
@@ -292,6 +297,38 @@ Sem o `Us687.sql`, o painel Uso do admin mostrava só "An error occurred while p
 
 A API não roda os scripts sozinha: aplique o indicado (são idempotentes) e reinicie a API — o `/health` volta a
 `Healthy`.
+
+### A API não abre a porta na subida (SQLite, 16/11)
+
+**O sintoma.** O site para sozinho (`Failed to start site. Revert by stopping site.`) e o log do contêiner diz `Container did
+not respond to startup probe on port 8080 within the expected time limit of 230s. No listening ports were detected`, sem
+nenhuma linha da API depois de `Running the command: dotnet "DevKitPage.Api.dll"`. Aumentar o
+`WEBSITES_CONTAINER_START_TIME_LIMIT` não resolve.
+
+**A causa.** No SQLite, o EF 9+ aplica as migrations sob uma trava que é uma LINHA da tabela `__EFMigrationsLock`. O processo
+que morre com ela na mão deixa a linha, e o `MigrateAsync` de toda subida seguinte espera por ela para sempre, sem log. Em
+16/11 foi a base de produção, em WAL no `/home` — um compartilhamento de rede, onde o WAL não funciona — com o contêiner velho
+e o novo ao mesmo tempo nela (o deploy e a troca de instância fazem isso): o deploy de 12/11 perdeu a migration
+`ConversaDaTask` (sem a `FalasRemotas.Sessao`, o `POST /api/remoto/conversa/falas` deu 500 em toda fala do chat) e a trava
+ficou para trás.
+
+**O que a API faz desde então.**
+
+- Libera, antes das migrations, a trava mais velha que `Banco__TravaAbandonadaMinutos` (padrão 5), com o aviso `Trava de
+  migration do SQLite abandonada desde … liberada` no log. A mais nova é de outra instância migrando agora, e fica.
+- Diz no log onde a subida está: `Base SQLite em …`, `Aplicando as migrations do SQLite.` e `Migrations do SQLite em dia em
+  N s.`.
+- Com `Banco__JournalDoSqlite=auto` (o padrão), tira a base do WAL (`delete`) quando ela está no `/home` do App Service (ou
+  num caminho UNC). Com outro processo na base, a troca fica para a próxima subida, com aviso; `wal`, `delete`, `truncate`
+  ou `persist` fixam o modo, e vazio não mexe.
+- Confere o esquema do SQLite como o do Azure SQL: a coluna que uma migration perdida deixou de criar põe o `/health` em
+  `Degraded` e vai ao log da subida.
+
+**Para voltar ao ar**, publique a versão com a correção e inicie o App Service, que fica parado depois do *revert* da
+plataforma (*Overview → Start*, ou `az webapp start -g <grupo> -n <app>`). Confira no *Log stream* o aviso da trava liberada
+e o `Migrations do SQLite em dia`, e o `/health` em `Healthy`. A correção manual equivalente, com o site parado, é apagar a
+linha da `__EFMigrationsLock` da base. O SQLite num compartilhamento de rede continua frágil: para uso real, Azure SQL
+(`Banco__Provider=SqlServer`).
 
 ### Importação de catálogos (US #738)
 
