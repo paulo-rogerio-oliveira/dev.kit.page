@@ -67,8 +67,9 @@ ser substituídos por esta descrição dos cenários.
    KeyRing e cliente da máquina descritos em `dev.kit.page/docs/publicacao-azure.md`.
    Nunca anexar os valores secretos.
 3. SQLite aplica migrations na subida. Não executar scripts de SQL Server nele.
-   A correção já incorporada limita a espera, registra as etapas, trata a trava
-   antiga e escolhe journal adequado ao armazenamento quando configurado `auto`.
+   A correção já incorporada verifica a trava antiga antes das migrations, registra
+   as etapas e escolhe journal adequado ao armazenamento quando configurado `auto`.
+   Não há timeout global da migration: uma trava preservada ainda pode reter a subida.
    Uma trava recente não comprova abandono; não a remover durante investigação.
 4. Se o histórico registra uma migration cujos efeitos faltam, comparar TODOS os
    seus efeitos, obter backup e ensaiar a recuperação em cópia isolada. A retirada
