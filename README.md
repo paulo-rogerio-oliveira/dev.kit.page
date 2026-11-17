@@ -80,6 +80,7 @@ publica os resultados.
 |---|---|---|
 | `ConnectionStrings:DevKitPage` | `Data Source=dados/devkitpage.db` | A base. |
 | `Banco:Provider` | `Sqlite` | `Sqlite` ou `SqlServer` (Azure SQL) — troca sem mudar código. |
+| `Banco:JournalDoSqlite` · `TravaAbandonadaMinutos` | `auto` · 5 | O journal do SQLite (`auto` tira do WAL a base no `/home` do App Service, um compartilhamento de rede) e a idade da trava de migration que a subida libera ([a API que não abria a porta](docs/publicacao-azure.md#a-api-não-abre-a-porta-na-subida-sqlite-1611)). |
 | `Jwt:Segredo` | — | **Segredo**, 32+ caracteres (Key Vault / `Jwt__Segredo`). Obrigatório em Production. |
 | `Jwt:ExpiracaoMinutos` · `MaxFalhas` · `BloqueioMinutos` | 60 · 5 · 15 | Validade do token e bloqueio após falhas seguidas. |
 | `Seed:AdminLogin` · `Seed:AdminPassword` | `admin` · gerada | O admin da primeira subida (troca obrigatória). |

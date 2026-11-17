@@ -24,10 +24,16 @@ public sealed record FaltaNoEsquema(string Tabela, string? Coluna, IReadOnlyList
 /// não o são em sequência (o <c>Us491.sql</c> recria o índice único que o <c>Us663.sql</c> derruba), e o esquema de produção
 /// continua mudando só pela mão de quem publica.
 /// </para>
+/// <para>
+/// No SQLite a mesma comparação (API fora do ar, 16/11): as migrations fazem o esquema, mas o deploy de 12/11 perdeu a
+/// <c>ConversaDaTask</c> na base em rede, e a <c>FalasRemotas.Sessao</c> ausente só aparecia no 500 das falas do chat.
+/// </para>
 /// </summary>
 public sealed class EsquemaDoBanco
 {
     private static readonly Lazy<IReadOnlyList<(string Nome, string Texto)>> Scripts = new(LerScripts);
+
+    private bool _sqlite;
 
     /// <summary>O que o banco não tem do modelo; vazio quando está completo (ou ainda não foi verificado).</summary>
     public IReadOnlyList<FaltaNoEsquema> Faltas { get; private set; } = [];
@@ -37,16 +43,17 @@ public sealed class EsquemaDoBanco
         => Faltas.Count == 0
             ? string.Empty
             : $"O banco não tem {string.Join("; ", Faltas.Take(10))}{(Faltas.Count > 10 ? $" e mais {Faltas.Count - 10}" : string.Empty)}. "
-              + "Aplique os scripts indicados de api/scripts/sqlserver (são idempotentes) e reinicie a API.";
+              + (_sqlite
+                  ? "No SQLite, a migration que traz isso não está em vigor: reinicie a API, que aplica as que faltam no __EFMigrationsHistory (se ele já registra a migration, tire-a de lá antes)."
+                  : "Aplique os scripts indicados de api/scripts/sqlserver (são idempotentes) e reinicie a API.");
 
-    /// <summary>Compara o modelo com o banco (só no SQL Server: o SQLite segue as migrations) e registra o que falta.</summary>
+    /// <summary>Compara o modelo com o banco e registra o que falta: no Azure SQL, com o script que o traz; no SQLite, sem script.</summary>
     public async Task VerificarAsync(DevKitPageDb db, ILogger log, CancellationToken ct = default)
     {
-        if (db.Database.IsSqlite())
-            return;
+        _sqlite = db.Database.IsSqlite();
         try
         {
-            Faltas = Comparar(db.Model, await ColunasAsync(db, ct));
+            Faltas = Comparar(db.Model, await ColunasAsync(db, _sqlite, ct), comScripts: !_sqlite);
             if (Faltas.Count > 0)
                 log.LogError("Esquema do banco incompleto: {Faltas}", Descrever());
         }
@@ -58,7 +65,8 @@ public sealed class EsquemaDoBanco
     }
 
     /// <summary>As tabelas e colunas do modelo que não estão em <paramref name="existentes"/> (a comparação ignora a caixa).</summary>
-    public static IReadOnlyList<FaltaNoEsquema> Comparar(IModel modelo, IEnumerable<(string Tabela, string Coluna)> existentes)
+    /// <param name="comScripts">Com o script do Azure SQL que traz cada falta; o SQLite não tem script, tem migration.</param>
+    public static IReadOnlyList<FaltaNoEsquema> Comparar(IModel modelo, IEnumerable<(string Tabela, string Coluna)> existentes, bool comScripts = true)
     {
         var colunas = existentes.Select(c => (c.Tabela.ToUpperInvariant(), c.Coluna.ToUpperInvariant())).ToHashSet();
         var tabelas = colunas.Select(c => c.Item1).ToHashSet();
@@ -68,7 +76,7 @@ public sealed class EsquemaDoBanco
             var tabela = grupo.Key;
             if (!tabelas.Contains(tabela.ToUpperInvariant()))
             {
-                faltas.Add(new FaltaNoEsquema(tabela, null, ScriptsQueTrazem(tabela, null)));
+                faltas.Add(new FaltaNoEsquema(tabela, null, comScripts ? ScriptsQueTrazem(tabela, null) : []));
                 continue;
             }
 
@@ -76,7 +84,7 @@ public sealed class EsquemaDoBanco
             foreach (var coluna in grupo.SelectMany(e => e.GetProperties()).Select(p => p.GetColumnName(loja)).OfType<string>().Distinct(StringComparer.Ordinal))
             {
                 if (!colunas.Contains((tabela.ToUpperInvariant(), coluna.ToUpperInvariant())))
-                    faltas.Add(new FaltaNoEsquema(tabela, coluna, ScriptsQueTrazem(tabela, coluna)));
+                    faltas.Add(new FaltaNoEsquema(tabela, coluna, comScripts ? ScriptsQueTrazem(tabela, coluna) : []));
             }
         }
 
@@ -103,7 +111,7 @@ public sealed class EsquemaDoBanco
             : Scripts.Value.Where(s => Cria(s.Texto) && s.Texto.Contains($"[{coluna}]", StringComparison.OrdinalIgnoreCase)).Select(s => s.Nome).ToArray();
     }
 
-    private static async Task<IReadOnlyList<(string Tabela, string Coluna)>> ColunasAsync(DevKitPageDb db, CancellationToken ct)
+    private static async Task<IReadOnlyList<(string Tabela, string Coluna)>> ColunasAsync(DevKitPageDb db, bool sqlite, CancellationToken ct)
     {
         var conexao = db.Database.GetDbConnection();
         var abriu = conexao.State != ConnectionState.Open;
@@ -112,7 +120,9 @@ public sealed class EsquemaDoBanco
         try
         {
             await using var comando = conexao.CreateCommand();
-            comando.CommandText = "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo'";
+            comando.CommandText = sqlite
+                ? "SELECT m.name, p.name FROM sqlite_master AS m JOIN pragma_table_info(m.name) AS p WHERE m.type = 'table'"
+                : "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo'";
             var colunas = new List<(string, string)>();
             await using var leitor = await comando.ExecuteReaderAsync(ct);
             while (await leitor.ReadAsync(ct))
