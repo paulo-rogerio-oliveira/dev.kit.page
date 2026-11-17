@@ -1,33 +1,31 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy ASP.Net Core app to Azure Web App - devkit
+name: Build and deploy ASP.Net Core app to Azure Web App - devkit (develop)
 
 on:
   push:
     branches:
-      - 'develop'
+      - develop
   workflow_dispatch:
+    inputs:
+      aplicar_sql:
+        description: 'Aplicar os scripts SQL antes do deploy'
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
-
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.x'
-
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+          global-json-file: api/global.json
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish api/src/DevKitPage.Api/DevKitPage.Api.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -35,19 +33,152 @@ jobs:
           name: .net-app
           path: ${{env.DOTNET_ROOT}}/myapp
 
+  worker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: api/global.json
+
+      - name: dotnet publish (worker da provisão)
+        run: dotnet publish api/src/DevKitPage.Provisao/DevKitPage.Provisao.csproj -c Release -o ${{ runner.temp }}/provisao
+
+      - name: Arquivos do WebJob
+        run: |
+          cp api/src/DevKitPage.Provisao/webjob/run.cmd api/src/DevKitPage.Provisao/webjob/run.sh api/src/DevKitPage.Provisao/webjob/settings.job ${{ runner.temp }}/provisao/
+          test -f ${{ runner.temp }}/provisao/DevKitPage.Provisao.dll
+
+      - name: Upload do WebJob
+        uses: actions/upload-artifact@v4
+        with:
+          name: webjob-provisao
+          path: ${{ runner.temp }}/provisao
+
+  configuracao:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_07853D17FA5D422186E297110F670939 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_35B76DCA600340CC91069E6BF9E1C760 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_729973CD066346579B80F6503BE74A2B }}
+
+      - name: Pré-checagem das app settings
+        run: bash api/scripts/azure/conferir-app-settings.sh --app devkit
+
+  sql:
+    needs: configuracao
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.aplicar_sql }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_07853D17FA5D422186E297110F670939 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_35B76DCA600340CC91069E6BF9E1C760 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_729973CD066346579B80F6503BE74A2B }}
+
+      - name: Remoto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Remoto.sql
+
+      - name: Provisao.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Provisao.sql
+
+      - name: Conversa.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Conversa.sql
+
+      - name: Decisoes.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Decisoes.sql
+
+      - name: Push.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Push.sql
+
+      - name: CatalogoRemoto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/CatalogoRemoto.sql
+
+      - name: ClienteDaMaquina.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ClienteDaMaquina.sql
+
+      - name: BoardRemoto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/BoardRemoto.sql
+
+      - name: ArtefatosDosProjetos.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ArtefatosDosProjetos.sql
+
+      - name: ConversaDaTask.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/ConversaDaTask.sql
+
+      - name: Matrix.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/Matrix.sql
+
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, worker, configuracao, sql]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.worker.result == 'success' && needs.configuracao.result == 'success' && needs.sql.result != 'failure' }}
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+      id-token: write
+      contents: read
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: .net-app
-      
+
+      - name: Download do WebJob do worker
+        uses: actions/download-artifact@v4
+        with:
+          name: webjob-provisao
+          path: App_Data/jobs/continuous/provisao
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,4 +193,3 @@ jobs:
           app-name: 'devkit'
           slot-name: 'Production'
           package: .
-          
