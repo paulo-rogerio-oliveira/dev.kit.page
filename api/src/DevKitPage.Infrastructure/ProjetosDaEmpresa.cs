@@ -70,15 +70,41 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                 : $"O projeto {envio.Slug} mudou (v{projeto.Versao}, você leu a v{envio.Versao}): releia e envie de novo.");
         }
 
-        var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
+        var anteriorProjeto = novo ? null : Leitura(escopo, projeto);
+        var anteriores = anteriorProjeto?.Itens ?? [];
+        // Campos opcionais ausentes em clientes antigos não apagam a definição portátil.
+        envio = envio with
+        {
+            BaseDoBranch = string.IsNullOrEmpty(envio.BaseDoBranch) ? anteriorProjeto?.BaseDoBranch ?? envio.BaseDoBranch : envio.BaseDoBranch,
+            FluxoPadrao = envio.FluxoPadrao ?? anteriorProjeto?.FluxoPadrao,
+            Agente = envio.Agente ?? anteriorProjeto?.Agente,
+            Modelo = envio.Modelo ?? anteriorProjeto?.Modelo,
+            Modelos = envio.Modelos ?? anteriorProjeto?.Modelos,
+            FeatureId = envio.FeatureId > 0 ? envio.FeatureId : anteriorProjeto?.FeatureId ?? 0,
+            EpicId = envio.EpicId > 0 ? envio.EpicId : anteriorProjeto?.EpicId ?? 0,
+            Iteracao = !string.IsNullOrEmpty(envio.Iteracao) ? envio.Iteracao : anteriorProjeto?.Iteracao ?? "",
+            Board = !string.IsNullOrEmpty(envio.Board) ? envio.Board : anteriorProjeto?.Board ?? "",
+            BranchesDasTasks = envio.BranchesDasTasks ?? anteriorProjeto?.BranchesDasTasks,
+        };
         // O número muda no replanejamento. A proposta acompanha a identidade do item,
         // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
         ItemDoProjetoV1? AnteriorDoDesign(ItemDoProjetoV1 item)
             => anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
                 ?? anteriores.FirstOrDefault(a => string.Equals(a.Titulo.Trim(), item.Titulo.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? anteriores.FirstOrDefault(a => a.Numero == item.Numero);
-        var enviados = (envio.Itens ?? []).Select(i => i.Design is null
-            ? i with { Design = AnteriorDoDesign(i)?.Design } : i).ToArray();
+        var enviados = (envio.Itens ?? []).Select(i =>
+        {
+            var anterior = AnteriorDoDesign(i);
+            return i with
+            {
+                Design = i.Design ?? anterior?.Design,
+                Agente = i.Agente ?? anterior?.Agente,
+                Modelo = i.Modelo ?? anterior?.Modelo,
+                WorkItemId = i.WorkItemId > 0 ? i.WorkItemId : anterior?.WorkItemId ?? 0,
+                Branch = i.Branch.Length > 0 ? i.Branch : anterior?.Branch ?? "",
+                Horas = i.AtualizadoEm is null && i.Horas == 0 ? anterior?.Horas ?? 0 : i.Horas,
+            };
+        }).ToArray();
         foreach (var item in enviados)
         {
             var anterior = AnteriorDoDesign(item);
@@ -171,7 +197,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             RegrasDosProjetos.Dependencias(i.Dependencias), i.Onda, i.WorkItemId, i.Situacao)).ToArray(),
         RegrasDeAcesso.Papel(escopo, p) == AcessoV1.PapelDono,
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
-        documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p)) with
+        documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
+        documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),

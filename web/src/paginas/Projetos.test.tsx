@@ -32,6 +32,37 @@ const projeto: Projeto = {
 };
 
 describe('Projetos sincronizados', () => {
+  it('leitor consulta snapshot portátil sem reenviar e preserva a referência ao navegar', async () => {
+    const referencia = { projeto: 'repo-fixado', tela: 'plano', versao: 6, hash: 'a'.repeat(64) };
+    const snapshot: Projeto = { ...projeto, board: 'nao', papel: 'leitor', baseDoBranch: 'develop',
+      fluxoPadrao: '1', agente: 'codex', modelo: 'gpt-6.1-sol',
+      modelos: [{ agente: 'codex', modelo: 'gpt-6.1-sol' }, { agente: 'claude', modelo: 'opus' }],
+      itens: [{ ...projeto.itens[0], agente: 'codex', modelo: 'gpt-6.1-sol',
+        design: { alteraTela: true, revisao: 2, propostas: [referencia] } }, projeto.itens[1]],
+    };
+    let envios = 0;
+    servidor.use(
+      http.get(`${API}/api/projetos`, () => HttpResponse.json([snapshot])),
+      http.get(`${API}/api/projetos/7/acessos`, () => HttpResponse.json({ ...acessoInicial, papel: 'leitor', candidatos: [] })),
+      http.get(`${API}/api/design/projetos`, () => HttpResponse.json([])),
+      http.put(`${API}/api/projetos`, () => { envios++; return HttpResponse.json(snapshot); }),
+      http.put(`${API}/api/projetos/7`, () => { envios++; return HttpResponse.json(snapshot); }),
+    );
+    renderizar('/projetos?slug=portal', tokenDoDev());
+    const detalhe = within(await screen.findByRole('article', { name: 'Detalhe do projeto' }));
+    expect(detalhe.getByText('1 Integrado')).toBeInTheDocument();
+    expect(detalhe.getByText('Depende de: 1')).toBeInTheDocument();
+    const acesso = within(await screen.findByRole('region', { name: 'Acesso' }));
+    expect(await acesso.findByText(/Seu papel:/)).toHaveTextContent('Leitor');
+    expect(acesso.queryByRole('button', { name: 'Dar acesso' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Propostas visuais' }));
+    expect(await screen.findByText('repo-fixado/plano/v6')).toBeInTheDocument();
+    expect(screen.getByText(`SHA-256: ${referencia.hash}`)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Plano$/ }));
+    expect(await screen.findByText('Depende de: 1')).toBeInTheDocument();
+    expect(envios).toBe(0);
+  });
+
   it('transporta a referência para o detalhe sem selecionar outra versão quando o Design está ausente', async () => {
     const ref = { projeto: 'repo-congelado', tela: 'plano', versao: 6, hash: 'a'.repeat(64) };
     servidor.use(
