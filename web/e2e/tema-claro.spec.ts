@@ -129,3 +129,33 @@ test('admin: painel, catálogo, usuários e empresas mantêm texto AA no tema cl
     }
   }
 });
+
+test('Design com versões, acesso e comparação permanece legível e cabe no celular', async ({ page, request }, info) => {
+  const c = await prepararMatrix(request);
+  await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), c.sessao);
+  await page.goto('/conta');
+  await expect(page.getByRole('heading', { name: 'Sua conta' })).toBeVisible();
+  const imagem = await page.screenshot();
+  for (const numero of [1, 2, 3]) {
+    const r = await request.post(`${API}/api/design/versoes`, { headers: c.headers, multipart: {
+      repositorio: 'https://example.test/demo/tema', tela: 'conta', nome: 'Conta de demonstração', numero: String(numero),
+      tipo: numero === 2 ? 'proposta' : 'captura', origem: numero === 2 ? 'proposta' : 'web', tema: 'light',
+      alvo: 'http://localhost/conta', branch: 'feature/demo/tema-com-branch-longo', commit: 'a'.repeat(40),
+      autorTipo: 'agente', runner: 'codex', ...(numero > 1 ? { base: String(numero - 1) } : {}),
+      imagem: { name: 'conta.png', mimeType: 'image/png', buffer: imagem },
+    } });
+    expect(r.ok(), await r.text()).toBeTruthy();
+  }
+  for (const width of [1440, 390]) for (const colorScheme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.emulateMedia({ colorScheme });
+    await page.goto('/empresa/conhecimento?aba=design');
+    const comparacao = page.getByRole('region', { name: 'Versões de Conta de demonstração' });
+    await expect(comparacao.getByRole('article')).toHaveCount(3);
+    for (const modo of ['Lado a lado', 'Uma', 'Sobrepor']) {
+      await page.getByRole('group', { name: 'Modo de comparação' }).getByRole('button', { name: modo, exact: true }).click();
+      await conferirTema(page);
+      await page.screenshot({ path: info.outputPath(`design-${modo.replaceAll(' ', '-')}-${width}-${colorScheme}.png`), fullPage: true });
+    }
+  }
+});
