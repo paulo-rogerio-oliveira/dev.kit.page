@@ -1,8 +1,12 @@
+export interface ReferenciaDeProposta { projeto: string; tela: string; versao: number; hash: string }
+export interface DesignDoItem { alteraTela: boolean; revisao: number; propostas: ReferenciaDeProposta[] }
+
 export interface ItemDoProjeto {
   numero: number; titulo: string; descricao: string; fluxo: string;
   repositorios: string[]; componentes: string[]; dependencias: number[];
   onda: number; workItemId: number; situacao: string; tipo: string;
   prioridade: number; horas: number; branch: string; atualizadoEm?: string;
+  design?: DesignDoItem | null;
 }
 
 export interface Projeto {

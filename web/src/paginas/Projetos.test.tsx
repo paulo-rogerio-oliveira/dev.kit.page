@@ -32,6 +32,22 @@ const projeto: Projeto = {
 };
 
 describe('Projetos sincronizados', () => {
+  it('transporta a referência para o detalhe sem selecionar outra versão quando o Design está ausente', async () => {
+    const ref = { projeto: 'repo-congelado', tela: 'plano', versao: 6, hash: 'a'.repeat(64) };
+    servidor.use(
+      http.get(`${API}/api/projetos`, () => HttpResponse.json([{ ...projeto, itens: [
+        { ...projeto.itens[0], design: { alteraTela: true, revisao: 2, propostas: [ref] } },
+      ] }])),
+      http.get(`${API}/api/design/projetos`, () => HttpResponse.json([])),
+    );
+    renderizar('/projetos?visao=propostas', tokenDoDev());
+    expect(await screen.findByText('repo-congelado/plano/v6')).toBeInTheDocument();
+    expect(screen.getByText(`SHA-256: ${ref.hash}`)).toBeInTheDocument();
+    expect(screen.getByText('Revisão 2 · Altera tela')).toBeInTheDocument();
+    expect(await screen.findByText(/Proposta fixada indisponível/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Ver proposta fixada/ })).not.toBeInTheDocument();
+  });
+
   it('mostra dados, branches, ondas, andamento e conserva os filtros ao escolher outro projeto', async () => {
     servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto, { ...projeto, id: 8, nome: 'Outro' }])));
     renderizar('/projetos?nivel=usuario&situacao=aprovado', tokenDoDev());

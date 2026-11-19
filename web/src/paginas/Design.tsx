@@ -57,6 +57,8 @@ export function VersaoDoDesign() {
   const [erro, setErro] = useState('');
   const tratar = useTratar(setErro);
   const numero = Number((rotuloDaVersao ?? '').replace(/^v/i, ''));
+  const [consulta] = useSearchParams();
+  const hashEsperado = consulta.get('hash');
 
   useEffect(() => {
     api.projetoDeDesign(sessao!.token, Number(idDoProjeto)).then(setProjeto).catch(tratar);
@@ -64,6 +66,7 @@ export function VersaoDoDesign() {
 
   const tela = projeto?.telas.find((t) => t.id === idDaTela);
   const versao = tela?.versoes.find((v) => v.numero === numero);
+  const divergente = Boolean(hashEsperado && versao && (versao.tipo !== 'proposta' || versao.sha256.toLowerCase() !== hashEsperado.toLowerCase()));
   return (
     <div className="pagina">
       <Topo secao="design">
@@ -74,7 +77,8 @@ export function VersaoDoDesign() {
         {erro && <p className="erro" role="alert">{erro}</p>}
         {!projeto && !erro && <p className="carregando" role="status">Carregando…</p>}
         {projeto && !versao && <p className="erro" role="alert">{falhaDoDesign(new ErroDaApi(404, ''))}</p>}
-        {versao && (
+        {divergente && <p className="erro" role="alert">A versão não corresponde ao hash da proposta fixada no planejamento. A referência foi preservada; sincronize o Design.</p>}
+        {versao && !divergente && (
           <section className="cartao design-pagina-da-versao" aria-label="Versão de design">
             <p className="design-meta">
               <code>{branchCurto(versao.branch) || '—'}{versao.commit ? ` @ ${versao.commit}` : ''}</code> · {versao.origem} ·{' '}

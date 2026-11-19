@@ -18,6 +18,36 @@ public sealed class ProjetosApiTests : IDisposable
         700, 600, "DevKit/Sprint 3", "vincular", ["feature/dev/us-710"], DateTimeOffset.UtcNow);
 
     [Fact]
+    public async Task Design_fixado_sobrevive_ao_transporte_e_a_cliente_antigo_sem_trocar_a_versao()
+    {
+        var cliente = await _api.AdminAsync();
+        var referencia = new ReferenciaDePropostaV1("repo-123", "plano", 6, new string('a', 64));
+        var design = new DesignDoItemV1(true, 1, [referencia]);
+        var envio = Envio() with { Situacao = "aguardando", Itens = [Envio().Itens[0] with { Design = design }] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var projeto = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(referencia, Assert.Single(projeto.Itens[0].Design!.Propostas));
+        var antigo = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", envio with
+            { Versao = projeto.Versao, Itens = [envio.Itens[0] with { Design = null, Titulo = "Cliente anterior" }] });
+        Assert.Equal(HttpStatusCode.OK, antigo.StatusCode);
+        projeto = (await antigo.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(referencia, Assert.Single(projeto.Itens[0].Design!.Propostas));
+        var semRevisao = envio with { Versao = projeto.Versao,
+            Itens = [envio.Itens[0] with { Design = design with { Propostas = [referencia with { Versao = 7 }] } }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", semRevisao)).StatusCode);
+        var novaRevisao = semRevisao with { Itens = [semRevisao.Itens[0] with { Design = semRevisao.Itens[0].Design! with { Revisao = 2 } }] };
+        var revisada = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", novaRevisao);
+        Assert.Equal(HttpStatusCode.OK, revisada.StatusCode);
+        var lida = (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!;
+        Assert.Equal(7, Assert.Single(lida.Itens[0].Design!.Propostas).Versao);
+        Assert.Equal(2, lida.Itens[0].Design!.Revisao);
+        var invalida = novaRevisao with { Versao = lida.Versao, Itens = [novaRevisao.Itens[0] with
+            { Design = new(true, 3, [referencia with { Hash = "inválido" }]) }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", invalida)).StatusCode);
+    }
+
+    [Fact]
     public async Task Snapshot_completo_volta_em_outra_sessao_e_versao_velha_recebe_estado_atual()
     {
         var cliente = await _api.AdminAsync();

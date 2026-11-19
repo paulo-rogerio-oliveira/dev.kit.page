@@ -71,10 +71,21 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         }
 
         var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
-        var enviados = envio.Itens ?? [];
+        var enviados = (envio.Itens ?? []).Select(i => i.Design is null
+            ? i with { Design = anteriores.FirstOrDefault(a => a.Numero == i.Numero)?.Design } : i).ToArray();
+        foreach (var item in enviados)
+        {
+            var anterior = anteriores.FirstOrDefault(a => a.Numero == item.Numero);
+            var recusa = DesignDosItens.Mudanca(anterior?.Design, item.Design);
+            if (recusa.Length > 0)
+                return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, $"Item {item.Numero}: {recusa}");
+            if (anterior is not null && envio.Situacao == ProjetosV1.Aprovado
+                && JsonSerializer.Serialize(anterior.Design) != JsonSerializer.Serialize(item.Design))
+                return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, "Alterar o design exige devolver o plano à aprovação (situação aguardando).");
+        }
         var itens = anteriores.Where(i => enviados.All(n => n.Numero != i.Numero))
             .Concat(enviados).OrderBy(i => i.Numero).ToArray();
-        var erroDoPlano = RegrasDosProjetos.ValidarItens(itens);
+        var erroDoPlano = RegrasDosProjetos.Validar(envio with { Itens = itens });
         if (erroDoPlano.Length > 0)
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, erroDoPlano);
         envio = envio with { Itens = itens };
