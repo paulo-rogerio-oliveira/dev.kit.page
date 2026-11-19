@@ -155,6 +155,8 @@ public static class RegrasDosArtefatos
             return "Informe o projeto (o slug).";
         if (acao.Repositorio is { Length: > ArtefatosV1.TamanhoMaximoDoRepositorio })
             return $"O repositório tem até {ArtefatosV1.TamanhoMaximoDoRepositorio} caracteres.";
+        if (!string.IsNullOrWhiteSpace(acao.Formato) && acao.Formato.Trim().ToLowerInvariant() is not (ArtefatosV1.TipoPacote or ArtefatosV1.TipoPreview))
+            return "O formato é pacote ou preview (omitido: detectado no clone).";
         return acao.Sha is { Length: > 0 } sha && !Hexadecimal(sha, 7, 40) ? "O SHA tem de 7 a 40 caracteres hexadecimais." : string.Empty;
     }
 

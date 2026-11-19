@@ -28,4 +28,4 @@ export interface Artefato {
 export interface ArtefatosDoProjeto { projetoId: number; slug: string; nome: string; artefatos: Artefato[] }
 
 /** A ação no projeto pelo site: o texto do comando `projeto` com `acao` (sem ela, o texto é o Novo projeto). */
-export interface AcaoNoProjetoRemoto { acao: 'artefato'; projeto: string; repositorio?: string; sha?: string }
+export interface AcaoNoProjetoRemoto { acao: 'artefato'; projeto: string; repositorio?: string; sha?: string; formato?: 'pacote' | 'preview' }

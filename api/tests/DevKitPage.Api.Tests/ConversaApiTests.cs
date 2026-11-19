@@ -441,6 +441,26 @@ public sealed class ConversaApiTests : IDisposable
         Assert.Equal(ConversaV1.ComandoProjeto, naFila.Tipo);
         var lida = JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(naFila.Texto, Json)!;
         Assert.Equal((ArtefatosV1.AcaoArtefato, "controle-v4", null, "3f9c2a1"), (lida.Acao, lida.Projeto, lida.Repositorio, lida.Sha));
+        Assert.Null(lida.Formato);
+    }
+
+    [Theory]
+    [InlineData("pacote")]
+    [InlineData("preview")]
+    public async Task A_acao_de_artefato_preserva_a_selecao_explicita_na_fila(string formato)
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var acao = new AcaoNoProjetoRemotoV1(ArtefatosV1.AcaoArtefato, "controle-v4",
+            "github.com/acme/portal-web", "3f9c2a1", formato);
+
+        var envio = await ana.PostAsJsonAsync("/api/remoto/comandos", Criacao("artefato-explicito", ConversaV1.ComandoProjeto, acao));
+
+        Assert.Equal(HttpStatusCode.Accepted, envio.StatusCode);
+        var fila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal(acao, JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(fila.Texto, Json));
+        // Aceite de transporte não cria resultado nem afirma conclusão da geração.
+        if (Directory.Exists(_api.PastaDosArtefatos))
+            Assert.Empty(Directory.EnumerateFiles(_api.PastaDosArtefatos, "*", SearchOption.AllDirectories));
     }
 
     [Theory]
@@ -452,6 +472,7 @@ public sealed class ConversaApiTests : IDisposable
     [InlineData(ConversaV1.ComandoDesign, """{"repositorio":" "}""", "repositório do catálogo")]
     [InlineData(ConversaV1.ComandoProjeto, """{"acao":"artefato","projeto":""}""", "Informe o projeto")]
     [InlineData(ConversaV1.ComandoProjeto, """{"acao":"artefato","projeto":"controle-v4","sha":"zz"}""", "hexadecimais")]
+    [InlineData(ConversaV1.ComandoProjeto, """{"acao":"artefato","projeto":"controle-v4","formato":"exe"}""", "pacote ou preview")]
     [InlineData(ConversaV1.ComandoProjeto, """{"acao":"publicar","projeto":"controle-v4"}""", "A ação no projeto é artefato")]
     public async Task O_formulario_da_criacao_invalido_e_recusado_antes_da_fila(string tipo, string texto, string motivo)
     {
