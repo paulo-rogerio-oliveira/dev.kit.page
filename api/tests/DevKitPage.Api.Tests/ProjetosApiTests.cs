@@ -47,6 +47,54 @@ public sealed class ProjetosApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", invalida)).StatusCode);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Reordenar_preserva_design_por_identidade_com_referencias_explicitas_ou_omitidas(bool omitirDesign, bool porWorkItem)
+    {
+        var cliente = await _api.AdminAsync();
+        var propostaA = new ReferenciaDePropostaV1("repo-123", "tela-a", 6, new string('a', 64));
+        var propostaB = new ReferenciaDePropostaV1("repo-123", "tela-b", 10, new string('b', 64));
+        var itemA = Envio().Itens[0] with { Numero = 1, Titulo = "A", WorkItemId = porWorkItem ? 747 : 0,
+            Design = new(true, 1, [propostaA]) };
+        var itemB = itemA with { Numero = 2, Titulo = "B", WorkItemId = porWorkItem ? 748 : 0,
+            Design = new(true, 1, [propostaB]) };
+        var envio = Envio() with { Itens = [itemA, itemB] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var projeto = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+
+        // Títulos trocados junto com os números comprovam a prioridade do WorkItemId.
+        // Sem work item, a identidade é o título normalizado, não a posição no plano.
+        var reordenados = new[]
+        {
+            itemB with { Numero = 1, Titulo = porWorkItem ? "A" : " b " },
+            itemA with { Numero = 2, Titulo = porWorkItem ? "B" : " a " },
+        };
+        foreach (var itens in new[] { reordenados, new[] { itemA, itemB } })
+        {
+            var resposta = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", envio with
+                { Versao = projeto.Versao, Itens = itens.Select(i => omitirDesign ? i with { Design = null } : i).ToArray() });
+            Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+            projeto = (await resposta.Content.ReadFromJsonAsync<ProjetoV1>())!;
+            var lida = (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!;
+            var listada = Assert.Single((await cliente.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!);
+            foreach (var leitura in new[] { projeto, lida, listada })
+            {
+                Assert.Equal("aprovado", leitura.Situacao);
+                foreach (var esperado in itens)
+                {
+                    var atual = Assert.Single(leitura.Itens, i => i.Numero == esperado.Numero);
+                    Assert.Equal(esperado.WorkItemId, atual.WorkItemId);
+                    Assert.Equal(1, atual.Design!.Revisao);
+                    Assert.Equal(Assert.Single(esperado.Design!.Propostas), Assert.Single(atual.Design.Propostas));
+                }
+            }
+        }
+    }
+
     [Fact]
     public async Task Snapshot_completo_volta_em_outra_sessao_e_versao_velha_recebe_estado_atual()
     {

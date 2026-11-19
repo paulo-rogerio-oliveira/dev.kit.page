@@ -71,11 +71,17 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         }
 
         var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
+        // O número muda no replanejamento. A proposta acompanha a identidade do item,
+        // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
+        ItemDoProjetoV1? AnteriorDoDesign(ItemDoProjetoV1 item)
+            => anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
+                ?? anteriores.FirstOrDefault(a => string.Equals(a.Titulo.Trim(), item.Titulo.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? anteriores.FirstOrDefault(a => a.Numero == item.Numero);
         var enviados = (envio.Itens ?? []).Select(i => i.Design is null
-            ? i with { Design = anteriores.FirstOrDefault(a => a.Numero == i.Numero)?.Design } : i).ToArray();
+            ? i with { Design = AnteriorDoDesign(i)?.Design } : i).ToArray();
         foreach (var item in enviados)
         {
-            var anterior = anteriores.FirstOrDefault(a => a.Numero == item.Numero);
+            var anterior = AnteriorDoDesign(item);
             var recusa = DesignDosItens.Mudanca(anterior?.Design, item.Design);
             if (recusa.Length > 0)
                 return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, $"Item {item.Numero}: {recusa}");
