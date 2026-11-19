@@ -5,7 +5,10 @@ public sealed record ItemDoProjetoV1(
     int Numero, string Titulo, string Descricao, string Fluxo, IReadOnlyList<string> Repositorios,
     IReadOnlyList<string> Componentes, IReadOnlyList<int> Dependencias, int Onda, int WorkItemId, string Situacao,
     string Tipo = "", int Prioridade = 0, double Horas = 0, string Branch = "",
-    DateTimeOffset? AtualizadoEm = null);
+    DateTimeOffset? AtualizadoEm = null, DesignDoItemV1? Design = null);
+
+public sealed record ReferenciaDePropostaV1(string Projeto, string Tela, int Versao, string Hash);
+public sealed record DesignDoItemV1(bool AlteraTela, int Revisao, IReadOnlyList<ReferenciaDePropostaV1> Propostas);
 
 /// <summary>Snapshot completo, versionado pelo servidor. Ausência de itens não significa exclusão.</summary>
 public sealed record EnvioDeProjetoV1(

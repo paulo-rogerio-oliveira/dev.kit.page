@@ -91,7 +91,7 @@
 .mx-cell-editor .mx-alerta { background:#352723; border-color:#755649; }
 @media(prefers-color-scheme:light) { .board-remoto .mx-cell-editor .mx-alerta { background:#fff0ed; } }
 .mx-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
-.projeto-abas { display:flex; gap:16px; border-bottom:1px solid #3a3f49; margin:20px 0 14px; }
+.projeto-abas { display:flex; flex-wrap:wrap; gap:4px 16px; border-bottom:1px solid #3a3f49; margin:20px 0 14px; }
 .projeto-abas button { border:0; border-bottom:3px solid transparent; background:none; color:inherit; font:inherit; padding:8px 0; cursor:pointer; }
 .projeto-abas button[aria-pressed=true] { border-bottom-color:#ff6358; font-weight:700; }
 @media(max-width:700px) {

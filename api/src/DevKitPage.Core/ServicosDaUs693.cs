@@ -119,6 +119,8 @@ public static partial class RegrasDosProjetos
         var anexos = envio.Anexos ?? [];
         if (anexos.Count > ProjetosV1.MaximoDeAnexos || anexos.Any(a => (a?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoTexto))
             return $"O projeto tem até {ProjetosV1.MaximoDeAnexos} anexos.";
+        if (envio.Situacao == ProjetosV1.Aprovado && (envio.Itens ?? []).Any(i => i.Design is { AlteraTela: true, Propostas.Count: 0 }))
+            return "Proposta visual ausente: fixe projeto/tela/versão/hash antes de aprovar o plano.";
         return ValidarItens(envio.Itens ?? []);
     }
 
@@ -130,6 +132,8 @@ public static partial class RegrasDosProjetos
         var numeros = new HashSet<int>();
         foreach (var item in itens)
         {
+            if (DesignDosItens.Validar(item.Design) is { Length: > 0 } design)
+                return $"Item {item.Numero}: {design}";
             if (item.Numero <= 0 || !numeros.Add(item.Numero))
                 return $"O número do item é positivo e único no plano (o {item.Numero} se repete ou não vale).";
             var titulo = item.Titulo?.Trim() ?? string.Empty;
