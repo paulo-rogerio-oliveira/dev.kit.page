@@ -25,6 +25,8 @@
 .br-contexto label {display:block; color:var(--ink); font-size:12px; margin-bottom:8px}
 .br-contexto input {display:block; width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); padding:6px; font:inherit}
 .br-contexto p {color:var(--muted); font-size:11px; margin:6px 0}
+.br-contexto-filtro>strong {display:block; margin-bottom:10px; color:var(--ink); font-size:14px}
+.br-contexto-filtro .br-contexto-selecionado {overflow-wrap:anywhere}
 /* O catálogo do dev.kit nos atalhos (remote-control-v3): as opções e a linha com a data e o Atualizar. */
 .br-opcoes {max-height:min(240px,40vh); overflow:auto; margin:0 0 8px; border:1px solid var(--line); border-radius:7px; background:var(--panel)}
 .br-opcoes-grupo {display:block; padding:6px 9px 2px; color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em}
@@ -74,6 +76,7 @@
   /* (ajuste 6) No celular o painel do atalho é uma folha FIXA no alto: dentro do chat (overflow escondido) e com o teclado aberto,
      a lista ficava cortada acima do compositor — o seletor parecia não listar nada. */
   .br-contexto {position:fixed; top:8px; left:8px; right:8px; bottom:auto; width:auto; max-height:calc(100dvh - 16px); overflow:auto; z-index:25; box-shadow:0 10px 40px #0005}
+  .br-contexto-filtro {top:50%; left:12px; right:12px; transform:translateY(-50%)}
   .br-opcoes {max-height:min(320px,45dvh)}
   .br-composer-ativo .br-contexto .br-opcao {padding:9px 10px; font-size:13px}
   .br-dica-texto {left:auto; right:-40px; transform:none}
