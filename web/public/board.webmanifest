@@ -7,8 +7,8 @@
   "start_url": "/board",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#242830",
-  "theme_color": "#242830",
+  "background_color": "#f7f8fa",
+  "theme_color": "#f7f8fa",
   "icons": [
     { "src": "/board-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
     { "src": "/board-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

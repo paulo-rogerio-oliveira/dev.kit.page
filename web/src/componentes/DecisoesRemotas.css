@@ -1,4 +1,4 @@
-.board-remoto .br-btn.br-primary {background:#c7362b; border-color:#c7362b; color:#fff!important; font-weight:600!important}
+.board-remoto .br-btn.br-primary:not(:disabled) {background:var(--accent); border-color:var(--accent); color:#fff!important; font-weight:600!important}
 .board-remoto .br-btn.br-primary:disabled {background:var(--panel); color:var(--soft)!important; border-color:var(--line)}
 .board-remoto .br-decisao-card {width:100%; max-width:680px; flex:none; overflow-wrap:anywhere; border-color:var(--needline)}
 .br-decisao-titulo {display:flex; align-items:start; justify-content:space-between; gap:8px}
