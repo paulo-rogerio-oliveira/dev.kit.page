@@ -71,7 +71,7 @@ export function opcoesDoAtalho(atalho: Atalho, catalogo: CatalogoRemoto | null):
       const nome = nomeDoRepositorio(r.nome);
       const dono = (vezes.get(nome.toLowerCase()) ?? 0) > 1 ? donoDoRepositorio(r.nome) : '';
       return { grupo: 'Repositórios', rotulo: nome, detalhe: [dono, r.branchPadrao ? `branch padrão ${r.branchPadrao}` : ''].filter(Boolean).join(' · '),
-        valor: r.nome, busca: [nome, dono] };
+        valor: r.nome, busca: [nome, donoDoRepositorio(r.nome), r.nome] };
     });
   }
   return [
@@ -106,6 +106,8 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
   atalho: Atalho | null; abrir: (atalho: Atalho | null) => void; desabilitado: boolean; catalogo?: CatalogoRemoto | null;
 }) {
   const [rascunho, setRascunho] = useState(contexto);
+  const [pesquisa, setPesquisa] = useState('');
+  const [digitou, setDigitou] = useState(false);
   const [chip, setChip] = useState<string | null>(null);
   const painel = useRef<HTMLDivElement>(null);
   const anterior = useRef<HTMLElement | null>(null);
@@ -114,31 +116,38 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
     setChip(null);
     anterior.current = document.activeElement as HTMLElement;
     setRascunho(contexto);
+    setPesquisa('');
+    setDigitou(false);
     focarSemTeclado(painel.current?.querySelector('input'));
   }, [atalho, contexto]);
   const campo = atalho === '/' ? 'fluxo' : atalho === '#' ? 'item' : 'repositorio';
   const rotulo = atalho === '/' ? 'Fluxo, projeto ou design' : atalho === '#' ? 'Work item' : 'Repositório';
-  const filtro = atalho ? rascunho[campo].trim().toLowerCase() : '';
+  const filtrando = atalho === '#' || atalho === '@';
+  const filtro = (filtrando ? pesquisa : atalho ? rascunho[campo] : '').trim().toLowerCase();
   const todas = atalho ? opcoesDoAtalho(atalho, catalogo) : [];
-  // O filtro casa pelo que a opção MOSTRA (o nome do repositório, não o host/dono inteiro); o escolhido já aparece inteiro.
-  const opcoes = todas.filter(o => !filtro || o.valor.toLowerCase() === filtro || o.busca.some(t => t.toLowerCase().includes(filtro)));
-  // O repositório escolhido do catálogo aparece pelo NOME; o digitado, como está.
-  const escrito = (atalho === '@' && todas.find(o => o.valor === rascunho.repositorio)?.rotulo) || rascunho[campo];
+  // Cada palavra pode aparecer em qualquer parte do título/origem, sem perder o valor exato da opção.
+  const termos = filtrando ? filtro.split(/\s+/).filter(Boolean) : [filtro];
+  const opcoes = todas.filter(o => termos.every(t => [o.valor, ...o.busca].some(b => b.toLowerCase().includes(t))));
+  const escrito = filtrando ? pesquisa : rascunho[campo];
+  const pesquisaDeTitulo = atalho === '#' && !!pesquisa.trim() && !/^\d+$/.test(pesquisa.trim());
   const fluxo = fluxoEscolhido(contexto, catalogo);
   function salvar() {
+    if (pesquisaDeTitulo) return;
     if (atalho === '/') {
       const nome = rascunho.fluxo.trim();
       const doCatalogo = nome === contexto.fluxo ? fluxo ?? undefined : catalogo?.fluxos?.find(f => f.nome.trim().toLowerCase() === nome.toLowerCase());
       alterar({ ...comFluxo(rascunho, doCatalogo, nome), ...(nome === contexto.fluxo ? { agente: contexto.agente, parametros: contexto.parametros } : {}),
         branch: rascunho.branch.trim() });
-    } else alterar({ ...rascunho, [campo]: rascunho[campo].trim(), branch: rascunho.branch.trim() });
+    } else alterar({ ...rascunho, [campo]: digitou ? pesquisa.trim() : rascunho[campo].trim(), branch: rascunho.branch.trim() });
     abrir(null);
   }
   function escolher(opcao: Opcao) {
-    // O repositório ainda pede o branch: a escolha preenche e o foco vai ao branch. Os outros aplicam já.
+    // O branch continua opcional; no toque a seleção não abre o teclado sozinha.
     if (atalho === '@') {
       setRascunho({ ...rascunho, repositorio: opcao.valor });
-      painel.current?.querySelector<HTMLInputElement>('input[aria-label="Branch existente"]')?.focus();
+      setPesquisa('');
+      setDigitou(false);
+      focarSemTeclado(painel.current?.querySelector<HTMLInputElement>('input[aria-label="Branch existente"]'));
       return;
     }
     if (atalho === '/') alterar({ ...comFluxo(rascunho, opcao.fluxo, opcao.valor), branch: rascunho.branch.trim() });
@@ -171,29 +180,52 @@ export function ContextoDoChatRemoto({ contexto, alterar, atalho, abrir, desabil
       onClick={() => abrir(atalho === '@' ? null : '@')}>
       @ {contexto.repositorio ? nomeDoRepositorio(contexto.repositorio) : 'Repositório'} ▾
     </button>
-    {atalho && <div className="br-contexto" role="dialog" aria-label={rotulo} ref={painel} onKeyDown={e => {
+    {atalho && <div className={`br-contexto${filtrando ? ' br-contexto-filtro' : ''}`} role="dialog" aria-label={rotulo} ref={painel} onKeyDown={e => {
       if (e.key === 'Escape') { e.stopPropagation(); abrir(null); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const botoes = Array.from(painel.current?.querySelectorAll<HTMLButtonElement>('.br-opcao') ?? []);
+        if (botoes.length && (e.target === painel.current?.querySelector('input') || botoes.includes(e.target as HTMLButtonElement))) {
+          e.preventDefault();
+          const i = botoes.indexOf(e.target as HTMLButtonElement);
+          botoes[(i + (e.key === 'ArrowDown' ? 1 : i < 0 ? 0 : -1) + botoes.length) % botoes.length].focus();
+        }
+      }
       // O Enter num botão (uma opção do catálogo, o Cancelar) é o clique dele; nos campos, aplica o contexto.
       if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); e.stopPropagation(); salvar(); }
     }}>
-      <label>{rotulo}<input aria-label={rotulo} value={escrito} maxLength={200} placeholder={catalogo ? 'Buscar no catálogo ou digitar' : undefined}
-        inputMode={atalho === '#' ? 'numeric' : 'text'} pattern={atalho === '#' ? '[0-9]*' : undefined}
-        onChange={e => setRascunho({ ...rascunho, [campo]: atalho === '#' ? e.target.value.replace(/\D/g, '') : e.target.value })} /></label>
+      {filtrando && <strong>{rotulo}</strong>}
+      <label>{atalho === '#' ? 'Filtrar por ID ou título' : atalho === '@' ? 'Filtrar por nome ou origem' : rotulo}
+        <input aria-label={rotulo} value={escrito} maxLength={atalho === '@' ? 2000 : 200}
+          title={atalho === '#' ? 'Pesquise pelo ID ou título e selecione um resultado. Um ID numérico também pode ser aplicado diretamente.' : 'Busque no catálogo ou digite o valor completo.'}
+          placeholder={atalho === '#' ? 'ID ou título do work item' : catalogo ? 'Buscar no catálogo ou digitar' : undefined} inputMode="text"
+          onChange={e => {
+            const valor = e.target.value;
+            setPesquisa(valor);
+            setDigitou(true);
+            if (!filtrando) setRascunho({ ...rascunho, [campo]: valor });
+          }} /></label>
+      {filtrando && rascunho[campo] && <p className="br-contexto-selecionado">Selecionado: {rascunho[campo]}</p>}
+      {filtrando && <span className="br-oculto" role="status">{opcoes.length} resultado(s) no catálogo</span>}
       {!!opcoes.length && <div className="br-opcoes" role="group" aria-label={`Do catálogo do dev.kit: ${nomeDaLista[atalho]}`}>
         {opcoes.slice(0, 50).map((o, i) => <div key={`${o.grupo}-${o.valor}`}>
           {(i === 0 || opcoes[i - 1].grupo !== o.grupo) && <small className="br-opcoes-grupo">{o.grupo}</small>}
-          <button type="button" className={rascunho[campo] === o.valor ? 'br-opcao br-opcao-escolhida' : 'br-opcao'} onClick={() => escolher(o)}>
+          <button type="button" title={o.valor} aria-pressed={rascunho[campo] === o.valor}
+            className={rascunho[campo] === o.valor ? 'br-opcao br-opcao-escolhida' : 'br-opcao'} onClick={() => escolher(o)}>
             <span>{o.rotulo}</span>{o.detalhe && <>{' '}<small>{o.detalhe}</small></>}
+            {atalho === '@' && <small>{o.valor}</small>}
           </button>
         </div>)}
       </div>}
       {!catalogo && <p>Sem catálogo do dev.kit desta máquina: digite o valor, ou use ↻ com o dev.kit aberto.</p>}
       {catalogo && !todas.length && <p>O catálogo não tem {nomeDaLista[atalho]}: digite o valor.</p>}
-      {catalogo && !!todas.length && !opcoes.length && <p>Nada no catálogo com “{escrito.trim()}”: o texto vai como está.</p>}
-      {atalho === '@' && <label>Branch existente<input aria-label="Branch existente" maxLength={250} value={rascunho.branch}
+      {catalogo && !!todas.length && !opcoes.length && <p>Nada no catálogo com “{escrito.trim()}”.{atalho !== '#' && ' O texto pode ser aplicado como está.'}</p>}
+      {pesquisaDeTitulo && <p>Selecione um resultado ou digite somente o ID para aplicar.</p>}
+      {atalho === '@' && <label>Branch existente (opcional)<input aria-label="Branch existente" title="Opcional: deixe vazio para o dev.kit resolver pela convenção." maxLength={250} value={rascunho.branch}
         onChange={e => setRascunho({ ...rascunho, branch: e.target.value })} /></label>}
       <p>Informe o contexto do dev.kit. Deixe vazio para usar a conversa atual.</p>
-      <button type="button" onClick={salvar}>Aplicar contexto</button>
+      <button type="button" disabled={pesquisaDeTitulo} title="Confirma o valor selecionado ou digitado para esta mensagem." onClick={salvar}>Aplicar contexto</button>
+      {filtrando && rascunho[campo] && <button type="button" title="Limpa a seleção deste campo; confirme em Aplicar contexto."
+        onClick={() => { setPesquisa(''); setDigitou(false); setRascunho({ ...rascunho, [campo]: '' }); }}>Limpar seleção</button>}
       <button type="button" onClick={() => abrir(null)}>Cancelar</button>
     </div>}
     {chip && fluxo && <PainelDoFluxo key={chip} chip={chip} fluxo={fluxo} contexto={contexto} catalogo={catalogo}

@@ -395,8 +395,9 @@ it('com o dev.kit fechado carrega os atalhos do último catálogo, mostra a data
   await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
   const repositorios = within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' }));
   expect(repositorios.getAllByRole('button').map(b => b.querySelector('span')?.textContent)).toEqual(['dev.kit.page', 'git.kit']);
-  await userEvent.click(repositorios.getByRole('button', { name: 'git.kit' }));
-  expect(screen.getByRole('textbox', { name: 'Repositório' })).toHaveValue('git.kit');
+  await userEvent.click(repositorios.getByRole('button', { name: /^git.kit/ }));
+  expect(screen.getByRole('textbox', { name: 'Repositório' })).toHaveValue('');
+  expect(screen.getByText('Selecionado: github.com/empresa/git.kit')).toBeInTheDocument();
   await userEvent.type(screen.getByRole('textbox', { name: 'Branch existente' }), 'feature/item-1');
   await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
   expect(screen.getByRole('button', { name: '@ Repositório' })).toHaveTextContent('@ git.kit ▾');
@@ -543,13 +544,169 @@ it('o seletor de repositório mostra só o nome, o dono no repetido, filtra pelo
   await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
   await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
   const grupo = () => within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' }));
-  expect(grupo().getAllByRole('button').map(b => b.textContent)).toEqual(['app empresa', 'app outra', 'git.kit']);
-  // O filtro casa pelo nome: o host do repositório não traz todos de volta.
+  expect(grupo().getAllByRole('button').map(b => b.querySelector('span')?.textContent)).toEqual(['app', 'app', 'git.kit']);
+  expect(grupo().getByRole('button', { name: /app empresa github.com\/empresa\/app/ })).toBeInTheDocument();
+  expect(grupo().getByRole('button', { name: /app outra dev.azure.com\/outra\/app/ })).toBeInTheDocument();
+  // A origem completa também filtra, inclusive quando o nome não é repetido.
   await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'github');
-  expect(screen.getByText(/Nada no catálogo com “github”/)).toBeInTheDocument();
+  expect(grupo().getAllByRole('button')).toHaveLength(2);
   await userEvent.clear(screen.getByRole('textbox', { name: 'Repositório' }));
   await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'git.k');
-  expect(grupo().getAllByRole('button').map(b => b.textContent)).toEqual(['git.kit']);
+  expect(grupo().getAllByRole('button').map(b => b.querySelector('span')?.textContent)).toEqual(['git.kit']);
+});
+
+function catalogoDosFiltros(): CatalogoDaMaquina {
+  const base = catalogoComFluxo();
+  return { ...base, catalogo: { ...base.catalogo, workItems: [
+    { id: 812, titulo: 'Corrigir login do portal', tipo: 'Bug', estado: 'Active' },
+    { id: 836, titulo: 'Login do portal com nova sessão', tipo: 'User Story', estado: 'Active' },
+    { id: 900, titulo: 'Rever documentação', tipo: 'Task', estado: 'Active' },
+  ] } };
+}
+
+it('filtra título com espaços a cada tecla, escolhe por teclado o ID exato e envia sem o termo de pesquisa', async () => {
+  preparar();
+  let enviado: ComandoNovo | undefined;
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoDosFiltros())),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      enviado = await request.json() as ComandoNovo; return HttpResponse.json({ ...comando(), ...enviado });
+    }),
+  );
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  const chip = screen.getByRole('button', { name: '# Work item' });
+  await userEvent.click(chip);
+  const input = screen.getByRole('textbox', { name: 'Work item' });
+  expect(input).toHaveFocus();
+  expect(input).toHaveAttribute('inputMode', 'text');
+  const opcoes = () => within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: work item em andamento' }));
+  expect(opcoes().getAllByRole('button')).toHaveLength(3);
+  await userEvent.type(input, 'l');
+  expect(opcoes().getAllByRole('button')).toHaveLength(2);
+  await userEvent.type(input, 'OgIn portal');
+  expect(input).toHaveValue('lOgIn portal');
+  expect(opcoes().getAllByRole('button')).toHaveLength(2);
+  expect(screen.getByRole('button', { name: 'Aplicar contexto' })).toBeDisabled();
+  await userEvent.keyboard('{Enter}');
+  expect(screen.getByRole('dialog', { name: 'Work item' })).toBeInTheDocument();
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+  expect(chip).toHaveTextContent('# 836');
+  expect(chip).toHaveFocus();
+  await userEvent.type(screen.getByLabelText('Mensagem ao Orquestrador'), 'Verifique{Enter}');
+  await waitFor(() => expect(enviado?.texto).toBe('# 836\nVerifique'));
+  expect(enviado?.texto).not.toContain('portal');
+});
+
+it('reabre todas as opções com o ID marcado e Esc/Cancelar descartam pesquisas e seleção de repositório', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoDosFiltros())));
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  const chip = screen.getByRole('button', { name: '# Work item' });
+  await userEvent.click(chip);
+  await userEvent.click(screen.getByRole('button', { name: /#812 ·/ }));
+  await userEvent.click(chip);
+  expect(screen.getByRole('textbox', { name: 'Work item' })).toHaveValue('');
+  expect(screen.getByRole('button', { name: /#812 ·/ })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: /#900 ·/ })).toBeInTheDocument();
+  await userEvent.type(screen.getByRole('textbox', { name: 'Work item' }), '900 inexistente');
+  expect(screen.getByText(/Nada no catálogo/)).toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  expect(chip).toHaveTextContent('# 812');
+  expect(chip).toHaveFocus();
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  await userEvent.click(screen.getByRole('button', { name: /app outra/ }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Branch existente' }), 'descartar');
+  await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  expect(screen.getByRole('button', { name: '@ Repositório' })).toHaveTextContent('@ Repositório');
+  expect(chip).toHaveTextContent('# 812');
+});
+
+it.each(['ausente', 'vazio'])('catálogo %s permite ID explícito, impede título como ID e permite limpar o contexto', async estado => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => estado === 'ausente'
+    ? new HttpResponse(null, { status: 404 }) : HttpResponse.json({ ...catalogo(), catalogo: { ...catalogo().catalogo, workItems: [] } })));
+  await abrir();
+  await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Work item' }), 'título 123');
+  expect(screen.getByRole('button', { name: 'Aplicar contexto' })).toBeDisabled();
+  expect(await screen.findByText(estado === 'ausente' ? /Sem catálogo do dev.kit desta máquina/ : /O catálogo não tem work item/)).toBeInTheDocument();
+  await userEvent.clear(screen.getByRole('textbox', { name: 'Work item' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Work item' }), '987654{Enter}');
+  expect(screen.getByRole('button', { name: '# Work item' })).toHaveTextContent('# 987654');
+  await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Limpar seleção' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
+  expect(screen.getByRole('button', { name: '# Work item' })).toHaveTextContent('# Work item');
+});
+
+it('pesquisa origem, preserva URL exata, fluxo e parâmetros e envia com branch omitido sem confirmação', async () => {
+  preparar();
+  let enviado: ComandoNovo | undefined;
+  const base = catalogoDosFiltros();
+  const url = 'https://dev.azure.com/outra/Projeto/_git/app';
+  servidor.use(
+    http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json({ ...base,
+      catalogo: { ...base.catalogo, repositorios: [{ nome: url }, { nome: 'https://github.com/outra/app' }] } })),
+    http.post(`${API}/api/remoto/comandos`, async ({ request }) => {
+      enviado = await request.json() as ComandoNovo; return HttpResponse.json({ ...comando(), ...enviado });
+    }),
+  );
+  await abrir();
+  await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+  await userEvent.click(screen.getByRole('button', { name: 'Trocar fluxo' }));
+  await userEvent.click(screen.getByRole('button', { name: /^Implementar com revisor/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Parâmetro Revisor' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Pessoa Revisora' }));
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  await userEvent.type(screen.getByRole('textbox', { name: 'Repositório' }), 'DEV.AZURE.COM outra');
+  const lista = within(screen.getByRole('group', { name: 'Do catálogo do dev.kit: repositório' }));
+  expect(lista.getAllByRole('button')).toHaveLength(1);
+  await userEvent.click(lista.getByRole('button'));
+  expect(screen.getByText(`Selecionado: ${url}`)).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Branch existente' })).toHaveValue('');
+  await userEvent.click(screen.getByRole('button', { name: 'Aplicar contexto' }));
+  await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+  expect(screen.getByRole('button', { name: new RegExp('dev.azure.com') })).toHaveAttribute('aria-pressed', 'true');
+  await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  await userEvent.type(screen.getByLabelText('Mensagem ao Orquestrador'), 'Implemente{Enter}');
+  await waitFor(() => expect(enviado).toBeDefined());
+  expect(enviado).toMatchObject({ fluxo: 7, agente: 'claude:opus', parametros: { REVISOR: 'Pessoa Revisora', AMBIENTE: 'homologação' } });
+  expect(enviado?.texto).toContain(`@ ${url}\nImplemente`);
+  expect(enviado?.texto).not.toContain('Branch');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+it('no toque listar não foca o filtro nem o branch e tocar no filtro permite título', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => HttpResponse.json(catalogoDosFiltros())));
+  const original = Object.getOwnPropertyDescriptor(window, 'matchMedia')!;
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: (consulta: string) => ({
+    ...original.value(consulta), matches: consulta === '(pointer: coarse)' || original.value(consulta).matches,
+  }) });
+  try {
+    await abrir();
+    await waitFor(() => expect(screen.getByTitle(/Catálogo do dev.kit · atualizado/)).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: '# Work item' }));
+    const input = screen.getByRole('textbox', { name: 'Work item' });
+    expect(input).not.toHaveFocus();
+    await userEvent.click(input);
+    await userEvent.type(input, 'login portal');
+    expect(input).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: /#836 ·/ }));
+    await userEvent.click(screen.getByRole('button', { name: '@ Repositório' }));
+    await userEvent.click(screen.getByRole('button', { name: /^app outra/ }));
+    expect(screen.getByRole('textbox', { name: 'Branch existente' })).not.toHaveFocus();
+  } finally { Object.defineProperty(window, 'matchMedia', original); }
+});
+
+it('catálogo com sessão expirada volta ao login sem expor as opções', async () => {
+  preparar();
+  servidor.use(http.get(`${API}/api/remoto/maquinas/:id/catalogo`, () => new HttpResponse(null, { status: 401 })));
+  renderizar('/board?aba=chat', tokenDoDev());
+  expect(await screen.findByRole('button', { name: 'Entrar' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '# Work item' })).not.toBeInTheDocument();
 });
 
 it('a fala com a versão de design mostra a miniatura, abre o modal e a imagem que não chegou vira aviso', async () => {
