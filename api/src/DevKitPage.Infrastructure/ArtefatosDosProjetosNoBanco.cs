@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using DevKitPage.Contracts.V1;
 using DevKitPage.Core;
 using Microsoft.EntityFrameworkCore;
@@ -26,29 +27,52 @@ public sealed class ArtefatosDosProjetosNoBanco(DevKitPageDb db, IArmazemDeArtef
         if (problema.Length > 0)
             return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, problema);
         var cfg = opcoes.Value;
-        if (pacote.Tamanho <= 0)
+        // O chamador não é autoridade sobre o tamanho: confira o arquivo que será enviado ao armazém.
+        await using var leitura = File.OpenRead(pacote.Arquivo);
+        var tamanho = leitura.Length;
+        if (tamanho <= 0)
             return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, "Envie o zip do artefato no campo 'arquivo'.");
-        if (pacote.Tamanho > cfg.TetoEmBytes)
+        if (tamanho > cfg.TetoEmBytes)
             return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, $"O zip passa do teto de {cfg.TamanhoMaximoMb} MB.", CodigoDoTeto);
 
-        string hash;
-        await using (var leitura = File.OpenRead(pacote.Arquivo))
-            hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(leitura, ct));
+        var hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(leitura, ct));
         if (pacote.HashInformado is { Length: > 0 } informado && !string.Equals(informado, hash, StringComparison.OrdinalIgnoreCase))
             return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, "O SHA-256 do zip recebido não confere com o informado: o envio se corrompeu, gere de novo.");
 
+        var publicacao = Identidade(ArtefatosV1.TipoPacote, pacote.Repositorio!.Trim(), pacote.Sha!.Trim().ToLowerInvariant(), hash);
+        if (await ExistenteAsync(alvo.Id, publicacao, ct) is { } existente)
+            return await RepetirAsync(existente, ct);
         var agora = relogio.GetUtcNow().UtcDateTime;
         var nome = RegrasDosArtefatos.NomeDoArquivo(pacote.NomeDoArquivo);
         var chave = $"projetos/{alvo.Id}/{Guid.NewGuid():N}.zip";
-        await using (var conteudo = File.OpenRead(pacote.Arquivo))
-            await armazem.GravarAsync(chave, conteudo, ct);
+        // Detecta conexão sem assinatura antes de gravar bytes ou linha e antes de executar retenção.
+        _ = armazem.Link(chave, nome, relogio.GetUtcNow().AddHours(1));
         var artefato = new ArtefatoDoProjeto
         {
             ProjetoId = alvo.Id, Tipo = ArtefatosV1.TipoPacote, Repositorio = pacote.Repositorio!.Trim(), Sha = pacote.Sha!.Trim().ToLowerInvariant(),
-            Chave = chave, NomeDoArquivo = nome, Hash = hash, Tamanho = pacote.Tamanho, AutorId = escopo.UsuarioId, CriadoEmUtc = agora,
+            Publicacao = publicacao, Chave = chave, NomeDoArquivo = nome, Hash = hash, Tamanho = tamanho, AutorId = escopo.UsuarioId, CriadoEmUtc = agora,
             RetidoAteUtc = agora.AddDays(Math.Max(1, cfg.RetencaoDias)),
         };
-        return await GravarAsync(artefato, ct);
+        try
+        {
+            leitura.Position = 0;
+            await armazem.GravarAsync(chave, leitura, ct);
+            return await GravarAsync(artefato, ct);
+        }
+        catch (Exception original)
+        {
+            // Se a linha já foi salva, uma falha posterior é recuperável pelo mesmo POST, sem apagar seu zip.
+            try
+            {
+                if (!await db.ArtefatosDosProjetos.AsNoTracking().AnyAsync(a => a.Chave == chave, CancellationToken.None))
+                    await armazem.ApagarAsync(chave, CancellationToken.None);
+            }
+            catch (Exception limpeza)
+            {
+                throw new AggregateException("Falha na publicação e na conferência/limpeza do upload; veja ambas as causas no log.", original, limpeza);
+            }
+            throw;
+        }
     }
 
     public async Task<ResultadoDaGestao<ArtefatoV1>> RegistrarPreviewAsync(EscopoDoDesign escopo, long projeto, PreviewDoProjetoV1 preview, CancellationToken ct)
@@ -59,10 +83,14 @@ public sealed class ArtefatosDosProjetosNoBanco(DevKitPageDb db, IArmazemDeArtef
         var problema = RegrasDosArtefatos.ValidarPreview(preview);
         if (problema.Length > 0)
             return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, problema);
+        var publicacao = Identidade(ArtefatosV1.TipoPreview, preview.Repositorio!.Trim(), preview.Sha!.Trim().ToLowerInvariant(),
+            preview.Url!.Trim(), preview.Ambiente!.Trim());
+        if (await ExistenteAsync(alvo.Id, publicacao, ct) is { } existente)
+            return await RepetirAsync(existente, ct);
         var artefato = new ArtefatoDoProjeto
         {
             ProjetoId = alvo.Id, Tipo = ArtefatosV1.TipoPreview, Repositorio = preview.Repositorio!.Trim(), Sha = preview.Sha!.Trim().ToLowerInvariant(),
-            Url = preview.Url!.Trim(), Ambiente = preview.Ambiente!.Trim(), AutorId = escopo.UsuarioId, CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
+            Publicacao = publicacao, Url = preview.Url!.Trim(), Ambiente = preview.Ambiente!.Trim(), AutorId = escopo.UsuarioId, CriadoEmUtc = relogio.GetUtcNow().UtcDateTime,
         };
         return await GravarAsync(artefato, ct);
     }
@@ -108,9 +136,36 @@ public sealed class ArtefatosDosProjetosNoBanco(DevKitPageDb db, IArmazemDeArtef
     private async Task<ResultadoDaGestao<ArtefatoV1>> GravarAsync(ArtefatoDoProjeto artefato, CancellationToken ct)
     {
         db.ArtefatosDosProjetos.Add(artefato);
-        await db.SaveChangesAsync(ct);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException)
+        {
+            // Dois hosts podem receber o mesmo pedido: o índice único escolhe uma só publicação.
+            db.Entry(artefato).State = EntityState.Detached;
+            if (await ExistenteAsync(artefato.ProjetoId, artefato.Publicacao!, ct) is not { } existente)
+                throw;
+            if (artefato.Chave.Length > 0)
+                await armazem.ApagarAsync(artefato.Chave, CancellationToken.None);
+            return await RepetirAsync(existente, ct);
+        }
         await ReterAsync(artefato.ProjetoId, ct);
         return new((await LeituraAsync([artefato], ct))[0]);
+    }
+
+    private static string Identidade(params string[] partes)
+        => Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(partes)));
+
+    private Task<ArtefatoDoProjeto?> ExistenteAsync(long projeto, string publicacao, CancellationToken ct)
+        => db.ArtefatosDosProjetos.AsNoTracking().FirstOrDefaultAsync(a => a.ProjetoId == projeto && a.Publicacao == publicacao, ct);
+
+    private async Task<ResultadoDaGestao<ArtefatoV1>> RepetirAsync(ArtefatoDoProjeto existente, CancellationToken ct)
+    {
+        // A repetição não prolonga retenção nem revive pacote vencido.
+        if (existente.RetidoAteUtc is { } ate && ate <= relogio.GetUtcNow().UtcDateTime)
+            return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.Recusada, "O pacote já venceu na retenção: gere outro artefato.");
+        await ReterAsync(existente.ProjetoId, ct);
+        if (!await db.ArtefatosDosProjetos.AsNoTracking().AnyAsync(a => a.Id == existente.Id, ct))
+            return ResultadoDaGestao<ArtefatoV1>.Falhou(FalhaNaGestao.NaoEncontrado, "O artefato saiu da retenção do projeto.");
+        return new((await LeituraAsync([existente], ct))[0]);
     }
 
     /// <summary>A retenção do projeto: o zip vencido e o excedente do teto por projeto saem do armazém e do banco.</summary>

@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using DevKitPage.Contracts.V1;
+using DevKitPage.Infrastructure;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DevKitPage.Api.Tests;
 
@@ -48,7 +52,80 @@ public sealed class ArtefatosApiTests : IDisposable
         return corpo;
     }
 
-    private static byte[] Zip(int tamanho = 4096) => Enumerable.Range(0, tamanho).Select(i => (byte)(i % 251)).ToArray();
+    private static byte[] Zip(int tamanho = 4096)
+    {
+        using var memoria = new MemoryStream();
+        using (var zip = new ZipArchive(memoria, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using (var arquivo = zip.CreateEntry("app.bin", CompressionLevel.NoCompression).Open())
+                arquivo.Write(Enumerable.Range(0, tamanho).Select(i => (byte)(i % 251)).ToArray());
+            using var manifesto = new StreamWriter(zip.CreateEntry("release.json").Open());
+            manifesto.Write("{\"sha\":\"" + Sha + "\"}");
+        }
+        return memoria.ToArray();
+    }
+
+    [Fact]
+    public async Task Link_vencido_e_404_e_leitura_autenticada_devolve_substituto_para_o_mesmo_zip()
+    {
+        var (ana, bia, _, projeto) = await CenarioAsync();
+        var envio = await ana.PostAsync($"/api/projetos/{projeto}/artefatos", Pacote(Zip()));
+        var publicado = (await envio.Content.ReadFromJsonAsync<ArtefatoV1>())!;
+        using var escopo = _api.Services.CreateScope();
+        var registro = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>().ArtefatosDosProjetos.Single();
+        var protetor = _api.Services.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("DevKitPage.Artefatos.Download").ToTimeLimitedDataProtector();
+        var vencido = protetor.Protect(registro.Chave + "\n" + registro.NomeDoArquivo, DateTimeOffset.UtcNow.AddMinutes(-1));
+        var anonimo = _api.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await anonimo.GetAsync(ArmazemDeArtefatosEmDisco.RotaDoDownload + vencido)).StatusCode);
+        var renovado = Assert.Single((await bia.GetFromJsonAsync<ArtefatoV1[]>($"/api/projetos/{projeto}/artefatos"))!);
+        Assert.Equal((publicado.Id, publicado.Hash, publicado.Tamanho, publicado.RetidoAte),
+            (renovado.Id, renovado.Hash, renovado.Tamanho, renovado.RetidoAte));
+        Assert.True(renovado.ExpiraEm > DateTimeOffset.UtcNow);
+        Assert.Equal(renovado.Hash, Convert.ToHexStringLower(SHA256.HashData(await anonimo.GetByteArrayAsync(renovado.Link))));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonimo.GetAsync($"/api/projetos/{projeto}/artefatos")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Repetir_upload_ou_preview_recupera_o_mesmo_registro_e_editor_pode_publicar()
+    {
+        var (ana, bia, _, projeto) = await CenarioAsync();
+        var acessos = (await ana.GetFromJsonAsync<AcessosDoProjetoV1>($"/api/projetos/{projeto}/acessos"))!;
+        var usuario = Assert.Single(acessos.Acessos).Usuario.Id;
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync($"/api/projetos/{projeto}/acessos/{usuario}",
+            new ConcessaoDeAcessoV1(null, "editor"))).StatusCode);
+        var zip = Zip();
+        var primeiro = await bia.PostAsync($"/api/projetos/{projeto}/artefatos", Pacote(zip));
+        Assert.Equal(HttpStatusCode.Created, primeiro.StatusCode);
+        var a = (await primeiro.Content.ReadFromJsonAsync<ArtefatoV1>())!;
+        var repetido = await bia.PostAsync($"/api/projetos/{projeto}/artefatos", Pacote(zip));
+        Assert.Equal(a.Id, (await repetido.Content.ReadFromJsonAsync<ArtefatoV1>())!.Id);
+        var preview = new PreviewDoProjetoV1("https://github.com/acme/portal-web", Sha, "https://portal.azurestaticapps.net", "preview");
+        var p1 = await ana.PostAsJsonAsync($"/api/projetos/{projeto}/artefatos", preview);
+        var p2 = await ana.PostAsJsonAsync($"/api/projetos/{projeto}/artefatos", preview);
+        Assert.Equal((await p1.Content.ReadFromJsonAsync<ArtefatoV1>())!.Id, (await p2.Content.ReadFromJsonAsync<ArtefatoV1>())!.Id);
+        Assert.Equal(2, (await ana.GetFromJsonAsync<ArtefatoV1[]>($"/api/projetos/{projeto}/artefatos"))!.Length);
+        Assert.Single(Directory.EnumerateFiles(_api.PastaDosArtefatos, "*.zip", SearchOption.AllDirectories));
+        var bytes = await _api.CreateClient().GetByteArrayAsync(a.Link);
+        Assert.Equal(a.Hash, Convert.ToHexStringLower(SHA256.HashData(bytes)));
+        using var recebido = new ZipArchive(new MemoryStream(bytes));
+        using var texto = new StreamReader(recebido.GetEntry("release.json")!.Open());
+        Assert.Contains(Sha, await texto.ReadToEndAsync(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Uploads_concorrentes_do_mesmo_conteudo_guardam_uma_so_publicacao()
+    {
+        var (ana, _, _, projeto) = await CenarioAsync();
+        var zip = Zip();
+        var respostas = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ =>
+            ana.PostAsync($"/api/projetos/{projeto}/artefatos", Pacote(zip))));
+        Assert.All(respostas, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        var registros = await Task.WhenAll(respostas.Select(r => r.Content.ReadFromJsonAsync<ArtefatoV1>()));
+        Assert.Single(registros.Select(a => a!.Id).Distinct());
+        Assert.Single((await ana.GetFromJsonAsync<ArtefatoV1[]>($"/api/projetos/{projeto}/artefatos"))!);
+        Assert.Single(Directory.EnumerateFiles(_api.PastaDosArtefatos, "*.zip", SearchOption.AllDirectories));
+    }
 
     [Fact]
     public async Task O_zip_recebido_volta_com_o_link_assinado_e_com_prazo_que_baixa_o_mesmo_conteudo_sem_login()

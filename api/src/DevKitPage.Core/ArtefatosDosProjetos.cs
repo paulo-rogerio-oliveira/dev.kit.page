@@ -13,6 +13,9 @@ public sealed class ArtefatoDoProjeto
     public long ProjetoId { get; set; }
     public ProjetoCompartilhado? Projeto { get; set; }
 
+    /// <summary>Identidade do conteúdo e origem para repetir o registro sem duplicar; nula nos registros antigos.</summary>
+    public string? Publicacao { get; set; }
+
     /// <summary><see cref="ArtefatosV1.TipoPacote"/> ou <see cref="ArtefatosV1.TipoPreview"/>.</summary>
     public string Tipo { get; set; } = string.Empty;
 
