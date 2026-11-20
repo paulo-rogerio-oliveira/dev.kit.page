@@ -120,7 +120,8 @@ test('Board consulta o retrato real, atualiza e só decide pela revisão com log
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Board sem conexão' })).toBeVisible();
     await expect(page.getByText('Integrar o item 20 no projeto?')).toHaveCount(0);
-    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe(colorScheme);
+    // O site permanece claro também offline, qualquer que seja a preferência do sistema.
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light');
   }
   await context.setOffline(false);
   await page.getByRole('link', { name: 'Tentar novamente' }).click();
