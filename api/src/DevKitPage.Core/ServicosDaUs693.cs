@@ -110,6 +110,15 @@ public static partial class RegrasDosProjetos
             return "Informe o branch do projeto (um nome de branch válido).";
         if ((envio.DestinoDaPr?.Trim().Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch)
             return "O destino da PR passa do tamanho de um branch.";
+        if ((envio.BaseDoBranch?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch
+            || (envio.FluxoPadrao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.Agente?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.Modelo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || envio.Modelos is { Count: > 20 }
+            || (envio.Modelos?.Any(m => m is null || string.IsNullOrWhiteSpace(m.Agente)
+                || m.Agente.Length > ProjetosV1.TamanhoMaximoDoNome || m.Modelo is null
+                || m.Modelo.Length > ProjetosV1.TamanhoMaximoDoNome) ?? false))
+            return "Base, fluxo ou modelos do projeto fora do contrato.";
         if (envio.Paralelismo < 1 || envio.Paralelismo > ProjetosV1.ParalelismoMaximo)
             return $"O paralelismo vai de 1 a {ProjetosV1.ParalelismoMaximo}.";
         if (!ProjetosV1.Situacoes.Contains(envio.Situacao ?? ProjetosV1.Rascunho))
@@ -141,6 +150,8 @@ public static partial class RegrasDosProjetos
                 return $"O item {item.Numero} precisa de título (até {ProjetosV1.TamanhoMaximoDoNome} caracteres).";
             if ((item.Descricao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoTexto || (item.Fluxo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome)
                 return $"Um dos textos do item {item.Numero} passa do tamanho do contrato.";
+            if ((item.Agente?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome || (item.Modelo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome)
+                return $"Agente ou modelo do item {item.Numero} passa do tamanho do contrato.";
             if (item.Prioridade is < 0 or > 4 || !double.IsFinite(item.Horas) || item.Horas < 0
                 || item.WorkItemId < 0 || item.Branch is null || item.Branch.Length > ProjetosV1.TamanhoMaximoDoBranch)
                 return $"Metadados inválidos no item {item.Numero}.";
