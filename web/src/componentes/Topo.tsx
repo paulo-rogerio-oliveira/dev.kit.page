@@ -19,7 +19,6 @@ export function Topo({ secao, children }: { secao: string; children?: ReactNode 
   const [aberto, setAberto] = useState(false);
   const botao = useRef<HTMLButtonElement>(null);
   const painel = useRef<HTMLElement>(null);
-  const anterior = useRef(local.pathname);
   const destino = destinoDoCaminho(local.pathname);
   const logado = !!sessao && !!destino && !sessao.deveTrocarSenha;
   const consulta = new URLSearchParams(local.search);
@@ -31,12 +30,7 @@ export function Topo({ secao, children }: { secao: string; children?: ReactNode 
 
   useEffect(() => {
     setAberto(false);
-    if (anterior.current !== local.pathname) {
-      anterior.current = local.pathname;
-      const titulo = document.querySelector<HTMLElement>('main h1');
-      if (titulo) { titulo.tabIndex = -1; titulo.focus({ preventScroll: true }); }
-    }
-  }, [local.key, local.pathname]);
+  }, [local.key]);
   useEffect(() => {
     if (!aberto) return;
     painel.current?.querySelector<HTMLAnchorElement>('a')?.focus();

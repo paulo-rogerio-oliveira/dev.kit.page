@@ -116,7 +116,7 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
   const ondas = [...new Set(p.itens.map(i => i.onda))].sort((a, b) => a - b);
   const atual = ondaAtual(p);
   return <article className="cartao projeto-detalhe" aria-label="Detalhe do projeto">
-    <h2>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
+    <h2 tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
     <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
     <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
     <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{p.itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>

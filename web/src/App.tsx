@@ -53,16 +53,32 @@ export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin 
 
 function FocoDaRota() {
   const local = useLocation();
-  const anterior = useRef(local.pathname);
+  const consulta = new URLSearchParams(local.search);
+  const projeto = local.pathname === '/projetos' ? consulta.get('projeto') || consulta.get('slug') || '' : '';
+  const nivel = consulta.get('nivel') ?? '';
+  const situacao = consulta.get('situacao') ?? '';
+  const anterior = useRef({ caminho: local.pathname, projeto, nivel, situacao });
   useEffect(() => {
     const main = document.querySelector<HTMLElement>('main');
     if (main) { main.id = 'conteudo-principal'; main.tabIndex = -1; }
-    if (anterior.current !== local.pathname) {
-      anterior.current = local.pathname;
-      const titulo = main?.querySelector<HTMLElement>('h1') ?? main;
-      if (titulo) { titulo.tabIndex = -1; titulo.focus({ preventScroll: true }); }
-    }
-  }, [local.pathname]);
+    const antes = anterior.current;
+    anterior.current = { caminho: local.pathname, projeto, nivel, situacao };
+    const mudouPagina = antes.caminho !== local.pathname;
+    // Filtrar também pode fechar o detalhe: nesse caso o foco permanece no próprio filtro.
+    const mudouProjeto = antes.projeto !== projeto && antes.nivel === nivel && antes.situacao === situacao;
+    if (!mudouPagina && !mudouProjeto) return;
+    const focar = () => {
+      const alvo = projeto ? document.querySelector<HTMLElement>('main [data-foco-navegacao="projeto"]')
+        : main?.querySelector<HTMLElement>('h1') ?? main;
+      if (!alvo) return false;
+      alvo.tabIndex = -1; alvo.focus({ preventScroll: true }); return true;
+    };
+    if (focar()) return;
+    // O retorno de outra página pode precisar aguardar os dados do projeto.
+    const observador = new MutationObserver(() => { if (focar()) observador.disconnect(); });
+    observador.observe(document.body, { childList: true, subtree: true });
+    return () => observador.disconnect();
+  }, [local.pathname, projeto, nivel, situacao]);
   return null;
 }
 
