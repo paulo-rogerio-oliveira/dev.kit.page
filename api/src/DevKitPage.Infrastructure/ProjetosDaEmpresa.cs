@@ -10,7 +10,7 @@ namespace DevKitPage.Infrastructure;
 /// <see cref="Visiveis"/> com a MESMA regra do design (<see cref="RegrasDoDesign.Visivel"/>) — o projeto que não é visível é
 /// 404, sem revelar se existe. A versão é a concorrência: gravar com a versão velha é conflito, e o dev.kit relê.
 /// </summary>
-public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : IProjetosDaEmpresa
+public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : IProjetosDaEmpresa
 {
     public async Task<IReadOnlyList<ProjetoV1>> ListarAsync(EscopoDoDesign escopo, string? time, DateTimeOffset? desde, CancellationToken ct)
     {
@@ -29,6 +29,10 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         => await Visiveis(escopo, null).FirstOrDefaultAsync(p => p.Id == id, ct) is { } achado ? Leitura(escopo, achado) : null;
 
     public async Task<ResultadoDaGestao<ProjetoGravado>> GravarAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio, CancellationToken ct)
+        => await GravarInternoAsync(escopo, envio, false, ct);
+
+    private async Task<ResultadoDaGestao<ProjetoGravado>> GravarInternoAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio,
+        bool decisaoHumana, CancellationToken ct)
     {
         var problema = RegrasDosProjetos.Validar(envio);
         if (problema.Length > 0)
@@ -72,6 +76,26 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
 
         var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
         var enviados = envio.Itens ?? [];
+        if (!decisaoHumana && enviados.Any(i => i.ReservasDeEscrita?.Paradas.Any(p =>
+            !(anteriores.FirstOrDefault(a => a.Numero == i.Numero)?.ReservasDeEscrita?.Paradas.Contains(p) ?? false)) == true))
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, "Parada exige recibo do host autenticado pela máquina.");
+        // Atualizações ordinárias não criam decisões nem substituem recibos, mesmo com data posterior.
+        if (!decisaoHumana && enviados.Any(i => CicloDosItensV1.Retirado(i)
+            && !anteriores.Any(a => a.Numero == i.Numero && a.DecisaoHumana == i.DecisaoHumana && CicloDosItensV1.Retirado(a))))
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada,
+                "Conclusão manual e cancelamento exigem a operação de decisão humana versionada.");
+        if (!decisaoHumana)
+            enviados = enviados.Select(i =>
+            {
+                var anterior = anteriores.FirstOrDefault(a => a.Numero == i.Numero);
+                var preservado = anterior is not null && CicloDosItensV1.Retirado(anterior) ? anterior : i;
+                var antes = anterior?.ReservasDeEscrita;
+                var novas = i.ReservasDeEscrita;
+                return antes is null && novas is null ? preservado : preservado with
+                {
+                    ReservasDeEscrita = new((antes?.Reservas ?? []).Concat(novas?.Reservas ?? []).Distinct().ToArray(), antes?.Paradas ?? []),
+                };
+            }).ToArray();
         var itens = anteriores.Where(i => enviados.All(n => n.Numero != i.Numero))
             .Concat(enviados).OrderBy(i => i.Numero).ToArray();
         var erroDoPlano = RegrasDosProjetos.ValidarItens(itens);

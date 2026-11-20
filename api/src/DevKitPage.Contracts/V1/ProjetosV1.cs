@@ -5,7 +5,11 @@ public sealed record ItemDoProjetoV1(
     int Numero, string Titulo, string Descricao, string Fluxo, IReadOnlyList<string> Repositorios,
     IReadOnlyList<string> Componentes, IReadOnlyList<int> Dependencias, int Onda, int WorkItemId, string Situacao,
     string Tipo = "", int Prioridade = 0, double Horas = 0, string Branch = "",
-    DateTimeOffset? AtualizadoEm = null);
+    DateTimeOffset? AtualizadoEm = null)
+{
+    public DecisaoHumanaDoItemV1? DecisaoHumana { get; init; }
+    public ReservasDoCicloDoItemV1? ReservasDeEscrita { get; init; }
+}
 
 /// <summary>Snapshot completo, versionado pelo servidor. Ausência de itens não significa exclusão.</summary>
 public sealed record EnvioDeProjetoV1(
@@ -43,14 +47,19 @@ public static class ProjetosV1
     public const string Concluido = "concluido";
 
     public const string ItemPlanejado = "planejado";
+    public const string ItemSolicitado = "solicitado";
+    public const string ItemAguardandoConfirmacao = "aguardando-confirmacao";
     public const string ItemRodando = "rodando";
     public const string ItemPergunta = "pergunta";
     public const string ItemIntegrado = "integrado";
     public const string ItemFalhou = "falhou";
+    public const string ItemConcluidoManualmente = "concluido-manual";
+    public const string ItemCancelado = "cancelado";
 
     /// <summary>As situações do projeto, na ordem da vida dele.</summary>
     public static IReadOnlyList<string> Situacoes { get; } = [Rascunho, AguardandoAprovacao, Aprovado, Pausado, Fechando, Concluido];
 
     /// <summary>As situações de um item.</summary>
-    public static IReadOnlyList<string> SituacoesDoItem { get; } = [ItemPlanejado, ItemRodando, ItemPergunta, ItemIntegrado, ItemFalhou];
+    public static IReadOnlyList<string> SituacoesDoItem { get; } = [ItemPlanejado, ItemSolicitado, ItemAguardandoConfirmacao, ItemRodando, ItemPergunta, ItemIntegrado, ItemFalhou,
+        ItemConcluidoManualmente, ItemCancelado];
 }
