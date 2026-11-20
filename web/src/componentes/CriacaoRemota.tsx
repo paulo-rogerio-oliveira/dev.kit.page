@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, ComandoRemoto, ConversaRemota, MaquinaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
 import type { UsoDoDesign } from '../api/tipos';
-import type { AcaoNoProjetoRemoto } from '../api/projetos';
+import type { AcaoNoProjetoRemoto, OrigemDoArtefato } from '../api/projetos';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { tiposDeCriacao } from './useCatalogoRemoto';
 import { useSessao } from '../sessao';
@@ -31,12 +31,25 @@ function situacao(comando: ComandoRemoto, conversa: ConversaRemota) {
       ? 'O pedido está na fila: quem gera é o dev.kit da máquina, no executor delegado, pelo mesmo caminho do devcli.'
       : 'O pedido está na fila: quem cria é o dev.kit da máquina, pelo mesmo caminho do devcli.' };
     case 'entregue': return { classe: '', titulo: 'em execução no dev.kit', texto: artefato ? 'O dev.kit recebeu o pedido e está gerando o artefato.' : 'O dev.kit recebeu o pedido e está criando.' };
-    case 'concluido': case 'respondido': return { classe: ' br-ok', titulo: 'concluído', texto: resposta || (artefato ? 'Artefato pedido ao dev.kit.' : 'Criado pelo dev.kit.') };
+    case 'concluido': case 'respondido': return artefato
+      ? { classe: '', titulo: origemConferida(resposta) ? 'origem conferida' : 'pedido aceito', texto: origemConferida(resposta)
+        ? 'Confira o repositório e o commit no painel antes de confirmar a geração.'
+        : resposta || 'Pedido aceito. Acompanhe a execução e a publicação nos artefatos do projeto.' }
+      : { classe: ' br-ok', titulo: 'concluído', texto: resposta || 'Criado pelo dev.kit.' };
     // O dev.kit antigo não conhece o comando e recusa com o motivo (regra de impacto #2): o site o mostra como veio.
     case 'recusado': return { classe: ' br-recusa', titulo: 'recusado', texto: (resposta || comando.erro || 'O dev.kit recusou o pedido.').replace(/^Não executado:\s*/, '') };
     case 'expirado': return { classe: ' br-recusa', titulo: 'expirado', texto: 'O prazo venceu antes de o dev.kit receber o pedido: a máquina pode estar desligada.' };
     default: return { classe: ' br-recusa', titulo: 'falhou', texto: comando.erro || 'A fila não aceitou o pedido. Tente de novo.' };
   }
+}
+
+/** Envelope da consulta de origem, transportado como resposta correlacionada da fila existente. */
+export function origemConferida(texto: string): OrigemDoArtefato | null {
+  try {
+    const origem = JSON.parse(texto) as OrigemDoArtefato;
+    return origem?.tipo === 'origem-artefato' && typeof origem.repositorio === 'string' && typeof origem.branch === 'string'
+      && typeof origem.projeto === 'string' && typeof origem.formato === 'string' && /^[a-f0-9]{40}$/i.test(origem.sha) ? origem : null;
+  } catch { return null; }
 }
 
 /**
@@ -65,13 +78,16 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
       // o tipo, o formulário fora da regra) fica no formulário, com o motivo.
       if (desfecho.ok) setAberta(null);
       else if (desfecho.mensagem) setFalha(desfecho.mensagem);
+      return desfecho.ok;
     } finally { setEnviando(false); }
   }
 
   return {
     maquina, aberta, enviando, falha, motivo, criar,
     /** (controle-v4, item 2) O "Gerar artefato" do card: a ação no projeto pela mesma fila, sem formulário. */
-    gerarArtefato: (projeto: string) => criar('projeto', { acao: 'artefato', projeto }),
+    gerarArtefato: (projeto: string, opcoes: Omit<AcaoNoProjetoRemoto, 'acao' | 'projeto'> = {}) => criar('projeto', { acao: 'artefato', projeto, ...opcoes }),
+    origemDoArtefato: ultima && ehGerarArtefato(ultima)
+      ? origemConferida(conversa.conversa.respostas.filter(r => r.comandoId === ultima.id).at(-1)?.texto ?? '') : null,
     desabilitado: !maquina || ocupado,
     abrir: (tipo: TipoDeCriacao) => { setFalha(''); setAberta(tipo); },
     fechar: () => { setFalha(''); setAberta(null); },
@@ -86,7 +102,7 @@ export function DesfechoDaCriacao({ criacao }: { criacao: CriacaoDoBoard }) {
   const d = criacao.desfecho;
   if (!d) return null;
   return <div className={`br-criacao${d.classe}`} role="status" aria-label="Desfecho da criação">
-    <strong>{d.comando.estado === 'concluido' ? '✓ ' : ''}{rotuloDaCriacao(d.comando.tipo, d.comando.texto)} · {hora(d.comando.criadoEm)} · {d.titulo}</strong>
+    <strong>{d.comando.estado === 'concluido' && !ehGerarArtefato(d.comando) ? '✓ ' : ''}{rotuloDaCriacao(d.comando.tipo, d.comando.texto)} · {hora(d.comando.criadoEm)} · {d.titulo}</strong>
     <span>{d.texto}</span>
   </div>;
 }

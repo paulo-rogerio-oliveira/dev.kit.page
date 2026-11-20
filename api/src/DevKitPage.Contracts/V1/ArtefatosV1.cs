@@ -46,7 +46,7 @@ public sealed record PreviewDoProjetoV1(string? Repositorio, string? Sha, string
 /// <param name="Sha">O commit (opcional: sem ele, o HEAD do branch do projeto).</param>
 /// <param name="Formato">pacote ou preview; omitido preserva a detecção no clone dos clientes anteriores.</param>
 public sealed record AcaoNoProjetoRemotoV1(string Acao, string Projeto, string? Repositorio = null, string? Sha = null,
-    string? Formato = null);
+    string? Formato = null, long? Retomar = null, bool Conferir = false);
 
 /// <summary>Os tipos e os tetos dos artefatos do projeto.</summary>
 public static class ArtefatosV1
