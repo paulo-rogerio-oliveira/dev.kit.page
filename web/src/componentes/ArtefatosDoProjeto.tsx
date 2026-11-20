@@ -90,6 +90,17 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     && plano.formato === formato && (!sha || plano.sha.startsWith(sha.toLowerCase())) ? plano : null;
   useEffect(() => { if (aberto) formulario.current?.querySelector('select')?.focus(); }, [aberto]);
   function fechar() { setAberto(false); abrir.current?.focus(); }
+  function prepararNovoPedido(anterior: EstadoDoArtefato) {
+    if (desabilitado || enviando || !capacidade) return;
+    const repositorio = repositorios.find(r => normalizarRepo(r) === normalizarRepo(anterior.repositorio));
+    if (!repositorio) { setMensagem('O repositório anterior não pertence mais ao projeto. Confira os repositórios antes de gerar.'); return; }
+    setRepo(repositorio);
+    setFormato(anterior.tipo === 'pacote' || anterior.tipo === 'preview' ? anterior.tipo : '');
+    setSha(anterior.sha);
+    setAberto(true);
+    formulario.current?.querySelector('select')?.focus();
+    setMensagem(`Corrija a causa informada no artefato nº ${anterior.id}. Repositório, tipo e commit foram preenchidos; confira a origem e confirme um novo pedido. O resultado anterior será preservado.`);
+  }
   async function pedir(opcoes: Omit<AcaoNoProjetoRemoto, 'acao' | 'projeto'>) {
     if (desabilitado || enviando) return;
     setEnviando(true); setMensagem('');
@@ -144,11 +155,16 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
       <strong>{a.tipo === 'preview' ? 'Preview web' : a.tipo === 'pacote' ? 'Pacote desktop' : 'Artefato'} · {repositorioCurto(a.repositorio)}</strong>
       <small>Commit <code>{a.sha}</code> · etapa {a.etapa} · artefato nº {a.id}</small>
       <p>{a.detalhe}</p>
-      {a.estado === 'local-pronto' && <p>Disponível somente na máquina. O Board aguarda um link publicado.</p>}
+      {a.estado === 'local-pronto' && <p>{a.tipo === 'preview'
+        ? 'Este preview ainda não tem link publicado disponível no Board. Para tentar novamente, prepare e confirme um novo pedido.'
+        : 'Disponível somente na máquina. O Board aguarda um link publicado.'}</p>}
       {a.estado === 'publicado' && <p>Aguardando link autorizado pela API. Atualize a lista.</p>}
-      {['envio-pendente', 'registro-pendente', 'local-pronto'].includes(a.estado) && <button className="br-btn" disabled={desabilitado || enviando || !capacidade}
+      {(a.estado === 'envio-pendente' || a.estado === 'registro-pendente' || a.estado === 'local-pronto' && a.tipo === 'pacote') && <button className="br-btn" disabled={desabilitado || enviando || !capacidade}
         onClick={() => void pedir({ retomar: a.id })} title="Retoma envio ou registro pelo mesmo ID, preservando o resultado já gerado.">
         {a.estado === 'registro-pendente' ? 'Tentar registro novamente' : 'Tentar envio novamente'}</button>}
+      {(a.estado === 'falhou' || a.estado === 'local-pronto' && a.tipo === 'preview') && <button className="br-btn" disabled={desabilitado || enviando || !capacidade}
+        onClick={() => prepararNovoPedido(a)} title="Preenche repositório, tipo e commit anteriores. Corrija a causa e confirme um novo pedido após conferir a origem.">
+        Preparar novo pedido</button>}
     </div>)}
     {artefatos.map(a => {
       const preview = a.tipo === 'preview';

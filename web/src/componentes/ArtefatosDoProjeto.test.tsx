@@ -80,6 +80,50 @@ describe('geração e resultado dos artefatos', () => {
     expect(atualizar).toHaveBeenCalledOnce(); expect(gerar).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['falhou', 'Entre novamente no host para consultar o destino.'],
+    ['falhou', 'SDK ausente: instale a capacidade no host.'],
+    ['local-pronto', 'Preview sem registro remoto.'],
+  ])('recupera %s preservando repo/tipo/SHA e exige confirmar um novo pedido (%s)', async (estado, detalhe) => {
+    const gerar = vi.fn().mockResolvedValue(true);
+    const estados = [{ id: 31, tipo: 'preview', repositorio: web, sha, estado, etapa: 'preflight', detalhe, idRemoto: 0, criadoEm: new Date().toISOString() }];
+    const tela = render(<ArtefatosDoCard {...base} gerar={gerar} estados={estados} />);
+    expect(screen.queryByRole('button', { name: 'Tentar envio novamente' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Preparar novo pedido' }));
+    expect(screen.getByLabelText('Repositório')).toHaveValue(web);
+    expect(screen.getByLabelText('Repositório')).toHaveFocus();
+    expect(screen.getByLabelText('Artefato')).toHaveValue('preview');
+    expect(screen.getByLabelText('Commit (opcional)')).toHaveValue(sha);
+    expect(screen.getByRole('status')).toHaveTextContent('O resultado anterior será preservado');
+    expect(gerar).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(gerar).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Preparar novo pedido' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Conferir origem' }));
+    expect(gerar).toHaveBeenCalledExactlyOnceWith('projeto', { repositorio: web, formato: 'preview', sha, conferir: true });
+    tela.rerender(<ArtefatosDoCard {...base} gerar={gerar} estados={estados} plano={{ tipo: 'origem-artefato', projeto: 'projeto', repositorio: web, sha, formato: 'preview', branch: 'feature/projeto' }} />);
+    gerar.mockResolvedValue(false);
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar geração' }));
+    expect(gerar).toHaveBeenLastCalledWith('projeto', { repositorio: web, formato: 'preview', sha });
+    expect(screen.getByRole('status')).toHaveTextContent('O pedido não foi enviado');
+    expect(screen.getByText(detalhe)).toBeInTheDocument();
+    expect(screen.getByLabelText('Commit (opcional)')).toHaveValue(sha);
+    gerar.mockResolvedValue(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar geração' }));
+    expect(gerar).toHaveBeenCalledTimes(3);
+    expect(screen.getByText(detalhe)).toBeInTheDocument();
+  });
+
+  it('leitor não prepara recuperação e pacote local retoma somente o envio', async () => {
+    const gerar = vi.fn().mockResolvedValue(true);
+    const estado = { id: 32, tipo: 'pacote', repositorio: repo, sha, estado: 'falhou', etapa: 'preflight', detalhe: 'SDK ausente', idRemoto: 0, criadoEm: new Date().toISOString() };
+    const tela = render(<ArtefatosDoCard {...base} gerar={gerar} desabilitado estados={[estado]} />);
+    expect(screen.getByRole('button', { name: 'Preparar novo pedido' })).toBeDisabled();
+    tela.rerender(<ArtefatosDoCard {...base} gerar={gerar} estados={[{ ...estado, estado: 'local-pronto' }]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Tentar envio novamente' }));
+    expect(gerar).toHaveBeenCalledExactlyOnceWith('projeto', { retomar: 32 });
+  });
+
   it('leitor não gera nem retoma; host antigo mostra a falta de capacidade sem enviar pedido', async () => {
     const gerar = vi.fn();
     const tela = render(<ArtefatosDoCard {...base} gerar={gerar} desabilitado motivo="Exige editor" />);
