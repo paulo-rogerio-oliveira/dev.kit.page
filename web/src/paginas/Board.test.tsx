@@ -20,7 +20,8 @@ const retrato = (m = maquina()): RetratoDaMaquina => ({
   maquina: m, recebidoEm: new Date().toISOString(),
   retrato: { contrato: 1, maquinaId: m.maquinaId, geradoEm: new Date().toISOString(),
     pendencias: [{ id: 'p1', tipo: 'pergunta', titulo: 'Integrar o item 20 no projeto?', pergunta: 'Escolha o destino', jaTentei: 'Nota 100 · regressão sem falhas', opcoes: ['Integrar', 'Aguardar'] }],
-    projetos: [{ slug: 'projeto', nome: 'Projeto de demonstração', ondaAtual: 10, situacao: 'aprovado', itens: [
+    projetos: [{ slug: 'projeto', nome: 'Projeto de demonstração', ondaAtual: 10, situacao: 'aprovado',
+      repositorios: ['github.com/acme/app-desktop', 'github.com/acme/portal-web'], branch: 'feature/projeto', podeGerarArtefato: true, itens: [
       { numero: 1, titulo: 'Base', onda: 1, situacao: 'integrado' }, { numero: 20, titulo: 'Layout', onda: 10, situacao: 'rodando' },
     ] }],
     fluxos: [{ id: 'f1', nome: 'Item 20 · layout do plano', etapa: 'Implementação', situacao: 'rodando', agente: 'codex' }],
@@ -720,20 +721,30 @@ describe('Board remoto', () => {
         leituras++;
         return HttpResponse.json(leituras === 1 ? [] : [{ projetoId: 11, slug: 'projeto', nome: 'Projeto de demonstração', artefatos: [artefato(2, 'preview'), artefato(1, 'pacote')] }]);
       }));
-      const enviados = comFila(() => ({ estado: 'concluido', texto: 'Artefato nº 7 pedido ao executor do dev.kit: pacote .NET de app-desktop no 3f9c2a1.' }));
+      const sha = '3f9c2a1b4d5e6f708192a3b4c5d6e7f809123456';
+      const enviados = comFila(c => ({ estado: 'concluido', texto: JSON.parse(c.texto).conferir
+        ? JSON.stringify({ tipo: 'origem-artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', branch: 'feature/projeto', sha, formato: '' })
+        : 'Artefato nº 7 pedido ao executor do dev.kit: pacote .NET de app-desktop no 3f9c2a1.' }));
       renderizar('/board', tokenDoDev());
       const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
       const card = within(await painel.findByRole('group', { name: 'Artefatos de Projeto de demonstração' }));
       expect(card.getByText(/Nenhum artefato ainda/)).toBeInTheDocument();
 
       await userEvent.click(card.getByRole('button', { name: 'Gerar artefato' }));
+      expect(enviados).toHaveLength(0);
+      await userEvent.click(card.getByRole('button', { name: 'Conferir origem' }));
       const pedido = unico(enviados);
       // O mesmo comando projeto, com a ação no texto: o site não gera nada, quem gera é o dev.kit da máquina.
       expect(pedido.tipo).toBe('projeto');
-      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto' });
+      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', conferir: true });
+      await userEvent.click(await card.findByRole('button', { name: 'Confirmar geração' }, { timeout: 6000 }));
+      expect(enviados).toHaveLength(2);
+      expect(JSON.parse(enviados[1].texto)).toEqual({ acao: 'artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', sha });
       const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
       await waitFor(() => expect(desfecho).toHaveTextContent('Gerar artefato'), { timeout: 6000 });
       await waitFor(() => expect(desfecho).toHaveTextContent('Artefato nº 7 pedido ao executor'), { timeout: 6000 });
+      expect(desfecho).toHaveTextContent('pedido aceito');
+      expect(desfecho).not.toHaveTextContent('concluído');
 
       // O desfecho relê os links: o pacote baixa pelo link assinado com prazo, e o preview abre a URL do ambiente.
       const baixar = await card.findByRole('link', { name: 'Baixar o pacote de app-desktop · 3f9c2a1' }, { timeout: 6000 });

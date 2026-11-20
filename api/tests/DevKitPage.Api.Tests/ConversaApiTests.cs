@@ -464,6 +464,22 @@ public sealed class ConversaApiTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Conferencia_e_retomada_de_artefato_preservam_parametros_na_fila_sem_criar_resultado(bool conferir)
+    {
+        var (_, ana) = await DevComFilaAsync();
+        var acao = conferir ? new AcaoNoProjetoRemotoV1("artefato", "controle-v4", "github.com/acme/app", "3f9c2a1", "pacote", Conferir: true)
+            : new AcaoNoProjetoRemotoV1("artefato", "controle-v4", Retomar: 17);
+        var resposta = await ana.PostAsJsonAsync("/api/remoto/comandos", Criacao("artefato-consulta-retomada", "projeto", acao));
+        Assert.Equal(HttpStatusCode.Accepted, resposta.StatusCode);
+        var fila = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal(acao, JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(fila.Texto, Json));
+        if (Directory.Exists(_api.PastaDosArtefatos))
+            Assert.Empty(Directory.EnumerateFiles(_api.PastaDosArtefatos, "*", SearchOption.AllDirectories));
+    }
+
+    [Theory]
     [InlineData(ConversaV1.ComandoProjeto, "", "Envie o formulário")]
     [InlineData(ConversaV1.ComandoProjeto, "{nome", "não é um JSON válido")]
     [InlineData(ConversaV1.ComandoProjeto, """{"nome":"","repositorios":["github.com/org/app"]}""", "nome do projeto")]

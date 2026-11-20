@@ -156,6 +156,12 @@ public static class RegrasDosArtefatos
             return $"A ação no projeto é {ArtefatosV1.AcaoArtefato}.";
         if (string.IsNullOrWhiteSpace(acao.Projeto) || acao.Projeto.Length > ProjetosV1.TamanhoMaximoDoSlug)
             return "Informe o projeto (o slug).";
+        if (acao.Retomar is <= 0)
+            return "O ID do artefato a retomar deve ser positivo.";
+        if (acao.Retomar is not null && acao.Conferir)
+            return "Conferência de origem e retomada são pedidos separados.";
+        if (acao.Retomar is not null && (!string.IsNullOrEmpty(acao.Repositorio) || !string.IsNullOrEmpty(acao.Sha) || !string.IsNullOrEmpty(acao.Formato)))
+            return "Retomada usa a origem do mesmo ID; não informe outra origem ou formato.";
         if (acao.Repositorio is { Length: > ArtefatosV1.TamanhoMaximoDoRepositorio })
             return $"O repositório tem até {ArtefatosV1.TamanhoMaximoDoRepositorio} caracteres.";
         if (!string.IsNullOrWhiteSpace(acao.Formato) && acao.Formato.Trim().ToLowerInvariant() is not (ArtefatosV1.TipoPacote or ArtefatosV1.TipoPreview))
