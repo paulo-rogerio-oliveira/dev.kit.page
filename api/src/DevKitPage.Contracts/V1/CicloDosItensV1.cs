@@ -4,6 +4,9 @@ public sealed record ReservaDeEscritaDoItemV1(string Maquina, string Instancia, 
 public sealed record ParadaDeEscritaDoItemV1(string Pedido, ReservaDeEscritaDoItemV1 Reserva, long Recibo, DateTimeOffset Em);
 public sealed record ReservasDoCicloDoItemV1(ReservaDeEscritaDoItemV1[] Reservas, ParadaDeEscritaDoItemV1[] Paradas);
 
+/// <summary>Proveniência da importação; não substitui a autoria nem o recibo local original.</summary>
+public sealed record ImportacaoDaDecisaoV1(string AutorAutenticado, DateTimeOffset Em, string HashDoEnvio);
+
 /// <summary>Recibo portátil; identidades de processos e caminhos da máquina permanecem no host.</summary>
 public sealed record DecisaoHumanaDoItemV1(string Pedido, string Acao, string Autor, string Confirmacao,
     string Motivo, DateTimeOffset Em, string VersaoEsperada, string EstadoAnterior, string Snapshot,

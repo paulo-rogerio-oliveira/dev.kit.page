@@ -14,6 +14,8 @@ public sealed record ProjetoGravado(ProjetoV1 Projeto, bool Novo);
 /// </summary>
 public interface IProjetosDaEmpresa
 {
+    Task<ResultadoDaGestao<ProjetoGravado>> ImportarDecisoesLocaisAsync(EscopoDoDesign escopo,
+        EnvioDeProjetoV1 envio, CancellationToken ct);
     Task<ResultadoDaDecisaoDoItem> DecidirItemAsync(EscopoDoDesign escopo, long id, int numero,
         PedidoDeDecisaoDoItemV1 pedido, CancellationToken ct);
     Task<ResultadoDaGestao<ProjetoV1>> ConfirmarParadaAsync(EscopoDoDesign escopo, long id, int numero,

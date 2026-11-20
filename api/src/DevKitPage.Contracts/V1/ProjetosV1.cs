@@ -8,6 +8,7 @@ public sealed record ItemDoProjetoV1(
     DateTimeOffset? AtualizadoEm = null)
 {
     public DecisaoHumanaDoItemV1? DecisaoHumana { get; init; }
+    public ImportacaoDaDecisaoV1? ImportacaoDaDecisao { get; init; }
     public ReservasDoCicloDoItemV1? ReservasDeEscrita { get; init; }
 }
 

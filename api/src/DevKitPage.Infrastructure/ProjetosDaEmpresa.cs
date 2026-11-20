@@ -32,7 +32,7 @@ public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relo
         => await GravarInternoAsync(escopo, envio, false, ct);
 
     private async Task<ResultadoDaGestao<ProjetoGravado>> GravarInternoAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio,
-        bool decisaoHumana, CancellationToken ct)
+        bool decisaoHumana, CancellationToken ct, string? hashDaImportacao = null)
     {
         var problema = RegrasDosProjetos.Validar(envio);
         if (problema.Length > 0)
@@ -67,6 +67,17 @@ public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relo
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Proibida,
                 $"O usuário {quem ?? $"#{escopo.UsuarioId}"} não pode alterar, aprovar ou disparar o projeto {projeto.Nome}: papel atual {(papel.Length == 0 ? "sem acesso" : papel)}; é exigido editor ou dono.");
         }
+        else if (hashDaImportacao is not null)
+        {
+            var atual = Leitura(escopo, projeto);
+            var importados = envio.Itens.Where(CicloDosItensV1.Retirado).ToArray();
+            return importados.All(i => atual.Itens.Any(a => a.Numero == i.Numero && a.DecisaoHumana == i.DecisaoHumana
+                && a.ImportacaoDaDecisao is { } origem && origem.HashDoEnvio == hashDaImportacao
+                && origem.AutorAutenticado == escopo.UsuarioId.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+                ? new(new ProjetoGravado(atual, false))
+                : ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito,
+                    "Projeto já compartilhado: somente replay exato da importação inicial é permitido.");
+        }
         else if (envio.Versao != projeto.Versao)
         {
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito, envio.Versao is null
@@ -76,6 +87,9 @@ public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relo
 
         var anteriores = novo ? Array.Empty<ItemDoProjetoV1>() : Leitura(escopo, projeto).Itens;
         var enviados = envio.Itens ?? [];
+        if (!decisaoHumana && enviados.Any(i => i.ImportacaoDaDecisao is not null
+            && anteriores.FirstOrDefault(a => a.Numero == i.Numero)?.ImportacaoDaDecisao != i.ImportacaoDaDecisao))
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, "Proveniência de importação só é emitida pelo servidor.");
         if (!decisaoHumana && enviados.Any(i => i.ReservasDeEscrita?.Paradas.Any(p =>
             !(anteriores.FirstOrDefault(a => a.Numero == i.Numero)?.ReservasDeEscrita?.Paradas.Contains(p) ?? false)) == true))
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, "Parada exige recibo do host autenticado pela máquina.");

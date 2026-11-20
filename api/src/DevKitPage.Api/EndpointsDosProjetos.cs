@@ -12,6 +12,15 @@ public static class EndpointsDosProjetos
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
         grupo.MapearAcessosDosProjetos();
         grupo.MapGet("/recursos", () => Results.Ok(new { recursos = new[] { CicloDosItensV1.Recurso } }));
+        grupo.MapPost("/importar-decisoes", (EnvioDeProjetoV1 envio, HttpRequest request, ClaimsPrincipal quem,
+            IProjetosDaEmpresa projetos, CancellationToken ct) => ComEscopo(quem, async e =>
+            {
+                if (!Compativel(request)) return ClienteAntigo();
+                var r = await projetos.ImportarDecisoesLocaisAsync(e, envio, ct);
+                return r.Valor is { } valor ? valor.Novo
+                    ? Results.Created($"/api/projetos/{valor.Projeto.Id}", valor.Projeto) : Results.Ok(valor.Projeto)
+                    : EndpointsDaUs425.Resultado(r);
+            }));
         grupo.MapPost("/{id:long}/itens/{numero:int}/parada", (long id, int numero, ParadaDeEscritaDoItemV1 parada,
             HttpRequest request, ClaimsPrincipal quem, IMaquinas maquinas, IProjetosDaEmpresa projetos, CancellationToken ct)
             => ComEscopo(quem, async e =>
