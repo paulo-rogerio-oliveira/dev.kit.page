@@ -1,0 +1,32 @@
+.pagina:has(> .navegacao-lateral) { display: grid; grid-template-columns: 224px minmax(0, 1fr); grid-template-rows: auto auto 1fr; }
+.topo.topo-unificado { grid-column: 1 / -1; padding: 17px 40px; background: var(--superficie); }
+.navegacao-lateral { grid-column: 1; grid-row: 2 / 4; background: var(--superficie); border-right: 1px solid var(--borda); padding: 30px 18px; }
+.navegacao-lateral nav { display: flex; flex-direction: column; gap: 6px; }
+.navegacao-link { padding: 13px 16px; border-radius: 8px; color: var(--texto); text-decoration: none; overflow-wrap: anywhere; }
+.navegacao-link:hover { background: var(--superficie-2); }
+.navegacao-link.ativo { color: var(--marca-texto); background: var(--marca-tinta); font-weight: 700; }
+.navegacao-link[href='/conta'] { margin-top: 28px; }
+.navegacao-lateral > p { margin: 24px 16px; font-size: 0.8rem; color: var(--texto-2); }
+.navegacao-localizacao { grid-column: 2; padding: 30px 36px 0; min-width: 0; font-size: 0.85rem; }
+.navegacao-localizacao nav { display: flex; flex-wrap: wrap; gap: 4px; color: var(--texto-2); }
+.navegacao-localizacao nav a { color: var(--texto-2); text-decoration: none; }
+.navegacao-voltar { margin-top: 20px; }
+.pagina-do-board > .board-remoto { grid-column: 2; grid-row: 3; min-width: 0; height: max(500px, calc(100dvh - 230px)); }
+.pagina:has(> .navegacao-lateral) > main { grid-column: 2; grid-row: 3; padding: 24px 36px 56px; min-width: 0; }
+.topo .navegacao-menu-botao, .navegacao-lateral .navegacao-sair { display: none; }
+.pular-conteudo { position: absolute; left: 16px; top: -100px; z-index: 30; background: var(--superficie); padding: 12px; color: var(--texto); }
+.pular-conteudo:focus { top: 12px; }
+.topo-unificado :focus-visible, .navegacao-lateral :focus-visible, .navegacao-localizacao a:focus-visible { outline: 3px solid var(--marca); outline-offset: 3px; }
+@media (max-width: 900px) {
+  .pagina:has(> .navegacao-lateral) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto 1fr; }
+  .topo.topo-unificado { padding: 12px 18px; gap: 8px; }
+  .topo.topo-unificado .usuario, .topo.topo-unificado .sair-da-sessao { display: none; }
+  .topo-unificado .navegacao-menu-botao { display: inline-flex; }
+  .navegacao-lateral { display: none; grid-column: 1; grid-row: 2; border-right: 0; border-bottom: 1px solid var(--borda); padding: 12px 18px; }
+  .navegacao-lateral.aberta { display: block; }
+  .navegacao-lateral .navegacao-sair { display: inline-flex; margin: 0 16px 12px; }
+  .navegacao-localizacao { grid-column: 1; grid-row: 3; padding: 24px 18px 0; }
+  .pagina:has(> .navegacao-lateral) > main { grid-column: 1; grid-row: 4; padding: 24px 18px 48px; }
+  .navegacao-voltar { margin-top: 16px; }
+  .pagina-do-board > .board-remoto { grid-column: 1; grid-row: 4; height: max(500px, calc(100dvh - 200px)); }
+}

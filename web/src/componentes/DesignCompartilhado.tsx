@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { comRetorno } from '../navegacao';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { NivelDeConvencao, ProjetoDeDesign, TelaDeDesign, UsoDoDesign, VersaoDeDesign } from '../api/tipos';
 import { copiarTexto } from '../areaDeTransferencia';
@@ -79,12 +81,21 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
 }) {
   const [projetos, setProjetos] = useState<ProjetoDeDesign[] | null>(null);
   const [uso, setUso] = useState<UsoDoDesign | null>(null);
-  const [escopo, setEscopo] = useState<Escopo>(comEmpresa ? 'empresa' : 'usuario');
-  const [chave, setChave] = useState('');
-  const [branch, setBranch] = useState('');
-  const [idDaTela, setIdDaTela] = useState('');
-  const [modo, setModo] = useState<Modo>('lado-a-lado');
-  const [escolhida, setEscolhida] = useState<number | null>(null);
+  const [consulta, setConsulta] = useSearchParams();
+  const local = useLocation();
+  const pedido = projetos?.find(p => p.chave.toLowerCase() === repositorio?.trim().toLowerCase());
+  const nivel = consulta.get('designEscopo');
+  const escopo: Escopo = nivel === 'usuario' || (comEmpresa && (nivel === 'empresa' || nivel === 'time')) ? nivel : (pedido?.nivel as Escopo | undefined) ?? (comEmpresa ? 'empresa' : 'usuario');
+  const chave = consulta.get('designRepo') ?? pedido?.chave ?? '';
+  const branch = consulta.get('designBranch') ?? '';
+  const idDaTela = consulta.get('designTela') ?? '';
+  const modo: Modo = consulta.get('designModo') === 'uma' ? 'uma' : consulta.get('designModo') === 'sobrepor' ? 'sobrepor' : 'lado-a-lado';
+  const escolhida = Number(consulta.get('designVersao')) || null;
+  function mudar(valores: Record<string, string>) {
+    const q = new URLSearchParams(consulta);
+    Object.entries(valores).forEach(([chave, valor]) => { if (valor) q.set(chave, valor); else q.delete(chave); });
+    setConsulta(q);
+  }
   const [aviso, setAviso] = useState('');
 
   const carregar = useCallback(async () => {
@@ -103,15 +114,8 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
 
   // O Board remoto abre o design pelo repositório do catálogo da máquina: o projeto de mesma chave (em qualquer escopo) já
   // vem escolhido; o que ainda não tem versão no site é dito, e não escondido.
-  const aberto = useRef(false);
-  useEffect(() => {
-    if (!projetos || !repositorio || aberto.current) return;
-    aberto.current = true;
-    const alvo = repositorio.trim().toLowerCase();
-    const achado = projetos.find((p) => p.chave.toLowerCase() === alvo);
-    if (achado) { setEscopo(achado.nivel as Escopo); setChave(achado.chave); }
-    else setAviso(`O projeto de design de ${repositorio} ainda não tem versão no site: as telas aparecem aqui depois da primeira captura ou proposta enviada pelo dev.kit.`);
-  }, [projetos, repositorio]);
+  const avisoDoRepositorio = projetos && repositorio && !pedido
+    ? `O projeto de design de ${repositorio} ainda não tem versão no site: as telas aparecem aqui depois da primeira captura ou proposta enviada pelo dev.kit.` : '';
 
   const doEscopo = useMemo(() => (projetos ?? []).filter((p) => p.nivel === escopo), [projetos, escopo]);
   const projeto = doEscopo.find((p) => p.chave === chave) ?? doEscopo[0];
@@ -147,19 +151,19 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
       <p className="nota-da-secao">
         As telas que o dev.kit capturou e propôs nos repositórios{comEmpresa ? ' da empresa' : ''}. Cada versão tem um link estável — é ele que a PR da semana cita.
       </p>
-      {aviso && <p className="aviso" role="status">{aviso}</p>}
+      {(aviso || avisoDoRepositorio) && <p className="aviso" role="status">{aviso || avisoDoRepositorio}</p>}
 
       <div className="design-filtros">
         <label className="campo-embutido">
           Repositório
-          <select value={projeto?.chave ?? ''} onChange={(e) => { setChave(e.target.value); setIdDaTela(''); setBranch(''); }} disabled={doEscopo.length === 0}>
+          <select value={projeto?.chave ?? ''} onChange={(e) => mudar({ designRepo: e.target.value, designTela: '', designBranch: '', designVersao: '' })} disabled={doEscopo.length === 0}>
             {doEscopo.length === 0 && <option value="">—</option>}
             {doEscopo.map((p) => <option key={p.id} value={p.chave}>{p.chave}{p.nivel === 'time' ? ` · ${p.time}` : ''}</option>)}
           </select>
         </label>
         <label className="campo-embutido">
           Branch
-          <select value={branch} onChange={(e) => { setBranch(e.target.value); setIdDaTela(''); }}>
+          <select value={branch} onChange={(e) => mudar({ designBranch: e.target.value, designTela: '', designVersao: '' })}>
             <option value="">todos</option>
             {branches.map((b) => <option key={b} value={b}>{branchCurto(b)}</option>)}
           </select>
@@ -167,7 +171,7 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
         {comEmpresa && (
           <div className="segmentado" role="group" aria-label="Escopo">
             {(['empresa', 'time', 'usuario'] as Escopo[]).map((n) => (
-              <button key={n} type="button" aria-pressed={escopo === n} onClick={() => { setEscopo(n); setChave(''); setIdDaTela(''); setBranch(''); }}>
+              <button key={n} type="button" aria-pressed={escopo === n} onClick={() => mudar({ designEscopo: n, designRepo: '', designTela: '', designBranch: '', designVersao: '' })}>
                 {n === 'time' && times.length === 1 ? `Equipe ${times[0]}` : ROTULO_DO_ESCOPO[n]}
               </button>
             ))}
@@ -193,7 +197,7 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
                 const papel = papelDaUltima(dela);
                 return (
                   <li key={t.id}>
-                    <button type="button" aria-current={t.id === tela?.id} onClick={() => { setIdDaTela(t.id); setEscolhida(null); }}>
+                    <button type="button" aria-current={t.id === tela?.id} onClick={() => mudar({ designTela: t.id, designVersao: '' })}>
                       <strong>{t.nome}{t.estado ? ` — ${t.estado}` : ''}</strong>
                       <span>
                         {papel && <SeloDoPapel papel={papel} />} {tresDigitos(ultima.numero)} · {dela.length} {dela.length === 1 ? 'versão' : 'versões'} · {branchCurto(ultima.branch)}
@@ -211,7 +215,7 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
                 <h3>{tela.nome} <small>{repositorioCurto(projeto!.chave)} · {versoes.length} {versoes.length === 1 ? 'versão' : 'versões'}</small></h3>
                 <div className="segmentado" role="group" aria-label="Modo de comparação">
                   {([['uma', 'Uma'], ['lado-a-lado', 'Lado a lado'], ['sobrepor', 'Sobrepor']] as [Modo, string][]).map(([m, rotulo]) => (
-                    <button key={m} type="button" aria-pressed={modo === m} onClick={() => setModo(m)}>{rotulo}</button>
+                    <button key={m} type="button" aria-pressed={modo === m} onClick={() => mudar({ designModo: m })}>{rotulo}</button>
                   ))}
                 </div>
               </div>
@@ -228,7 +232,7 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
                 <div className="design-uma">
                   <label className="campo-embutido">
                     Versão
-                    <select value={emFoco.numero} onChange={(e) => setEscolhida(Number(e.target.value))}>
+                    <select value={emFoco.numero} onChange={(e) => mudar({ designVersao: e.target.value })}>
                       {[...versoes].reverse().map((v) => <option key={v.numero} value={v.numero}>{tresDigitos(v.numero)} · {v.tipo}</option>)}
                     </select>
                   </label>
@@ -244,7 +248,7 @@ export function DesignCompartilhado({ token, comEmpresa, tratar, repositorio }: 
                   <span className="design-rotulo">Link estável</span>
                   <code>{paginaDaVersao(emFoco).replace(/^https?:\/\//, '')}</code>
                   <small>· o que a PR cita</small>
-                  <a className="botao botao-fantasma botao-pequeno" href={paginaDaVersao(emFoco)} target="_blank" rel="noreferrer">Abrir</a>
+                  <a className="botao botao-fantasma botao-pequeno" href={comRetorno(paginaDaVersao(emFoco), local.pathname + local.search + local.hash)} target="_blank" rel="noreferrer">Abrir</a>
                 </div>
               )}
             </section>

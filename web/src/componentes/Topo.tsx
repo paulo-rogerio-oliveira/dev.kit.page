@@ -1,77 +1,87 @@
-import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useSessao } from '../sessao';
+import { comRetorno, destinoDoCaminho, destinos, inicioDaSessao, listaDeProjetos, podeAbrir, retornoSeguro } from '../navegacao';
 import { Avatar } from './Avatar';
+import './Topo.css';
 
-/**
- * A marca do dev.kit (a identidade da versão 5): o selo "dK" vermelho, o "dev.kit" com o ponto vermelho e, quando
- * há, o nome da seção numa pílula mono. O selo é decorativo: o nome acessível do link é "dev.kit".
- */
 export function Marca({ secao, para = '/' }: { secao?: string; para?: string }) {
-  return (
-    <Link to={para} className="marca">
-      <span className="marca-icone" aria-hidden="true">dK</span>
-      <span>dev<span className="marca-ponto">.</span>kit</span>
-      {secao && <small className="marca-secao">{secao}</small>}
-    </Link>
-  );
+  return <Link to={para} className="marca">
+    <span className="marca-icone" aria-hidden="true">dK</span>
+    <span>dev<span className="marca-ponto">.</span>kit</span>
+    {secao && <small className="marca-secao">{secao}</small>}
+  </Link>;
 }
-
-/**
- * O cabeçalho das páginas da US #425 (a conta, a empresa do gestor, o catálogo) — e, desde a US #461, também de
- * Empresas e Usuários: a marca com o nome da seção, os links que a página passa (agrupados no menu, com o atual
- * marcado em vermelho) e, com sessão, quem está logado (com o avatar) e o Sair; sem sessão, o Entrar.
- */
+/** Um único menu para todos os papéis e páginas, no desktop e no celular. */
 export function Topo({ secao, children }: { secao: string; children?: ReactNode }) {
   const { sessao, sair } = useSessao();
-  return (
-    <header className="topo">
-      <Marca secao={secao} />
-      <nav>
-        {children && <div className="topo-menu">{children}</div>}
-        {sessao ? (
-          <>
-            <span className="usuario"><Avatar nome={sessao.login} /><span>{sessao.login}{sessao.empresa ? ` · ${sessao.empresa}` : ''}</span></span>
-            <button className="botao botao-fantasma" type="button" onClick={() => sair()}>Sair</button>
-          </>
-        ) : (
-          <Link className="botao botao-fantasma" to="/login">Entrar</Link>
-        )}
+  const local = useLocation();
+  const [aberto, setAberto] = useState(false);
+  const botao = useRef<HTMLButtonElement>(null);
+  const painel = useRef<HTMLElement>(null);
+  const anterior = useRef(local.pathname);
+  const destino = destinoDoCaminho(local.pathname);
+  const logado = !!sessao && !!destino && !sessao.deveTrocarSenha;
+  const consulta = new URLSearchParams(local.search);
+  const versao = local.pathname.startsWith('/design/');
+  const detalhe = local.pathname === '/projetos' && (consulta.has('projeto') || consulta.has('slug'));
+  const retorno = sessao ? retornoSeguro(sessao, consulta.get('retorno'), local.pathname) : null;
+  const voltar = retorno ?? (detalhe ? listaDeProjetos(consulta) : versao ? '/design' : local.pathname === '/conta' ? '/board' : '/conta');
+  const nomeDeVolta = destinoDoCaminho(voltar.split(/[?#]/)[0])?.nome ?? 'Minha conta';
+
+  useEffect(() => {
+    setAberto(false);
+    if (anterior.current !== local.pathname) {
+      anterior.current = local.pathname;
+      const titulo = document.querySelector<HTMLElement>('main h1');
+      if (titulo) { titulo.tabIndex = -1; titulo.focus({ preventScroll: true }); }
+    }
+  }, [local.key, local.pathname]);
+  useEffect(() => {
+    if (!aberto) return;
+    painel.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+    const fechar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setAberto(false); botao.current?.focus(); }
+    };
+    document.addEventListener('keydown', fechar);
+    return () => document.removeEventListener('keydown', fechar);
+  }, [aberto]);
+
+  return <>
+    <header className={`topo${logado ? ' topo-unificado' : ''}`}>
+      <Marca secao={logado ? undefined : secao} para={sessao ? inicioDaSessao(sessao) : '/'} />
+      {logado && <a className="pular-conteudo" href="#conteudo-principal">Ir para o conteúdo</a>}
+      <nav aria-label="Sessão">
+        {!logado && children && <div className="topo-menu">{children}</div>}
+        {sessao ? <>
+          <span className="usuario"><Avatar nome={sessao.login} /><span>{sessao.login}{sessao.empresa ? ` · ${sessao.empresa}` : ''}</span></span>
+          <button className="botao botao-fantasma sair-da-sessao" type="button" onClick={() => sair()}>Sair</button>
+        </> : <Link className="botao botao-fantasma" to="/login">Entrar</Link>}
+        {logado && <button ref={botao} className="botao botao-fantasma navegacao-menu-botao" type="button" aria-expanded={aberto}
+          aria-controls="navegacao-principal" onClick={() => setAberto(a => !a)}>☰ Menu</button>}
       </nav>
     </header>
-  );
-}
-
-const classeDoLink = ({ isActive }: { isActive: boolean }) => `botao botao-fantasma${isActive ? ' link-ativo' : ''}`;
-
-/**
- * Os links do admin entre as páginas dele (US #461): Uso (o dashboard), Empresas, Usuários, Catálogo e, desde a US #602,
- * Relatos — o atual destacado.
- */
-export function MenuDoAdmin() {
-  return (
-    <>
-      <NavLink className={classeDoLink} to="/dashboard">Uso</NavLink>
-      <NavLink className={classeDoLink} to="/empresas">Empresas</NavLink>
-      <NavLink className={classeDoLink} to="/usuarios">Usuários</NavLink>
-      <NavLink className={classeDoLink} to="/catalogo">Catálogo</NavLink>
-      <NavLink className={classeDoLink} to="/relatos">Relatos</NavLink>
-    </>
-  );
-}
-
-/**
- * Os links do GESTOR entre as páginas da empresa (as propostas de marca): Dashboard, Usuários da empresa, Catálogo da
- * empresa, Repositórios e convenções e Relatos — o atual destacado, como no menu do admin.
- */
-export function MenuDaEmpresa() {
-  return (
-    <>
-      <NavLink className={classeDoLink} to="/dashboard">Dashboard</NavLink>
-      <NavLink className={classeDoLink} to="/empresa/usuarios">Usuários da empresa</NavLink>
-      <NavLink className={classeDoLink} to="/empresa/catalogo">Catálogo da empresa</NavLink>
-      <NavLink className={classeDoLink} to="/empresa/conhecimento">Repositórios e convenções</NavLink>
-      <NavLink className={classeDoLink} to="/relatos">Relatos</NavLink>
-    </>
-  );
+    {logado && <>
+      <aside className={`navegacao-lateral${aberto ? ' aberta' : ''}`}>
+        <nav id="navegacao-principal" aria-label="Navegação principal" ref={painel}>
+          {destinos.filter(d => podeAbrir(sessao, d.caminho)).map(d => <NavLink key={d.caminho}
+            to={d.caminho === '/design' && local.pathname !== '/design' && !versao ? comRetorno(d.caminho, local.pathname + local.search + local.hash) : d.caminho}
+            onClick={() => { if (aberto) { setAberto(false); requestAnimationFrame(() => document.getElementById('conteudo-principal')?.focus({ preventScroll: true })); } }}
+            className={({ isActive }) => isActive ? 'navegacao-link ativo' : 'navegacao-link'}>{d.nome}</NavLink>)}
+        </nav>
+        <p>Links de administração aparecem conforme o seu acesso.</p>
+        <button className="botao botao-fantasma navegacao-sair" onClick={() => sair()}>Sair</button>
+      </aside>
+      <div className="navegacao-localizacao">
+        <nav aria-label="Localização">
+          <Link to={local.pathname === '/conta' ? '/board' : '/conta'}>{local.pathname === '/conta' ? 'Meu espaço' : 'Minha conta'}</Link><span aria-hidden="true"> › </span>
+          {versao ? <><Link to={retorno?.startsWith('/design?') ? retorno : '/design'}>Design</Link><span aria-hidden="true"> › </span><span aria-current="page">Versão</span></>
+            : detalhe ? <><Link to={listaDeProjetos(consulta)}>Projetos</Link><span aria-hidden="true"> › </span><span aria-current="page">Projeto</span></>
+            : <span aria-current="page">{destino.nome}</span>}
+        </nav>
+        <Link className="botao botao-fantasma navegacao-voltar" to={voltar}>← {local.pathname === '/conta' ? 'Meu espaço' : nomeDeVolta}</Link>
+        {local.state?.acessoNegado && <p className="aviso" role="status">Acesso negado à seção solicitada. Você pode continuar pelas opções do seu menu.</p>}
+      </div>
+    </>}
+  </>;
 }

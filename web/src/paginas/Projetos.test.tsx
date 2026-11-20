@@ -32,6 +32,14 @@ const projeto: Projeto = {
 };
 
 describe('Projetos sincronizados', () => {
+  it('o link do detalhe conserva filtros, aba e parâmetros adicionais', async () => {
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])));
+    renderizar('/projetos?nivel=usuario&situacao=aprovado&visao=propostas&extra=1', tokenDoDev());
+    const link = await screen.findByRole('link', { name: 'Abrir projeto Portal' });
+    expect(link).toHaveAttribute('href', '/projetos?nivel=usuario&situacao=aprovado&visao=propostas&extra=1&projeto=7');
+    await userEvent.click(link);
+    expect(screen.getByRole('link', { name: '← Projetos' })).toHaveAttribute('href', '/projetos?nivel=usuario&situacao=aprovado&extra=1');
+  });
   it('leitor consulta snapshot portátil sem reenviar e preserva a referência ao navegar', async () => {
     const referencia = { projeto: 'repo-fixado', tela: 'plano', versao: 6, hash: 'a'.repeat(64) };
     const snapshot: Projeto = { ...projeto, board: 'nao', papel: 'leitor', baseDoBranch: 'develop',

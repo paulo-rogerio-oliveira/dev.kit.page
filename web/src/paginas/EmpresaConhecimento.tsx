@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { ConvencaoDaEmpresa, NivelDeConvencao, RepositorioDaEmpresa } from '../api/tipos';
 import { Abas } from '../componentes/Abas';
@@ -10,7 +10,7 @@ import { ehContexto, temaDa } from '../componentes/EditorDeContexto';
 import { Pagina } from '../componentes/Pagina';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
-import { MenuDaEmpresa, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -92,13 +92,11 @@ export function EmpresaConhecimento() {
 
   return (
     <div className="pagina">
-      <Topo secao="conhecimento da empresa">
-        {ehGestor ? <MenuDaEmpresa /> : <Link className="botao botao-fantasma" to="/conta">Conta</Link>}
-      </Topo>
+      <Topo secao="conhecimento da empresa" />
       <Pagina rotulo={sessao!.empresa ?? 'Empresa'} titulo="Repositórios e convenções"subtitulo="O que a empresa compartilha com o dev.kit: auditado aqui, com quem gravou e quando, e editável.">
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}
-        <Abas rotulo="Conhecimento da empresa" abas={ABAS} ativa={aba} aoMudar={(id) => { setAviso(''); setErro(''); setBusca({ aba: id }, { replace: true }); }} prefixo="conhecimento">
+        <Abas rotulo="Conhecimento da empresa" abas={ABAS} ativa={aba} aoMudar={(id) => { setAviso(''); setErro(''); const q = new URLSearchParams(busca); q.set('aba', id); setBusca(q); }} prefixo="conhecimento">
           {aba === 'repositorios' && <AbaRepositorios repositorios={repositorios} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'convencoes' && <AbaConvencoes convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} />}
           {aba === 'contexto' && <AbaContexto convencoes={convencoes} ehGestor={ehGestor} token={token} escrever={escrever} tratar={tratar} />}
