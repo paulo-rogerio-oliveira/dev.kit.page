@@ -163,6 +163,7 @@ public static class Composicao
         // decide a situação dos itens), e o armazém dos zips é o banco por ora.
         servicos.AddScoped<IArmazemDePacotes, ArmazemDePacotesNoBanco>();
         servicos.AddScoped<PublicacaoDeCatalogos>();
+        servicos.AddScoped<IPublicacaoGit, PublicacaoGit>();
         servicos.AddScoped<IPublicacaoDeCatalogos>(sp => sp.GetRequiredService<PublicacaoDeCatalogos>());
         servicos.AddScoped<IGestaoDeCatalogos, GestaoDeCatalogos>();
         servicos.AddScoped<IImportacaoDeCatalogos, ImportacaoDeCatalogos>();
