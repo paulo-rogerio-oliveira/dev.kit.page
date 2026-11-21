@@ -151,8 +151,15 @@ function ConfirmacaoDoItem({ modal, projeto, item, ocupado, fechar, motivo, revi
     return () => { document.documentElement.style.overflow = overflow; anterior?.focus(); };
   }, []);
   const cancelar = modal.acao === 'cancelar-item';
-  return <dialog ref={dialogo} className="item-decisao-modal" aria-labelledby="item-decisao-titulo"
-    onCancel={e => { e.preventDefault(); fechar(); }}>
+  return <dialog ref={dialogo} className="item-decisao-modal" aria-modal="true" aria-labelledby="item-decisao-titulo"
+    onCancel={e => { e.preventDefault(); fechar(); }} onKeyDown={e => {
+      if (e.key !== 'Tab') return;
+      const controles = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('textarea, button:not(:disabled), a[href]'));
+      const primeiro = controles[0], ultimo = controles.at(-1);
+      if (!primeiro || !ultimo) return;
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+    }}>
     <div className="item-decisao-punho" aria-hidden="true" />
     <h2 id="item-decisao-titulo">{cancelar ? 'Cancelar' : 'Concluir manualmente'} o item {item.numero}?</h2>
     <p className="item-decisao-alvo">{projeto.nome}<br /><code>{item.branch}</code></p>

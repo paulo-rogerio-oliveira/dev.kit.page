@@ -99,6 +99,21 @@ describe('decisão humana do item pelo Board', () => {
     expect(projeto.itens[1].situacao).toBe('rodando');
   });
 
+  it('Tab e Shift+Tab permanecem nos controles do modal, sem aplicar uma decisão', async () => {
+    const modal = await abrir();
+    const campo = modal.getByLabelText('Motivo da decisão');
+    await userEvent.type(campo, 'Rascunho para testar o teclado');
+    await userEvent.tab();
+    expect(modal.getByRole('button', { name: 'Voltar' })).toHaveFocus();
+    await userEvent.tab();
+    expect(modal.getByRole('button', { name: 'Cancelar item' })).toHaveFocus();
+    await userEvent.tab();
+    expect(campo).toHaveFocus();
+    await userEvent.tab({ shift: true });
+    expect(modal.getByRole('button', { name: 'Cancelar item' })).toHaveFocus();
+    expect(pedidos.every(p => !p.aplicar)).toBe(true);
+  });
+
   it.each(['leitor', undefined] as const)('papel %s não envia simulação nem decisão', async papel => {
     projeto.papel = papel;
     renderizar('/projetos', tokenDoDev());

@@ -5,7 +5,7 @@ import { garantirSenhaDefinitiva } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
 import type { Projeto } from '../src/api/projetos';
 
-const pasta = fileURLToPath(new URL('../../../entrega/capturas-board-validacao/', import.meta.url));
+const pasta = fileURLToPath(new URL(`../../../entrega/capturas-board-validacao/${Date.now()}/`, import.meta.url));
 
 async function preparar(request: APIRequestContext) {
   await garantirSenhaDefinitiva(request);
@@ -69,10 +69,15 @@ test('decisão humana real: dono/editor/leitor, versão, confirmação, recibo e
     let modal = page.getByRole('dialog');
     await expect(modal.getByText('Conferindo a decisão…')).toHaveCount(0);
     await expect(modal.getByLabel('Motivo da decisão')).toBeFocused();
+    expect(await modal.evaluate(d => d.matches(':modal'))).toBe(true);
     await expect(modal.getByRole('button', { name: 'Cancelar item', exact: true })).toBeDisabled();
     await modal.getByLabel('Motivo da decisão').fill('Revisar sem aplicar a decisão.');
     for (let n = 0; n < 7; n++) {
       await page.keyboard.press('Tab');
+      expect(await modal.evaluate(d => d.contains(document.activeElement))).toBe(true);
+    }
+    for (let n = 0; n < 7; n++) {
+      await page.keyboard.press('Shift+Tab');
       expect(await modal.evaluate(d => d.contains(document.activeElement))).toBe(true);
     }
     await capturar(page, `${largura}-cancelar`);
