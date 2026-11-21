@@ -33,14 +33,13 @@ async function capturar(page: Page, nome: string) {
   await page.screenshot({ path: `${pasta}/${nome}.png`, fullPage: true });
 }
 
-test('decisão humana real: dono/editor/leitor, versão, confirmação, recibo e teclado em1280/390', async ({ page, request, browser }) => {
+for (const largura of [1280, 390]) test(`decisão humana real: dono/editor/leitor, versão, confirmação, recibo e teclado em${largura}`, async ({ page, request, browser }) => {
   mkdirSync(pasta, { recursive: true });
   const contas = await preparar(request);
   const headers = { Authorization: `Bearer ${contas.dono.sessao.token}`, 'X-DevKit-Ciclo-Item': '1' };
   const leitorHeaders = { Authorization: `Bearer ${contas.leitor.sessao.token}`, 'X-DevKit-Ciclo-Item': '1' };
   await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), contas.dono.sessao);
 
-  for (const largura of [1280, 390]) {
     await page.setViewportSize({ width: largura, height: largura === 390 ? 980 : 1100 });
     const slug = `ciclo-${largura}`;
     const envio = { slug, nome: `Ciclo humano · demonstração ${largura}`, nivel: 'usuario', time: '',
@@ -157,12 +156,15 @@ test('decisão humana real: dono/editor/leitor, versão, confirmação, recibo e
     await expect(cancelamento.getByRole('button', { name: 'Reler e revisar' })).toBeEnabled();
     await cancelamento.getByRole('button', { name: 'Reler e revisar' }).click();
     await expect(cancelamento.getByRole('button', { name: 'Cancelar item', exact: true })).toBeEnabled();
+    const respostaDaAplicacao = leitor.waitForResponse(r => r.url().endsWith('/itens/3/decisao') && r.request().postDataJSON()?.aplicar === true);
     await cancelamento.getByRole('button', { name: 'Cancelar item', exact: true }).click();
+    const resposta = await respostaDaAplicacao;
+    if (!resposta.ok()) await capturar(leitor, `${largura}-falha-editor-aplicacao`);
+    expect(resposta.status(), await resposta.text()).toBe(200);
     await expect(cancelamento).toHaveCount(0);
     atual = await reler();
     expect(atual.itens[2].situacao).toBe('cancelado');
     expect(atual.itens[1].situacao).toBe('concluido-manual');
     expect(atual.itens[0].situacao).toBe('integrado');
     await contexto.close();
-  }
 });
