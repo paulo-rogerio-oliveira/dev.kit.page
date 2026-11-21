@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { prepararMatrix } from './matrix-cenario';
 import { garantirSenhaDefinitiva } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
+import { prepararPainelComDados } from './tema-cenario';
 
 /** Mede texto renderizado sobre fundos sólidos, compondo transparências dos ancestrais.
  * Não substitui a revisão visual de imagens, gradientes, foco e estados transitórios. */
@@ -114,6 +115,7 @@ test('conta, projetos e Matrix conservam tema claro e leitura dos estados nas du
 
 test('admin: painel, catálogo, usuários e empresas mantêm texto AA no tema claro', async ({ page, request }, info) => {
   await garantirSenhaDefinitiva(request);
+  const dados = await prepararPainelComDados(request);
   const entrada = await request.post(`${API}/api/auth/login`, { data: { login: 'admin', senha: NOVA_SENHA } });
   expect(entrada.ok()).toBeTruthy();
   await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), await entrada.json());
@@ -124,6 +126,26 @@ test('admin: painel, catálogo, usuários e empresas mantêm texto AA no tema cl
       await page.goto(url);
       await expect(page.locator('h1').first()).toBeVisible();
       await expect(page.getByText('Carregando…', { exact: true })).toHaveCount(0);
+      if (url === '/dashboard') {
+        await expect(page.getByRole('table', { name: 'ROI por work item', exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: dados.excecao, exact: true }).first()).toBeVisible();
+        for (const nome of ['Tabela de exceções', 'Tabela de eventos', 'Tabela de ROI', 'Tabela de pedidos de demonstração']) {
+          const tabela = page.getByRole('region', { name: nome, exact: true });
+          await expect(tabela.locator('tbody tr').first()).toBeVisible();
+          if (width === 390) {
+            const rolavel = await tabela.evaluate(e => e.scrollWidth > e.clientWidth);
+            if (rolavel) {
+              await tabela.screenshot({ path: info.outputPath(`${nome.replaceAll(' ', '-')}-inicio-${width}-${colorScheme}.png`) });
+              await tabela.focus();
+              await page.keyboard.press('ArrowRight');
+              await expect.poll(() => tabela.evaluate(e => e.scrollLeft)).toBeGreaterThan(0);
+              await tabela.locator('tbody tr').first().locator('td').last().scrollIntoViewIfNeeded();
+              await tabela.screenshot({ path: info.outputPath(`${nome.replaceAll(' ', '-')}-${width}-${colorScheme}.png`) });
+              await tabela.evaluate(e => { e.scrollLeft = 0; });
+            }
+          }
+        }
+      }
       await conferirTema(page);
       await page.screenshot({ path: info.outputPath(`${url.slice(1)}-${width}-${colorScheme}.png`), fullPage: true });
     }

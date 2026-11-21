@@ -227,6 +227,7 @@ export function Dashboard() {
                 <p className="vazio">{filtrandoOLog ? 'Nenhum evento no período com este filtro.' : 'Nenhum evento no período.'}</p>
               ) : (
                 <>
+                  <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de eventos" tabIndex={0}>
                   <table className="tabela">
                     <thead>
                       <tr><th>Quando</th><th>Máquina</th><th>Tipo</th><th>Detalhe</th><th className="numero">Qtd.</th><th className="numero">Valor</th></tr>
@@ -244,6 +245,7 @@ export function Dashboard() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <div className="paginacao">
                     <button className="botao botao-fantasma" type="button" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
                     <span>Página {pagina} de {totalDePaginas} · {dados.eventos.total} eventos</span>
