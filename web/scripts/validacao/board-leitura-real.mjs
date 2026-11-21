@@ -19,9 +19,62 @@ let contexto;
 let bloqueadas = 0;
 let violacao = false;
 
+async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes) {
+  exigir(maquinas.length === 1, 'painel-exige-identificar-maquina-do-cenario');
+  const foto = await fotoPendente;
+  exigir(foto.resposta, 'retrato-nao-recebido-no-navegador');
+  emitir('http-painel', { cenario: 'retrato-da-maquina', metodo: 'GET', caminho: '/api/remoto/maquinas/<maquina>/retrato',
+    http: foto.resposta.status(), dataDoServidor: foto.resposta.headers()['date'] ?? null });
+  exigir(foto.resposta.status() === 200, 'retrato-do-board-recusado');
+  const recebido = await foto.resposta.json();
+  exigir(recebido.maquina?.maquinaId === maquinas[0].maquinaId, 'retrato-nao-corresponde-a-maquina-consultada');
+  const retrato = recebido.retrato;
+  exigir(retrato && Array.isArray(retrato.projetos), 'contrato-do-retrato-sem-projetos');
+  const projeto = retrato.projetos.find(p => p.slug === slug);
+  const data = typeof retrato.geradoEm === 'string' && /^\d{4}-\d\d-\d\dT[\d:.+-]+Z?$/.test(retrato.geradoEm) ? retrato.geradoEm : null;
+  emitir('retrato-do-board', { maquinaConectada: maquinas[0].conectada === true, appAberto: maquinas[0].appAberto === true,
+    retratoGeradoEm: data, projetoDeTestePresente: Boolean(projeto), capacidadeDeGerarInformada: projeto?.podeGerarArtefato === true,
+    repositoriosDoProjeto: Array.isArray(projeto?.repositorios) ? projeto.repositorios.length : null });
+  const consulta = await artefatosPendentes;
+  exigir(consulta.resposta, 'lista-de-artefatos-nao-recebida-no-navegador');
+  emitir('http-painel', { cenario: 'artefatos-recentes', metodo: 'GET', caminho: '/api/projetos/artefatos',
+    http: consulta.resposta.status(), dataDoServidor: consulta.resposta.headers()['date'] ?? null });
+  exigir(consulta.resposta.status() === 200, 'lista-de-artefatos-do-board-recusada');
+  const lista = await consulta.resposta.json();
+  exigir(Array.isArray(lista), 'contrato-de-artefatos-do-board-invalido');
+  const doProjeto = lista.find(p => p.projetoId === 1 && p.slug === slug);
+  const pacote = doProjeto?.artefatos?.find(a => a.id === 3);
+  emitir('artefato-do-projeto-na-api-do-board', { projeto: 1, artefato: pacote ? 3 : null,
+    shaConferido: pacote?.sha === '7e108e7fc3f4ff44bf105e7b9a5496007fbd0b20',
+    hashConferido: pacote?.hash === 'e422f35a4d1682cd16966d2bff3e458366723dcae1611dd8d4f2a18b080b92b9',
+    tamanhoConferido: pacote?.tamanho === 39612553, downloadExercitado: false });
+  if (!projeto) {
+    emitir('dependencia-do-painel', { codigo: 'projeto-compartilhado-ausente-no-retrato-da-maquina', projeto: 1,
+      fonte: 'GET real do retrato e GET de projetos', registroCompartilhadoConferido: true,
+      maquinaAlterada: false, comandoRemotoEnviado: false, aceiteE2E: 'pendente' });
+    return;
+  }
+  const grupo = pagina.getByRole('group', { name: 'Artefatos de TESTE ISOLADO artefato item 6 t63', exact: true });
+  await grupo.waitFor();
+  const gerar = grupo.getByRole('button', { name: 'Gerar artefato', exact: true });
+  await gerar.waitFor();
+  emitir('controles-do-painel', { projeto: 1, grupoVisivel: true, gerarHabilitado: await gerar.isEnabled(),
+    acaoDeGeracaoAcionada: false });
+  await pagina.setViewportSize({ width: 390, height: 844 });
+  await grupo.waitFor({ state: 'visible' });
+  const dimensoes = await grupo.evaluate(elemento => {
+    const caixa = elemento.getBoundingClientRect();
+    return { dentroDaLargura: caixa.left >= -1 && caixa.right <= window.innerWidth + 1,
+      semOverflowInterno: elemento.scrollWidth <= elemento.clientWidth + 1 };
+  });
+  emitir('painel-390px', { projeto: 1, ...dimensoes, capturaRealizada: false, coberturaVisualGlobal: false });
+}
+
 try {
   const modo = process.argv[2];
-  exigir(process.argv.length === 3 && ['--simular', '--consultar'].includes(modo), 'modo-invalido');
+  const painel = process.argv[3] === '--painel';
+  exigir((process.argv.length === 3 || process.argv.length === 4 && painel)
+    && ['--simular', '--consultar'].includes(modo), 'modo-invalido');
   const repositorio = fileURLToPath(new URL('../../..', import.meta.url));
   const workflow = readFileSync(join(repositorio, '.github/workflows/azure-static-web-apps-black-forest-00e9a2410.yml'), 'utf8');
   const site = new URL(workflow.match(/VITE_SITE_URL:\s*(https:\/\/[^\s'"#]+)/)?.[1]);
@@ -31,7 +84,7 @@ try {
   exigir(existsSync(edge), 'edge-existente-nao-encontrado');
   const sha = execFileSync('git', ['-C', repositorio, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex');
-  emitir('plano', { modo, site: site.origin, api, shaDoRepositorio: sha, hashDoRoteiro: hash,
+  emitir('plano', { modo, painel, site: site.origin, api, shaDoRepositorio: sha, hashDoRoteiro: hash,
     fonteDaOrigem: 'workflow VITE_SITE_URL existente', shaDoSitePublicado: 'nao-confirmado', shaDaApiPublicada: 'nao-confirmado',
     autorizacao: 'mensagens-516-e-530', ator: 'conta-de-teste', perfil: 'efemero-isolado',
     capturas: false, traces: false, sessaoExportada: false, gravacoesDeDadosPermitidas: 0,
@@ -109,6 +162,15 @@ try {
     emitir('projeto-na-interface', { projeto: 1, versao: projeto.versao, boardDesligado: projeto.board === 'nao',
       nomeVisivel: true, repositorios: Array.isArray(projeto.repositorios) ? projeto.repositorios.length : null });
     etapa = 'board-pela-interface';
+    // Instalar as esperas antes da navegação; nenhum corpo de resposta será substituído.
+    // Converter timeout em dado evita rejeição sem tratamento caso não exista máquina.
+    const fotoPendente = painel ? pagina.waitForResponse(r => {
+      const url = new URL(r.url());
+      return url.origin === api && /^\/api\/remoto\/maquinas\/[^/]+\/retrato$/.test(url.pathname)
+        && r.request().method() === 'GET';
+    }).then(resposta => ({ resposta }), () => ({})) : null;
+    const artefatosPendentes = painel ? respostaDe('/api/projetos/artefatos')
+      .then(resposta => ({ resposta }), () => ({})) : null;
     const [maquinas] = await Promise.all([respostaDe('/api/remoto/maquinas'), pagina.goto(site.origin + '/board')]);
     exigir(maquinas.status() === 200, 'maquinas-do-board-nao-consultaveis');
     const disponiveis = await maquinas.json();
@@ -119,6 +181,10 @@ try {
       await pagina.getByText('Nenhuma máquina cadastrada.', { exact: false }).waitFor();
       emitir('dependencia-do-board', { codigo: 'nenhuma-maquina-cadastrada-para-a-conta', mensagemVisivel: true,
         fonte: 'GET /api/remoto/maquinas e interface real', geracaoExercitada: false });
+    }
+    if (painel && disponiveis.length) {
+      etapa = 'retrato-e-painel-de-artefatos';
+      await conferirPainel(pagina, disponiveis, fotoPendente, artefatosPendentes);
     }
     exigir(!violacao, 'pagina-tentou-gravacao-fora-do-login-bloqueada');
     emitir('resultado', { navegadorReal: true, loginPelaInterface: true, cadastro: 'identidade-conferida', projeto: 1,
