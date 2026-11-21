@@ -102,7 +102,7 @@ test('landing → seções e recursos da proposta → pedido de demonstração �
   await page.getByLabel('Login').fill('admin');
   await page.getByLabel('Senha').fill(NOVA_SENHA);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  const pedidos = page.getByRole('region', { name: 'Pedidos de demonstração' });
+  const pedidos = page.getByRole('region', { name: 'Pedidos de demonstração', exact: true });
   await expect(pedidos.getByText(nome)).toBeVisible();
   await expect(pedidos.getByRole('link', { name: 'visitante.e2e@empresa.com.br' })).toBeVisible();
   await pedidos.screenshot({ path: 'test-results/capturas/12-pedidos-no-dashboard.png' });

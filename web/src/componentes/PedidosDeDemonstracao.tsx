@@ -44,6 +44,7 @@ export function PedidosDeDemonstracao({ token, aoFalhar }: { token: string; aoFa
         <p className="vazio">Nenhum pedido de demonstração recebido.</p>
       ) : (
         <>
+          <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de pedidos de demonstração" tabIndex={0}>
           <table className="tabela">
             <thead>
               <tr><th>Quando</th><th>Nome</th><th>E-mail</th><th>Empresa</th><th>Mensagem</th><th><span className="visualmente-oculto">Ações</span></th></tr>
@@ -65,6 +66,7 @@ export function PedidosDeDemonstracao({ token, aoFalhar }: { token: string; aoFa
               ))}
             </tbody>
           </table>
+          </div>
           <div className="paginacao">
             <button className="botao botao-fantasma" type="button" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
             <span>Página {pagina} de {totalDePaginas} · {dados.total} pedido(s)</span>
