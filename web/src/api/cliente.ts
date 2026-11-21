@@ -184,7 +184,8 @@ export const api = {
   /** O último catálogo dos atalhos do chat (o handshake); 404 enquanto a máquina não mandou nenhum. */
   catalogoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
-  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
+  // A página projeta os recibos humanos; a lista também negocia a leitura após uma decisão/reabertura.
+  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token, cicloDosItens: true }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
   recursosDosProjetos: (token: string, signal?: AbortSignal) =>
     chamar<RecursosDosProjetos>('/api/projetos/recursos', { token, signal }),

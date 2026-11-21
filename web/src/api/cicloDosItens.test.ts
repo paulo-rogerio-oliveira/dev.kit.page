@@ -35,6 +35,13 @@ beforeEach(() => {
 });
 
 describe('cliente do contrato humano de item, sem tela', () => {
+  it('a listagem anuncia leitura de decisões humanas também ao reabrir o projeto', async () => {
+    const terminal = impacto(confirmacao).projeto;
+    servidor.use(http.get(`${API}/api/projetos`, ({ request }) => request.headers.get('X-DevKit-Ciclo-Item') === '1'
+      ? HttpResponse.json([terminal]) : HttpResponse.json({ detail: 'Cliente anterior.' }, { status: 426 })));
+    expect((await api.projetos('sessao'))[0].itens[0].decisaoHumana?.pedido).toBe(confirmacao.pedido);
+  });
+
   it('negocia capacidade e envia versão/pedido/identidade sem transformar simulação em aplicação', async () => {
     const recebidos: PedidoDeDecisaoDoItem[] = [];
     servidor.use(http.post(`${API}/api/projetos/7/itens/2/decisao`, async ({ request }) => {
