@@ -17,6 +17,7 @@ let etapa = 'preparacao';
 let navegador;
 let contexto;
 let bloqueadas = 0;
+let pedidosDeCatalogoBloqueados = 0;
 let violacao = false;
 
 async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes) {
@@ -114,10 +115,21 @@ try {
       if (destinoPermitido && (leitura || login)) await rota.continue();
       else {
         bloqueadas++;
+        let catalogoDoCenario = false;
+        if (maquinaAlvo && url.origin === api && url.pathname === '/api/remoto/comandos' && metodo === 'POST') {
+          try {
+            const corpo = pedido.postDataJSON();
+            catalogoDoCenario = corpo?.tipo === 'catalogo' && corpo.maquinaId === maquinaAlvo
+              && corpo.texto === '' && !corpo.sessao;
+          } catch { /* Corpo desconhecido continua sendo uma gravação não permitida. */ }
+        }
+        if (catalogoDoCenario) pedidosDeCatalogoBloqueados++;
         // Sem URL, corpo ou headers: podem conter credenciais e identificadores privados.
         emitir('requisicao-bloqueada', { metodoPermitidoDeLeitura: leitura, destinoPermitido,
-          motivo: leitura ? 'destino-fora-do-cenario' : 'gravacao-fora-do-login' });
-        if (!leitura) violacao = true;
+          motivo: catalogoDoCenario ? 'pedido-automatico-de-catalogo-do-cenario-nao-enviado'
+            : leitura ? 'destino-fora-do-cenario' : 'gravacao-fora-do-login',
+          comandoRemotoEnviado: false });
+        if (!leitura && !catalogoDoCenario) violacao = true;
         await rota.abort('blockedbyclient');
       }
     });
@@ -190,13 +202,18 @@ try {
       const alvo = maquinaAlvo ? disponiveis.find(m => m.maquinaId === maquinaAlvo) : null;
       exigir(!maquinaAlvo || alvo, 'maquina-do-cenario-nao-acessivel-a-conta');
       if (alvo && disponiveis.length > 1) {
-        await pagina.getByRole('combobox', { name: 'Máquina', exact: true }).selectOption(maquinaAlvo);
+        const seletor = pagina.getByRole('combobox', { name: 'Máquina', exact: true });
+        // Não disparar change redundante: o handler do produto invalida a geração da leitura anterior.
+        const jaSelecionada = await seletor.inputValue() === maquinaAlvo;
+        if (!jaSelecionada) await seletor.selectOption(maquinaAlvo);
+        emitir('selecao-da-maquina-do-cenario', { jaSelecionada, selecaoAlterada: !jaSelecionada });
       }
       await conferirPainel(pagina, alvo ? [alvo] : disponiveis, fotoPendente, artefatosPendentes);
     }
     exigir(!violacao, 'pagina-tentou-gravacao-fora-do-login-bloqueada');
     emitir('resultado', { navegadorReal: true, loginPelaInterface: true, cadastro: 'identidade-conferida', projeto: 1,
-      consultaDoBoard: 'conferida', requisicoesBloqueadas: bloqueadas, gravacoesCadastrais: 0,
+      consultaDoBoard: 'conferida', requisicoesBloqueadas: bloqueadas, pedidosDeCatalogoBloqueados,
+      handshakeDeCatalogoExercitado: false, gravacoesCadastrais: 0,
       artefatoGeradoPeloBoard: false, previewValidado: false, aceiteE2E: 'parcial',
       swa: 'manual-pelo-desenvolvedor-aguardando-evidencia' });
   }
