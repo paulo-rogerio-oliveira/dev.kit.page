@@ -48,7 +48,7 @@ export function estadoDaCelula(c: CelulaMatrix, registros: RevisaoMatrix[], hist
   const lista = new Map<string, RegistroMatrix>();
   registros.slice().sort((a, b) => a.versao - b.versao).forEach(x => {
     const r = x.documento.registro;
-    if (r?.tipo === 'avaliacao' && r.celula === c.id && c.responsaveis.some(d => d.id === r.responsavel))
+    if ((r?.tipo === 'avaliacao' || r?.tipo === 'verificacao-final') && r.celula === c.id && c.responsaveis.some(d => d.id === r.responsavel))
       lista.set(`${r.responsavel}:${r.avaliador ?? 0}`, r);
   });
   const todos = [...lista.values()];

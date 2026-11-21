@@ -27,7 +27,7 @@
 .mx .mx-tabs button[aria-pressed=true] { border-bottom-color:var(--mx-accent); background:transparent; font-weight:650; }
 .mx-badge,.mx-chips span { border:1px solid var(--mx-border); padding:3px 7px; border-radius:4px; font-size:10px; white-space:nowrap; }
 .mx-chips { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
-.mx-card { border:1px solid var(--mx-border); background:var(--mx-bg); border-radius:8px; padding:10px; margin:10px 0; min-width:0; }
+.mx-card { border:1px solid var(--mx-border); background:var(--mx-bg); border-radius:8px; padding:10px; margin:10px 0; min-width:0; overflow-wrap:anywhere; }
 .mx-nota { border-left:3px solid var(--mx-blue); background:color-mix(in srgb,var(--mx-blue) 7%,var(--mx-bg)); padding:8px; font-size:11px; }
 .mx-alerta { border:1px solid color-mix(in srgb,var(--mx-warn) 50%,var(--mx-border)); background:color-mix(in srgb,var(--mx-warn) 10%,var(--mx-bg)); border-radius:5px; padding:10px 12px; }
 .mx a { color:var(--mx-blue); } .mx-dashed { border-style:dashed; }

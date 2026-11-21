@@ -13,19 +13,21 @@ public static class RegrasAvaliacaoMatrix
 
     public static void ValidarEvento(DocumentoMatrix d, EventoMatrix e)
     {
+        var final = e.Finalizacao is not null;
+        if (final) RegrasVerificacaoFinalMatrix.Validar(d, e);
         RegrasMatrix.Exigir(d.Id == IdDoEvento(e.Evento, e.Matriz, e.SessaoAvaliada) && RegrasMatrix.Identificador(e.Matriz)
-            && e.Evento is { Length: > 8 } && e.Evento.StartsWith("gatilho:", StringComparison.Ordinal) && long.TryParse(e.Evento[8..], out var execucao) && execucao > 0,
+            && (final || e.Evento is { Length: > 8 } && e.Evento.StartsWith("gatilho:", StringComparison.Ordinal) && long.TryParse(e.Evento[8..], out var execucao) && execucao > 0),
             "Recibo exige identidade persistida do evento.");
         RegrasMatrix.Exigir(e.Revisao > 0 && e.RevisaoEfetiva > 0 && e.RevisaoEfetiva <= e.Revisao
             && e.RevisaoDoContexto >= e.RevisaoEfetiva && e.RevisaoDoContexto <= e.Revisao
-            && e.Avaliador > 0 && RegrasMatrix.Identificador(e.SessaoAvaliada)
+            && (final ? e.Avaliador == 0 : e.Avaliador > 0) && RegrasMatrix.Identificador(e.SessaoAvaliada)
             && !string.IsNullOrWhiteSpace(e.Maquina), "Recibo exige host, avaliador, sessão e revisões do recorte.");
         RegrasMatrix.Exigir(e.Responsaveis is { Length: > 0 } && e.Responsaveis.All(RegrasMatrix.Identificador)
             && e.Celulas is not null && e.Celulas.All(RegrasMatrix.Identificador)
             && e.Dependencias is not null && e.Dependencias.All(RegrasMatrix.Identificador), "Recorte inválido.");
         RegrasMatrix.Exigir(e.Shas is { Count: > 0 } && e.Shas.All(s => !string.IsNullOrWhiteSpace(s.Key)
             && s.Value is { Length: 40 or 64 } && s.Value.All(char.IsAsciiHexDigit)), "Recibo exige SHAs completos.");
-        RegrasMatrix.Exigir(EntregaConfere(e.RevisaoDaEntrega, e.Shas), "Revisão imutável da entrega não confere com os SHAs do evento.");
+        RegrasMatrix.Exigir(final || EntregaConfere(e.RevisaoDaEntrega, e.Shas), "Revisão imutável da entrega não confere com os SHAs do evento.");
     }
 
     public static bool EntregaConfere(string json, IReadOnlyDictionary<string, string> shas)
@@ -49,7 +51,7 @@ public static class RegrasAvaliacaoMatrix
 
     public static void ConferirVinculo(RegistroMatrix r, EventoMatrix? e)
     {
-        RegrasMatrix.Exigir(r.Tipo == "avaliacao" && e is not null && r.Evento == e.Evento
+        RegrasMatrix.Exigir(e is not null && r.Tipo == (e.Finalizacao is null ? "avaliacao" : RegrasVerificacaoFinalMatrix.Tipo) && r.Evento == e.Evento
             && r.SessaoAvaliada == e.SessaoAvaliada && r.Avaliador == e.Avaliador
             && r.RevisaoDaDefinicao == e.Revisao && r.RevisaoEfetiva == e.RevisaoEfetiva
             && r.RevisaoDoContexto == e.RevisaoDoContexto && r.RevisaoDaEntrega == e.RevisaoDaEntrega
@@ -90,7 +92,7 @@ public static class RegrasAvaliacaoMatrix
 
     public static string EstadoDaCelula(CelulaMatrix celula, IReadOnlyList<RevisaoMatrix> registros, IReadOnlyList<RevisaoMatrix> historico)
     {
-        var lista = registros.Where(x => x.Documento.Registro is { Tipo: "avaliacao" } r && r.Celula == celula.Id
+        var lista = registros.Where(x => x.Documento.Registro is { } r && (r.Tipo == "avaliacao" || r.Tipo == RegrasVerificacaoFinalMatrix.Tipo) && r.Celula == celula.Id
                 && celula.Responsaveis.Any(d => d.Id == r.Responsavel))
             .GroupBy(x => (x.Documento.Registro!.Responsavel, x.Documento.Registro.Avaliador))
             .Select(g => g.OrderBy(x => x.Versao).Last().Documento.Registro!).ToArray();

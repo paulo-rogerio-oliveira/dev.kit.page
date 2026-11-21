@@ -32,6 +32,18 @@ const projeto: Projeto = {
 };
 
 describe('Projetos sincronizados', () => {
+  it('onda e andamento usam o grafo formal e preservam a fonte histórica recebida', async () => {
+    const finalizado = { ...projeto, itensDoGrafo: [1] };
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([finalizado])));
+    renderizar('/projetos', tokenDoDev());
+    const detalhe = await screen.findByRole('article', { name: 'Detalhe do projeto' });
+    expect(within(detalhe).getByText('Todas as ondas integradas')).toBeInTheDocument();
+    expect(screen.getByText('1 de 1 itens integrados')).toBeInTheDocument();
+    expect(within(detalhe).queryByText('2 · Cliente')).not.toBeInTheDocument();
+    expect(finalizado.itens).toHaveLength(2);
+    expect(finalizado.itens[1].situacao).toBe('rodando');
+  });
+
   it('mostra dados, branches, ondas, andamento e conserva os filtros ao escolher outro projeto', async () => {
     servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto, { ...projeto, id: 8, nome: 'Outro' }])));
     renderizar('/projetos?nivel=usuario&situacao=aprovado', tokenDoDev());
