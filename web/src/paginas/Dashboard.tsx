@@ -8,7 +8,7 @@ import { BarrasHorizontais, Kpi } from '../componentes/Graficos';
 import { PainelDeUtilidade } from '../componentes/PainelDeUtilidade';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
-import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar, ultimosDias } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -133,7 +133,7 @@ export function Dashboard() {
 
   return (
     <div className="pagina">
-      <Topo secao="uso">{ehAdmin ? <MenuDoAdmin /> : <MenuDaEmpresa />}</Topo>
+      <Topo secao="uso" />
 
       <main className="painel">
         <div className="cabecalho-do-painel">

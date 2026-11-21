@@ -161,7 +161,7 @@ describe('Relatos (US #602)', { timeout: 30_000 }, () => {
     const { unmount } = renderizar('/usuarios', tokenValido());
     await userEvent.click(await screen.findByRole('link', { name: 'Relatos' }));
     expect(await screen.findByRole('heading', { name: 'Relatos', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Relatos' })).toHaveClass('link-ativo');
+    expect(screen.getByRole('link', { name: 'Relatos' })).toHaveAttribute('aria-current', 'page');
     unmount();
     sessionStorage.clear();
 

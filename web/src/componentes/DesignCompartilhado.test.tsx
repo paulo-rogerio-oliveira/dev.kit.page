@@ -14,6 +14,17 @@ const v = (numero: number, tipo: 'captura' | 'proposta', base: number | null = n
   ({ ...projetosDeDesign[0].telas[0].versoes[0], numero, tipo, base }) as VersaoDeDesign;
 
 describe('Design compartilhado (US #669)', () => {
+  it('reidrata os filtros do Design e inclui a origem ao abrir uma versão', async () => {
+    const rota = '/empresa/conhecimento?aba=design&designEscopo=empresa&designRepo=github.com%2Facme%2Fportal&designBranch=feature%2Fdev%2Fsemana3&designTela=login&designModo=uma&designVersao=1&extra=preservado';
+    renderizar(rota, tokenDoGestor());
+    await screen.findByRole('region', { name: 'Versões de Login' });
+    expect(screen.getByLabelText('Branch')).toHaveValue('feature/dev/semana3');
+    expect(screen.getByRole('button', { name: 'Uma' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Versão')).toHaveValue('1');
+    const link = new URL(screen.getByRole('link', { name: 'Abrir' }).getAttribute('href')!, window.location.origin);
+    expect(link.pathname).toBe('/design/7/login/v1');
+    expect(link.searchParams.get('retorno')).toBe(rota);
+  });
   it('a comparação é a captura de antes, a última proposta e a recaptura depois dela', () => {
     const lado = comparacao([v(1, 'captura'), v(2, 'captura'), v(3, 'proposta', 1), v(4, 'captura', 3), v(5, 'captura', 3)]);
     expect(lado.map((c) => [c.versao.numero, c.papel, c.legenda])).toEqual([[1, 'captura', 'antes'], [3, 'proposta', 'base v001'], [5, 'recaptura', 'depois']]);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { comRetorno } from '../navegacao';
 import { api, mensagemDaFalha } from '../api/cliente';
 import type { ItemDoProjeto, ReferenciaDeProposta } from '../api/projetos';
 import type { ProjetoDeDesign, VersaoDeDesign } from '../api/tipos';
@@ -27,6 +28,7 @@ export async function resolverProposta(referencia: ReferenciaDeProposta, projeto
 }
 
 export function PropostasDoPlano({ token, itens, tratar }: { token: string; itens: ItemDoProjeto[]; tratar: (erro: unknown) => void }) {
+  const local = useLocation();
   const [resolvidas, setResolvidas] = useState<PropostaResolvida[]>([]);
   const [erro, setErro] = useState('');
   const [carregando, setCarregando] = useState(true);
@@ -58,7 +60,7 @@ export function PropostasDoPlano({ token, itens, tratar }: { token: string; iten
             {resultado?.erro && <p role="alert">{resultado.erro}</p>}
             {resultado?.versao && <>
               <ImagemDaVersao token={token} versao={resultado.versao} tratar={tratar} />
-              <Link className="botao botao-fantasma" to={`/design/${resultado.projeto}/${encodeURIComponent(ref.tela)}/v${ref.versao}?hash=${encodeURIComponent(ref.hash)}`}>Ver proposta fixada · v{ref.versao}</Link>
+              <Link className="botao botao-fantasma" to={comRetorno(`/design/${resultado.projeto}/${encodeURIComponent(ref.tela)}/v${ref.versao}?hash=${encodeURIComponent(ref.hash)}`, local.pathname + local.search + local.hash)}>Ver proposta fixada · v{ref.versao}</Link>
             </>}
           </div>;
         })}

@@ -32,6 +32,31 @@ const projeto: Projeto = {
 };
 
 describe('Projetos sincronizados', () => {
+  it('foco acompanha abertura e troca de projeto sem interferir em filtros ou abas', async () => {
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto, { ...projeto, id: 8, slug: 'outro', nome: 'Outro' }])));
+    renderizar('/projetos?nivel=usuario', tokenDoDev());
+    const link = await screen.findByRole('link', { name: 'Abrir projeto Portal' });
+    link.focus();
+    await userEvent.keyboard('{Enter}');
+    const detalhe = within(screen.getByRole('article', { name: 'Detalhe do projeto' }));
+    await waitFor(() => expect(detalhe.getByRole('heading', { name: 'Portal' })).toHaveFocus());
+    await userEvent.click(screen.getByRole('button', { name: /Outro/ }));
+    await waitFor(() => expect(detalhe.getByRole('heading', { name: 'Outro' })).toHaveFocus());
+    const aba = screen.getByRole('button', { name: 'Propostas visuais' });
+    await userEvent.click(aba);
+    expect(aba).toHaveFocus();
+    const filtro = screen.getByRole('combobox', { name: 'Situação do projeto' });
+    await userEvent.selectOptions(filtro, 'aguardando');
+    expect(filtro).toHaveFocus();
+  });
+  it('o link do detalhe conserva filtros, aba e parâmetros adicionais', async () => {
+    servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])));
+    renderizar('/projetos?nivel=usuario&situacao=aprovado&visao=propostas&extra=1', tokenDoDev());
+    const link = await screen.findByRole('link', { name: 'Abrir projeto Portal' });
+    expect(link).toHaveAttribute('href', '/projetos?nivel=usuario&situacao=aprovado&visao=propostas&extra=1&projeto=7');
+    await userEvent.click(link);
+    expect(screen.getByRole('link', { name: '← Projetos' })).toHaveAttribute('href', '/projetos?nivel=usuario&situacao=aprovado&extra=1');
+  });
   it('leitor consulta snapshot portátil sem reenviar e preserva a referência ao navegar', async () => {
     const referencia = { projeto: 'repo-fixado', tela: 'plano', versao: 6, hash: 'a'.repeat(64) };
     const snapshot: Projeto = { ...projeto, board: 'nao', papel: 'leitor', baseDoBranch: 'develop',

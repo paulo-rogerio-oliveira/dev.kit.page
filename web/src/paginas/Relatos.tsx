@@ -3,7 +3,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CategoriaDeRelato, EmpresaResumo, EstadoDoRelato, FiltroDeRelatos, Pagina as PaginaDaApi, RelatoDetalhe, RelatoResumo } from '../api/tipos';
 import { CATEGORIAS_DE_RELATO, ESTADOS_DE_RELATO, ListaDeRelatos, SeloDaCategoria, SeloDoEstado } from '../componentes/ListaDeRelatos';
 import { Pagina } from '../componentes/Pagina';
-import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -117,9 +117,7 @@ export function Relatos() {
 
   return (
     <div className="pagina">
-      <Topo secao="relatos">
-        {ehAdmin ? <MenuDoAdmin /> : <MenuDaEmpresa />}
-      </Topo>
+      <Topo secao="relatos" />
 
       <Pagina
         rotulo="Suporte"
