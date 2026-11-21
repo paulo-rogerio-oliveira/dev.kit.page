@@ -14,6 +14,12 @@ public sealed record ProjetoGravado(ProjetoV1 Projeto, bool Novo);
 /// </summary>
 public interface IProjetosDaEmpresa
 {
+    Task<ResultadoDaGestao<ProjetoGravado>> ImportarDecisoesLocaisAsync(EscopoDoDesign escopo,
+        EnvioDeProjetoV1 envio, CancellationToken ct);
+    Task<ResultadoDaDecisaoDoItem> DecidirItemAsync(EscopoDoDesign escopo, long id, int numero,
+        PedidoDeDecisaoDoItemV1 pedido, CancellationToken ct);
+    Task<ResultadoDaGestao<ProjetoV1>> ConfirmarParadaAsync(EscopoDoDesign escopo, long id, int numero,
+        string maquinaAutenticada, ParadaDeEscritaDoItemV1 parada, CancellationToken ct);
     /// <summary>Os projetos visíveis; com <paramref name="time"/>, o nível time só desse time; com <paramref name="desde"/>, só os alterados depois.</summary>
     Task<IReadOnlyList<ProjetoV1>> ListarAsync(EscopoDoDesign escopo, string? time, DateTimeOffset? desde, CancellationToken ct);
 
@@ -29,6 +35,8 @@ public interface IProjetosDaEmpresa
     /// <summary>Apaga o projeto e o plano: só o autor ou o gestor da empresa.</summary>
     Task<ResultadoDaGestao<ProjetoV1>> ApagarAsync(EscopoDoDesign escopo, long id, CancellationToken ct);
 }
+
+public sealed record ResultadoDaDecisaoDoItem(int Status, ImpactoDaDecisaoDoItemV1? Impacto = null, string Mensagem = "");
 
 /// <summary>As regras puras dos projetos (US #693): o slug, a validação do envio e as dependências sem ciclo — sem banco.</summary>
 public static partial class RegrasDosProjetos
@@ -144,6 +152,11 @@ public static partial class RegrasDosProjetos
                 return $"A onda do item {item.Numero} não é negativa.";
             if (!ProjetosV1.SituacoesDoItem.Contains(item.Situacao ?? ProjetosV1.ItemPlanejado))
                 return $"A situação do item {item.Numero} é uma de: {string.Join(", ", ProjetosV1.SituacoesDoItem)}.";
+            if (item.ReservasDeEscrita is { } reservas && (reservas.Reservas is null || reservas.Paradas is null
+                || reservas.Reservas.Length > 100 || reservas.Paradas.Length > 100
+                || reservas.Reservas.Any(r => r is null || new[] { r.Maquina, r.Instancia, r.Sessao, r.Tentativa }
+                    .Any(s => string.IsNullOrWhiteSpace(s) || s.Length > 200))))
+                return $"Reservas de escrita inválidas no item {item.Numero}.";
         }
 
         foreach (var item in itens)
