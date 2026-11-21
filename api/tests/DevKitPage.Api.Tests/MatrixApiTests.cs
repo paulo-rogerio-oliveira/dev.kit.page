@@ -125,8 +125,10 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal("sessao", (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("vinculo", "demanda")))![0].Documento.Vinculo!.Sessao);
     }
 
-    [Fact]
-    public async Task Finalizacao_sem_item_exige_recibo_do_host_atual_e_preserva_vinculo_anterior_na_retomada()
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task Finalizacao_sem_item_exige_recibo_do_host_atual_e_preserva_vinculo_anterior_na_retomada(string novaLinha)
     {
         var admin = await _api.AdminAsync();
         var empresa = await ApiDeTeste.EmpresaAsync(admin, "Matrix finalização");
@@ -161,9 +163,12 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo, aplicar: false)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await ana.GetAsync(Rota("vinculo", "demanda"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo)).StatusCode);
-        var verificacao = new EventoMatrix(RegrasVerificacaoFinalMatrix.Evento(recibo), "demanda", maquina, fluxo.Id,
+        var revisaoPortatil = RegrasVerificacaoFinalMatrix.Revisao(recibo).Replace("\n", novaLinha, StringComparison.Ordinal);
+        var eventoPortatil = "finalizacao:" + recibo.Execucao + ":" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(revisaoPortatil)));
+        var verificacao = new EventoMatrix(eventoPortatil, "demanda", maquina, fluxo.Id,
             0, 1, 1, 1, ["task-1"], ["c1"], recibo.Shas.ToDictionary(p => p.Key, p => p.Value),
-            RegrasVerificacaoFinalMatrix.Revisao(recibo)) { Finalizacao = recibo };
+            revisaoPortatil) { Finalizacao = recibo };
         var reciboMatrix = new DocumentoMatrix { Aplicacao = "app", Tipo = "evento", Projeto = "projeto",
             Id = RegrasAvaliacaoMatrix.IdDoEvento(verificacao.Evento, "demanda", fluxo.Id), Evento = verificacao };
         var respostaDoRecibo = await Editar(ana, reciboMatrix);
@@ -185,8 +190,10 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal("exec-retomada", historico[1].Documento.Vinculo!.Sessao);
     }
 
-    [Fact]
-    public async Task Transferencia_versionada_preserva_item_e_cliente_antigo_e_vincula_a_finalizacao_fora_do_grafo()
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task Transferencia_versionada_preserva_item_e_cliente_antigo_e_vincula_a_finalizacao_fora_do_grafo(string novaLinha)
     {
         var admin = await _api.AdminAsync();
         var empresa = await ApiDeTeste.EmpresaAsync(admin, "Transferência formal");
@@ -203,6 +210,12 @@ public sealed class MatrixApiTests : IDisposable
         var snapshot = FonteDaTransferenciaMatrix.Retratar(envio, envio.Itens[1]);
         var revisao = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!.Last();
         var proposta = RegrasDaTransferenciaMatrix.Preparar(revisao, snapshot, "finalizacao", "Validação do conjunto", "Plano aprovado r3", DateTimeOffset.UtcNow);
+        var transferenciaPortatil = Assert.Single(proposta.Documento.Matriz!.Transferencias!);
+        proposta = proposta with { Documento = proposta.Documento with { Matriz = proposta.Documento.Matriz! with
+        {
+            Transferencias = [transferenciaPortatil with
+            { SnapshotDoItem = transferenciaPortatil.SnapshotDoItem.Replace("\n", novaLinha, StringComparison.Ordinal) }]
+        } } };
         Assert.Equal(HttpStatusCode.OK, (await Editar(ana, proposta.Documento, 1, aplicar: false)).StatusCode);
         Assert.Single((await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!);
         const string maquina = "maquina-transferencia";

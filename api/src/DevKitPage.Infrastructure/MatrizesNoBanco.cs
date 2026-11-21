@@ -228,7 +228,7 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
             : JsonSerializer.Deserialize<RetratoV1>(maquina.Retrato, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var task = retrato?.Fluxos?.SingleOrDefault(f => f.Id == evento.SessaoAvaliada);
         if (task is not { Item: null, Finalizacao: not null } || task.Projeto != d.Projeto
-            || RegrasVerificacaoFinalMatrix.Revisao(task.Finalizacao) != evento.RevisaoDaEntrega)
+            || !RegrasVerificacaoFinalMatrix.MesmaRevisao(task.Finalizacao, evento.RevisaoDaEntrega))
             return "Verificação final diverge da reserva/composição publicada pelo host do solicitante.";
         var projeto = await db.ProjetosCompartilhados.AsNoTracking().SingleOrDefaultAsync(p => p.Id == projetoId, ct);
         var documento = projeto is null || projeto.Documento.Length == 0 ? null : JsonSerializer.Deserialize<EnvioDeProjetoV1>(projeto.Documento);

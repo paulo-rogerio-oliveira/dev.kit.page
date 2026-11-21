@@ -6,7 +6,8 @@ namespace DevKitPage.Core;
 /// <summary>Mesmo contrato nos produtores local/remoto; responsabilidade transferida não é evidência atendida.</summary>
 public static class RegrasDaTransferenciaMatrix
 {
-    public static string Snapshot(ItemDaTransferenciaMatrix item) => JsonSerializer.Serialize(item, RegrasMatrix.Json);
+    private static readonly JsonSerializerOptions JsonDoSnapshot = new(RegrasMatrix.Json) { NewLine = "\n" };
+    public static string Snapshot(ItemDaTransferenciaMatrix item) => JsonSerializer.Serialize(item, JsonDoSnapshot);
 
     public static ItemDaTransferenciaMatrix Item(TransferenciaDeValidacaoMatrix transferencia)
         => JsonSerializer.Deserialize<ItemDaTransferenciaMatrix>(transferencia.SnapshotDoItem, RegrasMatrix.Json)
@@ -84,7 +85,8 @@ public static class RegrasDaTransferenciaMatrix
     {
         if (transferencia.Revogacao is not null) return;
         var item = itens.SingleOrDefault(i => i.Numero == transferencia.Item);
-        RegrasMatrix.Exigir(item is not null && Snapshot(item) == transferencia.SnapshotDoItem,
+        // O JSON antigo pode ter CRLF de Windows; as quebras do texto do item estão escapadas e permanecem distintas.
+        RegrasMatrix.Exigir(item is not null && Snapshot(item) == transferencia.SnapshotDoItem?.Replace("\r\n", "\n", StringComparison.Ordinal),
             "O item mudou desde a transferência: releia e revogue/replaneje explicitamente, sem reinterpretar a história.");
         RegrasMatrix.Exigir(!itens.Any(i => i.Numero != item.Numero && i.Dependencias.Contains(item.Numero)),
             "Outro item depende da validação final: replaneje essa dependência explicitamente antes de transferir.");
