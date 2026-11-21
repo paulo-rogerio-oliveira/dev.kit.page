@@ -44,6 +44,36 @@ public sealed class RemotoApiTests : IDisposable
     private static StringContent Json(string json, string tipo = "application/json") => new(json, Encoding.UTF8, tipo);
 
     [Fact]
+    public async Task Estados_do_artefato_chegam_ao_polling_do_board_depois_do_aceite_sem_expor_arquivo_local()
+    {
+        var admin = await _api.AdminAsync();
+        var (dono, _) = await _api.UsuarioAsync(admin, "dono-artefato", Papeis.Dev);
+        var (outro, _) = await _api.UsuarioAsync(admin, "outro-artefato", Papeis.Dev);
+        Assert.Equal(HttpStatusCode.OK, (await dono.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat())).StatusCode);
+        var origem = Retrato();
+        var numero = 0;
+        foreach (var estado in new[] { "enfileirado", "gerando", "envio-pendente", "falhou" })
+        {
+            var artefato = new ArtefatoNoRetratoV1(17, "pacote", "github.com/acme/app", new string('a', 40), estado,
+                "upload", estado == "falhou" ? "Host sem capacidade para concluir o envio." : "Resultado em acompanhamento", 0, Gerado);
+            var projeto = origem.Projetos![0] with { Repositorios = ["github.com/acme/app"], Branch = "feature/projeto", Artefatos = [artefato], PodeGerarArtefato = true };
+            var enviado = origem with { GeradoEm = Gerado.AddSeconds(++numero), Projetos = [projeto] };
+            Assert.Equal(HttpStatusCode.OK, (await dono.PutAsJsonAsync("/api/remoto/retrato", enviado)).StatusCode);
+            var lido = (await dono.GetFromJsonAsync<RetratoDaMaquinaV1>("/api/remoto/maquinas/3f2b9c0e5d7a/retrato"))!;
+            var resultado = Assert.Single(Assert.Single(lido.Retrato.Projetos!).Artefatos!);
+            Assert.Equal(artefato, resultado);
+            Assert.DoesNotContain("caminhoLocal", JsonSerializer.Serialize(resultado), StringComparison.OrdinalIgnoreCase);
+        }
+        // O envio malformado não apaga o último desfecho que o Board recebeu.
+        var invalido = origem with { GeradoEm = Gerado.AddHours(1), Projetos = [origem.Projetos![0] with {
+            Artefatos = [new(17, "pacote", "github.com/acme/app", new string('a', 40), "falhou", "upload", @"Arquivo C:\privado\pacote.zip", 0, Gerado)] }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await dono.PutAsJsonAsync("/api/remoto/retrato", invalido)).StatusCode);
+        var preservado = (await dono.GetFromJsonAsync<RetratoDaMaquinaV1>("/api/remoto/maquinas/3f2b9c0e5d7a/retrato"))!;
+        Assert.Equal("falhou", preservado.Retrato.Projetos![0].Artefatos![0].Estado);
+        Assert.Equal(HttpStatusCode.NotFound, (await outro.GetAsync("/api/remoto/maquinas/3f2b9c0e5d7a/retrato")).StatusCode);
+    }
+
+    [Fact]
     public async Task Sem_jwt_com_chave_de_maquina_ou_com_troca_pendente_nada_entra()
     {
         var anonimo = _api.CreateClient();

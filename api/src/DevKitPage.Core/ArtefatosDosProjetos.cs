@@ -13,6 +13,9 @@ public sealed class ArtefatoDoProjeto
     public long ProjetoId { get; set; }
     public ProjetoCompartilhado? Projeto { get; set; }
 
+    /// <summary>Identidade do conteúdo e origem para repetir o registro sem duplicar; nula nos registros antigos.</summary>
+    public string? Publicacao { get; set; }
+
     /// <summary><see cref="ArtefatosV1.TipoPacote"/> ou <see cref="ArtefatosV1.TipoPreview"/>.</summary>
     public string Tipo { get; set; } = string.Empty;
 
@@ -153,8 +156,16 @@ public static class RegrasDosArtefatos
             return $"A ação no projeto é {ArtefatosV1.AcaoArtefato}.";
         if (string.IsNullOrWhiteSpace(acao.Projeto) || acao.Projeto.Length > ProjetosV1.TamanhoMaximoDoSlug)
             return "Informe o projeto (o slug).";
+        if (acao.Retomar is <= 0)
+            return "O ID do artefato a retomar deve ser positivo.";
+        if (acao.Retomar is not null && acao.Conferir)
+            return "Conferência de origem e retomada são pedidos separados.";
+        if (acao.Retomar is not null && (!string.IsNullOrEmpty(acao.Repositorio) || !string.IsNullOrEmpty(acao.Sha) || !string.IsNullOrEmpty(acao.Formato)))
+            return "Retomada usa a origem do mesmo ID; não informe outra origem ou formato.";
         if (acao.Repositorio is { Length: > ArtefatosV1.TamanhoMaximoDoRepositorio })
             return $"O repositório tem até {ArtefatosV1.TamanhoMaximoDoRepositorio} caracteres.";
+        if (!string.IsNullOrWhiteSpace(acao.Formato) && acao.Formato.Trim().ToLowerInvariant() is not (ArtefatosV1.TipoPacote or ArtefatosV1.TipoPreview))
+            return "O formato é pacote ou preview (omitido: detectado no clone).";
         return acao.Sha is { Length: > 0 } sha && !Hexadecimal(sha, 7, 40) ? "O SHA tem de 7 a 40 caracteres hexadecimais." : string.Empty;
     }
 

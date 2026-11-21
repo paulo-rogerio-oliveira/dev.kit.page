@@ -37,6 +37,17 @@ BEGIN
 END;
 GO
 
+-- Compatível com API anterior: identidade opcional; não transforma nem remove registros existentes.
+IF COL_LENGTH(N'dbo.ArtefatosDosProjetos', N'Publicacao') IS NULL
+    ALTER TABLE [dbo].[ArtefatosDosProjetos] ADD [Publicacao] nvarchar(64) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.ArtefatosDosProjetos')
+    AND name = N'IX_ArtefatosDosProjetos_ProjetoId_Publicacao')
+    CREATE UNIQUE INDEX [IX_ArtefatosDosProjetos_ProjetoId_Publicacao]
+        ON [dbo].[ArtefatosDosProjetos] ([ProjetoId], [Publicacao]) WHERE [Publicacao] IS NOT NULL;
+GO
+
 -- Os últimos de cada projeto (o card do Board) e a retenção por projeto.
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ArtefatosDosProjetos_ProjetoId_CriadoEmUtc' AND object_id = OBJECT_ID(N'[dbo].[ArtefatosDosProjetos]'))
     CREATE INDEX [IX_ArtefatosDosProjetos_ProjetoId_CriadoEmUtc] ON [dbo].[ArtefatosDosProjetos] ([ProjetoId], [CriadoEmUtc]);
