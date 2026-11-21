@@ -73,7 +73,9 @@ async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes
 try {
   const modo = process.argv[2];
   const painel = process.argv[3] === '--painel';
-  exigir((process.argv.length === 3 || process.argv.length === 4 && painel)
+  const maquinaAlvo = process.argv.length === 6 && process.argv[4] === '--maquina' ? process.argv[5] : null;
+  exigir((process.argv.length === 3 || process.argv.length === 4 && painel
+    || process.argv.length === 6 && painel && /^[a-f0-9]{32}$/.test(maquinaAlvo ?? ''))
     && ['--simular', '--consultar'].includes(modo), 'modo-invalido');
   const repositorio = fileURLToPath(new URL('../../..', import.meta.url));
   const workflow = readFileSync(join(repositorio, '.github/workflows/azure-static-web-apps-black-forest-00e9a2410.yml'), 'utf8');
@@ -84,7 +86,7 @@ try {
   exigir(existsSync(edge), 'edge-existente-nao-encontrado');
   const sha = execFileSync('git', ['-C', repositorio, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex');
-  emitir('plano', { modo, painel, site: site.origin, api, shaDoRepositorio: sha, hashDoRoteiro: hash,
+  emitir('plano', { modo, painel, maquinaDoCenarioIndicada: Boolean(maquinaAlvo), site: site.origin, api, shaDoRepositorio: sha, hashDoRoteiro: hash,
     fonteDaOrigem: 'workflow VITE_SITE_URL existente', shaDoSitePublicado: 'nao-confirmado', shaDaApiPublicada: 'nao-confirmado',
     autorizacao: 'mensagens-516-e-530', ator: 'conta-de-teste', perfil: 'efemero-isolado',
     capturas: false, traces: false, sessaoExportada: false, gravacoesDeDadosPermitidas: 0,
@@ -167,6 +169,7 @@ try {
     const fotoPendente = painel ? pagina.waitForResponse(r => {
       const url = new URL(r.url());
       return url.origin === api && /^\/api\/remoto\/maquinas\/[^/]+\/retrato$/.test(url.pathname)
+        && (!maquinaAlvo || url.pathname === '/api/remoto/maquinas/' + maquinaAlvo + '/retrato')
         && r.request().method() === 'GET';
     }).then(resposta => ({ resposta }), () => ({})) : null;
     const artefatosPendentes = painel ? respostaDe('/api/projetos/artefatos')
@@ -184,7 +187,12 @@ try {
     }
     if (painel && disponiveis.length) {
       etapa = 'retrato-e-painel-de-artefatos';
-      await conferirPainel(pagina, disponiveis, fotoPendente, artefatosPendentes);
+      const alvo = maquinaAlvo ? disponiveis.find(m => m.maquinaId === maquinaAlvo) : null;
+      exigir(!maquinaAlvo || alvo, 'maquina-do-cenario-nao-acessivel-a-conta');
+      if (alvo && disponiveis.length > 1) {
+        await pagina.getByRole('combobox', { name: 'Máquina', exact: true }).selectOption(maquinaAlvo);
+      }
+      await conferirPainel(pagina, alvo ? [alvo] : disponiveis, fotoPendente, artefatosPendentes);
     }
     exigir(!violacao, 'pagina-tentou-gravacao-fora-do-login-bloqueada');
     emitir('resultado', { navegadorReal: true, loginPelaInterface: true, cadastro: 'identidade-conferida', projeto: 1,
