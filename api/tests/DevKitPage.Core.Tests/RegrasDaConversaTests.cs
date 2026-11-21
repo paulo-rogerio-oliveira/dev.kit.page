@@ -96,7 +96,9 @@ public sealed class RegrasDaConversaTests
         // (semana 7) O agente da task entra no fim: o site antigo não o conhece e segue com os dois de antes.
         Assert.Equal(["orquestrador", "dev", "agente"], ConversaV1.AutoresDaFala);
         Assert.Equal(["desktop", "remoto"], ConversaV1.OrigensDaFala);
-        Assert.Equal("conversa-da-task", RemotoV1.RecursosDaApi[^1]);
+        // Runners acrescenta a capability ao fim, mantendo o recurso anterior e seu prefixo.
+        Assert.Equal("conversa-da-task", RemotoV1.RecursosDaApi[^2]);
+        Assert.Equal("ciclo-humano-item-v1", RemotoV1.RecursosDaApi[^1]);
     }
 
     [Fact]
