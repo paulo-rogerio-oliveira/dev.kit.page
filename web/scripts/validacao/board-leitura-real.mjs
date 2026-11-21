@@ -3,7 +3,7 @@
 import { chromium } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,8 +19,72 @@ let contexto;
 let bloqueadas = 0;
 let pedidosDeCatalogoBloqueados = 0;
 let violacao = false;
+let downloadDoBoardConferido = false;
 
-async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes) {
+async function baixarPeloBoard(pagina, grupo, pacote, pasta) {
+  exigir(pacote?.sha === '7e108e7fc3f4ff44bf105e7b9a5496007fbd0b20'
+    && pacote.hash === 'e422f35a4d1682cd16966d2bff3e458366723dcae1611dd8d4f2a18b080b92b9'
+    && pacote.tamanho === 39612553, 'pacote-do-board-diverge-do-cenario-conferido');
+  // A lista pode renovar a assinatura enquanto o cartão é medido/capturado.
+  // Selecionar o único link do SHA conhecido e conferir os bytes depois do clique.
+  const link = grupo.getByRole('link').filter({ hasText: pacote.sha.slice(0, 7) });
+  exigir(await link.count() === 1 && await link.isVisible(), 'link-do-registro3-nao-encontrado-no-cartao');
+  const href = await link.getAttribute('href');
+  exigir(href, 'link-do-registro3-sem-destino');
+  const destino = new URL(href, pagina.url());
+  exigir(destino.origin === api && !destino.username && !destino.password, 'destino-do-download-fora-do-cenario');
+  const contextoDaPagina = pagina.context();
+  let http = null;
+  let bearerNoDownload = null;
+  const observarResposta = resposta => {
+    if (resposta.url() === destino.href && resposta.request().method() === 'GET') {
+      http = resposta.status();
+      bearerNoDownload = Boolean(resposta.request().headers().authorization);
+    }
+  };
+  let resolver;
+  let rejeitar;
+  const iniciado = new Promise((resolve, reject) => { resolver = resolve; rejeitar = reject; });
+  // Se o clique falhar antes da espera, não deixar timeout virar rejeição sem tratamento.
+  void iniciado.catch(() => {});
+  const paginas = new Set();
+  const observarPagina = p => { paginas.add(p); p.on('download', resolver); };
+  for (const p of contextoDaPagina.pages()) observarPagina(p);
+  contextoDaPagina.on('page', observarPagina);
+  contextoDaPagina.on('response', observarResposta);
+  const prazo = setTimeout(() => rejeitar(new Pendencia('download-do-board-nao-iniciou')), 30_000);
+  try {
+    await link.click();
+    const download = await iniciado;
+    exigir(new URL(download.url()).href === destino.href, 'download-nao-corresponde-ao-link-do-registro3');
+    const arquivo = join(pasta, 'artefato-3.zip');
+    let prazoDaTransferencia;
+    try {
+      await Promise.race([download.saveAs(arquivo), new Promise((_, reject) => {
+        prazoDaTransferencia = setTimeout(() => reject(new Pendencia('download-do-board-excedeu-o-prazo')), 60_000);
+      })]);
+    } finally { clearTimeout(prazoDaTransferencia); }
+    exigir(await download.failure() === null, 'download-do-board-nao-concluiu');
+    const tamanho = statSync(arquivo).size;
+    exigir(tamanho === pacote.tamanho, 'download-do-board-com-tamanho-divergente');
+    const hash = createHash('sha256').update(readFileSync(arquivo)).digest('hex');
+    exigir(hash === pacote.hash, 'download-do-board-com-hash-divergente');
+    exigir(http === null || http === 200, 'download-do-board-http-nao-aprovado');
+    exigir(bearerNoDownload !== true, 'download-do-board-enviou-bearer');
+    exigir(new URL(pagina.url()).pathname === '/board' && await grupo.isVisible(), 'contexto-do-board-nao-preservado');
+    downloadDoBoardConferido = true;
+    emitir('download-pelo-board', { projeto: 1, artefato: 3, http, bearerNoDownload, arquivo,
+      hash, tamanho, sha: pacote.sha, contextoDoPainelPreservado: true,
+      manifestos: 'mesmos-bytes-do-zip-conferido-no-comando534', novaLeituraDosManifestos: false });
+  } finally {
+    clearTimeout(prazo);
+    contextoDaPagina.off('page', observarPagina);
+    contextoDaPagina.off('response', observarResposta);
+    for (const p of paginas) p.off('download', resolver);
+  }
+}
+
+async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes, diagnostico, pasta) {
   exigir(maquinas.length === 1, 'painel-exige-identificar-maquina-do-cenario');
   const foto = await fotoPendente;
   exigir(foto.resposta, 'retrato-nao-recebido-no-navegador');
@@ -35,6 +99,8 @@ async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes
   const data = typeof retrato.geradoEm === 'string' && /^\d{4}-\d\d-\d\dT[\d:.+-]+Z?$/.test(retrato.geradoEm) ? retrato.geradoEm : null;
   emitir('retrato-do-board', { maquinaConectada: maquinas[0].conectada === true, appAberto: maquinas[0].appAberto === true,
     retratoGeradoEm: data, projetoDeTestePresente: Boolean(projeto), capacidadeDeGerarInformada: projeto?.podeGerarArtefato === true,
+    campoCapacidadePresente: Boolean(projeto && Object.hasOwn(projeto, 'podeGerarArtefato')),
+    capacidade: typeof projeto?.podeGerarArtefato === 'boolean' ? projeto.podeGerarArtefato : null,
     repositoriosDoProjeto: Array.isArray(projeto?.repositorios) ? projeto.repositorios.length : null });
   const consulta = await artefatosPendentes;
   exigir(consulta.resposta, 'lista-de-artefatos-nao-recebida-no-navegador');
@@ -69,16 +135,56 @@ async function conferirPainel(pagina, maquinas, fotoPendente, artefatosPendentes
       semOverflowInterno: elemento.scrollWidth <= elemento.clientWidth + 1 };
   });
   emitir('painel-390px', { projeto: 1, ...dimensoes, capturaRealizada: false, coberturaVisualGlobal: false });
+  if (diagnostico) {
+    exigir(!existsSync(pasta), 'pasta-do-diagnostico-ja-existe');
+    mkdirSync(pasta, { recursive: true });
+    const cartao = grupo.locator('..');
+    exigir(await cartao.evaluate(el => el.classList.contains('br-proj-card')), 'container-nao-e-o-cartao-do-projeto');
+    const textoDoCartao = (await cartao.innerText()).toLowerCase();
+    exigir(![process.env.usuario_test, process.env.senha_test].filter(Boolean)
+      .some(valor => textoDoCartao.includes(valor.toLowerCase())), 'cartao-contem-credencial-nao-capturado');
+    const destinosDoCartao = await grupo.getByRole('link').evaluateAll(links => links.map(link => link.href));
+    exigir(!destinosDoCartao.some(url => textoDoCartao.includes(url.toLowerCase())), 'cartao-expoe-url-nao-capturado');
+    const geometria = await grupo.evaluate(elemento => {
+      const caixa = elemento.getBoundingClientRect();
+      const cartao = elemento.parentElement.getBoundingClientRect();
+      const arredondar = numero => Math.round(numero * 100) / 100;
+      const elementosQueExcedemOGrupo = [...elemento.querySelectorAll('a,button,small,code,select,input')].flatMap(el => {
+        const r = el.getBoundingClientRect();
+        if (r.left >= caixa.left - 1 && r.right <= caixa.right + 1) return [];
+        const css = getComputedStyle(el);
+        return [{ tag: el.tagName, esquerda: arredondar(r.left), direita: arredondar(r.right),
+          foraDaViewport: r.left < -1 || r.right > innerWidth + 1,
+          foraDoCartao: r.left < cartao.left - 1 || r.right > cartao.right + 1,
+          margemEsquerda: css.marginLeft, margemDireita: css.marginRight, overflowX: css.overflowX }];
+      }).slice(0, 20);
+      return { viewport: innerWidth, larguraDoDocumento: document.documentElement.scrollWidth,
+        grupoEsquerda: arredondar(caixa.left), grupoDireita: arredondar(caixa.right),
+        larguraInterna: elemento.clientWidth, larguraRolavel: elemento.scrollWidth,
+        cartaoEsquerda: arredondar(cartao.left), cartaoDireita: arredondar(cartao.right), elementosQueExcedemOGrupo };
+    });
+    emitir('geometria-do-cartao-390px', geometria);
+    const estreita = join(pasta, 'cartao-390.png');
+    await cartao.screenshot({ path: estreita });
+    await pagina.setViewportSize({ width: 1365, height: 900 });
+    const larga = join(pasta, 'cartao-1365.png');
+    await cartao.screenshot({ path: larga });
+    emitir('capturas-locais-do-cartao', { projeto: 1, arquivos: [estreita, larga],
+      paginaInteira: false, sessaoExportada: false, coberturaVisualGlobal: false });
+    await baixarPeloBoard(pagina, grupo, pacote, pasta);
+  }
 }
 
 try {
   const modo = process.argv[2];
   const painel = process.argv[3] === '--painel';
-  const maquinaAlvo = process.argv.length === 6 && process.argv[4] === '--maquina' ? process.argv[5] : null;
+  const diagnostico = process.argv.length === 7 && process.argv[6] === '--diagnostico';
+  const maquinaAlvo = [6, 7].includes(process.argv.length) && process.argv[4] === '--maquina' ? process.argv[5] : null;
   exigir((process.argv.length === 3 || process.argv.length === 4 && painel
-    || process.argv.length === 6 && painel && /^[a-f0-9]{32}$/.test(maquinaAlvo ?? ''))
+    || (process.argv.length === 6 || diagnostico) && painel && /^[a-f0-9]{32}$/.test(maquinaAlvo ?? ''))
     && ['--simular', '--consultar'].includes(modo), 'modo-invalido');
   const repositorio = fileURLToPath(new URL('../../..', import.meta.url));
+  const pastaDiagnostico = join(repositorio, '../git.kit/anexos/board-diagnostico-item6', execucao);
   const workflow = readFileSync(join(repositorio, '.github/workflows/azure-static-web-apps-black-forest-00e9a2410.yml'), 'utf8');
   const site = new URL(workflow.match(/VITE_SITE_URL:\s*(https:\/\/[^\s'"#]+)/)?.[1]);
   exigir(site.protocol === 'https:' && site.hostname.endsWith('.azurestaticapps.net') && !site.username && !site.password,
@@ -90,7 +196,8 @@ try {
   emitir('plano', { modo, painel, maquinaDoCenarioIndicada: Boolean(maquinaAlvo), site: site.origin, api, shaDoRepositorio: sha, hashDoRoteiro: hash,
     fonteDaOrigem: 'workflow VITE_SITE_URL existente', shaDoSitePublicado: 'nao-confirmado', shaDaApiPublicada: 'nao-confirmado',
     autorizacao: 'mensagens-516-e-530', ator: 'conta-de-teste', perfil: 'efemero-isolado',
-    capturas: false, traces: false, sessaoExportada: false, gravacoesDeDadosPermitidas: 0,
+    capturaDoCartaoPlanejada: diagnostico, downloadPeloBoardPlanejado: diagnostico,
+    traces: false, sessaoExportada: false, gravacoesDeDadosPermitidas: 0,
     swa: 'validacao-manual-pelo-desenvolvedor-pendente' });
   if (modo === '--simular') {
     emitir('simulacao', { navegadorAberto: false, requisicoesHttp: 0, credenciaisLidas: false, gravacoesRemotas: 0 });
@@ -103,7 +210,7 @@ try {
     const ambiente = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
       !['usuario_test', 'senha_test', 'debug', 'pwdebug'].includes(k.toLowerCase())));
     navegador = await chromium.launch({ executablePath: edge, headless: true, env: ambiente });
-    contexto = await navegador.newContext({ serviceWorkers: 'block', acceptDownloads: false, viewport: { width: 1365, height: 900 } });
+    contexto = await navegador.newContext({ serviceWorkers: 'block', acceptDownloads: diagnostico, viewport: { width: 1365, height: 900 } });
     // Guarda de destino e escrita: nunca fabrica resposta nem libera CORS artificialmente.
     await contexto.route('**/*', async rota => {
       const pedido = rota.request();
@@ -208,13 +315,13 @@ try {
         if (!jaSelecionada) await seletor.selectOption(maquinaAlvo);
         emitir('selecao-da-maquina-do-cenario', { jaSelecionada, selecaoAlterada: !jaSelecionada });
       }
-      await conferirPainel(pagina, alvo ? [alvo] : disponiveis, fotoPendente, artefatosPendentes);
+      await conferirPainel(pagina, alvo ? [alvo] : disponiveis, fotoPendente, artefatosPendentes, diagnostico, pastaDiagnostico);
     }
     exigir(!violacao, 'pagina-tentou-gravacao-fora-do-login-bloqueada');
     emitir('resultado', { navegadorReal: true, loginPelaInterface: true, cadastro: 'identidade-conferida', projeto: 1,
       consultaDoBoard: 'conferida', requisicoesBloqueadas: bloqueadas, pedidosDeCatalogoBloqueados,
       handshakeDeCatalogoExercitado: false, gravacoesCadastrais: 0,
-      artefatoGeradoPeloBoard: false, previewValidado: false, aceiteE2E: 'parcial',
+      artefatoGeradoPeloBoard: false, downloadDoBoardConferido, previewValidado: false, aceiteE2E: 'parcial',
       swa: 'manual-pelo-desenvolvedor-aguardando-evidencia' });
   }
 } catch (erro) {
