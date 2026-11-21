@@ -23,6 +23,16 @@ it('mostra evento, avaliador, recorte e SHAs nas áreas existentes e mantém reg
   expect(screen.getAllByText('a'.repeat(40))).toHaveLength(2);
 });
 
+it('verificação final mantém a obrigação comprovada e aparece sem inventar avaliador', () => {
+  const documento = documentoDeTeste(), c = documento.matriz!.celulas[0];
+  const final = registro(resultado({ tipo: 'verificacao-final', evento: 'finalizacao:1:composicao', avaliador: 0 }));
+  expect(estadoDaCelula(c, [final], [revisaoDeTeste(documento)])).toBe('Comprovado');
+  render(<RegistrosDaCelula tipo="avaliacao" celula={c.id} registros={[final]} historico={[revisaoDeTeste(documento)]} />);
+  expect(screen.getByText('Resultados por obrigação')).toBeInTheDocument();
+  expect(screen.getByText(/verificação da finalização/)).toBeInTheDocument();
+  expect(screen.queryByText(/avaliador 0/)).not.toBeInTheDocument();
+});
+
 it('revisão global alheia e evidência de implementação não substituem nem invalidam avaliação da célula', () => {
   const antes = documentoDeTeste(), depois = structuredClone(antes);
   depois.matriz!.celulas[1].criterio = 'Outra task revisada';

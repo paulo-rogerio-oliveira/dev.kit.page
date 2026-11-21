@@ -69,8 +69,9 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
             projetoId = projeto.Id;
         }
         if ((anterior?.Versao ?? 0) != edicao.VersaoEsperada) return new(409, Erro: "Conflito de versão matrix; releia antes de editar.");
-        if (d.Matriz is { Coberturas: null } matrizAnterior && anterior is not null)
-            d = d with { Matriz = matrizAnterior with { Coberturas = Ler(anterior).Documento.Matriz?.Coberturas } };
+        if (d.Matriz is { } matrizAnterior && anterior is not null)
+            d = d with { Matriz = RegrasDaTransferenciaMatrix.PreservarOmissoes(matrizAnterior with
+                { Coberturas = matrizAnterior.Coberturas ?? Ler(anterior).Documento.Matriz?.Coberturas }, Ler(anterior).Documento.Matriz) };
 
         // Leitura de referências sempre passa pelo mesmo ACL. Não aceita mapa de outra aplicação nem outra demanda.
         var referencias = new Dictionary<(string Tipo, string Id), RevisaoMatrix[]>();
@@ -103,6 +104,29 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
         }
         catch (ArgumentException ex) { return new(400, Erro: ex.Message); }
 
+        if (d.Matriz?.Transferencias is { Length: > 0 } transferencias)
+        {
+            var atual = projetoId is { } id ? await new ProjetosDaEmpresa(db, relogio).ObterAsync(e, id, ct) : null;
+            if (atual is null) return new(404, Erro: "Projeto da transferência indisponível.");
+            var fonte = new EnvioDeProjetoV1(atual.Slug, atual.Nome, atual.Nivel, atual.Time, atual.Repositorios, atual.Branch,
+                atual.SemanaConvertida, atual.Definicao, atual.Anexos, atual.Autonomia, atual.Paralelismo, atual.DestinoDaPr,
+                atual.Situacao, atual.Versao, atual.Itens);
+            try { FonteDaTransferenciaMatrix.Conferir(fonte, transferencias); }
+            catch (Exception ex) when (ex is ArgumentException or System.Text.Json.JsonException)
+            { return new(400, Erro: ex.Message); }
+            // A conferência interna considera os editores do projeto; não devolve seus retratos privados ao solicitante.
+            var donoDoProjeto = await db.ProjetosCompartilhados.AsNoTracking().Where(p => p.Id == projetoId).Select(p => p.DonoId).SingleAsync(ct);
+            var editoresDoProjeto = await db.AcessosAosProjetos.AsNoTracking().Where(a => a.ProjetoEmOndasId == projetoId
+                && a.Papel == AcessoV1.PapelEditor).Select(a => a.UsuarioId).ToListAsync(ct);
+            editoresDoProjeto.Add(donoDoProjeto); editoresDoProjeto.Add(e.UsuarioId);
+            var retratosDaFonte = await db.MaquinasRemotas.AsNoTracking().Where(m => editoresDoProjeto.Contains(m.UsuarioId) && m.Retrato != "")
+                .Select(m => m.Retrato).ToArrayAsync(ct);
+            var itensAtivos = retratosDaFonte.Select(r => JsonSerializer.Deserialize<RetratoV1>(r, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+                .SelectMany(r => r?.Fluxos ?? []).Where(f => f.Projeto == d.Projeto && f.Item is not null).Select(f => f.Item).ToHashSet();
+            if (transferencias.Any(t => t.Revogacao is null && itensAtivos.Contains(t.Item)))
+                return new(400, Erro: "A execução do item ainda aparece no retrato de uma máquina do projeto; preserve a sessão antes de transferir.");
+        }
+
         if (d.Evento is { } evento)
         {
             if (anterior is not null || edicao.VersaoEsperada != 0) return new(409, Erro: "Recibo do host é imutável.");
@@ -116,6 +140,11 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
             var task = retrato?.Fluxos?.SingleOrDefault(f => f.Id == evento.SessaoAvaliada);
             if (task is null || (task.Projeto ?? "") != d.Projeto)
                 return new(404, Erro: "Host/sessão avaliada não confirmado no retrato da máquina do solicitante.");
+            if (evento.Finalizacao is not null)
+            {
+                var problema = await ConferirFinalAsync(e, d, projetoId, ct);
+                if (problema.Length > 0) return new(400, Erro: problema);
+            }
         }
 
         if (d.Tipo is "registro" or "vinculo")
@@ -125,6 +154,12 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
             var acesso = await AcessoAsync(e, matriz, true, ct);
             if (acesso != 200) return new(acesso, Erro: "Registrar comprovação/vínculo exige editor ou dono.");
             projetoId = matriz.ProjetoId; dono = matriz.DonoId;
+            if (d.Registro is { Tipo: RegrasVerificacaoFinalMatrix.Tipo } final)
+            {
+                var recibo = Referencia("evento", RegrasAvaliacaoMatrix.IdDoEvento(final.Evento, d.Id, final.SessaoAvaliada), 0)!.Documento;
+                var problema = await ConferirFinalAsync(e, recibo, projetoId, ct);
+                if (problema.Length > 0) return new(400, Erro: problema);
+            }
         }
         var responsaveis = d.Matriz?.Celulas.SelectMany(c => c.Responsaveis).ToArray() ?? [];
         if (responsaveis.Any(r => r.Item is not null))
@@ -141,8 +176,28 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
                 ? task.Projeto != d.Projeto || task.Item != v.Item
                 : !string.IsNullOrEmpty(task.Projeto) || task.Item is not null))
                 return new(404, Erro: "Sessão/item não encontrado no retrato da máquina do solicitante.");
+            var finalizacaoConfirmada = false;
+            if (d.Projeto.Length > 0 && v.Item is null)
+            {
+                var projeto = await db.ProjetosCompartilhados.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projetoId, ct);
+                var documento = projeto is null || projeto.Documento.Length == 0 ? null
+                    : JsonSerializer.Deserialize<EnvioDeProjetoV1>(projeto.Documento);
+                try
+                {
+                    if (documento is not null && projeto is not null)
+                        documento = await PlanoEfetivoDaFinalizacao.ConferirAsync(db, projeto.Id, documento, ct);
+                }
+                catch (Exception ex) when (ex is ArgumentException or JsonException) { return new(400, Erro: ex.Message); }
+                var recusa = RegrasDaFinalizacao.Conferir(task.Finalizacao, v.Sessao, documento);
+                if (recusa.Length > 0) return new(400, Erro: recusa);
+                finalizacaoConfirmada = true;
+            }
             var vinculos = await Stream(e, d.Aplicacao, "vinculo", d.Id).ToArrayAsync(ct);
-            if (vinculos.Select(Ler).Any(r => r.Documento.Vinculo!.Responsavel == v.Responsavel && r.Documento.Vinculo != v))
+            if (vinculos.Select(Ler).Any(r => r.Documento.Vinculo is { } existente
+                && existente.Responsavel == v.Responsavel && existente != v
+                && !(finalizacaoConfirmada && (existente.Item is null
+                    || Referencia("matriz", d.Id, 0)?.Documento.Matriz?.Transferencias?.Any(t => t.Revogacao is null
+                        && t.Item == existente.Item && t.ResponsavelDaFinalizacao == v.Responsavel) == true))))
                 return new(400, Erro: "Responsável já associado a outra sessão.");
         }
         var agora = relogio.GetUtcNow();
@@ -163,5 +218,31 @@ public sealed class MatrizesNoBanco(DevKitPageDb db, TimeProvider relogio) : IMa
         }
         await transacao!.CommitAsync(ct);
         return new(200, resultado);
+    }
+
+    private async Task<string> ConferirFinalAsync(EscopoDoDesign e, DocumentoMatrix d, long? projetoId, CancellationToken ct)
+    {
+        var evento = d.Evento!;
+        var maquina = await db.MaquinasRemotas.AsNoTracking().SingleOrDefaultAsync(m => m.UsuarioId == e.UsuarioId && m.MaquinaId == evento.Maquina, ct);
+        var retrato = maquina is null || maquina.Retrato.Length == 0 ? null
+            : JsonSerializer.Deserialize<RetratoV1>(maquina.Retrato, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var task = retrato?.Fluxos?.SingleOrDefault(f => f.Id == evento.SessaoAvaliada);
+        if (task is not { Item: null, Finalizacao: not null } || task.Projeto != d.Projeto
+            || RegrasVerificacaoFinalMatrix.Revisao(task.Finalizacao) != evento.RevisaoDaEntrega)
+            return "Verificação final diverge da reserva/composição publicada pelo host do solicitante.";
+        var projeto = await db.ProjetosCompartilhados.AsNoTracking().SingleOrDefaultAsync(p => p.Id == projetoId, ct);
+        var documento = projeto is null || projeto.Documento.Length == 0 ? null : JsonSerializer.Deserialize<EnvioDeProjetoV1>(projeto.Documento);
+        try
+        {
+            if (documento is not null && projeto is not null) documento = await PlanoEfetivoDaFinalizacao.ConferirAsync(db, projeto.Id, documento, ct);
+        }
+        catch (Exception ex) when (ex is ArgumentException or JsonException) { return ex.Message; }
+        var problema = RegrasDaFinalizacao.Conferir(task.Finalizacao, task.Id, documento);
+        if (problema.Length > 0) return problema;
+        var vinculos = (await Stream(e, d.Aplicacao, "vinculo", evento.Matriz).ToArrayAsync(ct)).Select(Ler)
+            .GroupBy(r => r.Documento.Vinculo!.Responsavel).Select(g => g.MaxBy(r => r.Versao)!.Documento.Vinculo!).ToArray();
+        return evento.Responsaveis.All(dono => vinculos.Any(v => v.Responsavel == dono && v.Item is null
+            && v.Sessao == evento.SessaoAvaliada && v.Maquina == evento.Maquina)) ? ""
+            : "Verificação final sem vínculo formal do responsável com a sessão e máquina do host.";
     }
 }

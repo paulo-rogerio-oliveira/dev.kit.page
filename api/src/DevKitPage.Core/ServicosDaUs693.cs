@@ -90,6 +90,8 @@ public static partial class RegrasDosProjetos
     {
         if (envio is null)
             return "Envie o projeto.";
+        if (EscolhasDosProjetos.ValidarPolitica(envio) is { Length: > 0 } politicaInvalida)
+            return politicaInvalida;
         if (!SlugValido(envio.Slug))
             return "O slug do projeto usa minúsculas, dígitos e hífen (até 60), começando por letra ou dígito.";
         var nome = envio.Nome?.Trim() ?? string.Empty;
