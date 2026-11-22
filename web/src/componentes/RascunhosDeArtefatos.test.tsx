@@ -35,7 +35,7 @@ function abrir(gerar = vi.fn()) {
 }
 
 async function editar() {
-  await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato', exact: true }));
+  await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato' }));
   await userEvent.selectOptions(screen.getByLabelText('Repositório', { exact: true }), repos[1]);
   await userEvent.selectOptions(screen.getByLabelText('Artefato', { exact: true }), 'preview');
   await userEvent.type(screen.getByLabelText('Commit (opcional)'), sha);
@@ -45,10 +45,10 @@ describe('rascunho de artefato entre rotas', () => {
   it('conserva escolhas após desmontar o painel e isola host/projeto/sessão, sem gerar', async () => {
     const gerar = abrir();
     await editar();
-    await userEvent.click(screen.getByRole('button', { name: 'Cancelar', exact: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     await userEvent.click(screen.getByRole('button', { name: 'Abrir plano' }));
     await userEvent.click(screen.getByRole('button', { name: 'Voltar ao Board' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato', exact: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato' }));
     expect(screen.getByLabelText('Repositório', { exact: true })).toHaveValue(repos[1]);
     expect(screen.getByLabelText('Artefato', { exact: true })).toHaveValue('preview');
     expect(screen.getByLabelText('Commit (opcional)')).toHaveValue(sha);
@@ -75,7 +75,7 @@ describe('rascunho de artefato entre rotas', () => {
     expect(screen.getByRole('button', { name: 'Confirmar geração' })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: 'Abrir plano' }));
     await userEvent.click(screen.getByRole('button', { name: 'Voltar ao Board' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato', exact: true }));
+    await userEvent.click(screen.getByRole('button', { name: 'Gerar artefato' }));
     expect(screen.queryByRole('button', { name: 'Confirmar geração' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Conferir origem' })).toBeEnabled();
     await userEvent.click(screen.getByRole('button', { name: 'Revogar edição' }));
