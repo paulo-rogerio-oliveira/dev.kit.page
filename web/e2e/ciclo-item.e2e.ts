@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { garantirSenhaDefinitiva } from './admin';
 import { API, NOVA_SENHA } from './ambiente';
 import type { Projeto } from '../src/api/projetos';
+import { prepararMatrix } from './matrix-cenario';
 
 const pasta = fileURLToPath(new URL(`../../../entrega/capturas-board-validacao/${Date.now()}/`, import.meta.url));
 
@@ -167,4 +168,84 @@ for (const largura of [1280, 390]) test(`decisão humana real: dono/editor/leito
     expect(atual.itens[1].situacao).toBe('concluido-manual');
     expect(atual.itens[0].situacao).toBe('integrado');
     await contexto.close();
+});
+
+for (const largura of [1280, 390]) test(`painel de artefatos volta do plano sem perder seleção nem enviar operações em${largura}`, async ({ page, request, browser }) => {
+  const cenario = await prepararMatrix(request);
+  // O retrato anuncia o nome portável do repositório, como o host; a API recusa caminhos locais.
+  const repositorio = cenario.projeto.repositorios[0].replace(/^https?:\/\//, '');
+  const sha = 'abcdef0123456789abcdef0123456789abcdef01';
+  const retrato = await request.put(`${API}/api/remoto/retrato`, { headers: cenario.headers, data: {
+    contrato: 1, maquinaId: cenario.maquina, geradoEm: new Date().toISOString(),
+    projetos: [{ slug: 'matrix', nome: cenario.projeto.nome, situacao: 'aprovado', ondaAtual: 3,
+      itens: cenario.projeto.itens, repositorios: [repositorio], branch: cenario.projeto.branch,
+      podeGerarArtefato: true, artefatos: [] }], fluxos: [], pendencias: [],
+  } });
+  expect(retrato.ok(), await retrato.text()).toBeTruthy();
+  let operacoes = 0;
+  page.on('request', r => {
+    if (r.method() !== 'POST') return;
+    if (r.url().endsWith('/itens/4/decisao') && r.postDataJSON()?.aplicar) operacoes++;
+    if (r.url().includes('/comandos') && r.postData()?.includes('artefato')) operacoes++;
+  });
+  await page.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), cenario.sessao);
+  await page.setViewportSize({ width: largura, height: largura === 390 ? 980 : 1100 });
+  await page.goto('/board?aba=board');
+  let painel = page.getByRole('group', { name: `Artefatos de ${cenario.projeto.nome}`, exact: true });
+  await painel.getByRole('button', { name: 'Gerar artefato', exact: true }).click();
+  await painel.getByRole('combobox', { name: 'Repositório', exact: true }).selectOption(repositorio);
+  await painel.getByRole('combobox', { name: 'Artefato', exact: true }).selectOption('preview');
+  await painel.getByLabel('Commit (opcional)').fill(sha);
+  await painel.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByRole('link', { name: `Abrir ${cenario.projeto.nome}`, exact: true }).click();
+  await page.getByRole('button', { name: '4 · Editor Page', exact: true }).click();
+  await page.getByRole('region', { name: 'Detalhe do item 4', exact: true }).getByRole('button', { name: 'Cancelar item', exact: true }).click();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByLabel('Motivo da decisão')).toBeFocused();
+  await modal.getByLabel('Motivo da decisão').fill('Apenas revisar; não aplicar.');
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await page.goBack();
+  painel = page.getByRole('group', { name: `Artefatos de ${cenario.projeto.nome}`, exact: true });
+  await painel.getByRole('button', { name: 'Gerar artefato', exact: true }).click();
+  await expect(painel.getByRole('combobox', { name: 'Repositório', exact: true })).toHaveValue(repositorio);
+  await expect(painel.getByRole('combobox', { name: 'Artefato', exact: true })).toHaveValue('preview');
+  await expect(painel.getByLabel('Commit (opcional)')).toHaveValue(sha);
+  expect(operacoes).toBe(0);
+  await capturar(page, `${largura}-painel-retorno-sem-operacao`);
+  const final = await request.get(`${API}/api/projetos/${cenario.projeto.id}`, { headers: { ...cenario.headers, 'X-DevKit-Ciclo-Item': '1' } });
+  expect(final.ok()).toBeTruthy();
+  expect((await final.json()).itens.find((i: { numero: number }) => i.numero === 4).situacao).toBe('planejado');
+  // A máquina pertence à conta. O leitor recebe seu retrato autorizado, com geração recusada.
+  const maquinaLeitor = 'leitor-painel';
+  const headersLeitor = { Authorization: `Bearer ${cenario.leitor.token}`, 'X-DevKit-Ciclo-Item': '1' };
+  expect((await request.post(`${API}/api/remoto/heartbeat`, { headers: headersLeitor, data: {
+    contrato: 1, maquinaId: maquinaLeitor, nome: 'Leitor de demonstração', versaoDevKit: '146', origem: 'servico',
+    appAberto: true, estadoDoAgente: 'ativo', turnoEmAndamento: false,
+  } })).ok()).toBeTruthy();
+  expect((await request.put(`${API}/api/remoto/retrato`, { headers: headersLeitor, data: {
+    contrato: 1, maquinaId: maquinaLeitor, geradoEm: new Date().toISOString(),
+    projetos: [{ slug: 'matrix', nome: cenario.projeto.nome, situacao: 'aprovado', ondaAtual: 3,
+      itens: cenario.projeto.itens, repositorios: [repositorio], branch: cenario.projeto.branch,
+      podeGerarArtefato: false, artefatos: [] }], fluxos: [], pendencias: [],
+  } })).ok()).toBeTruthy();
+  const contextoLeitor = await browser.newContext({ baseURL: new URL(page.url()).origin,
+    viewport: { width: largura, height: largura === 390 ? 980 : 1100 } });
+  await contextoLeitor.addInitScript(s => sessionStorage.setItem('devkitpage.sessao', JSON.stringify(s)), cenario.leitor);
+  const leitor = await contextoLeitor.newPage();
+  let operacoesLeitor = 0;
+  leitor.on('request', r => {
+    if (r.method() === 'POST' && (r.url().endsWith('/itens/4/decisao') && r.postDataJSON()?.aplicar
+      || r.url().includes('/comandos') && r.postData()?.includes('artefato'))) operacoesLeitor++;
+  });
+  await leitor.goto('/board?aba=board');
+  await expect(leitor.getByRole('button', { name: 'Gerar artefato', exact: true })).toBeDisabled();
+  await leitor.getByRole('link', { name: `Abrir ${cenario.projeto.nome}`, exact: true }).click();
+  await leitor.getByRole('button', { name: '4 · Editor Page', exact: true }).click();
+  await expect(leitor.getByRole('region', { name: 'Detalhe do item 4', exact: true }).getByRole('button', { name: 'Cancelar item', exact: true })).toBeDisabled();
+  await leitor.goBack();
+  await expect(leitor.getByRole('button', { name: 'Gerar artefato', exact: true })).toBeDisabled();
+  expect(operacoesLeitor).toBe(0);
+  await capturar(leitor, `${largura}-painel-retorno-leitor`);
+  await contextoLeitor.close();
 });

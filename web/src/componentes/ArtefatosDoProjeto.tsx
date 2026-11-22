@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { AcaoNoProjetoRemoto, Artefato, OrigemDoArtefato } from '../api/projetos';
 import type { EstadoDoArtefato } from '../api/remoto';
+import { useRascunhoDeArtefato } from './rascunhosDeArtefatos';
 
 /** Quanto tempo os links do card valem antes de o Board relê-los (o link de download vence; a API devolve um novo a cada leitura). */
 const releituraMs = 15_000;
@@ -69,18 +70,16 @@ function prazo(expiraEm: string, agora: number) {
  * A seção Artefatos do card do projeto: o "Gerar artefato" (o pedido vai pela fila ao dev.kit da máquina, que gera no
  * executor) e os últimos links — o pacote .NET para baixar e o preview da página estática. Nunca publica em produção.
  */
-export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, motivo, agora,
+export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, motivo, agora, maquina = '',
   repositorios = [], branch = '', estados = [], capacidade = false, plano = null, erro = '', erroDoPedido = '', atualizar, atualizando = false, linksAutorizados = true }: {
-  nome: string; slug: string; artefatos: Artefato[];
+  nome: string; slug: string; artefatos: Artefato[]; maquina?: string;
   gerar: (slug: string, opcoes?: Omit<AcaoNoProjetoRemoto, 'acao' | 'projeto'>) => void | Promise<boolean>;
   desabilitado: boolean; motivo: string; agora: number; repositorios?: string[]; branch?: string;
   estados?: EstadoDoArtefato[]; capacidade?: boolean; plano?: OrigemDoArtefato | null; erro?: string; erroDoPedido?: string;
   atualizar?: () => void; atualizando?: boolean; linksAutorizados?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [repo, setRepo] = useState(repositorios[0] ?? '');
-  const [formato, setFormato] = useState<'' | 'pacote' | 'preview'>('');
-  const [sha, setSha] = useState('');
+  const [{ repositorio: repo, formato, sha }, alterarRascunho] = useRascunhoDeArtefato(maquina, slug, repositorios[0] ?? '');
   const [enviando, setEnviando] = useState(false);
   const [mensagem, setMensagem] = useState('');
   const formulario = useRef<HTMLFormElement>(null);
@@ -94,9 +93,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     if (desabilitado || enviando || !capacidade) return;
     const repositorio = repositorios.find(r => normalizarRepo(r) === normalizarRepo(anterior.repositorio));
     if (!repositorio) { setMensagem('O repositório anterior não pertence mais ao projeto. Confira os repositórios antes de gerar.'); return; }
-    setRepo(repositorio);
-    setFormato(anterior.tipo === 'pacote' || anterior.tipo === 'preview' ? anterior.tipo : '');
-    setSha(anterior.sha);
+    alterarRascunho({ repositorio, formato: anterior.tipo === 'pacote' || anterior.tipo === 'preview' ? anterior.tipo : '', sha: anterior.sha });
     setAberto(true);
     formulario.current?.querySelector('select')?.focus();
     setMensagem(`Corrija a causa informada no artefato nº ${anterior.id}. Repositório, tipo e commit foram preenchidos; confira a origem e confirme um novo pedido. O resultado anterior será preservado.`);
@@ -125,17 +122,17 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     }}>
       <h3>Gerar artefato</h3><p>Escolha o que deseja disponibilizar deste projeto.</p>
       <div className="br-artefato-campos">
-        <label>Repositório<select value={escolhido} disabled={enviando || !repositorios.length} onChange={e => setRepo(e.target.value)}
+        <label>Repositório<select value={escolhido} disabled={enviando || !repositorios.length} onChange={e => alterarRascunho({ repositorio: e.target.value })}
           title="Seleciona o repositório do projeto que será usado pelo executor.">
           {!repositorios.length && <option value="">Indisponível neste host</option>}
           {repositorios.map(r => <option key={r} value={r}>{r}</option>)}
         </select></label>
-        <label>Artefato<select value={formato} disabled={enviando} onChange={e => setFormato(e.target.value as typeof formato)}
+        <label>Artefato<select value={formato} disabled={enviando} onChange={e => alterarRascunho({ formato: e.target.value as typeof formato })}
           title="Escolhe pacote desktop .NET ou preview web, ou deixa o executor detectar o tipo suportado.">
           <option value="">Detectar no repositório</option><option value="pacote">Pacote desktop para download</option><option value="preview">Preview web</option>
         </select></label>
       </div>
-      <label>Commit (opcional)<input value={sha} onChange={e => setSha(e.target.value.trim())} disabled={enviando} maxLength={40} pattern="[a-fA-F0-9]{7,40}"
+      <label>Commit (opcional)<input value={sha} onChange={e => alterarRascunho({ sha: e.target.value.trim() })} disabled={enviando} maxLength={40} pattern="[a-fA-F0-9]{7,40}"
         title="SHA de 7 a 40 caracteres. Vazio consulta o HEAD do branch do projeto; a confirmação usa o SHA integral." /></label>
       <p className="br-artefato-origem">Origem: {origem?.branch || branch || 'branch informado pelo host'}{origem && <> · commit <code>{origem.sha}</code></>}</p>
       <p>O resultado aparecerá abaixo. A publicação web usa o ambiente de preview do projeto. Nunca produção.</p>

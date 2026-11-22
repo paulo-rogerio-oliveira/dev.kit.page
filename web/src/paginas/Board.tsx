@@ -114,6 +114,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
         <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.porSlug.get(p.slug) ?? []} gerar={criacao.gerarArtefato}
+          maquina={foto?.maquina.maquinaId ?? ''}
           repositorios={p.repositorios ?? []} branch={p.branch ?? ''} estados={p.artefatos ?? []} capacidade={p.podeGerarArtefato === true}
           plano={criacao.origemDoArtefato} erro={artefatos.erro} erroDoPedido={criacao.falha} atualizar={artefatos.atualizar} atualizando={artefatos.atualizando}
           linksAutorizados={!artefatos.bloqueado}

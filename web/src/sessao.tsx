@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { LoginResponse, Papel } from './api/tipos';
 import { cancelarPushAoSair } from './boardPush';
+import { ContextoDosRascunhosDeArtefatos, type RascunhoDeArtefato } from './componentes/rascunhosDeArtefatos';
 
 /** Onde o token fica: a aba do navegador (fecha a aba, acaba a sessão). */
 export const CHAVE_DA_SESSAO = 'devkitpage.sessao';
@@ -91,7 +92,11 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   }, [sessao, sair]);
 
   const valor = useMemo(() => ({ sessao, motivo, entrar, sair }), [sessao, motivo, entrar, sair]);
-  return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
+  // Vive entre rotas, mas uma saída/troca de sessão descarta as escolhas da conta anterior.
+  const rascunhos = useMemo(() => new Map<string, RascunhoDeArtefato>(), [sessao?.token]);
+  return <Contexto.Provider value={valor}><ContextoDosRascunhosDeArtefatos.Provider value={rascunhos}>
+    {children}
+  </ContextoDosRascunhosDeArtefatos.Provider></Contexto.Provider>;
 }
 
 export function useSessao(): ContextoDaSessao {
