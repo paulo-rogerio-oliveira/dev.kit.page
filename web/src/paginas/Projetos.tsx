@@ -6,6 +6,7 @@ import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
 import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
 import { ImpactosDoProjeto } from '../componentes/matrix/Impactos';
+import { DecisaoDoItem } from '../componentes/DecisaoDoItem';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
 import './Projetos.css';
@@ -14,10 +15,11 @@ const estados: Record<string, string> = {
   planejado: 'Planejado', rodando: 'Rodando', pergunta: 'Pergunta', integrado: 'Integrado', falhou: 'Falhou',
   rascunho: 'Rascunho', aguardando: 'Aguardando aprovação', aprovado: 'Em andamento', pausado: 'Pausado',
   fechando: 'Fechando', concluido: 'Concluído',
+  'concluido-manual': 'Concluído pelo dev', cancelado: 'Cancelado pelo dev',
 };
-const situacoes = ['planejado', 'rodando', 'pergunta', 'integrado', 'falhou'];
+const situacoes = ['planejado', 'rodando', 'pergunta', 'integrado', 'falhou', 'concluido-manual', 'cancelado'];
 const curto = (url: string) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean).slice(-2).join('/');
-const ondaAtual = (p: Projeto) => Math.min(...p.itens.filter(i => i.situacao !== 'integrado').map(i => i.onda));
+const ondaAtual = (p: Projeto) => Math.min(...p.itens.filter(i => !i.decisaoHumana && !['integrado', 'concluido-manual', 'cancelado'].includes(i.situacao)).map(i => i.onda));
 
 export function Projetos() {
   const { sessao, sair } = useSessao();
@@ -26,6 +28,7 @@ export function Projetos() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const sequencia = useRef(0);
+  const atualizarProjeto = useCallback((atual: Projeto) => setProjetos(lista => lista.map(p => p.id === atual.id && atual.versao >= p.versao ? atual : p)), []);
   const nivel = consulta.get('nivel') ?? '';
   const situacao = consulta.get('situacao') ?? '';
   const carregar = useCallback(async () => {
@@ -87,16 +90,18 @@ export function Projetos() {
             </button>;
           })}
         </aside>
-        <Detalhe projeto={escolhido} />
+        <Detalhe projeto={escolhido} atualizar={atualizarProjeto} />
       </div>}
     </Pagina>
   </div>;
 }
 
-function Detalhe({ projeto: p }: { projeto: Projeto }) {
+function Detalhe({ projeto: p, atualizar }: { projeto: Projeto; atualizar: (projeto: Projeto) => void }) {
   const { sessao, sair } = useSessao();
   const [consulta, setConsulta] = useSearchParams();
   const [emRevisao, setEmRevisao] = useState(false);
+  const [selecao, setSelecao] = useState<{ projeto: number; numero: number } | null>(null);
+  const itemSelecionado = selecao?.projeto === p.id ? selecao.numero : null;
   const visao = consulta.get('visao') ?? 'plano';
   const impactos = ['impactos', 'entregas', 'historico'].includes(visao);
   const [erro, setErro] = useState('');
@@ -104,25 +109,28 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
     if (falha instanceof ErroDaApi && falha.status === 401) sair('expirou');
     else setErro(mensagemDaFalha(falha));
   }, [sair]);
-  useEffect(() => setErro(''), [p.id]);
+  useEffect(() => { setErro(''); setSelecao(null); setEmRevisao(false); }, [p.id]);
   const ondas = [...new Set(p.itens.map(i => i.onda))].sort((a, b) => a - b);
   const atual = ondaAtual(p);
   return <article className="cartao projeto-detalhe" aria-label="Detalhe do projeto">
     <h2>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
     <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
-    <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
+    <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Sem trabalho restante nas ondas' : 'Ainda sem plano'}</p>
     <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{p.itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
     <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
       onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', impactos: 'Impactos', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
     {impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
       <h3>Onda {onda} · {onda < atual ? 'concluída' : onda === atual ? 'atual' : 'próxima'}</h3>
-      {p.itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
-        <h4>{i.numero} · {i.titulo}</h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>
+      {p.itens.filter(i => i.onda === onda).map(i => <div className={`projeto-item${itemSelecionado === i.numero ? ' selecionado' : ''}`} key={i.numero}>
+        <h4><button className="projeto-item-seletor" aria-pressed={itemSelecionado === i.numero}
+          onClick={() => setSelecao({ projeto: p.id, numero: i.numero })}>{i.numero} · {i.titulo}</button></h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>
         <span>{i.repositorios.map(curto).join(' · ')}</span><code>{i.branch || 'Branch ainda não informado'}</code>
         {i.dependencias.length > 0 && <p>Depende de: {i.dependencias.join(', ')}</p>}
         {i.workItemId > 0 && <small>Work item #{i.workItemId}</small>}
       </div>)}
     </section>)}</div>}
+    {!impactos && itemSelecionado !== null && <DecisaoDoItem key={`${p.id}-${itemSelecionado}`} projeto={p} numero={itemSelecionado}
+      token={sessao!.token} atualizar={atualizar} />}
     <p className="projetos-nota">Última sincronização: {formatar.dataHora(p.atualizadoEm)}. No dev.kit de outra máquina, use Sincronizar para recuperar o projeto e continuar.</p>
     {erro && <p role="alert" className="erro">{erro}</p>}
     <AcessoAoProjeto key={p.id} token={sessao!.token} recurso="projeto" projeto={{ id: p.id, chave: p.nome }} tratar={tratar} />

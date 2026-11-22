@@ -95,6 +95,32 @@ public sealed class DadosSensiveisTests
 /// <summary>As regras do contrato v1 do controle remoto (<see cref="RegrasDoRemoto"/>): a forma do envio e o caminho do campo sensível.</summary>
 public sealed class RegrasDoRemotoTests
 {
+    [Fact]
+    public void Estado_do_executor_e_aditivo_limitado_e_nao_aceita_caminho_local()
+    {
+        var estado = new ArtefatoNoRetratoV1(17, "pacote", "github.com/acme/app", new string('a', 40), "envio-pendente", "upload", "Envio recusado", 0, DateTimeOffset.UtcNow);
+        var original = Retrato();
+        var projeto = original.Projetos![0] with { Repositorios = ["github.com/acme/app"], Artefatos = [estado], PodeGerarArtefato = true };
+        var retrato = original with { Projetos = [projeto] };
+        Assert.Empty(RegrasDoRemoto.Validar(retrato));
+        Assert.Empty(RegrasDoRemoto.CamposSensiveis(retrato));
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with { Artefatos = [estado with { Detalhe = @"Arquivo C:\privado\pacote.zip" }] }] }));
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with { Artefatos = [estado with { Sha = "invalido" }] }] }));
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with { Artefatos = Enumerable.Repeat(estado, 6).ToArray() }] }));
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with { Artefatos = [estado with { Estado = "sucesso-inventado" }] }] }));
+        Assert.NotEmpty(RegrasDoRemoto.CamposSensiveis(retrato with { Projetos = [projeto with { Artefatos = [estado with { Detalhe = "Token=segredo123" }] }] }));
+        Assert.Empty(RegrasDoRemoto.Validar(original));
+    }
+
+    [Fact]
+    public void Consulta_de_origem_e_retomada_tem_argumentos_distintos()
+    {
+        Assert.Empty(RegrasDosArtefatos.ValidarAcao(new("artefato", "projeto", Conferir: true)));
+        Assert.Empty(RegrasDosArtefatos.ValidarAcao(new("artefato", "projeto", Retomar: 17)));
+        Assert.NotEmpty(RegrasDosArtefatos.ValidarAcao(new("artefato", "projeto", Retomar: -1)));
+        Assert.NotEmpty(RegrasDosArtefatos.ValidarAcao(new("artefato", "projeto", Formato: "preview", Retomar: 17)));
+        Assert.NotEmpty(RegrasDosArtefatos.ValidarAcao(new("artefato", "projeto", Retomar: 17, Conferir: true)));
+    }
     private static HeartbeatV1 Heartbeat() => new(1, "3f2b9c0e5d7a", "Notebook", "75", "servico", true, "ativo", false);
 
     private static RetratoV1 Retrato(string titulo = "Qual fila usar?") => new(

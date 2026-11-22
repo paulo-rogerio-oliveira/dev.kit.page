@@ -11,6 +11,8 @@ import type {
   DetalheDoRecurso, PermissaoDeProvisao, RecursoLiberavel, RecursoProvisionado,
 } from './tipos';
 import type { ArtefatosDoProjeto, Projeto } from './projetos';
+import { recursoDoCicloDosItens } from './cicloDosItens';
+import type { ImpactoDaDecisaoDoItem, PedidoDeDecisaoDoItem, RecursosDosProjetos } from './cicloDosItens';
 import { rotaMatrix } from './matrix';
 import type { DecisaoPendente, DispensaDaPendencia, ResponderDecisao, RespostaDaDecisao } from './remoto';
 import type { MaquinaRemota, RetratoDaMaquina, ComandoNovo, ComandoRemoto, ConversaRemota, CatalogoDaMaquina } from './remoto';
@@ -56,6 +58,7 @@ interface Opcoes {
   token?: string;
   aceita?: string;
   ultimoEvento?: number;
+  cicloDosItens?: boolean;
 }
 
 /** A requisição: o 2xx volta como está; o resto vira {@link ErroDaApi} com a mensagem do ProblemDetails. */
@@ -65,6 +68,7 @@ async function requisitar(caminho: string, opcoes: Opcoes): Promise<Response> {
   if (opcoes.token) cabecalhos.Authorization = `Bearer ${opcoes.token}`;
   if (opcoes.ultimoEvento !== undefined) cabecalhos['Last-Event-ID'] = String(opcoes.ultimoEvento);
   if (caminho.startsWith('/api/matrix')) cabecalhos['X-DevKit-Matrix-Avaliacao'] = '1';
+  if (opcoes.cicloDosItens) cabecalhos['X-DevKit-Ciclo-Item'] = '1';
 
   const resposta = await fetch(`${baseDaApi}${caminho}`, {
     signal: opcoes.signal,
@@ -180,8 +184,31 @@ export const api = {
   /** O último catálogo dos atalhos do chat (o handshake); 404 enquanto a máquina não mandou nenhum. */
   catalogoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
-  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
+  // A página projeta os recibos humanos; a lista também negocia a leitura após uma decisão/reabertura.
+  projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token, cicloDosItens: true }),
   projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
+  recursosDosProjetos: (token: string, signal?: AbortSignal) =>
+    chamar<RecursosDosProjetos>('/api/projetos/recursos', { token, signal }),
+  /** Leitura compatível para o consumidor humano; não muda a versão nem presume estado aplicado. */
+  projetoComCicloDosItens: (token: string, id: number, signal?: AbortSignal) =>
+    chamar<Projeto>(`/api/projetos/${id}`, { token, signal, cicloDosItens: true }),
+  /** Transporte do contrato do item4. Nenhum comando de confirmar parada ou cálculo de ondas no navegador. */
+  decidirItemDoProjeto: async (token: string, projeto: number, numero: number, pedido: PedidoDeDecisaoDoItem, signal?: AbortSignal) => {
+    const capacidade = await chamar<RecursosDosProjetos>('/api/projetos/recursos', { token, signal });
+    if (!Array.isArray(capacidade?.recursos) || !capacidade.recursos.includes(recursoDoCicloDosItens))
+      throw new ErroDaApi(426, `A API não anunciou ${recursoDoCicloDosItens}. Atualize e releia o projeto antes de decidir.`);
+    const resposta = await chamar<ImpactoDaDecisaoDoItem>(`/api/projetos/${projeto}/itens/${numero}/decisao`,
+      { token, signal, metodo: 'POST', corpo: pedido, cicloDosItens: true });
+    if (!resposta || resposta.item !== numero || resposta.projeto?.id !== projeto || resposta.simulacao !== !pedido.aplicar)
+      throw new ErroDaApi(409, 'A resposta não corresponde à decisão solicitada. Releia o projeto e o recibo.');
+    if (pedido.aplicar) {
+      const recibo = resposta.projeto.itens?.find(i => i.numero === numero)?.decisaoHumana;
+      if (!recibo || recibo.pedido !== pedido.pedido || recibo.acao !== pedido.acao
+        || recibo.motivo !== pedido.motivo.trim() || recibo.confirmacao !== pedido.confirmacao)
+        throw new ErroDaApi(409, 'Sem recibo correspondente: aceite da fila não comprova aplicação. Releia antes de repetir.');
+    }
+    return resposta;
+  },
   /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
   artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
   login: (login: string, senha: string) =>

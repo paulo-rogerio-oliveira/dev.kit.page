@@ -47,9 +47,10 @@ public sealed partial class ProjetosDaEmpresa
             projeto.Branch, projeto.SemanaConvertida, projeto.Definicao, projeto.Anexos, projeto.Autonomia, projeto.Paralelismo,
             projeto.DestinoDaPr, projeto.Situacao, projeto.Versao, proposta.Itens, projeto.FeatureId, projeto.EpicId,
             projeto.Iteracao, projeto.Board, projeto.BranchesDasTasks, agora);
-        var resultado = await GravarInternoAsync(escopo, envio, true, ct);
+        var resultado = await GravarInternoAsync(escopo, envio, true, ct, idDoProjeto: projeto.Id);
         return resultado.Valor is { } gravado ? new(200, Impacto(gravado.Projeto, numero, false))
-            : new(resultado.Falha == FalhaNaGestao.Conflito ? 409 : resultado.Falha == FalhaNaGestao.Proibida ? 403 : 400,
+            : new(resultado.Falha == FalhaNaGestao.Conflito ? 409 : resultado.Falha == FalhaNaGestao.Proibida ? 403
+                : resultado.Falha == FalhaNaGestao.NaoEncontrado ? 404 : 400,
                 Mensagem: resultado.Mensagem);
     }
 
@@ -72,7 +73,7 @@ public sealed partial class ProjetosDaEmpresa
             projeto.Branch, projeto.SemanaConvertida, projeto.Definicao, projeto.Anexos, projeto.Autonomia, projeto.Paralelismo,
             projeto.DestinoDaPr, projeto.Situacao, projeto.Versao, projeto.Itens.Select(i => i.Numero == numero ? atualizado : i).ToArray(),
             projeto.FeatureId, projeto.EpicId, projeto.Iteracao, projeto.Board, projeto.BranchesDasTasks, projeto.AlteradoEm);
-        var gravado = await GravarInternoAsync(escopo, envio, true, ct);
+        var gravado = await GravarInternoAsync(escopo, envio, true, ct, idDoProjeto: projeto.Id);
         return gravado.Valor is { } valor ? new(valor.Projeto)
             : ResultadoDaGestao<ProjetoV1>.Falhou(gravado.Falha, gravado.Mensagem);
     }

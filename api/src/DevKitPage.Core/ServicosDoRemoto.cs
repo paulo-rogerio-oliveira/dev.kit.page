@@ -35,6 +35,9 @@ public interface IExpurgoDoRemoto
 /// </summary>
 public static partial class RegrasDoRemoto
 {
+    private static bool CaminhoLocal(string? texto) => texto is not null && Regex.IsMatch(texto,
+        @"(?:[A-Za-z]:[\\/]|\\\\|file://|/(?:home|Users|tmp)/)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     [GeneratedRegex("^[A-Za-z0-9-]{1,64}$", RegexOptions.CultureInvariant)]
     private static partial Regex IdDaMaquina();
 
@@ -86,6 +89,18 @@ public static partial class RegrasDoRemoto
                 return $"projetos[{i}]: a situação é uma de: {string.Join(", ", ProjetosV1.Situacoes)}.";
             if (projeto.OndaAtual < 0)
                 return $"projetos[{i}]: a onda não é negativa.";
+            if ((projeto.Repositorios?.Count ?? 0) > 20 || (projeto.Branch?.Length ?? 0) > 200
+                || (projeto.Repositorios ?? []).Any(r => string.IsNullOrWhiteSpace(r) || r.Length > 300 || CaminhoLocal(r)))
+                return $"projetos[{i}]: repositórios e branch inválidos para a geração de artefatos.";
+            if ((projeto.Artefatos?.Count ?? 0) > 5)
+                return $"projetos[{i}]: até 5 estados de artefatos.";
+            foreach (var a in projeto.Artefatos ?? [])
+                if (a is null || a.Id <= 0 || a.IdRemoto < 0 || a.Tipo is not ("" or "pacote" or "preview")
+                    || string.IsNullOrWhiteSpace(a.Repositorio) || a.Repositorio.Length > 300 || CaminhoLocal(a.Repositorio)
+                    || string.IsNullOrEmpty(a.Sha) || a.Sha.Length is < 7 or > 40 || !a.Sha.All(char.IsAsciiHexDigit)
+                    || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou")
+                    || a.Etapa is null || a.Etapa.Length > 100 || a.Detalhe is null || a.Detalhe.Length > 1000 || CaminhoLocal(a.Detalhe))
+                    return $"projetos[{i}]: estado de artefato inválido ou com caminho local.";
             var itens = projeto.Itens ?? [];
             if (itens.Count > RemotoV1.MaximoDeItens)
                 return $"projetos[{i}]: até {RemotoV1.MaximoDeItens} itens.";
@@ -164,6 +179,15 @@ public static partial class RegrasDoRemoto
             yield return ($"projetos[{i}].slug", p.Slug);
             yield return ($"projetos[{i}].nome", p.Nome);
             yield return ($"projetos[{i}].situacao", p.Situacao);
+            yield return ($"projetos[{i}].branch", p.Branch);
+            foreach (var repo in p.Repositorios ?? [])
+                yield return ($"projetos[{i}].repositorio", repo);
+            foreach (var artefato in p.Artefatos ?? [])
+            {
+                yield return ($"projetos[{i}].artefatos.repositorio", artefato.Repositorio);
+                yield return ($"projetos[{i}].artefatos.etapa", artefato.Etapa);
+                yield return ($"projetos[{i}].artefatos.detalhe", artefato.Detalhe);
+            }
             foreach (var (item, j) in (p.Itens ?? []).Select((x, j) => (x, j)))
             {
                 yield return ($"projetos[{i}].itens[{j}].titulo", item.Titulo);

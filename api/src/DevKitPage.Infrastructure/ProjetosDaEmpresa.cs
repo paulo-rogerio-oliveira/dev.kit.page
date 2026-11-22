@@ -32,7 +32,7 @@ public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relo
         => await GravarInternoAsync(escopo, envio, false, ct);
 
     private async Task<ResultadoDaGestao<ProjetoGravado>> GravarInternoAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio,
-        bool decisaoHumana, CancellationToken ct, string? hashDaImportacao = null)
+        bool decisaoHumana, CancellationToken ct, string? hashDaImportacao = null, long? idDoProjeto = null)
     {
         var problema = RegrasDosProjetos.Validar(envio);
         if (problema.Length > 0)
@@ -45,8 +45,18 @@ public sealed partial class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relo
         var espaco = RegrasDoDesign.EspacoDe(escopo);
         var dono = nivel == NiveisDeConvencao.Usuario ? escopo.UsuarioId : 0;
         var agora = relogio.GetUtcNow().UtcDateTime;
-        var projeto = await db.ProjetosCompartilhados.Include(p => p.Itens).Include(p => p.Acessos)
-            .FirstOrDefaultAsync(p => p.Espaco == espaco && p.Nivel == nivel && p.Time == time && p.UsuarioId == dono && p.Slug == envio.Slug, ct);
+        var consulta = db.ProjetosCompartilhados.Include(p => p.Itens).Include(p => p.Acessos);
+        // A operação humana já escolheu um projeto por id. Um editor não é o dono do projeto pessoal compartilhado.
+        var projeto = idDoProjeto is { } id
+            ? await consulta.Visiveis(escopo).FirstOrDefaultAsync(p => p.Espaco == espaco && p.Id == id, ct)
+            : await consulta.FirstOrDefaultAsync(p => p.Espaco == espaco && p.Nivel == nivel && p.Time == time
+                && p.UsuarioId == dono && p.Slug == envio.Slug, ct);
+        if (idDoProjeto is not null && projeto is null)
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.NaoEncontrado, "Projeto não encontrado.");
+        if (idDoProjeto is not null && projeto is not null
+            && (projeto.Slug != envio.Slug || projeto.Nivel != nivel || projeto.Time != time))
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada,
+                "A identidade do projeto não pode mudar durante a decisão humana.");
 
         var novo = projeto is null;
         if (projeto is null)

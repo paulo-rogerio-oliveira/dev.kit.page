@@ -1,8 +1,13 @@
+import type { DecisaoHumanaDoItem, ImportacaoDaDecisao, ReservasDoCicloDoItem } from './cicloDosItens';
+
 export interface ItemDoProjeto {
   numero: number; titulo: string; descricao: string; fluxo: string;
   repositorios: string[]; componentes: string[]; dependencias: number[];
   onda: number; workItemId: number; situacao: string; tipo: string;
   prioridade: number; horas: number; branch: string; atualizadoEm?: string;
+  decisaoHumana?: DecisaoHumanaDoItem | null;
+  importacaoDaDecisao?: ImportacaoDaDecisao | null;
+  reservasDeEscrita?: ReservasDoCicloDoItem | null;
 }
 
 export interface Projeto {
@@ -13,6 +18,8 @@ export interface Projeto {
   atualizadoEm: string; itens: ItemDoProjeto[]; podeApagar: boolean;
   featureId: number; epicId: number; iteracao: string; board: string;
   branchesDasTasks?: string[];
+  alteradoEm?: string | null;
+  papel?: 'dono' | 'editor' | 'leitor' | '';
 }
 
 /**
@@ -28,4 +35,8 @@ export interface Artefato {
 export interface ArtefatosDoProjeto { projetoId: number; slug: string; nome: string; artefatos: Artefato[] }
 
 /** A ação no projeto pelo site: o texto do comando `projeto` com `acao` (sem ela, o texto é o Novo projeto). */
-export interface AcaoNoProjetoRemoto { acao: 'artefato'; projeto: string; repositorio?: string; sha?: string }
+export interface AcaoNoProjetoRemoto { acao: 'artefato'; projeto: string; repositorio?: string; sha?: string; formato?: 'pacote' | 'preview'; retomar?: number; conferir?: boolean }
+
+export interface OrigemDoArtefato {
+  tipo: 'origem-artefato'; projeto: string; repositorio: string; branch: string; sha: string; formato: string;
+}

@@ -122,13 +122,95 @@ public sealed class CicloDosItensApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Leitor_recusado_editor_decide_e_versao_antiga_nao_grava()
+    public async Task Editor_nao_altera_seu_projeto_pessoal_homonimo_ao_decidir_no_projeto_compartilhado()
+    {
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Identidade do ciclo");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@identidade.test");
+        var (bia, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "bia@identidade.test");
+        var envio = Envio() with { Nivel = "usuario", Nome = "Alvo compartilhado" };
+        var criacao = await ana.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criacao.StatusCode);
+        var alvo = (await criacao.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        var criacaoVizinho = await bia.PutAsJsonAsync("/api/projetos", envio with
+            { Nome = "Vizinho do editor", Branch = "feature/dev/projeto-vizinho", Definicao = "Preservar o vizinho" });
+        Assert.Equal(HttpStatusCode.Created, criacaoVizinho.StatusCode);
+        var vizinho = (await criacaoVizinho.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.NotEqual(alvo.Id, vizinho.Id);
+        Assert.Equal(alvo.Slug, vizinho.Slug);
+        Assert.Equal(alvo.Versao, vizinho.Versao);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync($"/api/projetos/{alvo.Id}/acessos",
+            new ConcessaoDeAcessoV1("bia@identidade.test", "editor"))).StatusCode);
+        bia.DefaultRequestHeaders.Add(CicloDosItensV1.Cabecalho, "1");
+        ana.DefaultRequestHeaders.Add(CicloDosItensV1.Cabecalho, "1");
+        var pedido = new PedidoDeDecisaoDoItemV1(Guid.NewGuid().ToString(), CicloDosItensV1.Cancelar,
+            alvo.Versao, true, true, "Encerrar somente o alvo compartilhado", "Editor confirmou no alvo");
+        var aplicada = await bia.PostAsJsonAsync($"/api/projetos/{alvo.Id}/itens/1/decisao", pedido);
+        Assert.Equal(HttpStatusCode.OK, aplicada.StatusCode);
+        var impacto = (await aplicada.Content.ReadFromJsonAsync<ImpactoDaDecisaoDoItemV1>())!;
+        var alvoDepois = (await ana.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{alvo.Id}"))!;
+        var vizinhoDepois = (await bia.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{vizinho.Id}"))!;
+        Assert.True(impacto.Projeto.Id == alvo.Id && alvoDepois.Itens[0].DecisaoHumana?.Pedido == pedido.Pedido
+            && vizinhoDepois.Itens[0].DecisaoHumana is null,
+            $"Destino pedido={alvo.Id}, devolvido={impacto.Projeto.Id}; alvo={alvoDepois.Itens[0].Situacao}; homonimo={vizinhoDepois.Itens[0].Situacao}.");
+        Assert.Equal(vizinho.Branch, vizinhoDepois.Branch);
+        Assert.Equal(vizinho.Definicao, vizinhoDepois.Definicao);
+        Assert.Equal(vizinho.Versao, vizinhoDepois.Versao);
+        Assert.Equal(alvo.Autor, alvoDepois.Autor);
+    }
+
+    [Fact]
+    public async Task Parada_no_projeto_pessoal_compartilhado_preserva_o_homonimo_do_editor()
+    {
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Parada pessoal");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@parada-pessoal.test");
+        var (bia, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "bia@parada-pessoal.test");
+        await _api.MaquinaAsync("host-pessoal");
+        var reserva = new ReservaDeEscritaDoItemV1("host-pessoal", "instancia", "sessao", "tentativa");
+        var envio = Envio() with { Nivel = "usuario" };
+        var reservado = envio with { Itens = envio.Itens.Select(i => i.Numero == 1
+            ? i with { Situacao = "rodando", ReservasDeEscrita = new([reserva], []) } : i).ToArray() };
+        var alvo = (await (await ana.PutAsJsonAsync("/api/projetos", reservado)).Content.ReadFromJsonAsync<ProjetoV1>())!;
+        var vizinho = (await (await bia.PutAsJsonAsync("/api/projetos", envio)).Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(HttpStatusCode.OK, (await ana.PostAsJsonAsync($"/api/projetos/{alvo.Id}/acessos",
+            new ConcessaoDeAcessoV1("bia@parada-pessoal.test", "editor"))).StatusCode);
+        ana.DefaultRequestHeaders.Add(CicloDosItensV1.Cabecalho, "1");
+        bia.DefaultRequestHeaders.Add(CicloDosItensV1.Cabecalho, "1");
+        var pedido = new PedidoDeDecisaoDoItemV1(Guid.NewGuid().ToString(), CicloDosItensV1.Cancelar,
+            alvo.Versao, true, true, "Retirar o restante", "Dono confirmou");
+        var aplicada = await ana.PostAsJsonAsync($"/api/projetos/{alvo.Id}/itens/1/decisao", pedido);
+        Assert.Equal(HttpStatusCode.OK, aplicada.StatusCode);
+        var decisao = (await aplicada.Content.ReadFromJsonAsync<ImpactoDaDecisaoDoItemV1>())!.Projeto.Itens[0].DecisaoHumana!;
+        var recibo = new ParadaDeEscritaDoItemV1(decisao.Pedido, reserva, 17, DateTimeOffset.UtcNow);
+        var rota = $"/api/projetos/{alvo.Id}/itens/1/parada";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await bia.PostAsJsonAsync(rota, recibo)).StatusCode);
+        bia.DefaultRequestHeaders.Add(ContratoV1.CabecalhoDaChave, _api.Chaves["host-pessoal"]);
+        var parada = await bia.PostAsJsonAsync(rota, recibo);
+        Assert.Equal(HttpStatusCode.OK, parada.StatusCode);
+        var depois = (await parada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(alvo.Id, depois.Id);
+        Assert.False(CicloDosItensV1.ReservaPendente(depois.Itens[0]));
+        Assert.Equal(decisao, depois.Itens[0].DecisaoHumana);
+        var repetida = await bia.PostAsJsonAsync(rota, recibo);
+        Assert.Equal(HttpStatusCode.OK, repetida.StatusCode);
+        Assert.Equal(depois.Versao, (await repetida.Content.ReadFromJsonAsync<ProjetoV1>())!.Versao);
+        var preservado = (await bia.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{vizinho.Id}"))!;
+        Assert.Equal(vizinho.Versao, preservado.Versao);
+        Assert.Null(preservado.Itens[0].DecisaoHumana);
+        Assert.Null(preservado.Itens[0].ReservasDeEscrita);
+    }
+
+    [Theory]
+    [InlineData("empresa")]
+    [InlineData("usuario")]
+    public async Task Leitor_recusado_editor_decide_e_versao_antiga_nao_grava(string nivel)
     {
         var admin = await _api.AdminAsync();
         var empresa = await ApiDeTeste.EmpresaAsync(admin, "Ciclo");
         var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@ciclo.test");
         var (bia, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "bia@ciclo.test");
-        var p = (await (await ana.PutAsJsonAsync("/api/projetos", Envio())).Content.ReadFromJsonAsync<ProjetoV1>())!;
+        var p = (await (await ana.PutAsJsonAsync("/api/projetos", Envio() with { Nivel = nivel })).Content.ReadFromJsonAsync<ProjetoV1>())!;
         var rota = $"/api/projetos/{p.Id}";
         var acesso = await ana.PostAsJsonAsync(rota + "/acessos", new ConcessaoDeAcessoV1("bia@ciclo.test", "leitor"));
         Assert.Equal(HttpStatusCode.OK, acesso.StatusCode);
@@ -139,5 +221,22 @@ public sealed class CicloDosItensApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota + $"/acessos/{biaId}", new ConcessaoDeAcessoV1(null, "editor"))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await bia.PostAsJsonAsync(rota + "/itens/1/decisao", pedido with { VersaoEsperada = 0 })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await bia.PostAsJsonAsync(rota + "/itens/1/decisao", pedido)).StatusCode);
+        ana.DefaultRequestHeaders.Add(CicloDosItensV1.Cabecalho, "1");
+        var peloDono = (await ana.GetFromJsonAsync<ProjetoV1>(rota))!;
+        var peloEditor = (await bia.GetFromJsonAsync<ProjetoV1>(rota))!;
+        Assert.Equal(p.Id, peloDono.Id);
+        Assert.Equal(p.Id, peloEditor.Id);
+        Assert.Equal(p.Nivel, peloDono.Nivel);
+        Assert.Equal(p.Autor, peloDono.Autor);
+        Assert.Equal(p.Versao + 1, peloDono.Versao);
+        Assert.Equal(peloDono.Itens[0].DecisaoHumana, peloEditor.Itens[0].DecisaoHumana);
+        Assert.Equal(pedido.Pedido, peloDono.Itens[0].DecisaoHumana!.Pedido);
+        var replay = await bia.PostAsJsonAsync(rota + "/itens/1/decisao", pedido);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(peloDono.Versao, (await replay.Content.ReadFromJsonAsync<ImpactoDaDecisaoDoItemV1>())!.Projeto.Versao);
+        var revogacao = await ana.DeleteAsync(rota + $"/acessos/{biaId}");
+        Assert.Equal(HttpStatusCode.OK, revogacao.StatusCode);
+        Assert.Empty((await revogacao.Content.ReadFromJsonAsync<AcessosDoProjetoV1>())!.Acessos);
+        Assert.Equal(HttpStatusCode.NotFound, (await bia.PostAsJsonAsync(rota + "/itens/1/decisao", pedido)).StatusCode);
     }
 }
