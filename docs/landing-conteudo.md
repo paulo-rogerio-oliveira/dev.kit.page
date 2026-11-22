@@ -5,6 +5,54 @@ dev.kit faz, como ele trabalha, por que confiar nele e como vê-lo funcionando**
 [`web/src/conteudo/landing.ts`](../web/src/conteudo/landing.ts) (dados tipados, separados dos
 componentes) e as mídias em [`web/public/midia`](../web/public/midia).
 
+## Desde o ajustes-2 (item 9): a hierarquia da proposta ajustes-2-landing v1
+
+O pedido do projeto *ajustes_2* — "ajustar a landing page para refletir os recursos que estão no dev.kit.page" — trouxe a
+proposta `ajustes-2-landing` v1 do projeto de design do dev.kit.page. Ela orienta o topo da página, e os mesmos tokens do
+tema claro (item 7) se estendem ao resto, sem inventar disponibilidade:
+
+- **Topo:** o menu da proposta tem quatro itens — Como funciona, Recursos, Catálogo e Planos —, com o Entrar e o Pedir
+  demonstração ao lado. As seções que saíram do topo (Plataforma, Board web, Conceitos, Fábrica agêntica, Comparativo,
+  Integrações, Segurança, Empresas e Perguntas) estão no rodapé: o `landing.test.ts` confere que nenhuma seção fica sem
+  caminho (só o início, o por que, o contato e o CTA final, alcançados pela marca e pelos CTAs).
+- **Hero:** o rótulo "Seu trabalho, do plano à entrega", o título *Planeje, acompanhe e entregue com agentes de código.*
+  (o destaque em vermelho), o texto das quatro peças, os dois botões, o link "Baixar o dev.kit para Windows" (a versão, a
+  data e o tamanho seguem na nota ao lado) e, no lugar da amostra do Board, o cartão "dev.kit · projetos" marcado como
+  **Demonstração**: planejar e conferir propostas, implementar no branch do item, comparar proposta e recaptura.
+- **Recursos do dev.kit.page** (`#plataforma`): os três cartões da proposta, cada um com o link para o detalhe —
+  `#board-web`, `#recurso-design` e a vitrine pública `/catalogo` — e as **quatro peças**: o app desktop, o serviço do
+  Windows, o devcli e o Board web.
+- **Board web** (`#board-web`): os recursos remotos que existem hoje, cada um com a etiqueta do que ele exige — *Com
+  login*, *Com a fila liberada* (a fila do controle remoto, criada quando o administrador do dev.kit libera a provisão) ou
+  *Depende do navegador* —, o "O que é preciso" e as chamadas *Entrar no Board web* (`/board`, que cai no login sem
+  sessão) e *Ver os planos*.
+- **Catálogo e contexto:** o catálogo segue igual, e o contexto do time (três níveis, as sugestões dos agentes e os
+  repositórios e convenções) entra dito para quem ele existe: a conta de uma empresa ou da assinatura individual.
+
+**Decisão (e por quê):** desde a US #381 a página não explicava a área logada. O pedido do ajustes_2 é refletir os
+recursos do dev.kit.page, então a landing passou a contar o Board web no nível do *que ele faz e do que exige*. Continua
+sem explicar o painel do gestor e do admin: o teste segue recusando "dashboard" e "métricas" em todo o conteúdo.
+
+### Promessas e onde elas moram (conferidas no código em 22/11/2026)
+
+| Promessa na landing | Onde mora | Quem acessa | Teste |
+|---|---|---|---|
+| O retrato de cada máquina (projetos, execuções, o que precisa de você), também com o app fechado | `/board` (`Board.tsx`); heartbeat do serviço e retrato ([contrato remoto](contrato-remoto-v1.md) §1–3) | qualquer papel logado; a máquina é só do dono | `Landing.test.tsx` (`podeAbrir` de cada rota) |
+| Decisões com as evidências; sem o snapshot, a aprovação fica no dev.kit | `/board` (`DecisoesRemotas.tsx`, [decisões remotas](decisoes-remotas.md): snapshot, cinco minutos, auditoria) | o dono da máquina | idem |
+| Projetos em ondas: plano, impactos, propostas visuais, entregas e histórico; o Sincronizar recupera | `/projetos` (`Projetos.tsx`) | logado, com o nível de compartilhamento do projeto | idem |
+| Design compartilhado: lado a lado, uma a uma, sobreposto; o link estável da versão | `/design` e `/design/:projeto/:tela/:versao` (`Design.tsx`, `DesignCompartilhado.tsx`) | logado; o acesso do projeto (dono, leitor, editor) | idem |
+| Conversa remota, Novo projeto/design e Gerar artefato (nunca produção) | `/board` pela fila do usuário ([contrato remoto](contrato-remoto-v1.md) §4–5.1, `ArtefatosDoProjeto.tsx`) | **com a fila liberada** pelo administrador (`FilaDoControleRemoto.tsx`) | `landing.test.ts` (nenhum texto oferece o remoto sem a fila) |
+| Ligar e reiniciar o dev.kit, com o aviso do turno em andamento | `/board` → serviço do Windows (comandos `ligar`/`reiniciar`, `confirmarReinicio`) | com a fila liberada | idem |
+| Avisos no dispositivo, sem o conteúdo da decisão | Web Push ([push do Board](push-board.md)) | depende do navegador e do sistema | `Landing.test.tsx` (etiqueta) |
+| O contexto do time em três níveis e as sugestões dos agentes | `/conta` (Meu contexto) e `/empresa/conhecimento` | conta de empresa ou da assinatura individual (gestor e dev; o admin não é de empresa) | `Landing.test.tsx` (`podeAbrir`) |
+| O catálogo básico, público | `/catalogo` (a vitrine; fora do ar, diz "indisponível no momento") | público | `Landing.test.tsx` (Explorar o catálogo) |
+| O download e o teste grátis | `/api/versoes/ultima/download` (anônimo; no 503, "Download indisponível no momento.") | público | `Landing.test.tsx` (Baixar o dev.kit) |
+
+O teste de links do `Landing.test.tsx` confere toda âncora (o alvo existe na página), toda rota (é uma das rotas do site, e
+a que pede login diz "Entrar" no rótulo) e o único endereço externo (o download da API). Foi ele que achou o "Pular para
+o conteúdo" quebrado: o `FocoDaRota` do App dá ao `<main>` o id `conteudo-principal`, e o `#conteudo` da landing sumia —
+a landing usa agora a âncora do site inteiro.
+
 ## Referências de mercado
 
 | Produto | O que a landing dele faz bem | O que trouxemos |
@@ -42,14 +90,16 @@ preço de ninguém. "Em parte" é o recurso que existe com integração ou confi
   fechamento com a PR.
 - **"Para empresas"**: o acompanhamento do time pelo gestor, com o **consentimento do colaborador** e a
   exportação auditada como diferenciais; o contato é o mesmo formulário de demonstração.
-- **A página não explica a área logada** (o que o gestor ou o admin veem e como): ela vende o produto,
+- **A página não explica o painel do gestor e do admin** (o que eles veem e como): ela vende o produto,
   e quem tem acesso entra pelo link "Entrar". O teste `landing.test.ts` recusa a palavra "dashboard"
-  e "métricas" em todo o conteúdo.
+  e "métricas" em todo o conteúdo. Desde o ajustes-2 (item 9), o Board web — o que ele faz e o que cada
+  recurso exige — é contado na página (ver a seção do ajustes-2 acima).
 
 ## A mensagem
 
-- **Proposta de valor (hero):** *O agente de IA que leva a sua task do work item à Pull Request* —
-  com as regras do time, avaliadores com nota mínima e você aprovando.
+- **Proposta de valor (hero):** desde o ajustes-2, *Planeje, acompanhe e entregue com agentes de código.* — o desktop, o
+  serviço, o devcli e o Board web conectados, com projetos, Design e entregas num só lugar. Até então era *O agente de IA
+  que leva a sua task do work item à Pull Request*, que segue contada no "Como funciona".
 - **Benefícios (verificáveis no produto, sem número inventado):**
   1. Da task à PR sem trocar de janela.
   2. Qualidade com nota mínima — o objetivo só é aceito com a nota de cada avaliador.

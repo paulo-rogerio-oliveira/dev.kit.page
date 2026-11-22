@@ -33,7 +33,8 @@ test('landing com o download da versão → lote com impasse e árbitro → cart
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   const baixar = page.getByRole('group', { name: 'Download do dev.kit', exact: true });
-  const link = baixar.getByRole('link', { name: 'Baixar o dev.kit versão 136' });
+  // O texto do link é o da proposta ajustes-2-landing v1; a versão, a data e o tamanho seguem na nota ao lado.
+  const link = baixar.getByRole('link', { name: 'Baixar o dev.kit para Windows' });
   await expect(link).toBeVisible();
   await expect(baixar).toContainText('versão 136 · 09/10/2026 · 50,0 MB');
   // A URL de verdade: no href (o "Copiar endereço do link") e escrita na página, para colar na barra.
