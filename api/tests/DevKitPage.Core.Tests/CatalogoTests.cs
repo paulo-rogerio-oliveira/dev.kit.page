@@ -72,6 +72,27 @@ public sealed class CatalogoTests
         Assert.False(RegrasDoCatalogoBase.Valido(null, 3));
     }
 
+    /// <summary>
+    /// Item 15 (ajustes-2): o manifesto do básico admite GATILHOS desde a US #515, mas a validação do fallback do GitHub
+    /// só conhecia skill/plan/fluxo. O cenário comprova a aceitação de gatilhos e a recusa do tipo desconhecido com
+    /// motivo para o log; não atribui sozinho a causa do 503 observado em produção.
+    /// </summary>
+    [Fact]
+    public void Manifesto_com_gatilho_e_valido_e_o_invalido_diz_o_motivo()
+    {
+        var comGatilho = Manifesto with { Itens = [.. Manifesto.Itens, Item("revisor-do-dev", 3, "Gatilhos", GatilhoDoCatalogo.Tipo)] };
+
+        Assert.True(RegrasDoCatalogoBase.Valido(comGatilho, 3));
+        Assert.Null(RegrasDoCatalogoBase.Problema(comGatilho, 3));
+        Assert.True(RegrasDoCatalogoBase.TipoDoManifesto(GatilhoDoCatalogo.Tipo));
+        Assert.DoesNotContain(GatilhoDoCatalogo.Tipo, TiposDeItem.Todos); // o catálogo da empresa segue sem gatilho
+        Assert.Equal("o item \"x1\" tem o tipo desconhecido \"macro\"",
+            RegrasDoCatalogoBase.Problema(Manifesto with { Itens = [Item("x1", 1) with { Tipo = "macro" }] }, 3));
+        Assert.Equal("a versão do manifesto (3) não é a da tag (2)", RegrasDoCatalogoBase.Problema(Manifesto, 2));
+        Assert.Equal("o item skill:x1 não tem nome ou hash", RegrasDoCatalogoBase.Problema(Manifesto with { Itens = [Item("x1", 1) with { Hash = " " }] }, 3));
+        Assert.Equal("o manifesto não tem itens e retirados", RegrasDoCatalogoBase.Problema(null, 3));
+    }
+
     private static readonly IReadOnlySet<string> Basico = new HashSet<string> { "skill:revisar-alteracoes", "plan:geral" };
 
     private static PublicacaoV1 Publicacao(string nome = "compilar-uau", string tipo = TiposDeItem.Skill, string conteudo = "{\"name\":\"x\"}", string[]? deps = null)
