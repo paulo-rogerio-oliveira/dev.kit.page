@@ -125,6 +125,150 @@ public sealed class MatrixApiTests : IDisposable
         Assert.Equal("sessao", (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("vinculo", "demanda")))![0].Documento.Vinculo!.Sessao);
     }
 
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task Finalizacao_sem_item_exige_recibo_do_host_atual_e_preserva_vinculo_anterior_na_retomada(string novaLinha)
+    {
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Matrix finalização");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@final-matrix.com");
+        ana.DefaultRequestHeaders.Add("X-DevKit-Matrix-Avaliacao", "1");
+        var politica = new PoliticaDoProjetoV1("projeto", "finalizacao-unica", 1, "1", DateTimeOffset.UtcNow, "escolha")
+        { IdentidadeDoFluxo = "fluxo:final", RevisaoDoFluxo = "rev", ModeloDaFinalizacao = new("claude", "sonnet") };
+        var envio = new EnvioDeProjetoV1("projeto", "Projeto", "empresa", "", ["repo-a"], "feature/projeto", false, "", [], false, 1,
+            "develop", "aprovado", null, [new(1, "Item", "", "item", [], [], [], 1, 0, "integrado")]) { PoliticaDeFinalizacao = politica };
+        (await ana.PutAsJsonAsync("/api/projetos", envio)).EnsureSuccessStatusCode();
+        (await Editar(ana, Mapa("projeto"))).EnsureSuccessStatusCode();
+        (await Editar(ana, Matriz("projeto"))).EnsureSuccessStatusCode();
+        const string maquina = "maquina-final";
+        (await ana.PostAsJsonAsync("/api/remoto/heartbeat", new HeartbeatV1(1, maquina, "Desktop", "8", "servico", true, "ativo", true)))
+            .EnsureSuccessStatusCode();
+        var agora = DateTimeOffset.UtcNow;
+        var fluxo = new FluxoNoRetratoV1("exec-final", "Finalização", "Finalização", "executando", "projeto");
+        async Task Publicar(FluxoNoRetratoV1 f)
+        {
+            agora = agora.AddSeconds(1);
+            (await ana.PutAsJsonAsync("/api/remoto/retrato", new RetratoV1(1, maquina, agora, [], [f], []))).EnsureSuccessStatusCode();
+        }
+        var vinculo = new DocumentoMatrix { Aplicacao = "app", Tipo = "vinculo", Id = "demanda", Projeto = "projeto",
+            Vinculo = new("task-1", fluxo.Id, Maquina: maquina) };
+        await Publicar(fluxo); // O cliente antigo/declarativo não oferece recibo.
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, vinculo)).StatusCode);
+        var recibo = new ReciboDaFinalizacaoV1(1, fluxo.Id, 1, "projeto", "feature/projeto", "develop", 1, "fluxo:final", "rev",
+            "claude", "sonnet", new Dictionary<string, string> { [RegrasDaFinalizacao.IdDoRepositorio("repo-a")] = new('a', 40) });
+        await Publicar(fluxo with { Finalizacao = recibo with { RevisaoDaPolitica = 2 } });
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, vinculo)).StatusCode);
+        await Publicar(fluxo with { Finalizacao = recibo });
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo, aplicar: false)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await ana.GetAsync(Rota("vinculo", "demanda"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo)).StatusCode);
+        var revisaoPortatil = RegrasVerificacaoFinalMatrix.Revisao(recibo).Replace("\n", novaLinha, StringComparison.Ordinal);
+        var eventoPortatil = "finalizacao:" + recibo.Execucao + ":" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(revisaoPortatil)));
+        var verificacao = new EventoMatrix(eventoPortatil, "demanda", maquina, fluxo.Id,
+            0, 1, 1, 1, ["task-1"], ["c1"], recibo.Shas.ToDictionary(p => p.Key, p => p.Value),
+            revisaoPortatil) { Finalizacao = recibo };
+        var reciboMatrix = new DocumentoMatrix { Aplicacao = "app", Tipo = "evento", Projeto = "projeto",
+            Id = RegrasAvaliacaoMatrix.IdDoEvento(verificacao.Evento, "demanda", fluxo.Id), Evento = verificacao };
+        var respostaDoRecibo = await Editar(ana, reciboMatrix);
+        Assert.True(respostaDoRecibo.IsSuccessStatusCode, await respostaDoRecibo.Content.ReadAsStringAsync());
+        var resultadoFinal = new DocumentoMatrix { Aplicacao = "app", Tipo = "registro", Id = "demanda", Projeto = "projeto",
+            Registro = new("c1", 1, "task-1", RegrasVerificacaoFinalMatrix.Tipo, "atendido", "Cenários integrados conferidos", ["log final"], verificacao.Shas)
+            { Evento = verificacao.Evento, SessaoAvaliada = fluxo.Id, RevisaoEfetiva = 1, RevisaoDoContexto = 1,
+                RevisaoDaEntrega = verificacao.RevisaoDaEntrega } };
+        (await Editar(ana, resultadoFinal)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, resultadoFinal with
+            { Registro = resultadoFinal.Registro with { Tipo = "avaliacao", Avaliador = 1 } }, 1)).StatusCode);
+        var retomada = fluxo with { Id = "exec-retomada", Finalizacao = recibo with { Sessao = "exec-retomada", Execucao = 2 } };
+        await Publicar(retomada);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, resultadoFinal, 1)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, vinculo with { Vinculo = new("task-1", retomada.Id, Maquina: maquina) }, 1)).StatusCode);
+        var historico = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("vinculo", "demanda")))!;
+        Assert.Equal(2, historico.Length);
+        Assert.Equal("exec-final", historico[0].Documento.Vinculo!.Sessao);
+        Assert.Equal("exec-retomada", historico[1].Documento.Vinculo!.Sessao);
+    }
+
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public async Task Transferencia_versionada_preserva_item_e_cliente_antigo_e_vincula_a_finalizacao_fora_do_grafo(string novaLinha)
+    {
+        var admin = await _api.AdminAsync();
+        var empresa = await ApiDeTeste.EmpresaAsync(admin, "Transferência formal");
+        var (ana, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "ana@transferencia-matrix.com");
+        var envio = new EnvioDeProjetoV1("projeto", "Projeto", "empresa", "", ["repo-a"], "feature/projeto", false, "", [], false, 1,
+            "develop", "aprovado", null, [new(1, "Implementação", "", "item", [], [], [], 1, 0, "integrado"),
+                new(6, "Validação final", "Regressão e CI do conjunto", "avulsa", [], [], [1], 2, 0, "planejado")]);
+        var projeto = (await (await ana.PutAsJsonAsync("/api/projetos", envio)).Content.ReadFromJsonAsync<ProjetoV1>())!;
+        (await Editar(ana, Mapa("projeto"))).EnsureSuccessStatusCode();
+        var matriz = Matriz("projeto");
+        matriz = matriz with { Matriz = matriz.Matriz! with { Celulas = [matriz.Matriz.Celulas[0] with { Responsaveis = [new("validacao-6", 6)] }] } };
+        (await Editar(ana, matriz)).EnsureSuccessStatusCode();
+        (await Editar(ana, matriz with { Id = "segunda" })).EnsureSuccessStatusCode();
+        var snapshot = FonteDaTransferenciaMatrix.Retratar(envio, envio.Itens[1]);
+        var revisao = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!.Last();
+        var proposta = RegrasDaTransferenciaMatrix.Preparar(revisao, snapshot, "finalizacao", "Validação do conjunto", "Plano aprovado r3", DateTimeOffset.UtcNow);
+        var transferenciaPortatil = Assert.Single(proposta.Documento.Matriz!.Transferencias!);
+        proposta = proposta with { Documento = proposta.Documento with { Matriz = proposta.Documento.Matriz! with
+        {
+            Transferencias = [transferenciaPortatil with
+            { SnapshotDoItem = transferenciaPortatil.SnapshotDoItem.Replace("\n", novaLinha, StringComparison.Ordinal) }]
+        } } };
+        Assert.Equal(HttpStatusCode.OK, (await Editar(ana, proposta.Documento, 1, aplicar: false)).StatusCode);
+        Assert.Single((await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!);
+        const string maquina = "maquina-transferencia";
+        (await ana.PostAsJsonAsync("/api/remoto/heartbeat", new HeartbeatV1(1, maquina, "Desktop", "8", "servico", true, "ativo", true))).EnsureSuccessStatusCode();
+        var agora = DateTimeOffset.UtcNow;
+        async Task Publicar(params FluxoNoRetratoV1[] fluxos)
+        {
+            agora = agora.AddSeconds(1);
+            (await ana.PutAsJsonAsync("/api/remoto/retrato", new RetratoV1(1, maquina, agora, [], fluxos, []))).EnsureSuccessStatusCode();
+        }
+        await Publicar(new FluxoNoRetratoV1("exec-item", "Validação", "Execução", "executando", "projeto", 6));
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, proposta.Documento, 1)).StatusCode);
+        await Publicar();
+        var (bia, _) = await _api.DevPorAdesaoAsync(empresa.CodigoDeAdesao, "bia@transferencia-matrix.com");
+        (await ana.PostAsJsonAsync($"/api/projetos/{projeto.Id}/acessos", new ConcessaoDeAcessoV1("bia@transferencia-matrix.com", "editor"))).EnsureSuccessStatusCode();
+        (await bia.PostAsJsonAsync("/api/remoto/heartbeat", new HeartbeatV1(1, "maquina-editora", "Desktop", "8", "servico", true, "ativo", true))).EnsureSuccessStatusCode();
+        (await bia.PutAsJsonAsync("/api/remoto/retrato", new RetratoV1(1, "maquina-editora", agora,
+            [], [new("exec-de-outra-editora", "Validação", "Execução", "executando", "projeto", 6)], []))).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.BadRequest, (await Editar(ana, proposta.Documento, 1)).StatusCode);
+        (await bia.PutAsJsonAsync("/api/remoto/retrato", new RetratoV1(1, "maquina-editora", agora.AddSeconds(1), [], [], []))).EnsureSuccessStatusCode();
+        (await Editar(ana, proposta.Documento, 1)).EnsureSuccessStatusCode();
+        var politica = new PoliticaDoProjetoV1("projeto", "finalizacao-unica", 1, "1", DateTimeOffset.UtcNow, "adoção explícita")
+        { IdentidadeDoFluxo = "teste:final", RevisaoDoFluxo = "rev", ModeloDaFinalizacao = new("claude", "sonnet") };
+        var adotar = envio with { Versao = projeto.Versao, PoliticaDeFinalizacao = politica };
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PutAsJsonAsync("/api/projetos", adotar)).StatusCode);
+        var segunda = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "segunda")))!.Last();
+        var segundaTransferencia = RegrasDaTransferenciaMatrix.Preparar(segunda, snapshot, "finalizacao", "Validação do conjunto", "Plano aprovado r3", DateTimeOffset.UtcNow);
+        (await Editar(ana, segundaTransferencia.Documento, 1)).EnsureSuccessStatusCode();
+        var atual = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!.Last();
+        var antigo = atual.Documento with { Matriz = atual.Documento.Matriz! with { Transferencias = null } };
+        (await Editar(ana, antigo, atual.Versao)).EnsureSuccessStatusCode();
+        Assert.Single((await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!.Last().Documento.Matriz!.Transferencias!);
+        var adotado = await ana.PutAsJsonAsync("/api/projetos", adotar);
+        adotado.EnsureSuccessStatusCode();
+        projeto = (await adotado.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal("planejado", projeto.Itens.Single(i => i.Numero == 6).Situacao);
+        Assert.Equal(new[] { 1 }, projeto.ItensDoGrafo);
+        var leituraDoPlano = (await ana.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!;
+        Assert.Equal(new[] { 1 }, leituraDoPlano.ItensDoGrafo);
+        Assert.Equal(2, leituraDoPlano.Itens.Count);
+        var alterado = adotar with { Versao = projeto.Versao, Itens = adotar.Itens.Select(i => i.Numero == 6 ? i with { Descricao = "alteração silenciosa" } : i).ToArray() };
+        Assert.Equal(HttpStatusCode.Conflict, (await ana.PutAsJsonAsync("/api/projetos", alterado)).StatusCode);
+        var recibo = new ReciboDaFinalizacaoV1(1, "exec-final", 1, "projeto", "feature/projeto", "develop", 1, "teste:final", "rev", "claude", "sonnet",
+            new Dictionary<string, string> { [RegrasDaFinalizacao.IdDoRepositorio("repo-a")] = new('a', 40) });
+        await Publicar(new FluxoNoRetratoV1("exec-final", "Finalização", "Finalização", "executando", "projeto") { Finalizacao = recibo });
+        var vinculo = new DocumentoMatrix { Aplicacao = "app", Tipo = "vinculo", Id = "demanda", Projeto = "projeto",
+            Vinculo = new("finalizacao", "exec-final", Maquina: maquina) };
+        (await Editar(ana, vinculo)).EnsureSuccessStatusCode();
+        var historico = (await ana.GetFromJsonAsync<RevisaoMatrix[]>(Rota("matriz", "demanda")))!;
+        Assert.Equal(6, historico[0].Documento.Matriz!.Celulas[0].Responsaveis[0].Item);
+        Assert.Equal("finalizacao", historico[^1].Documento.Matriz!.Celulas[0].Responsaveis[0].Id);
+    }
+
     [Fact]
     public async Task Concorrencia_rejeita_edicao_vencida_e_vinculo_sem_identidade_de_maquina()
     {

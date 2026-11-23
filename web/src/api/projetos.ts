@@ -11,6 +11,12 @@ export interface ItemDoProjeto {
   agente?: string | null; modelo?: string | null;
 }
 
+export interface PoliticaDoProjeto {
+  slug: string; politica: string; revisao: number; fluxoDaFinalizacao: string;
+  adotadaEm: string; motivo: string; identidadeDoFluxo: string; revisaoDoFluxo: string;
+  modeloDaFinalizacao?: ModeloDoProjeto | null;
+}
+
 export interface Projeto {
   id: number; slug: string; nome: string; nivel: string; time: string;
   repositorios: string[]; branch: string; semanaConvertida: boolean;
@@ -20,8 +26,10 @@ export interface Projeto {
   featureId: number; epicId: number; iteracao: string; board: string;
   branchesDasTasks?: string[];
   baseDoBranch?: string | null; fluxoPadrao?: string | null;
-  agente?: string | null; modelo?: string | null; modelos?: ModeloDoProjeto[] | null;
+  agente?: string | null; modelo?: string | null; modelos?: ModeloDoProjeto[] | null; politicaDeFinalizacao?: PoliticaDoProjeto | null;
   alteradoEm?: string | null; papel?: string;
+  /** Projecao operacional; itens conserva o cadastro historico. */
+  itensDoGrafo?: number[] | null; pendenciaDoGrafo?: string | null;
 }
 
 /**

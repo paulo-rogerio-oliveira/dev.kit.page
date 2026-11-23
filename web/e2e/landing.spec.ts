@@ -2,21 +2,70 @@ import { expect, test } from '@playwright/test';
 import { garantirSenhaDefinitiva } from './admin';
 import { NOVA_SENHA } from './ambiente';
 
-/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta da home da US #467). */
+/** As seções da landing, na ordem da lista SECOES de conteudo/landing.ts (a proposta ajustes-2-landing v1). */
 const ORDEM = [
-  'inicio', 'como-funciona', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes', 'seguranca', 'empresas',
-  'planos', 'contato', 'faq', 'comecar',
+  'inicio', 'plataforma', 'board-web', 'como-funciona', 'recursos', 'beneficios', 'conceitos', 'fabrica', 'catalogo', 'comparativo', 'integracoes',
+  'seguranca', 'empresas', 'planos', 'contato', 'faq', 'comecar',
 ];
 
-/** A home inteira nas quatro combinações da entrega (US #467): desktop e celular, claro e escuro. */
+/**
+ * A hierarquia da proposta ajustes-2-landing v1 (ajustes-2, item 9) no navegador: o topo com o menu de quatro itens, o hero
+ * com a amostra do projeto e os três cartões dos recursos do dev.kit.page — cada link chega ao destino —, em desktop (o
+ * tamanho da proposta, 1440×1000) e no celular, com o menu pelo botão.
+ */
+test('a landing da proposta ajustes-2 em desktop e celular, com os links dos cartões chegando ao destino', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  const menu = page.getByRole('navigation', { name: 'Seções' });
+  await expect(menu.getByRole('listitem')).toHaveText(['Como funciona', 'Recursos', 'Catálogo', 'Planos']);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planeje, acompanhe e entregue com agentes de código.');
+  await expect(page.getByRole('complementary', { name: 'Do pedido à entrega' })).toBeVisible();
+  const plataforma = page.locator('#plataforma');
+  await expect(plataforma.locator('h3')).toContainText(['Projetos e Board web', 'Design e avaliação', 'Catálogo e contexto']);
+  await page.screenshot({ path: 'test-results/capturas/80-landing-ajustes2-desktop.png' });
+  await page.screenshot({ path: 'test-results/capturas/81-landing-ajustes2-desktop-inteira.png', fullPage: true });
+  await page.locator('#board-web').screenshot({ path: 'test-results/capturas/82-board-web.png' });
+
+  // Cada link dos cartões chega a um destino que existe: as duas âncoras da página e a vitrine pública do catálogo.
+  await plataforma.getByRole('link', { name: 'Conhecer os recursos' }).click();
+  await expect(page).toHaveURL(/#board-web$/);
+  await expect(page.getByRole('heading', { level: 2, name: 'Projetos, decisões e conversa no navegador' })).toBeInViewport();
+  await plataforma.getByRole('link', { name: 'Como funciona o Design' }).click();
+  await expect(page).toHaveURL(/#recurso-design$/);
+  await expect(page.locator('#titulo-recurso-design')).toBeInViewport();
+  await plataforma.getByRole('link', { name: 'Explorar o catálogo' }).click();
+  await expect(page).toHaveURL(/\/catalogo$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Catálogo do dev.kit');
+  await page.goBack();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Planeje, acompanhe e entregue com agentes de código.');
+  // O Board web pede login: o Entrar dele cai no login, sem prometer o Board sem a conta.
+  await page.locator('#board-web').getByRole('link', { name: 'Entrar no Board web' }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // O celular: o menu abre pelo botão, e a página cabe na largura.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: 'test-results/capturas/83-landing-ajustes2-celular.png' });
+  await page.screenshot({ path: 'test-results/capturas/84-landing-ajustes2-celular-inteira.png', fullPage: true });
+  await page.getByRole('button', { name: 'Abrir o menu' }).click();
+  await expect(menu.getByRole('link', { name: 'Planos' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/capturas/85-landing-ajustes2-celular-menu.png' });
+  await menu.getByRole('link', { name: 'Planos' }).click();
+  await expect(page).toHaveURL(/#planos$/);
+});
+
+/** A home inteira nas quatro combinações da entrega (US #467): desktop e celular, com a preferência clara e a escura do sistema. */
 test('a home da proposta (US #467) em desktop e celular, nos temas claro e escuro', async ({ page }) => {
   for (const [tela, largura, altura] of [['desktop', 1440, 900], ['celular', 390, 844]] as const) {
     for (const tema of ['light', 'dark'] as const) {
       await page.setViewportSize({ width: largura, height: altura });
       await page.emulateMedia({ colorScheme: tema, reducedMotion: 'reduce' });
       await page.goto('/');
-      // Os sete recursos desde a versão 5 (o Orquestrador, o provedor cognitivo e o Design entraram). O site é só escuro desde a
-      // marca da versão 5: o tema claro do sistema dá a mesma página.
+      // Os sete recursos desde a versão 5 (o Orquestrador, o provedor cognitivo e o Design entraram). O site é só claro desde o
+      // ajustes-2 (item 7): a preferência escura do sistema dá a mesma página.
       await expect(page.locator('#recursos article')).toHaveCount(7);
       // Com menos movimento entra o poster (o primeiro quadro, também o do GIF do Orquestrador): a captura não depende do vídeo carregar.
       await expect(page.locator('#recursos .janela img')).toHaveCount(7);
@@ -32,14 +81,14 @@ test('a home da proposta (US #467) em desktop e celular, nos temas claro e escur
 test('landing → seções e recursos da proposta → pedido de demonstração → o admin vê e exclui no dashboard', async ({ page, request }) => {
   const nome = `Visitante E2E ${Date.now()}`;
 
-  // 1. A landing de venda, na ordem da proposta da home (US #467).
+  // 1. A landing de venda, na ordem da proposta ajustes-2-landing v1.
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('agente de IA');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('agentes de código');
   await expect(page.locator('main > section')).toHaveCount(ORDEM.length);
   expect(await page.locator('main > section').evaluateAll((secoes) => secoes.map((s) => s.id))).toEqual(ORDEM);
-  // O hero da proposta: o selo e a amostra do Board com a nota. "Como funciona" ficou só com as sete etapas.
-  await expect(page.locator('#inicio')).toContainText('Para times no Azure DevOps');
-  await expect(page.getByRole('img', { name: /Amostra do Board/ })).toBeVisible();
+  // O hero da proposta: o rótulo e a amostra do projeto. "Como funciona" ficou só com as sete etapas.
+  await expect(page.locator('#inicio')).toContainText('Seu trabalho, do plano à entrega');
+  await expect(page.getByRole('complementary', { name: 'Do pedido à entrega' })).toBeVisible();
   await expect(page.locator('#como-funciona ol > li')).toHaveCount(7);
   await expect(page.locator('#como-funciona video')).toHaveCount(0);
   // Os sete recursos, com as abas 01–07: a aba leva ao bloco, e a mídia toca dentro da moldura de janela (seis vídeos e o
@@ -67,8 +116,9 @@ test('landing → seções e recursos da proposta → pedido de demonstração �
   await page.locator('#empresas').screenshot({ path: 'test-results/capturas/14-para-empresas.png' });
   await page.locator('#como-funciona').screenshot({ path: 'test-results/capturas/15-como-funciona.png' });
 
-  // 1c. Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico.
-  await page.getByRole('navigation', { name: 'Seções' }).getByRole('link', { name: 'Conceitos' }).click();
+  // 1c. Os conceitos (agente, skill e rule, cada um com o exemplo) e a fábrica agêntica com o time agêntico — pelo rodapé
+  // desde a proposta ajustes-2-landing v1, que deixou o topo com quatro itens.
+  await page.getByRole('navigation', { name: 'Rodapé' }).getByRole('link', { name: 'Conceitos' }).click();
   await expect(page).toHaveURL(/#conceitos$/);
   await expect(page.locator('#conceitos article')).toHaveCount(3);
   await expect(page.locator('#conceito-skill pre')).toContainText('name: compilar-angular');

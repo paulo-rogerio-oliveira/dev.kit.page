@@ -7,8 +7,8 @@ import { Janela } from '../componentes/Janela';
 import { Midia } from '../componentes/Midia';
 import { Secao } from '../componentes/Secao';
 import {
-  AMOSTRA_DO_BOARD, BENEFICIOS, CABECALHOS, CATALOGO, COMPARATIVO, CONCEITOS, EMPRESAS, FABRICA, HERO, INTEGRACOES, MENU, PASSOS, PERGUNTAS,
-  PLANOS, PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
+  AMOSTRA_DO_PROJETO, BENEFICIOS, BOARD_WEB, CABECALHOS, CATALOGO, COMPARATIVO, CONCEITOS, CONTEXTO, EMPRESAS, FABRICA, HERO, INTEGRACOES, MENU, PASSOS,
+  PERGUNTAS, PLANOS, PLATAFORMA, PRODUTOS_COMPARADOS, RECURSOS, RODAPE, ROTULO_DA_DISPONIBILIDADE, rotuloDaSecao, SEGURANCA, tituloDaJanela,
 } from '../conteudo/landing';
 
 /** A marca "dK" do cabeçalho e do rodapé (o quadrado da cor da marca e o ponto vermelho). */
@@ -35,65 +35,43 @@ function Icone({ tipo }: { tipo: 'ramo' | 'nota' | 'relogio' }) {
 }
 
 /**
- * A amostra do Board no hero (US #405): o "Precisa de você", o avaliador com a nota e as horas do dia,
- * com o selo "Nota 92/100 · Aceito". É uma imagem feita de HTML (sem foto de tela a carregar), lida como
- * uma figura só pelo leitor de tela.
+ * A amostra do hero (proposta ajustes-2-landing v1): o cartão "dev.kit · projetos" com o caminho de um item de projeto,
+ * do pedido à entrega. É demonstração — a etiqueta diz —, em texto de verdade para o leitor de tela, sem dado real.
  */
-function AmostraDoBoard() {
-  const b = AMOSTRA_DO_BOARD;
+function AmostraDoProjeto() {
+  const a = AMOSTRA_DO_PROJETO;
   return (
-    <figure className="amostra" role="img" aria-label={`Amostra do Board do dev.kit: o ${b.orquestrador.autor} diz "${b.orquestrador.texto}"; Precisa de você com ${b.precisaDeVoce.length} itens; ${b.nota.valor}, ${b.nota.texto.toLowerCase()}; ${b.horas.texto}.`}>
-      <Janela titulo={b.titulo} className="amostra-janela" aria-hidden="true">
-        <div className="amostra-corpo">
-          <div className="amostra-lateral"><span /><span /><span /><span /></div>
-          <div className="amostra-conteudo">
-            <div className="amostra-cartao amostra-orquestrador">
-              <span className="amostra-o">O</span>
-              <span className="amostra-texto"><b>{b.orquestrador.autor}</b><small>{b.orquestrador.texto}</small></span>
-            </div>
-            <div className="amostra-cartao">
-              <strong>Precisa de você <span className="amostra-contagem">3</span></strong>
-              {b.precisaDeVoce.map((item, i) => (
-                <div key={item.titulo} className="amostra-item">
-                  <span className={`amostra-avatar amostra-avatar-${i}`} />
-                  <span className="amostra-texto"><b>{item.titulo}</b><small>{item.estado}</small></span>
-                  <span className={i === 0 ? 'amostra-acao amostra-acao-forte' : 'amostra-acao'}>{item.acao}</span>
-                </div>
-              ))}
-            </div>
-            <div className="amostra-linha">
-              <div className="amostra-cartao amostra-avaliador">
-                <small>Avaliação</small>
-                <span className="amostra-notas">{b.avaliador.notas.map((n) => <span key={n} className={n >= 90 ? 'nota-boa' : 'nota-baixa'}>{n}</span>)}</span>
-                <small>{b.avaliador.titulo} · {b.avaliador.gatilho}</small>
-              </div>
-              <div className="amostra-cartao">
-                <strong>{b.horas.titulo}</strong>
-                <span className="amostra-horas">{b.horas.partes.map((p, i) => <span key={i} style={{ flexGrow: p }} className={`hora-${i}`} />)}</span>
-                <small>{b.horas.texto}</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Janela>
-      <div className="amostra-selo" aria-hidden="true">
-        <span className="amostra-check">✓</span>
-        <span><b>{b.nota.valor}</b><small>{b.nota.texto}</small></span>
+    <aside className="amostra-do-projeto" aria-labelledby="titulo-amostra-do-projeto">
+      <div className="amostra-do-projeto-topo">
+        <b>{a.janela}</b>
+        <span className="etiqueta">{a.etiqueta}</span>
       </div>
-    </figure>
+      <h2 id="titulo-amostra-do-projeto">{a.titulo}</h2>
+      <p>{a.texto}</p>
+      <ol aria-label="Etapas do item">
+        {a.etapas.map((e, i) => (
+          <li key={e.texto}>
+            <span className="amostra-do-projeto-numero" aria-hidden="true">{i + 1}</span>
+            <span className="amostra-do-projeto-etapa">{e.texto}</span>
+            <span className="pilula-da-etapa">{e.papel}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="amostra-do-projeto-nota">{a.nota}</p>
+    </aside>
   );
 }
 
 /**
- * A landing pública — a página de venda do dev.kit, na disposição da proposta da home (US #467):
- * cabeçalho (marca, menu, Entrar e Pedir demonstração), hero com o selo, o título com "Pull Request" em
- * destaque, os dois botões, o link discreto de download e a amostra do Board → como funciona em sete
- * etapas → recursos (as abas 01–04 e, em blocos alternados, o texto com os marcadores e a mídia numa
- * moldura de janela com a legenda abaixo) → por que o dev.kit (três cartões) → os conceitos (agente, skill e
- * rule, cada um com o exemplo, e o exemplo de ponta a ponta) → a fábrica agêntica e o time agêntico → as seções que o menu, o
- * rodapé e o contato apontam (catálogo, comparativo, integrações, segurança, empresas, planos, contato,
- * FAQ) → CTA escuro → rodapé. O texto e as mídias vêm de conteudo/landing.ts, na ordem de SECOES. A
- * página vende o produto e NÃO explica a área logada.
+ * A landing pública — a página de venda do dev.kit, na hierarquia da proposta ajustes-2-landing v1 (ajustes-2, item 9):
+ * cabeçalho (marca, o menu Como funciona · Recursos · Catálogo · Planos, Entrar e Pedir demonstração) → hero (o rótulo,
+ * o título com "agentes de código." em destaque, os dois botões, o link discreto de download e a amostra do projeto) →
+ * recursos do dev.kit.page (os três cartões com o link para o detalhe e as quatro peças: desktop, serviço, devcli e
+ * Board web) → o Board web (cada recurso remoto com a etiqueta do que ele exige) → como funciona (sete etapas) →
+ * recursos (as abas 01–07 e os blocos com a mídia numa moldura de janela) → por que o dev.kit → conceitos → fábrica
+ * agêntica → catálogo e contexto → comparativo → integrações → segurança → empresas → planos → contato → FAQ → CTA
+ * final → rodapé (as seções que não estão no menu). O texto e as mídias vêm de conteudo/landing.ts, na ordem de SECOES;
+ * cada promessa tem a rota e a permissão conferidas em docs/landing-conteudo.md.
  */
 export function Landing() {
   const [antes, depois] = HERO.titulo.split(HERO.destaque);
@@ -101,7 +79,8 @@ export function Landing() {
   const [menuAberto, setMenuAberto] = useState(false);
   return (
     <div className="pagina landing">
-      <a className="pular" href="#conteudo">Pular para o conteúdo</a>
+      {/* A âncora do conteúdo é a do site inteiro (o FocoDaRota do App dá esse id a todo <main>, e o Topo pula para ele). */}
+      <a className="pular" href="#conteudo-principal">Pular para o conteúdo</a>
       <header className="topo">
         <Marca />
         <nav aria-label="Seções" className="nav-landing">
@@ -119,20 +98,65 @@ export function Landing() {
         </nav>
       </header>
 
-      <main id="conteudo">
+      <main id="conteudo-principal">
         <section id="inicio" className="hero" aria-labelledby="titulo-inicio">
           <div className="hero-texto">
-            <p className="selo"><span className="selo-ponto" aria-hidden="true" />{HERO.selo}</p>
+            <p className="secao-rotulo">{HERO.rotulo}</p>
             <h1 id="titulo-inicio">{antes}<span className="destaque">{HERO.destaque}</span>{depois}</h1>
             <p>{HERO.texto}</p>
             <div className="ctas">
               <Cta para="#contato">Quero uma demonstração <span aria-hidden="true">→</span></Cta>
               <Cta para="#como-funciona" variante="secundario">Ver como funciona</Cta>
             </div>
-            <BaixarDevKit discreto />
+            <BaixarDevKit discreto texto={HERO.baixar} />
           </div>
-          <AmostraDoBoard />
+          <AmostraDoProjeto />
         </section>
+
+        <Secao id="plataforma" rotulo={PLATAFORMA.rotulo} titulo={PLATAFORMA.titulo} className="secao-plataforma">
+          <ul className="grade-cartoes grade-tres">
+            {PLATAFORMA.cartoes.map((c) => (
+              <li key={c.titulo} className="cartao cartao-com-link">
+                <h3>{c.titulo}</h3>
+                <p>{c.texto}</p>
+                <Cta para={c.link.destino} variante="texto">{c.link.rotulo} <span aria-hidden="true">→</span></Cta>
+              </li>
+            ))}
+          </ul>
+          <h3 className="subtitulo-da-secao" id="titulo-pecas">{PLATAFORMA.pecas.titulo}</h3>
+          <p className="texto-da-subsecao">{PLATAFORMA.pecas.texto}</p>
+          <ul className="grade-cartoes pecas" aria-labelledby="titulo-pecas">
+            {PLATAFORMA.pecas.itens.map((p) => (
+              <li key={p.id} id={`peca-${p.id}`} className="cartao peca">
+                <p className="peca-onde">{p.onde}</p>
+                <h4>{p.nome}</h4>
+                <p>{p.texto}</p>
+              </li>
+            ))}
+          </ul>
+        </Secao>
+
+        <Secao id="board-web" rotulo={BOARD_WEB.rotulo} titulo={BOARD_WEB.titulo} subtitulo={BOARD_WEB.subtitulo} className="secao-tinta">
+          <ul className="grade-cartoes grade-tres recursos-remotos" aria-label="Recursos do Board web">
+            {BOARD_WEB.recursos.map((r) => (
+              <li key={r.titulo} className="cartao recurso-remoto">
+                <span className={`requisito requisito-${r.requisito}`}>{BOARD_WEB.requisitos[r.requisito]}</span>
+                <h3>{r.titulo}</h3>
+                <p>{r.texto}</p>
+              </li>
+            ))}
+          </ul>
+          <div className="condicoes-do-board">
+            <h3 id="titulo-condicoes-do-board">{BOARD_WEB.condicoes.titulo}</h3>
+            <ul className="marcadores" aria-labelledby="titulo-condicoes-do-board">
+              {BOARD_WEB.condicoes.itens.map((c) => <li key={c}>{c}</li>)}
+            </ul>
+          </div>
+          <div className="ctas ctas-da-secao">
+            <Cta para={BOARD_WEB.ctas.entrar.destino}>{BOARD_WEB.ctas.entrar.rotulo}</Cta>
+            <Cta para={BOARD_WEB.ctas.planos.destino} variante="secundario">{BOARD_WEB.ctas.planos.rotulo}</Cta>
+          </div>
+        </Secao>
 
         <Secao id="como-funciona" rotulo={CABECALHOS.comoFunciona.rotulo} titulo={CABECALHOS.comoFunciona.titulo} subtitulo={CABECALHOS.comoFunciona.subtitulo}>
           <ol className="etapas">
@@ -234,10 +258,17 @@ export function Landing() {
           </div>
         </Secao>
 
-        <Secao id="catalogo" rotulo="Catálogo" titulo={CATALOGO.titulo} subtitulo={CATALOGO.subtitulo} className="secao-tinta">
-          <ul className="grade-cartoes grade-tres">
+        <Secao id="catalogo" rotulo="Catálogo e contexto" titulo={CATALOGO.titulo} subtitulo={CATALOGO.subtitulo} className="secao-tinta">
+          <ul className="grade-cartoes grade-tres" aria-label="O catálogo">
             {CATALOGO.itens.map((item) => (
               <li key={item.titulo} className="cartao"><h3>{item.titulo}</h3><p>{item.texto}</p></li>
+            ))}
+          </ul>
+          <h3 className="subtitulo-da-secao" id="titulo-contexto">{CONTEXTO.titulo}</h3>
+          <p className="texto-da-subsecao">{CONTEXTO.texto}</p>
+          <ul className="grade-cartoes grade-tres" aria-labelledby="titulo-contexto">
+            {CONTEXTO.itens.map((item) => (
+              <li key={item.titulo} className="cartao"><h4>{item.titulo}</h4><p>{item.texto}</p></li>
             ))}
           </ul>
           <div className="ctas ctas-da-secao">
@@ -278,7 +309,7 @@ export function Landing() {
         </Secao>
 
         <Secao id="seguranca" rotulo="Segurança" titulo="Segurança e privacidade" subtitulo="O agente trabalha com o que o time permite, e nada além." className="secao-tinta">
-          <ul className="grade-cartoes">
+          <ul className="grade-cartoes grade-tres">
             {SEGURANCA.map((s) => (
               <li key={s.titulo} className="cartao"><h3>{s.titulo}</h3><p>{s.texto}</p></li>
             ))}

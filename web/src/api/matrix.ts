@@ -13,9 +13,18 @@ export interface CelulaMatrix {
   aplicavel: boolean; justificativa: string; origem: string; responsaveis: ResponsavelMatrix[];
   criterio: string; evidenciaEsperada: string;
 }
-export interface MatrizMatrix { revisaoDoMapa: number; componentes: EixoMatrix[]; layers: EixoMatrix[]; celulas: CelulaMatrix[]; coberturas?: { relacao: string; celula: string }[] | null }
+export interface TransferenciaDeValidacaoMatrix {
+  id: string; item: number; revisaoDeOrigem: number; responsavelDaFinalizacao: string;
+  motivo: string; origem: string; snapshotDoItem: string; em: string; celulasDeOrigem: CelulaMatrix[];
+  revogacao?: { motivo: string; origem: string; em: string } | null;
+}
+export interface MatrizMatrix {
+  revisaoDoMapa: number; componentes: EixoMatrix[]; layers: EixoMatrix[]; celulas: CelulaMatrix[];
+  coberturas?: { relacao: string; celula: string }[] | null;
+  transferencias?: TransferenciaDeValidacaoMatrix[] | null;
+}
 export interface RegistroMatrix {
-  celula: string; revisaoDaDefinicao: number; responsavel: string; tipo: 'implementacao' | 'avaliacao';
+  celula: string; revisaoDaDefinicao: number; responsavel: string; tipo: 'implementacao' | 'avaliacao' | 'verificacao-final';
   resultado: 'atendido' | 'parcial' | 'nao-atendido' | 'nao-aplicavel'; justificativa: string;
   evidencias: string[]; shas: Record<string, string>;
   evento?: string; sessaoAvaliada?: string; avaliador?: number; revisaoEfetiva?: number;
@@ -26,6 +35,7 @@ export interface EventoMatrix {
   evento: string; matriz: string; maquina: string; sessaoAvaliada: string; avaliador: number;
   revisao: number; revisaoEfetiva: number; revisaoDoContexto: number; responsaveis: string[];
   celulas: string[]; dependencias?: string[]; shas: Record<string, string>; revisaoDaEntrega: string;
+  finalizacao?: import('./remoto').ReciboDaFinalizacao | null;
 }
 export interface DocumentoMatrix {
   contrato: number; aplicacao: string; tipo: 'mapa' | 'matriz' | 'registro' | 'vinculo' | 'evento'; id: string; projeto: string;

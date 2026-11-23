@@ -22,11 +22,13 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         }
 
         var projetos = await consulta.OrderBy(p => p.Slug).ThenBy(p => p.Nivel).ThenBy(p => p.Time).ToListAsync(ct);
-        return projetos.Select(p => Leitura(escopo, p)).ToArray();
+        var leituras = new List<ProjetoV1>();
+        foreach (var p in projetos) leituras.Add(await LeituraEfetivaAsync(escopo, p, ct));
+        return leituras;
     }
 
     public async Task<ProjetoV1?> ObterAsync(EscopoDoDesign escopo, long id, CancellationToken ct)
-        => await Visiveis(escopo, null).FirstOrDefaultAsync(p => p.Id == id, ct) is { } achado ? Leitura(escopo, achado) : null;
+        => await Visiveis(escopo, null).FirstOrDefaultAsync(p => p.Id == id, ct) is { } achado ? await LeituraEfetivaAsync(escopo, achado, ct) : null;
 
     public async Task<ResultadoDaGestao<ProjetoGravado>> GravarAsync(EscopoDoDesign escopo, EnvioDeProjetoV1 envio, CancellationToken ct)
     {
@@ -72,6 +74,15 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
 
         var anteriorProjeto = novo ? null : Leitura(escopo, projeto);
         var anteriores = anteriorProjeto?.Itens ?? [];
+        if (EscolhasDosProjetos.RebaixaReferencia(anteriorProjeto?.FluxoPadrao, envio.FluxoPadrao)
+            || (envio.Itens ?? []).Any(i => EscolhasDosProjetos.RebaixaReferencia(anteriorProjeto?.Itens.FirstOrDefault(a => a.Numero == i.Numero)?.Fluxo, i.Fluxo)))
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito,
+                "A escolha do fluxo tem identidade e revisão portáteis: preserve a referência ou selecione explicitamente outra referência compatível. Um ID local/nome de cliente antigo não pode sobrescrevê-la.");
+        if (envio.PoliticaDeFinalizacao is { } recebida && anteriorProjeto?.PoliticaDeFinalizacao is { } politicaAnterior
+            && recebida != politicaAnterior && recebida.Revisao <= politicaAnterior.Revisao)
+            return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito,
+                "A política da finalização mudou: releia a revisão atual antes de reenviar.");
+
         // Campos opcionais ausentes em clientes antigos não apagam a definição portátil.
         envio = envio with
         {
@@ -80,6 +91,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             Agente = envio.Agente ?? anteriorProjeto?.Agente,
             Modelo = envio.Modelo ?? anteriorProjeto?.Modelo,
             Modelos = envio.Modelos ?? anteriorProjeto?.Modelos,
+            PoliticaDeFinalizacao = envio.PoliticaDeFinalizacao ?? anteriorProjeto?.PoliticaDeFinalizacao,
             FeatureId = envio.FeatureId > 0 ? envio.FeatureId : anteriorProjeto?.FeatureId ?? 0,
             EpicId = envio.EpicId > 0 ? envio.EpicId : anteriorProjeto?.EpicId ?? 0,
             Iteracao = !string.IsNullOrEmpty(envio.Iteracao) ? envio.Iteracao : anteriorProjeto?.Iteracao ?? "",
@@ -98,6 +110,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             return i with
             {
                 Design = i.Design ?? anterior?.Design,
+                Fluxo = i.Fluxo ?? anterior?.Fluxo ?? "",
                 Agente = i.Agente ?? anterior?.Agente,
                 Modelo = i.Modelo ?? anterior?.Modelo,
                 WorkItemId = i.WorkItemId > 0 ? i.WorkItemId : anterior?.WorkItemId ?? 0,
@@ -121,6 +134,12 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         if (erroDoPlano.Length > 0)
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, erroDoPlano);
         envio = envio with { Itens = itens };
+        if (!novo && envio.PoliticaDeFinalizacao?.Politica == "finalizacao-unica")
+        {
+            try { await PlanoEfetivoDaFinalizacao.ConferirAsync(db, projeto.Id, envio, ct); }
+            catch (Exception ex) when (ex is ArgumentException or JsonException)
+            { return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito, "Transferência da validação: " + ex.Message); }
+        }
         projeto.Documento = JsonSerializer.Serialize(envio);
         projeto.Nome = envio.Nome!.Trim();
         projeto.Repositorios = RegrasDosProjetos.Linhas(envio.Repositorios);
@@ -158,7 +177,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         }
 
         var gravado = await Visiveis(escopo, null).FirstAsync(p => p.Id == projeto.Id, ct);
-        return new(new ProjetoGravado(Leitura(escopo, gravado), novo));
+        return new(new ProjetoGravado(await LeituraEfetivaAsync(escopo, gravado, ct), novo));
     }
 
     public async Task<ResultadoDaGestao<ProjetoV1>> ApagarAsync(EscopoDoDesign escopo, long id, CancellationToken ct)
@@ -185,6 +204,20 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             .Where(p => p.Nivel != NiveisDeConvencao.Time || doTime == string.Empty || p.Time == doTime);
     }
 
+    private async Task<ProjetoV1> LeituraEfetivaAsync(EscopoDoDesign escopo, ProjetoCompartilhado p, CancellationToken ct)
+    {
+        var leitura = Leitura(escopo, p);
+        if (leitura.PoliticaDeFinalizacao?.Politica != "finalizacao-unica") return leitura;
+        try
+        {
+            var documento = JsonSerializer.Deserialize<EnvioDeProjetoV1>(p.Documento) ?? throw new JsonException("Documento ausente.");
+            var plano = await PlanoEfetivoDaFinalizacao.ConferirAsync(db, p.Id, documento, ct);
+            return leitura with { ItensDoGrafo = plano.Itens.Select(i => i.Numero).ToArray() };
+        }
+        catch (Exception ex) when (ex is ArgumentException or JsonException)
+        { return leitura with { ItensDoGrafo = [], PendenciaDoGrafo = "Plano operacional bloqueado: " + ex.Message }; }
+    }
+
     private static ProjetoV1 Leitura(EscopoDoDesign escopo, ProjetoCompartilhado p)
     {
         var documento = p.Documento.Length == 0 ? null : JsonSerializer.Deserialize<EnvioDeProjetoV1>(p.Documento);
@@ -198,7 +231,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         RegrasDeAcesso.Papel(escopo, p) == AcessoV1.PapelDono,
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
         documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
-        documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos) with
+        documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
+        documento?.PoliticaDeFinalizacao) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),
