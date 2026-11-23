@@ -102,7 +102,7 @@ public sealed class PublicacaoGit(DevKitPageDb db, IPublicacaoDeCatalogos public
         if (!arquivos.TryGetValue("manifesto.json", out var texto)) throw new FormatException("Manifesto ausente.");
         var m = ManifestoJson.Ler(texto);
         if (m.Versao != p.Versao || m.MinDevKit < 1 || m.Itens is null || m.Retirados is null || m.Itens.Count is 0 or > 2000
-            || m.Itens.Any(i => i is null || !(TiposDeItem.Todos.Contains(i.Tipo) || i.Tipo == GatilhoDoCatalogo.Tipo) || string.IsNullOrWhiteSpace(i.Nome) || i.Tecnologia is null
+            || m.Itens.Any(i => i is null || !RegrasDoCatalogoBase.TipoDoManifesto(i.Tipo) || string.IsNullOrWhiteSpace(i.Nome) || i.Tecnologia is null
                 || i.Requer is null || i.Dependencias is null || i.Hashes is null || !Hex(i.Hash, 64) || i.MinDevKit < 1 || i.MinDevKit > m.MinDevKit
                 || i.Arquivo is null || !i.Arquivo.StartsWith(FormatosDoCatalogo.Pasta(i.Tipo) + "/", StringComparison.Ordinal))
             || m.Itens.Select(i => i.Tipo + ":" + i.Nome).Distinct().Count() != m.Itens.Count

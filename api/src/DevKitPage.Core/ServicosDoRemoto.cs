@@ -109,6 +109,12 @@ public static partial class RegrasDoRemoto
                 return $"fluxos[{i}]: informe o nome; nome, etapa, situação, projeto e agente têm até {RemotoV1.TamanhoMaximoDoNome} caracteres.";
             if (fluxo.Item is <= 0)
                 return $"fluxos[{i}]: o item é positivo.";
+            if (fluxo.Finalizacao is { } finalizacao)
+            {
+                var problema = RegrasDaFinalizacao.ValidarFormato(finalizacao, fluxo.Id);
+                if (problema.Length > 0 || fluxo.Item is not null || fluxo.Projeto != finalizacao.Projeto)
+                    return $"fluxos[{i}]: recibo da finalização incompatível com a sessão. {problema}";
+            }
         }
 
         var pendencias = retrato.Pendencias ?? [];
@@ -179,6 +185,14 @@ public static partial class RegrasDoRemoto
             yield return ($"fluxos[{i}].situacao", f.Situacao);
             yield return ($"fluxos[{i}].projeto", f.Projeto);
             yield return ($"fluxos[{i}].agente", f.Agente);
+            if (f.Finalizacao is { } finalizacao)
+            {
+                yield return ($"fluxos[{i}].finalizacao.projeto", finalizacao.Projeto);
+                yield return ($"fluxos[{i}].finalizacao.branch", finalizacao.Branch);
+                yield return ($"fluxos[{i}].finalizacao.destino", finalizacao.Destino);
+                yield return ($"fluxos[{i}].finalizacao.agente", finalizacao.Agente);
+                yield return ($"fluxos[{i}].finalizacao.modelo", finalizacao.Modelo);
+            }
         }
 
         foreach (var (p, i) in (retrato.Pendencias ?? []).Select((p, i) => (p, i)))
