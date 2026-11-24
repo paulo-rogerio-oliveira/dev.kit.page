@@ -10,6 +10,77 @@ namespace DevKitPage.Api.Tests;
 
 public sealed partial class ArtefatosApiTests
 {
+    [Theory]
+    [InlineData("pacote", "envio-pendente")]
+    [InlineData("preview", "registro-pendente")]
+    public async Task Pedido_preserva_publicacao_concluida_contra_snapshot_atrasado_do_mesmo_comando(string tipo, string pendencia)
+    {
+        var (ana, _, _, projeto) = await CenarioAsync();
+        var envio = tipo == "pacote"
+            ? await ana.PostAsync($"/api/projetos/{projeto}/artefatos", Pacote(Zip()))
+            : await ana.PostAsJsonAsync($"/api/projetos/{projeto}/artefatos", new PreviewDoProjetoV1(
+                "https://github.com/acme/portal-web", Sha, "https://portal.azurestaticapps.net", "controle-v4"));
+        Assert.Equal(HttpStatusCode.Created, envio.StatusCode);
+        var publicacao = (await envio.Content.ReadFromJsonAsync<ArtefatoV1>())!;
+        var id = Guid.NewGuid().ToString("N");
+        var rota = $"https://localhost/api/projetos/{projeto}/artefatos/pedidos/{id}";
+        var pendente = new ResultadoDoPedidoDeArtefatosV1(101, projeto, tipo, publicacao.Repositorio, Sha,
+            "pronto", "", null, "", 0, publicacao.Ambiente, "Aguardando registro", DateTimeOffset.UtcNow,
+            Ciclo: new(pendencia, "envio", "recibo-10", 10, "feature/dev/projeto-controle-v4", tipo, id));
+        var pedido = new PedidoDeArtefatosV1(id, projeto, pendente.CriadoEm, [pendente]);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido)).StatusCode);
+        var inicial = (await ana.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!;
+        Assert.Equal("publicacao-pendente", inicial.Estado);
+        Assert.Equal(0, Assert.Single(inicial.Resultados).IdRemoto);
+        Assert.Empty(inicial.Resultados[0].Link);
+
+        var concluido = pendente with { IdRemoto = publicacao.Id, Hash = publicacao.Hash, Tamanho = publicacao.Tamanho,
+            ValidoAte = publicacao.ExpiraEm, TerminadoEm = DateTimeOffset.UtcNow, Detalhe = "Publicação concluída",
+            Ciclo = pendente.Ciclo! with { Estado = "publicado", Etapa = "concluido" } };
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [concluido] })).StatusCode);
+        await ConferirPublicadoAsync(concluido);
+
+        // Outro executor pode ter lido o pedido completo antes de a publicação terminar.
+        foreach (var estado in new[] { pendencia, "enfileirando", "enfileirado", "gerando", "local-pronto", "falhou" })
+        {
+            var atrasado = pendente with { Ciclo = pendente.Ciclo! with { Estado = estado } };
+            Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [atrasado] })).StatusCode);
+            await ConferirPublicadoAsync(concluido);
+        }
+
+        // Uma tentativa posterior continua podendo avançar; snapshots da tentativa anterior não a desfazem.
+        var posterior = pendente with { Ciclo = pendente.Ciclo! with { ComandoId = 11, Recibo = "recibo-11" } };
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [posterior] })).StatusCode);
+        Assert.Equal("publicacao-pendente", (await ana.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!.Estado);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [concluido] })).StatusCode);
+        var atual = Assert.Single((await ana.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!.Resultados);
+        Assert.Equal((pendencia, 11L, "recibo-11"), (atual.Estado, atual.Ciclo!.ComandoId, atual.Ciclo.Recibo));
+        var final = concluido with { Ciclo = concluido.Ciclo! with { ComandoId = 11, Recibo = "recibo-11" } };
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [final] })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido with { Resultados = [posterior] })).StatusCode);
+        await ConferirPublicadoAsync(final);
+
+        using var escopo = _api.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
+        var persistido = System.Text.Json.JsonSerializer.Deserialize<PedidoDeArtefatosV1>((await db.PedidosDeArtefatos.SingleAsync()).Conteudo)!;
+        Assert.Equal(final, Assert.Single(persistido.Resultados));
+        Assert.Single(await db.ArtefatosDosProjetos.ToArrayAsync());
+
+        async Task ConferirPublicadoAsync(ResultadoDoPedidoDeArtefatosV1 esperado)
+        {
+            var lido = (await ana.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!;
+            Assert.Equal("publicado", lido.Estado);
+            var a = Assert.Single(lido.Resultados);
+            Assert.Equal((esperado.Id, esperado.IdRemoto, esperado.Hash, esperado.Tamanho, esperado.TerminadoEm, esperado.Detalhe, esperado.Ciclo),
+                (a.Id, a.IdRemoto, a.Hash, a.Tamanho, a.TerminadoEm, a.Detalhe, a.Ciclo));
+            Assert.StartsWith("https://", a.Link);
+            if (tipo == "pacote")
+                Assert.Equal(publicacao.Hash, Convert.ToHexStringLower(SHA256.HashData(await _api.CreateClient().GetByteArrayAsync(a.Link))));
+            else
+                Assert.Equal(publicacao.Link, a.Link);
+        }
+    }
+
     [Fact]
     public async Task Pedido_agrupa_resultados_conserva_download_ACL_ids_e_retry_apos_falha_parcial()
     {

@@ -27,13 +27,14 @@ public sealed partial class ArtefatosDosProjetosNoBanco
                 !pedido.Resultados.Any(b => (a.Id, a.Repositorio, a.Sha, a.Tipo, a.Ciclo?.Branch, a.Ambiente)
                     == (b.Id, b.Repositorio, b.Sha, b.Tipo, b.Ciclo?.Branch, b.Ambiente))))
                 return ResultadoDaGestao<PedidoDeArtefatosV1>.Falhou(FalhaNaGestao.Recusada, "A origem e os IDs do pedido são imutáveis.");
-            // Uma consulta atrasada não apaga resultado já concluído nem sobrepõe uma tentativa posterior.
+            // Publicado é terminal no mesmo comando: outro executor pode enviar um retrato ainda pendente.
+            // Um ComandoId posterior continua autorizando a evolução de uma nova tentativa.
             pedido = pedido with { CriadoEm = anterior.CriadoEm, Resultados = pedido.Resultados.Select(b =>
             {
                 var a = anterior.Resultados.Single(a => a.Id == b.Id);
                 return a.Ciclo?.ComandoId > (b.Ciclo?.ComandoId ?? 0)
-                    || (a.Ciclo?.ComandoId == b.Ciclo?.ComandoId && a.Estado is ("publicado" or "local-pronto")
-                        && b.Estado is ("enfileirando" or "enfileirado" or "gerando"))
+                    || (a.Ciclo?.ComandoId == b.Ciclo?.ComandoId && (a.Estado == "publicado"
+                        || a.Estado == "local-pronto" && b.Estado is ("enfileirando" or "enfileirado" or "gerando")))
                     ? a : b;
             }).ToArray() };
         }
