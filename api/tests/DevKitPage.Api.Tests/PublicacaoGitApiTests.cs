@@ -46,24 +46,46 @@ public sealed class PublicacaoGitApiTests : IDisposable
 
     public void Dispose() { _api.Dispose(); _rsa.Dispose(); }
 
-    private static string Skill(string texto) => FormatosDoCatalogo.ExportarSkill(new SkillDoCatalogo("exemplo", "Exemplo", texto, [], [], false, false, false));
-    private static GeradorDoManifesto.ItemLido Lido(string texto) => GeradorDoManifesto.Ler("skill", "exemplo", "skills/exemplo.json", Skill(texto));
+    private static string Skill(string texto, string nome = "exemplo") => FormatosDoCatalogo.ExportarSkill(new SkillDoCatalogo(nome, "Exemplo", texto, [], [], false, false, false));
+    private static GeradorDoManifesto.ItemLido Lido(string texto, string nome = "exemplo") => GeradorDoManifesto.Ler("skill", nome, $"skills/{nome}.json", Skill(texto, nome));
     private static ManifestoDoCatalogoV1 Inicial => GeradorDoManifesto.Gerar(GeradorDoManifesto.Vazio, [Lido("v1")], 151).Manifesto;
 
-    private async Task<PublicacaoGitV1> PrepararAsync()
+    /// <summary>A release publicada do basico, e um rascunho divergente que o CD jamais pode publicar nem sobrescrever.</summary>
+    private async Task SemearAsync(ManifestoDoCatalogoV1 publicada)
     {
         _api.CreateClient();
         using var scope = _api.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DevKitPageDb>();
         var basico = await db.Catalogos.SingleAsync(c => c.Basico);
-        var v = new VersaoDoCatalogo { CatalogoId = basico.Id, Versao = 1, Tag = "catalogo-v1", Manifesto = ManifestoJson.Serializar(Inicial),
+        var v = new VersaoDoCatalogo { CatalogoId = basico.Id, Versao = publicada.Versao, Tag = $"catalogo-v{publicada.Versao}", Manifesto = ManifestoJson.Serializar(publicada),
             Sha256 = new string('0', 64), PublicadaEmUtc = DateTime.UtcNow, PublicadaPor = "semente-isolada" };
         db.VersoesDoCatalogo.Add(v);
-        // Um rascunho divergente jamais pode entrar no pacote nem ser sobrescrito pelo CD.
         db.ItensEditaveis.Add(new ItemDoCatalogoEditavel { CatalogoId = basico.Id, Tipo = "skill", Nome = "rascunho",
             Arquivo = "skills/rascunho.json", Conteudo = "rascunho-preservado", AlteradoEmUtc = DateTime.UtcNow });
         await db.SaveChangesAsync();
+    }
+
+    private async Task<PublicacaoGitV1> PrepararAsync()
+    {
+        await SemearAsync(Inicial);
         return Pacote(GeradorDoManifesto.Gerar(Inicial, [Lido("v2")], 151).Manifesto, Skill("v2"));
+    }
+
+    /// <summary>O motivo da recusa como o devcli o le: o detail do ProblemDetails.</summary>
+    private static async Task<string> MotivoAsync(HttpResponseMessage resposta)
+    {
+        Assert.Equal("application/problem+json", resposta.Content.Headers.ContentType?.MediaType);
+        return (await resposta.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ProblemDetails>())!.Detail!;
+    }
+
+    /// <summary>A recusa nao deixa release nem recibo: so as <paramref name="releases"/> semeadas.</summary>
+    private async Task SemPublicacaoAsync(HttpClient cliente, int releases)
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await cliente.GetAsync(Raiz + "/recibos/" + Sha)).StatusCode);
+        using var scope = _api.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DevKitPageDb>();
+        Assert.Equal(releases, await db.VersoesDoCatalogo.CountAsync());
+        Assert.Equal(0, await db.Set<ReciboDoCatalogoGit>().CountAsync());
     }
 
     private static PublicacaoGitV1 Pacote(ManifestoDoCatalogoV1 manifesto, string texto, string? extra = null, IReadOnlyDictionary<string, string>? adicionais = null, string arquivo = "skills/exemplo.json")
@@ -82,11 +104,12 @@ public sealed class PublicacaoGitApiTests : IDisposable
         return new(Sha, $"refs/tags/catalogo-v{manifesto.Versao}", Motor, Convert.ToHexStringLower(SHA256.HashData(bytes)), manifesto.Versao, bytes);
     }
 
-    private HttpClient Cliente(string? alterar = null)
+    private HttpClient Cliente(string? alterar = null, int versao = 2)
     {
+        var referencia = $"refs/tags/catalogo-v{versao}";
         var claims = new Dictionary<string, object> { ["repository"] = "dono/catalogo", ["repository_id"] = "42", ["environment"] = "catalogo-producao",
-            ["event_name"] = "release", ["ref"] = "refs/tags/catalogo-v2", ["sha"] = Sha,
-            ["workflow_ref"] = "dono/catalogo/.github/workflows/catalogo.yml@refs/tags/catalogo-v2" };
+            ["event_name"] = "release", ["ref"] = referencia, ["sha"] = Sha,
+            ["workflow_ref"] = "dono/catalogo/.github/workflows/catalogo.yml@" + referencia };
         if (alterar is not null && claims.ContainsKey(alterar)) claims[alterar] = "nao-autorizado";
         var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
@@ -157,9 +180,15 @@ public sealed class PublicacaoGitApiTests : IDisposable
         Assert.False((await oidc.PostAsJsonAsync("/api/catalogos", new CatalogoNovoV1("outro", "Outro", null))).IsSuccessStatusCode);
     }
 
+    /// <summary>
+    /// O pacote adulterado continua recusado por ConferirPacote (400), inclusive o hash do manifesto divergente do arquivo
+    /// do zip ("conteudo") e o do pacote ("hash"); o item que retrocede e recusado pela sequencia (409).
+    /// </summary>
     [Theory]
-    [InlineData("hash")][InlineData("conteudo")][InlineData("versao")][InlineData("minimo")][InlineData("historico")][InlineData("extra")][InlineData("path")]
-    public async Task Adulteracao_recusada_sem_release_ou_recibo(string caso)
+    [InlineData("hash", HttpStatusCode.BadRequest)][InlineData("conteudo", HttpStatusCode.BadRequest)][InlineData("versao", HttpStatusCode.BadRequest)]
+    [InlineData("minimo", HttpStatusCode.BadRequest)][InlineData("extra", HttpStatusCode.BadRequest)][InlineData("path", HttpStatusCode.BadRequest)]
+    [InlineData("retrocesso", HttpStatusCode.Conflict)]
+    public async Task Adulteracao_recusada_sem_release_ou_recibo(string caso, HttpStatusCode esperado)
     {
         var pedido = await PrepararAsync();
         var m = GeradorDoManifesto.Gerar(Inicial, [Lido("v2")], 151).Manifesto;
@@ -169,15 +198,108 @@ public sealed class PublicacaoGitApiTests : IDisposable
             "conteudo" => Pacote(m, Skill("adulterado")),
             "versao" => pedido with { Versao = 3 },
             "minimo" => Pacote(m with { MinDevKit = 1 }, Skill("v2")),
-            "historico" => Pacote(m with { Itens = [m.Itens[0] with { Versao = 77 }] }, Skill("v2")),
+            "retrocesso" => Pacote(m with { Itens = [m.Itens[0] with { Versao = 0 }] }, Skill("v2")),
             "extra" => Pacote(m, Skill("v2"), "skills/extra.json"),
             _ => Pacote(m, Skill("v2"), "../fora.json"),
         };
         using var cliente = Cliente();
-        Assert.False((await cliente.PostAsJsonAsync(Raiz + "/publicar", pedido)).IsSuccessStatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await cliente.GetAsync(Raiz + "/recibos/" + Sha)).StatusCode);
-        using var scope = _api.Services.CreateScope();
-        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<DevKitPageDb>().VersoesDoCatalogo.CountAsync());
+        Assert.Equal(esperado, (await cliente.PostAsJsonAsync(Raiz + "/publicar", pedido)).StatusCode);
+        await SemPublicacaoAsync(cliente, 1);
+    }
+
+    /// <summary>
+    /// O caso que antes esperava a recusa por salto: o manifesto do Git e a fonte, e a versao do catalogo ou do item pode
+    /// saltar. A release v1 tem o item na v1; o pacote chega com o catalogo e o item em versoes acumuladas.
+    /// </summary>
+    [Theory]
+    [InlineData(2, 77)]
+    [InlineData(5, 3)]
+    public async Task Versao_maior_com_salto_e_item_com_versao_acumulada_sao_aceitos(int versao, int versaoDoItem)
+    {
+        await SemearAsync(Inicial);
+        var m = GeradorDoManifesto.Gerar(Inicial, [Lido("v2")], 151).Manifesto;
+        var pedido = Pacote(m with { Versao = versao, Itens = [m.Itens[0] with { Versao = versaoDoItem, Catalogo = versao + 40 }] }, Skill("v2"));
+        using var cliente = Cliente(versao: versao);
+        var resposta = await cliente.PostAsJsonAsync(Raiz + "/publicar", pedido);
+        resposta.EnsureSuccessStatusCode();
+        Assert.Equal(versao, (await resposta.Content.ReadFromJsonAsync<ConferenciaGitV1>())!.Recibo.Versao);
+        Assert.Equal(pedido.Pacote, await cliente.GetByteArrayAsync($"/api/catalogos/basico/releases/{versao}/download"));
+        Assert.Equal(versaoDoItem, Assert.Single((await cliente.GetFromJsonAsync<ManifestoDoCatalogoV1>($"/api/catalogos/basico/releases/{versao}/manifesto"))!.Itens).Versao);
+    }
+
+    /// <summary>
+    /// O par do CD real (run 45313544507), sintetico e isolado: a release 28 publicada e o manifesto 29 do Git com as versoes
+    /// acumuladas do repositorio (controlar-devkit v20 para v26, item novo ja na v4, catalogo do Git acima de 29) e o
+    /// retirado mantido. A regra antiga recusava (409); agora publica, a versao publicada vai de 28 a 29 e o recibo fica.
+    /// </summary>
+    [Fact]
+    public async Task Par_28_publicada_e_manifesto_29_com_versoes_acumuladas_do_git_publica()
+    {
+        var antiga = new ItemRetiradoV1("skill", "antiga", 2, 10);
+        var publicada = Inicial with { Versao = 28, Itens = [Inicial.Itens[0] with { Nome = "controlar-devkit", Versao = 20, Catalogo = 27, Arquivo = "skills/controlar-devkit.json" }], Retirados = [antiga] };
+        await SemearAsync(publicada);
+        var m = GeradorDoManifesto.Gerar(publicada, [Lido("v26", "controlar-devkit"), Lido("nova", "fechar-entrega")], 151).Manifesto;
+        Assert.Equal((29, 21, 1), (m.Versao, m.Itens[0].Versao, m.Itens[1].Versao)); // o passo unico que a regra antiga exigia
+        var manifesto = m with { Itens = [m.Itens[0] with { Versao = 26, Catalogo = 68 }, m.Itens[1] with { Versao = 4, Catalogo = 60 }] };
+        Assert.Equal(antiga, Assert.Single(manifesto.Retirados));
+        var pedido = Pacote(manifesto, Skill("v26", "controlar-devkit"), arquivo: "skills/controlar-devkit.json",
+            adicionais: new Dictionary<string, string> { ["skills/fechar-entrega.json"] = Skill("nova", "fechar-entrega") });
+        using var cliente = Cliente(versao: 29);
+        var resposta = await cliente.PostAsJsonAsync(Raiz + "/publicar", pedido);
+        resposta.EnsureSuccessStatusCode();
+        var recibo = (await resposta.Content.ReadFromJsonAsync<ConferenciaGitV1>())!.Recibo;
+        Assert.Equal(recibo, await cliente.GetFromJsonAsync<ReciboPublicacaoGitV1>(Raiz + "/recibos/" + Sha));
+        using var admin = await _api.AdminAsync();
+        Assert.Equal(new[] { 29, 28 }, (await admin.GetFromJsonAsync<ReleaseDoCatalogoV1[]>("/api/catalogos/basico/releases"))!.Select(r => r.Versao).Take(2));
+        Assert.Equal(29, Assert.Single((await admin.GetFromJsonAsync<CatalogoV1[]>("/api/catalogos"))!).Versao);
+        Assert.Equal(ManifestoJson.Serializar(manifesto), ManifestoJson.Serializar((await cliente.GetFromJsonAsync<ManifestoDoCatalogoV1>(recibo.Manifesto))!));
+        // A maquina que esta na 28 recebe a 29 com os dois itens (o catalogo do Git, 68 e 60, passa do desde).
+        using var anonimo = _api.CreateClient();
+        var delta = (await anonimo.GetFromJsonAsync<CatalogoBaseV1>("/api/catalogo/base?desde=28"))!;
+        Assert.Equal((29, 2, pedido.Sha256), (delta.Manifesto.Versao, delta.Manifesto.Itens.Count, delta.Sha256));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(2)]
+    public async Task Versao_igual_ou_menor_que_a_publicada_responde_409_com_as_duas_versoes(int recebida)
+    {
+        var publicada = Inicial with { Versao = 3, Itens = [Inicial.Itens[0] with { Catalogo = 3 }] };
+        await SemearAsync(publicada);
+        var m = GeradorDoManifesto.Gerar(Inicial, [Lido("v2")], 151).Manifesto;
+        using var cliente = Cliente(versao: recebida);
+        var resposta = await cliente.PostAsJsonAsync(Raiz + "/publicar", Pacote(m with { Versao = recebida }, Skill("v2")));
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        Assert.Equal($"A versao recebida ({recebida}) deve ser maior que a release publicada (3); igual ou menor substituiria uma release.", await MotivoAsync(resposta));
+        await SemPublicacaoAsync(cliente, 1);
+    }
+
+    /// <summary>A recusa da sequencia nomeia o item e as duas versoes, sem gravar release nem recibo.</summary>
+    [Theory]
+    [InlineData("item", "O item skill:exemplo retrocede da v5 (release 1) para a v4 (manifesto 2).")]
+    [InlineData("saiu", "O item skill:antiga (v3 na release 1) saiu do manifesto 2 sem entrar nos retirados.")]
+    [InlineData("retirado", "O retirado skill:velha retrocede da v6 (release 1) para a v2 (manifesto 2).")]
+    public async Task Item_ou_retirado_que_retrocede_ou_some_responde_409_com_o_motivo(string caso, string motivo)
+    {
+        var publicada = Inicial with
+        {
+            Itens = caso == "saiu"
+                ? [Inicial.Itens[0] with { Versao = 5 }, Inicial.Itens[0] with { Nome = "antiga", Versao = 3, Arquivo = "skills/antiga.json" }]
+                : [Inicial.Itens[0] with { Versao = 5 }],
+            Retirados = [new ItemRetiradoV1("skill", "velha", 6, 1)],
+        };
+        await SemearAsync(publicada);
+        var m = GeradorDoManifesto.Gerar(Inicial, [Lido("v2")], 151).Manifesto;
+        var manifesto = m with
+        {
+            Itens = [m.Itens[0] with { Versao = caso == "item" ? 4 : 5 }],
+            Retirados = [new ItemRetiradoV1("skill", "velha", caso == "retirado" ? 2 : 6, 1)],
+        };
+        using var cliente = Cliente();
+        var resposta = await cliente.PostAsJsonAsync(Raiz + "/publicar", Pacote(manifesto, Skill("v2")));
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+        Assert.Equal(motivo, await MotivoAsync(resposta));
+        await SemPublicacaoAsync(cliente, 1);
     }
 
     [Fact]

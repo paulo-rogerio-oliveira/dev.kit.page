@@ -81,6 +81,67 @@ public static partial class RegrasDoCatalogoBase
     }
 
     /// <summary>
+    /// A SEQUÊNCIA da publicação pelo Git (o CD do básico, <c>PublicacaoGit</c>) diante da release publicada, numa frase
+    /// para a recusa; nula quando ela é aceita. O manifesto do repositório é a fonte: ele numera os itens na sequência
+    /// dele e não precisa ser a evolução de UM passo da release anterior. O que ele não pode é substituir nem andar
+    /// para trás:
+    /// <list type="bullet">
+    /// <item>a versão do catálogo é MAIOR que a publicada — o salto é aceito; igual ou menor substituiria uma release;</item>
+    /// <item>o item que as duas releases têm não volta a uma versão menor; o item novo entra livremente;</item>
+    /// <item>os retirados seguem a regra do <see cref="GeradorDoManifesto"/>: o item que sai vai para os retirados (é
+    /// por eles que a máquina o remove), o retirado continua listado ou volta ao catálogo, nenhum com versão menor, e
+    /// nenhum item fica ativo e retirado ao mesmo tempo.</item>
+    /// </list>
+    /// As frases são ASCII, como as demais da publicação pelo Git: chegam ao log do CD pelo <c>devcli catalogo-publicacao</c>.
+    /// </summary>
+    /// <param name="publicada">A versão da release publicada (a última do básico).</param>
+    /// <param name="anterior">O manifesto dessa release.</param>
+    /// <param name="novo">O manifesto do pacote do Git, já conferido contra os arquivos.</param>
+    public static string? ProblemaDaSequencia(int publicada, ManifestoDoCatalogoV1 anterior, ManifestoDoCatalogoV1 novo)
+    {
+        if (novo.Versao <= publicada)
+            return $"A versao recebida ({novo.Versao}) deve ser maior que a release publicada ({publicada}); igual ou menor substituiria uma release.";
+
+        var ativos = new Dictionary<(string, string), int>();
+        foreach (var item in novo.Itens)
+            if (!ativos.TryAdd((item.Tipo, item.Nome), item.Versao))
+                return $"O item {item.Tipo}:{item.Nome} aparece mais de uma vez no manifesto {novo.Versao}.";
+        var retirados = new Dictionary<(string, string), int>();
+        foreach (var saiu in novo.Retirados)
+        {
+            if (ativos.ContainsKey((saiu.Tipo, saiu.Nome)))
+                return $"O item {saiu.Tipo}:{saiu.Nome} esta nos itens e nos retirados do manifesto {novo.Versao}.";
+            if (!retirados.TryAdd((saiu.Tipo, saiu.Nome), saiu.Versao))
+                return $"O retirado {saiu.Tipo}:{saiu.Nome} aparece mais de uma vez no manifesto {novo.Versao}.";
+        }
+
+        foreach (var antes in anterior.Itens)
+        {
+            if (ativos.TryGetValue((antes.Tipo, antes.Nome), out var versao))
+            {
+                if (versao < antes.Versao)
+                    return $"O item {antes.Tipo}:{antes.Nome} retrocede da v{antes.Versao} (release {publicada}) para a v{versao} (manifesto {novo.Versao}).";
+            }
+            else if (!retirados.TryGetValue((antes.Tipo, antes.Nome), out var retirada))
+                return $"O item {antes.Tipo}:{antes.Nome} (v{antes.Versao} na release {publicada}) saiu do manifesto {novo.Versao} sem entrar nos retirados.";
+            else if (retirada < antes.Versao)
+                return $"O item {antes.Tipo}:{antes.Nome} retrocede da v{antes.Versao} (release {publicada}) para a v{retirada} nos retirados do manifesto {novo.Versao}.";
+        }
+
+        foreach (var antes in anterior.Retirados)
+        {
+            int? versao = ativos.TryGetValue((antes.Tipo, antes.Nome), out var voltou) ? voltou
+                : retirados.TryGetValue((antes.Tipo, antes.Nome), out var continua) ? continua : (int?)null;
+            if (versao is null)
+                return $"O retirado {antes.Tipo}:{antes.Nome} (v{antes.Versao} na release {publicada}) sumiu do manifesto {novo.Versao} sem voltar ao catalogo.";
+            if (versao < antes.Versao)
+                return $"O retirado {antes.Tipo}:{antes.Nome} retrocede da v{antes.Versao} (release {publicada}) para a v{versao} (manifesto {novo.Versao}).";
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Os tipos que o manifesto do BÁSICO carrega — os do motor do git.kit: skill, plan e fluxo e, desde a US #515, o
     /// gatilho. É a mesma regra do fallback do GitHub e da publicação pelo Git (<c>PublicacaoGit</c>): o
     /// <see cref="TiposDeItem.Todos"/> sozinho é o do catálogo da EMPRESA, que não publica gatilho.

@@ -25,8 +25,7 @@ public sealed class PublicacaoGit(DevKitPageDb db, IPublicacaoDeCatalogos public
     public async Task<ResultadoDaGestao<ConferenciaGitV1>> ExecutarAsync(PublicacaoGitV1 pedido, bool aplicar, string autor, CancellationToken ct)
     {
         ManifestoDoCatalogoV1 manifesto;
-        List<ItemDoCatalogoEditavel> itens;
-        try { (manifesto, itens) = ConferirPacote(pedido); }
+        try { (manifesto, _) = ConferirPacote(pedido); }
         catch (Exception ex) when (ex is FormatException or InvalidDataException or JsonException or DecoderFallbackException or ArgumentException or InvalidOperationException)
         { return Falha(ex.Message); }
 
@@ -43,12 +42,10 @@ public sealed class PublicacaoGit(DevKitPageDb db, IPublicacaoDeCatalogos public
         // Nao interpretar indisponibilidade do fallback como catalogo vazio: a numeracao historica e obrigatoria.
         if (ultima is null)
             return Falha("A release anterior do basico esta indisponivel; nao e seguro iniciar outra sequencia.", FalhaNaGestao.Conflito);
-        if (pedido.Versao != ultima.Versao + 1)
-            return Falha("A versao deve continuar a ultima release publicada, sem substituir nem saltar versoes.", FalhaNaGestao.Conflito);
-        var gerado = GeradorDoManifesto.Gerar(ultima.Manifesto,
-            itens.Select(i => GeradorDoManifesto.Ler(i.Tipo, i.Nome, i.Arquivo, i.Conteudo, i.Categoria)).ToArray(), manifesto.MinDevKit);
-        if (!gerado.Mudou || ManifestoJson.Serializar(gerado.Manifesto) != ManifestoJson.Serializar(manifesto))
-            return Falha("O manifesto diverge da evolucao da release anterior (versoes, hashes, dependencias ou MinDevKit).", FalhaNaGestao.Conflito);
+        // O manifesto do Git e a fonte e numera os itens na sequencia do repositorio: nao precisa ser a evolucao de um passo
+        // da release anterior. So nao substitui (versao maior, com salto) nem retrocede item ou retirado.
+        if (RegrasDoCatalogoBase.ProblemaDaSequencia(ultima.Versao, ultima.Manifesto, manifesto) is { } problema)
+            return Falha(problema, FalhaNaGestao.Conflito);
 
         var agora = relogio.GetUtcNow();
         var raiz = $"/api/catalogos/basico/releases/{pedido.Versao}";
