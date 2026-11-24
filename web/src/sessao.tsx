@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { LoginResponse, Papel } from './api/tipos';
 import { cancelarPushAoSair } from './boardPush';
+import { destinoSeguro, inicioDaSessao, papelDaNavegacao } from './navegacao';
 
 /** Onde o token fica: a aba do navegador (fecha a aba, acaba a sessão). */
 export const CHAVE_DA_SESSAO = 'devkitpage.sessao';
@@ -22,7 +23,7 @@ const Contexto = createContext<ContextoDaSessao | null>(null);
  * existir (sem o campo) era do admin — o único usuário de então.
  */
 export function papelDa(sessao: LoginResponse): Papel {
-  return sessao.papel ?? (sessao.ehAdmin ? 'admin' : 'gestor');
+  return papelDaNavegacao(sessao);
 }
 
 /** O painel é do admin e do gestor (US #405): o dev entra para baixar o dev.kit, mas a API o recusa no painel. */
@@ -31,23 +32,13 @@ export function entraNoPainel(sessao: LoginResponse): boolean {
 }
 
 /**
- * As páginas que o dev abre (US #425): a conta dele e as públicas — o painel e a administração, não. Desde a US #491,
- * também os repositórios e as convenções da empresa, que ele audita e edita.
- */
-const DO_DEV = ['/', '/conta', '/catalogo', '/empresa/conhecimento', '/board', '/projetos'];
-
-/**
  * Para onde a sessão vai depois do login (e da troca de senha): a troca pendente primeiro; depois o
  * painel — ou, para o dev, a página da conta (US #425). `de` é a página que pediu o login, e vale quando
  * a sessão pode abri-la.
  */
 export function destinoDa(sessao: LoginResponse, de?: string | null): string {
   if (sessao.deveTrocarSenha) return '/trocar-senha';
-  if (de?.startsWith('/') && !de.startsWith('//') && !de.includes('\\')) {
-    const caminho = de.split(/[?#]/)[0];
-    if (caminho !== '/login' && caminho !== '/trocar-senha' && (entraNoPainel(sessao) || DO_DEV.includes(caminho))) return de;
-  }
-  return entraNoPainel(sessao) ? '/dashboard' : '/conta';
+  return destinoSeguro(sessao, de) ?? inicioDaSessao(sessao);
 }
 
 /** A sessão gravada, se ainda não venceu. */

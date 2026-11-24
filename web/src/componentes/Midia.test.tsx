@@ -94,4 +94,22 @@ describe('Secao e Cta', () => {
     expect(screen.getByRole('link', { name: 'Entrar' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Entrar' })).toHaveClass('botao-fantasma');
   });
+
+  it('o CTA de texto (o link dos cartões da proposta ajustes-2-landing v1) segue a mesma regra de âncora e rota, sem cara de botão', () => {
+    render(
+      <MemoryRouter>
+        <Cta para="#board-web" variante="texto">Conhecer os recursos <span aria-hidden="true">→</span></Cta>
+        <Cta para="/catalogo" variante="texto">Explorar o catálogo</Cta>
+      </MemoryRouter>,
+    );
+
+    const ancora = screen.getByRole('link', { name: 'Conhecer os recursos' });
+    expect(ancora).toHaveAttribute('href', '#board-web');
+    expect(ancora).toHaveClass('link-da-chamada');
+    expect(ancora).not.toHaveClass('botao');
+    const rota = screen.getByRole('link', { name: 'Explorar o catálogo' });
+    expect(rota).toHaveAttribute('href', '/catalogo');
+    expect(rota).toHaveClass('link-da-chamada');
+    expect(rota).not.toHaveClass('cta');
+  });
 });

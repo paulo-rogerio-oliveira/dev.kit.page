@@ -81,6 +81,7 @@ export function RoiPorWorkItem({ token, filtro, aoFalhar }: { token: string; fil
             }))}
           />
 
+          <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de ROI" tabIndex={0}>
           <table className="tabela" aria-label="ROI por work item">
             <thead>
               <tr>
@@ -105,6 +106,7 @@ export function RoiPorWorkItem({ token, filtro, aoFalhar }: { token: string; fil
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </section>

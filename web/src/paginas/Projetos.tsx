@@ -5,6 +5,7 @@ import type { Projeto } from '../api/projetos';
 import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
 import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
+import { PropostasDoPlano } from '../componentes/PropostasDoPlano';
 import { ImpactosDoProjeto } from '../componentes/matrix/Impactos';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
@@ -17,7 +18,8 @@ const estados: Record<string, string> = {
 };
 const situacoes = ['planejado', 'rodando', 'pergunta', 'integrado', 'falhou'];
 const curto = (url: string) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean).slice(-2).join('/');
-const ondaAtual = (p: Projeto) => Math.min(...p.itens.filter(i => i.situacao !== 'integrado').map(i => i.onda));
+const itensDoGrafo = (p: Projeto) => p.itensDoGrafo == null ? p.itens : p.itens.filter(i => p.itensDoGrafo!.includes(i.numero));
+const ondaAtual = (p: Projeto) => Math.min(...itensDoGrafo(p).filter(i => i.situacao !== 'integrado').map(i => i.onda));
 
 export function Projetos() {
   const { sessao, sair } = useSessao();
@@ -54,9 +56,13 @@ export function Projetos() {
     proxima.delete('slug');
     setConsulta(proxima);
   }
-  return <div className="pagina">
-    <Topo secao="projetos"><Link className="botao botao-fantasma link-ativo" to="/projetos">Projetos</Link>
-      <Link className="botao botao-fantasma" to="/design">Design</Link><Link className="botao botao-fantasma" to="/conta">Conta</Link></Topo>
+  function linkDoProjeto(id: number) {
+    const q = new URLSearchParams(consulta);
+    q.set('projeto', String(id)); q.delete('slug');
+    return `/projetos?${q}`;
+  }
+  return <div className={`pagina projetos-pagina${consulta.has('projeto') || slug ? ' com-projeto-aberto' : ''}`}>
+    <Topo secao="projetos" />
     <Pagina rotulo={sessao!.empresa ?? 'Meu espaço'} titulo="Projetos" subtitulo="Os projetos sincronizados do dev.kit, com seus branches, plano e andamento.">
       <div className="projetos-filtros">
         <select aria-label="Nível de compartilhamento" value={nivel} onChange={e => filtrar('nivel', e.target.value)}>
@@ -78,13 +84,16 @@ export function Projetos() {
       {!carregando && !erro && escolhido && <div className="projetos-board">
         <aside className="projetos-lista" aria-label="Projetos sincronizados">
           {visiveis.map(p => {
-            const integrados = p.itens.filter(i => i.situacao === 'integrado').length;
-            return <button key={p.id} className={`cartao projeto-resumo${escolhido.id === p.id ? ' escolhido' : ''}`}
-              aria-pressed={escolhido.id === p.id} onClick={() => filtrar('projeto', String(p.id))}>
-              <strong>{p.nome}</strong><span>{p.repositorios.map(curto).join(' · ')}</span>
-              <progress aria-label={`Andamento de ${p.nome}`} max={Math.max(1, p.itens.length)} value={integrados} />
-              <span>{integrados} de {p.itens.length} itens integrados</span><span>{estados[p.situacao] ?? p.situacao}</span>
-            </button>;
+            const itens = itensDoGrafo(p), integrados = itens.filter(i => i.situacao === 'integrado').length;
+            return <div key={p.id} className={`cartao projeto-resumo${escolhido.id === p.id ? ' escolhido' : ''}`}>
+              <button type="button" className="projeto-selecionar" aria-pressed={escolhido.id === p.id} onClick={() => filtrar('projeto', String(p.id))}>
+              <strong>{p.nome}</strong><span className="projeto-resumo-repositorios">{p.repositorios.map(curto).join(' · ')}</span>
+              <code className="projeto-branch">{p.branch}</code>
+              <progress aria-label={`Andamento de ${p.nome}`} max={Math.max(1, itens.length)} value={integrados} />
+              <span>{integrados} de {itens.length} itens integrados</span><span>{estados[p.situacao] ?? p.situacao}</span>
+              </button>
+              <Link className="projeto-abrir" to={linkDoProjeto(p.id)} aria-label={`Abrir projeto ${p.nome}`}>Abrir projeto →</Link>
+            </div>;
           })}
         </aside>
         <Detalhe projeto={escolhido} />
@@ -105,18 +114,19 @@ function Detalhe({ projeto: p }: { projeto: Projeto }) {
     else setErro(mensagemDaFalha(falha));
   }, [sair]);
   useEffect(() => setErro(''), [p.id]);
-  const ondas = [...new Set(p.itens.map(i => i.onda))].sort((a, b) => a - b);
+  const itens = itensDoGrafo(p);
+  const ondas = [...new Set(itens.map(i => i.onda))].sort((a, b) => a - b);
   const atual = ondaAtual(p);
   return <article className="cartao projeto-detalhe" aria-label="Detalhe do projeto">
-    <h2>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
+    <h2 tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
     <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
-    <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : p.itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
-    <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{p.itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
-    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
-      onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', impactos: 'Impactos', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
-    {impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
+    <p>{p.pendenciaDoGrafo || (Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano')}</p>
+    <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
+    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'propostas', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
+      onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', impactos: 'Impactos', propostas: 'Propostas visuais', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
+    {visao === 'propostas' ? <PropostasDoPlano key={`propostas-${p.id}`} token={sessao!.token} itens={p.itens} tratar={tratar} /> : impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
       <h3>Onda {onda} · {onda < atual ? 'concluída' : onda === atual ? 'atual' : 'próxima'}</h3>
-      {p.itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
+      {itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
         <h4>{i.numero} · {i.titulo}</h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>
         <span>{i.repositorios.map(curto).join(' · ')}</span><code>{i.branch || 'Branch ainda não informado'}</code>
         {i.dependencias.length > 0 && <p>Depende de: {i.dependencias.join(', ')}</p>}

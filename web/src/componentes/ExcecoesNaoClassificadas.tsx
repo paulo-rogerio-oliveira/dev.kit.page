@@ -126,6 +126,7 @@ export function ExcecoesNaoClassificadas({ token, filtro, harness = null, podeRe
         <p className="vazio">Nenhuma exceção não classificada no período.</p>
       ) : (
         <>
+          <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de exceções" tabIndex={0}>
           <table className="tabela">
             <thead>
               <tr>
@@ -152,6 +153,7 @@ export function ExcecoesNaoClassificadas({ token, filtro, harness = null, podeRe
               ))}
             </tbody>
           </table>
+          </div>
           <div className="paginacao">
             <button className="botao botao-fantasma" type="button" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
             <span>Página {pagina} de {totalDePaginas} · {lista.total} grupo(s)</span>
@@ -209,6 +211,7 @@ export function ExcecoesNaoClassificadas({ token, filtro, harness = null, podeRe
               {detalhe.ocorrencias.length === 0 ? (
                 <p className="vazio">Nenhuma ocorrência guardada no seu escopo.</p>
               ) : (
+                <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de ocorrências" tabIndex={0}>
                 <table className="tabela">
                   <thead><tr><th>Quando</th><th>Máquina</th><th>Versão</th></tr></thead>
                   <tbody>
@@ -217,6 +220,7 @@ export function ExcecoesNaoClassificadas({ token, filtro, harness = null, podeRe
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </>
           )}

@@ -18,6 +18,135 @@ public sealed class ProjetosApiTests : IDisposable
         700, 600, "DevKit/Sprint 3", "vincular", ["feature/dev/us-710"], DateTimeOffset.UtcNow);
 
     [Fact]
+    public async Task Contrato_portatil_preserva_omissao_legada_e_limpeza_explicita_sem_reativar_board()
+    {
+        var cliente = await _api.AdminAsync();
+        var envio = Envio() with { BaseDoBranch = "develop", DestinoDaPr = "release", Board = "nao",
+            FluxoPadrao = "1", Agente = "codex", Modelo = "gpt-6.1-sol",
+            Modelos = [new("codex", "gpt-6.1-sol"), new("claude", "opus")],
+            Itens = [Envio().Itens[0] with { Agente = "codex", Modelo = "gpt-6.1-sol",
+                Design = new(true, 1, [new("repo", "tela", 6, new string('a', 64))]) }] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var projeto = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        var antigo = JsonSerializer.SerializeToNode(envio, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.AsObject();
+        antigo["versao"] = projeto.Versao;
+        foreach (var campo in new[] { "baseDoBranch", "fluxoPadrao", "agente", "modelo", "modelos", "board", "featureId", "epicId", "iteracao", "branchesDasTasks" })
+            antigo.Remove(campo);
+        foreach (var campo in new[] { "agente", "modelo", "design", "branch", "horas", "atualizadoEm" })
+            antigo["itens"]![0]!.AsObject().Remove(campo);
+        var regravada = await cliente.PutAsJsonAsync("/api/projetos", antigo);
+        Assert.Equal(HttpStatusCode.OK, regravada.StatusCode);
+        projeto = (await regravada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        antigo["versao"] = projeto.Versao;
+        antigo["board"] = null;
+        antigo["iteracao"] = null;
+        antigo["baseDoBranch"] = null;
+        var nulos = await cliente.PutAsJsonAsync("/api/projetos", antigo);
+        Assert.Equal(HttpStatusCode.OK, nulos.StatusCode);
+        projeto = (await nulos.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        foreach (var leitura in new[] { projeto,
+            (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!,
+            Assert.Single((await cliente.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!) })
+        {
+            Assert.Equal(("develop", "release", "nao", 700, "1", "codex", "gpt-6.1-sol"),
+                (leitura.BaseDoBranch, leitura.DestinoDaPr, leitura.Board, leitura.FeatureId,
+                    leitura.FluxoPadrao, leitura.Agente, leitura.Modelo));
+            Assert.Equal(envio.Modelos, leitura.Modelos);
+            Assert.Equal(envio.Itens[0].Design!.Propostas, leitura.Itens[0].Design!.Propostas);
+            Assert.Equal(("codex", "gpt-6.1-sol", 14d), (leitura.Itens[0].Agente, leitura.Itens[0].Modelo, leitura.Itens[0].Horas));
+        }
+        var limpeza = await cliente.PutAsJsonAsync("/api/projetos", envio with { Versao = projeto.Versao,
+            Agente = "", Modelo = "", FluxoPadrao = "", Modelos = [],
+            Itens = [envio.Itens[0] with { Agente = "", Modelo = "" }] });
+        Assert.Equal(HttpStatusCode.OK, limpeza.StatusCode);
+        var limpa = (await limpeza.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal("", limpa.Agente);
+        Assert.Empty(limpa.Modelos!);
+        Assert.Equal("", limpa.Itens[0].Modelo);
+        Assert.Equal("nao", limpa.Board);
+    }
+
+    [Fact]
+    public async Task Design_fixado_sobrevive_ao_transporte_e_a_cliente_antigo_sem_trocar_a_versao()
+    {
+        var cliente = await _api.AdminAsync();
+        var referencia = new ReferenciaDePropostaV1("repo-123", "plano", 6, new string('a', 64));
+        var design = new DesignDoItemV1(true, 1, [referencia]);
+        var envio = Envio() with { Situacao = "aguardando", Itens = [Envio().Itens[0] with { Design = design }] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var projeto = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(referencia, Assert.Single(projeto.Itens[0].Design!.Propostas));
+        var antigo = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", envio with
+            { Versao = projeto.Versao, Itens = [envio.Itens[0] with { Design = null, Titulo = "Cliente anterior" }] });
+        Assert.Equal(HttpStatusCode.OK, antigo.StatusCode);
+        projeto = (await antigo.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        Assert.Equal(referencia, Assert.Single(projeto.Itens[0].Design!.Propostas));
+        var semRevisao = envio with { Versao = projeto.Versao,
+            Itens = [envio.Itens[0] with { Design = design with { Propostas = [referencia with { Versao = 7 }] } }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", semRevisao)).StatusCode);
+        var novaRevisao = semRevisao with { Itens = [semRevisao.Itens[0] with { Design = semRevisao.Itens[0].Design! with { Revisao = 2 } }] };
+        var revisada = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", novaRevisao);
+        Assert.Equal(HttpStatusCode.OK, revisada.StatusCode);
+        var lida = (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!;
+        Assert.Equal(7, Assert.Single(lida.Itens[0].Design!.Propostas).Versao);
+        Assert.Equal(2, lida.Itens[0].Design!.Revisao);
+        var invalida = novaRevisao with { Versao = lida.Versao, Itens = [novaRevisao.Itens[0] with
+            { Design = new(true, 3, [referencia with { Hash = "inválido" }]) }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", invalida)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Reordenar_preserva_design_por_identidade_com_referencias_explicitas_ou_omitidas(bool omitirDesign, bool porWorkItem)
+    {
+        var cliente = await _api.AdminAsync();
+        var propostaA = new ReferenciaDePropostaV1("repo-123", "tela-a", 6, new string('a', 64));
+        var propostaB = new ReferenciaDePropostaV1("repo-123", "tela-b", 10, new string('b', 64));
+        var itemA = Envio().Itens[0] with { Numero = 1, Titulo = "A", WorkItemId = porWorkItem ? 747 : 0,
+            Design = new(true, 1, [propostaA]), Agente = "codex", Modelo = "gpt-6.1-sol" };
+        var itemB = itemA with { Numero = 2, Titulo = "B", WorkItemId = porWorkItem ? 748 : 0,
+            Design = new(true, 1, [propostaB]), Agente = "claude", Modelo = "opus" };
+        var envio = Envio() with { Itens = [itemA, itemB] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var projeto = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+
+        // Títulos trocados junto com os números comprovam a prioridade do WorkItemId.
+        // Sem work item, a identidade é o título normalizado, não a posição no plano.
+        var reordenados = new[]
+        {
+            itemB with { Numero = 1, Titulo = porWorkItem ? "A" : " b " },
+            itemA with { Numero = 2, Titulo = porWorkItem ? "B" : " a " },
+        };
+        foreach (var itens in new[] { reordenados, new[] { itemA, itemB } })
+        {
+            var resposta = await cliente.PutAsJsonAsync($"/api/projetos/{projeto.Id}", envio with
+                { Versao = projeto.Versao, Itens = itens.Select(i => omitirDesign ? i with { Design = null, Agente = null, Modelo = null } : i).ToArray() });
+            Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+            projeto = (await resposta.Content.ReadFromJsonAsync<ProjetoV1>())!;
+            var lida = (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{projeto.Id}"))!;
+            var listada = Assert.Single((await cliente.GetFromJsonAsync<ProjetoV1[]>("/api/projetos"))!);
+            foreach (var leitura in new[] { projeto, lida, listada })
+            {
+                Assert.Equal("aprovado", leitura.Situacao);
+                foreach (var esperado in itens)
+                {
+                    var atual = Assert.Single(leitura.Itens, i => i.Numero == esperado.Numero);
+                    Assert.Equal(esperado.WorkItemId, atual.WorkItemId);
+                    Assert.Equal((esperado.Agente, esperado.Modelo), (atual.Agente, atual.Modelo));
+                    Assert.Equal(1, atual.Design!.Revisao);
+                    Assert.Equal(Assert.Single(esperado.Design!.Propostas), Assert.Single(atual.Design.Propostas));
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task Snapshot_completo_volta_em_outra_sessao_e_versao_velha_recebe_estado_atual()
     {
         var cliente = await _api.AdminAsync();

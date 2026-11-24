@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { comRetorno } from '../navegacao';
+import { Topo } from '../componentes/Topo';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, MaquinaRemota, RetratoDaMaquina } from '../api/remoto';
 import { dispositivoAtual, type DecisaoPendente, type PendenciaRemota, type ResponderDecisao } from '../api/remoto';
@@ -63,6 +65,8 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
 }
 
 function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: ReturnType<typeof useArtefatosDoBoard>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
+  const local = useLocation();
+  const origem = local.pathname + local.search + local.hash;
   const retrato = foto?.retrato;
   const [todosOsProjetos, setTodosOsProjetos] = useState(false);
   const [todosOsDesigns, setTodosOsDesigns] = useState(false);
@@ -99,7 +103,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     <p className="br-note">Confira os detalhes antes de decidir. O texto do chat nunca aprova.</p>
     {/* (item 4) Os projetos abrem a página Projetos no projeto, e o Novo projeto cria pelo dev.kit da máquina. */}
     <div className="br-secao-titulo"><h2>Projetos{projetos.length > 0 && ` · ${projetos.length}`}</h2>
-      <Link className="br-ver" to="/projetos">Ver todos</Link>
+      <Link className="br-ver" to={comRetorno('/projetos', origem)}>Ver todos</Link>
       <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('projeto')}>+ Novo projeto</button></div>
     {(todosOsProjetos ? projetos : projetos.slice(0, primeirasEntradas)).map(p => {
       const itens = p.itens ?? [];
@@ -108,7 +112,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
       const ondas = Math.max(p.ondaAtual, ...itens.map(i => i.onda));
       // (controle-v4, item 2) O card abre o projeto e, embaixo, gera artefato e mostra os últimos links.
       return <div className="br-card br-proj-card" key={p.slug}>
-        <Link className="br-proj br-abrir" to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
+        <Link className="br-proj br-abrir" to={comRetorno(`/projetos?slug=${encodeURIComponent(p.slug)}`, origem)} aria-label={`Abrir ${p.nome}`}>
           <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
           <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
@@ -131,10 +135,10 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     <DesfechoDaCriacao criacao={criacao} />
     {/* Os projetos de design vêm do catálogo da máquina (o handshake): abrem o Design compartilhado no repositório. */}
     <div className="br-secao-titulo"><h2>Design{designs.length > 0 && ` · ${designs.length}`}</h2>
-      <Link className="br-ver" to="/design">Ver todos</Link>
+      <Link className="br-ver" to={comRetorno('/design', origem)}>Ver todos</Link>
       <button className="br-btn br-novo" disabled={criacao.desabilitado} title={criacao.motivo} onClick={() => criacao.abrir('design')}>+ Novo design</button></div>
     {(todosOsDesigns ? designs : designs.slice(0, primeirasEntradas)).map(d => {
-      const destino = d.repositorio ? `/design?repositorio=${encodeURIComponent(d.repositorio)}` : '/design';
+      const destino = comRetorno(d.repositorio ? `/design?repositorio=${encodeURIComponent(d.repositorio)}` : '/design', origem);
       // A miniatura é a última versão do projeto no site: o clique nela amplia, e o card continua abrindo o Design.
       return <div className={`br-design-card${d.miniatura ? ' br-com-miniatura' : ''}`} key={d.nome}>
         {d.miniatura && <MiniaturaDoDesign titulo={`${d.nome} · última versão`} link={d.miniatura} ampliar={setAmpliada} />}
@@ -366,7 +370,7 @@ export function Board() {
   // A task só abre enquanto o retrato a anuncia como conversável; a que terminou (ou o link velho) volta ao Orquestrador.
   const execucaoDaTask = taskAberta ? foto?.retrato?.fluxos?.find(f => f.id === taskAberta && f.conversavel) : undefined;
 
-  return <div className="board-remoto" data-aba={aba}>
+  return <div className="pagina pagina-do-board"><Topo secao="board" /><div className="board-remoto" data-aba={aba}>
     <header className="br-top">
       <b>dev.kit</b><span className="br-spacer" />
       <div className="br-machine">
@@ -414,5 +418,5 @@ export function Board() {
     <AvisosDoBoard avisos={avisos} encerrar={encerrar} />
     <div className="br-pwa"><strong>Instale o dev.kit</strong> pelo menu do navegador, quando a instalação estiver disponível.</div>
     {/* Sem rodapé (proposta chat-remoto v016): o "Ligar e Reiniciar…" é a dica do botão, e o "decisões auditadas", o selo do chat. */}
-  </div>;
+  </div></div>;
 }

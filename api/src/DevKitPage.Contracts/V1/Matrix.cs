@@ -17,6 +17,24 @@ public sealed record MatrizMatrix(int RevisaoDoMapa, EixoMatrix[] Componentes, E
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public CoberturaRelacaoMatrix[]? Coberturas { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public TransferenciaDeValidacaoMatrix[]? Transferencias { get; init; }
+}
+
+/// <summary>Retrato da definição do item transferido; datas de atualização não mudam a sua identidade.</summary>
+public sealed record ItemDaTransferenciaMatrix(int Numero, string Titulo, string Descricao, string Fluxo,
+    string[] Repositorios, string[] Componentes, int[] Dependencias, int Onda, int WorkItemId, string Situacao,
+    string Branch, string Agente, string Modelo, string Tipo, int Prioridade, double Horas, string Design);
+
+public sealed record RevogacaoDaTransferenciaMatrix(string Motivo, string Origem, DateTimeOffset Em);
+
+/// <summary>Troca formal de responsabilidade. Não integra o item nem declara a obrigação atendida.</summary>
+public sealed record TransferenciaDeValidacaoMatrix(string Id, int Item, int RevisaoDeOrigem,
+    string ResponsavelDaFinalizacao, string Motivo, string Origem, string SnapshotDoItem, DateTimeOffset Em,
+    CelulaMatrix[] CelulasDeOrigem)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public RevogacaoDaTransferenciaMatrix? Revogacao { get; init; }
 }
 /// <summary>A obrigação de conferir uma relação tem célula e responsáveis explícitos.</summary>
 public sealed record CoberturaRelacaoMatrix(string Relacao, string Celula);
@@ -37,6 +55,8 @@ public sealed record EventoMatrix(string Evento, string Matriz, string Maquina, 
     string[] Responsaveis, string[] Celulas, Dictionary<string, string> Shas, string RevisaoDaEntrega)
 {
     public string[] Dependencias { get; init; } = [];
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DevKitPage.Contracts.V1.ReciboDaFinalizacaoV1? Finalizacao { get; init; }
 }
 public sealed record VinculoMatrix(string Responsavel, string Sessao, int? Item = null, string Maquina = "");
 

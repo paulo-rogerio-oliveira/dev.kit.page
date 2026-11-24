@@ -17,6 +17,23 @@ namespace DevKitPage.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("DevKitPage.Core.ReciboDoCatalogoGit", b =>
+                {
+                    b.Property<string>("Sha").IsRequired().HasMaxLength(40).HasColumnType("TEXT");
+                    b.Property<long>("VersaoId").HasColumnType("INTEGER");
+                    b.Property<string>("Documento").IsRequired().HasColumnType("TEXT");
+                    b.HasKey("Sha");
+                    b.HasIndex("VersaoId").IsUnique();
+                    b.ToTable("RecibosDoCatalogoGit", (string)null);
+                });
+
+            modelBuilder.Entity("DevKitPage.Core.ReciboDoCatalogoGit", b =>
+                {
+                    b.HasOne("DevKitPage.Core.VersaoDoCatalogo", null)
+                        .WithOne().HasForeignKey("DevKitPage.Core.ReciboDoCatalogoGit", "VersaoId")
+                        .OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+
             modelBuilder.Entity("DevKitPage.Core.RevisaoMatrixNoBanco", b =>
                 {
                     b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("INTEGER");

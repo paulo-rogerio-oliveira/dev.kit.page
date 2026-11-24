@@ -43,20 +43,25 @@ O SQL Server tem os seus scripts em `api/scripts/sqlserver` (ver *Base embarcada
 
 ## A landing (US #283)
 
-A landing é a página de venda, na disposição da proposta da home (US #467, que reorganizou a da US #405):
-hero (selo "Para times no Azure DevOps", o título com "Pull Request" em destaque, os dois botões, o link
-discreto "Baixar o dev.kit versão N" e a amostra do Board feita em HTML) → como funciona (sete etapas, de
-Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Provedor cognitivo e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
-mídia numa moldura de janela do app — o componente `Janela`, o mesmo da amostra do Board —, com a legenda
-abaixo) → por que o dev.kit (três cartões) → catálogo → comparativo → integrações → segurança → para
-empresas → planos → contato (pedido de demonstração) → FAQ → CTA escuro → rodapé. O "Baixar o dev.kit"
+A landing é a página de venda. Desde o ajustes-2 (item 9) a hierarquia segue a proposta `ajustes-2-landing` v1:
+topo com o menu Como funciona · Recursos · Catálogo · Planos (as demais seções no rodapé) → hero (o rótulo "Seu
+trabalho, do plano à entrega", o título com "agentes de código." em destaque, os dois botões, o link discreto
+"Baixar o dev.kit para Windows" e o cartão "dev.kit · projetos", uma demonstração em HTML) → recursos do
+dev.kit.page (três cartões com o link para o detalhe e as quatro peças: desktop, serviço, devcli e Board web) →
+Board web (cada recurso remoto com a etiqueta do que exige: login, a fila liberada ou o navegador) → como funciona
+(sete etapas, de Clona a Pull Request) → recursos (as abas 01–07 — Orquestrador, Provedor cognitivo e Design são os da versão 5 — e os blocos alternados: o texto com os marcadores e a
+mídia numa moldura de janela do app — o componente `Janela` —, com a legenda abaixo) → por que o dev.kit (três
+cartões) → catálogo e contexto → comparativo → integrações → segurança → para empresas → planos → contato (pedido
+de demonstração) → FAQ → CTA final → rodapé. Cada promessa tem a rota e a permissão conferidas em
+[landing-conteudo.md](landing-conteudo.md#promessas-e-onde-elas-moram-conferidas-no-código-em-22112026). O "Baixar o dev.kit"
 (`BaixarDevKit`) lê `/api/versoes/ultima` e, desde a US #467, é um **link de verdade** (`<a href>`) para o
 alias permanente `/api/versoes/ultima/download`, com o endereço absoluto escrito abaixo dele: o
 navegador mostra a URL, o "Copiar endereço do link" funciona e ela cola em outra aba — o `fetch` + blob
 anterior só deixava um `blob:` passageiro. A ordem é a lista `SECOES` de
-`web/src/conteudo/landing.ts`, a mesma que o teste confere. Desde a US #381 a página **não explica a
-área logada** (o teste recusa "dashboard" e "métricas" no conteúdo), e a tabela comparativa e a seção
-"Para empresas" seguem a pesquisa de [landing-conteudo.md](landing-conteudo.md).
+`web/src/conteudo/landing.ts`, a mesma que o teste confere. Desde a US #381 a página **não explica o painel
+do gestor e do admin** (o teste recusa "dashboard" e "métricas" no conteúdo); desde o ajustes-2 ela conta o Board
+web no nível do que ele faz e exige. A tabela comparativa e a seção "Para empresas" seguem a pesquisa de
+[landing-conteudo.md](landing-conteudo.md).
 
 - **Conteúdo tipado, separado da apresentação.** `conteudo/landing.ts` tem os textos e as mídias
   (`Recurso`, `Beneficio`, `Passo`, `Integracao`, `PerguntaFrequente`, `Midia`) — evolução do antigo

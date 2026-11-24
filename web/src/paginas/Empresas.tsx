@@ -11,7 +11,7 @@ import { Pagina } from '../componentes/Pagina';
 import { formatarCnpj, PainelDaEmpresa } from '../componentes/PainelDaEmpresa';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo } from '../componentes/Selo';
-import { MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 
@@ -117,7 +117,7 @@ export function Empresas() {
 
   return (
     <div className="pagina">
-      <Topo secao="empresas"><MenuDoAdmin /></Topo>
+      <Topo secao="empresas" />
 
       <Pagina rotulo="Administração" titulo="Empresas" subtitulo={empresas ? resumoDasEmpresas(empresas) : undefined} acao={novaEmpresa} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}

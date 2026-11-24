@@ -271,11 +271,21 @@ public sealed class ConversaApiTests : IDisposable
         var envio = await bia.PostAsJsonAsync("/api/remoto/comandos", Mensagem("c-1"));
         Assert.Equal((HttpStatusCode.Conflict, ConversaV1.CodigoSemFila), (envio.StatusCode, await CodigoAsync(envio)));
 
-        // O SSE da bia não traz nada da ana.
+        // A fala própria é um marcador posterior ao comando da ana: prova que o SSE leu até ele,
+        // sem depender de cancelar um fluxo vazio antes do primeiro evento/cabeçalho.
+        var falaDaBia = Fala("f-bia", texto: "Marcador privado da Bia.");
+        Assert.Equal(HttpStatusCode.Created, (await bia.PostAsJsonAsync("/api/remoto/conversa/falas", falaDaBia)).StatusCode);
         using var tempo = new CancellationTokenSource(TimeSpan.FromSeconds(4));
         using var fluxo = await AbrirSseAsync(bia, "/api/remoto/conversa/eventos", null, tempo.Token);
         Assert.Equal(HttpStatusCode.OK, fluxo.StatusCode);
-        Assert.DoesNotContain(await LerSseAsync(fluxo, _ => false, tempo.Token), e => e.Evento != "ping");
+        var eventosDaBia = await LerSseAsync(fluxo, l => l.Any(e => e.Evento == ConversaV1.EventoFala), tempo.Token);
+        Assert.False(tempo.IsCancellationRequested);
+        var marcador = Assert.Single(eventosDaBia, e => e.Evento != "ping");
+        Assert.Equal(ConversaV1.EventoFala, marcador.Evento);
+        var eventoDaBia = JsonSerializer.Deserialize<EventoDaConversaV1>(marcador.Dados, Json)!;
+        Assert.Equal(falaDaBia.Id, eventoDaBia.Fala!.Id);
+        Assert.Null(eventoDaBia.Comando);
+        Assert.Null(eventoDaBia.Resposta);
         // E o mesmo SSE da ana traz o comando dela.
         using var tempoDaAna = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var fluxoDaAna = await AbrirSseAsync(ana, "/api/remoto/conversa/eventos", null, tempoDaAna.Token);
@@ -516,8 +526,8 @@ public sealed class ConversaApiTests : IDisposable
         using (var json = JsonDocument.Parse(await antigo.Content.ReadAsStringAsync()))
         {
             Assert.Equal(60, json.RootElement.GetProperty("intervaloSegundos").GetInt32());
-            // Recursos são aditivos: preserva o prefixo publicado pela Matrix e acrescenta a conversa da task no fim.
-            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RemotoV1.RecursoConversaDaTask],
+            // Recursos são aditivos: preserva o prefixo publicado e anuncia o novo contrato no fim.
+            Assert.Equal([RemotoV1.RecursoFalasDoDesktop, "decisoes-com-snapshot", "catalogo-remoto", RemotoV1.RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RemotoV1.RecursoConversaDaTask, RemotoV1.RecursoFluxosTipados],
                  json.RootElement.GetProperty("recursos").EnumerateArray().Select(r => r.GetString()));
         }
 

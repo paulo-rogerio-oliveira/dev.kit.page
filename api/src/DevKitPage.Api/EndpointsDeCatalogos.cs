@@ -19,6 +19,7 @@ public static class EndpointsDeCatalogos
 {
     public static void MapearCatalogos(this IEndpointRouteBuilder app)
     {
+        app.MapearAutomacaoDoCatalogo();
         var distribuicao = app.MapGroup("/api/catalogos").WithTags("Catálogos");
 
         distribuicao.MapGet("/meus", async (ClaimsPrincipal quem, IPublicacaoDeCatalogos publicacao, CancellationToken ct)

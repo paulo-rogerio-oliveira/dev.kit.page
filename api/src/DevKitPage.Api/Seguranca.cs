@@ -105,6 +105,7 @@ public static class Seguranca
                 .RequireAssertion(c => !c.User.HasClaim(ClaimTrocaPendente, "true")));
 
         servicos.AddSingleton<EmissorDeToken>();
+        servicos.AdicionarAutomacaoDoCatalogo();
         return servicos;
     }
 

@@ -380,6 +380,15 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
             e.HasOne<VersaoDoCatalogo>().WithOne().HasForeignKey<PacoteDoCatalogo>(p => p.VersaoId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ReciboDoCatalogoGit>(e =>
+        {
+            e.ToTable("RecibosDoCatalogoGit");
+            e.HasKey(r => r.Sha);
+            e.Property(r => r.Sha).HasMaxLength(40);
+            e.HasIndex(r => r.VersaoId).IsUnique();
+            e.HasOne<VersaoDoCatalogo>().WithOne().HasForeignKey<ReciboDoCatalogoGit>(r => r.VersaoId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         // A conta do dev, o trial, a licença e o pagamento (US #425): o mesmo script Us425.sql no Azure SQL.
         modelBuilder.Entity<LinkDeSenha>(e =>
         {

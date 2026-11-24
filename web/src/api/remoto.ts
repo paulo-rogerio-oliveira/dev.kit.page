@@ -31,6 +31,7 @@ export interface RetratoDaMaquina {
       projeto?: string | null; item?: number | null; agente?: string | null; desdeEm?: string | null;
       /** (semana 7, campo novo) A task aceita a conversa pelo site: o item do Executando abre o chat dela. */
       conversavel?: boolean | null;
+      finalizacao?: ReciboDaFinalizacao | null;
     }> | null;
     pendencias: PendenciaRemota[] | null;
   };
@@ -40,6 +41,12 @@ export interface RetratoDaMaquina {
 export interface EstadoDoArtefato {
   id: number; tipo: string; repositorio: string; sha: string; estado: string; etapa: string;
   detalhe: string; idRemoto: number; criadoEm: string;
+}
+
+export interface ReciboDaFinalizacao {
+  contrato: number; sessao: string; execucao: number; projeto: string; branch: string; destino: string;
+  revisaoDaPolitica: number; fluxo: string; revisaoDoFluxo: string; agente: string; modelo: string;
+  shas: Record<string, string>;
 }
 
 export interface PendenciaRemota {

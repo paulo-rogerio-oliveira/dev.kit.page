@@ -1,8 +1,20 @@
+export interface ReferenciaDeProposta { projeto: string; tela: string; versao: number; hash: string }
+export interface DesignDoItem { alteraTela: boolean; revisao: number; propostas: ReferenciaDeProposta[] }
+export interface ModeloDoProjeto { agente: string; modelo: string }
+
 export interface ItemDoProjeto {
   numero: number; titulo: string; descricao: string; fluxo: string;
   repositorios: string[]; componentes: string[]; dependencias: number[];
   onda: number; workItemId: number; situacao: string; tipo: string;
   prioridade: number; horas: number; branch: string; atualizadoEm?: string;
+  design?: DesignDoItem | null;
+  agente?: string | null; modelo?: string | null;
+}
+
+export interface PoliticaDoProjeto {
+  slug: string; politica: string; revisao: number; fluxoDaFinalizacao: string;
+  adotadaEm: string; motivo: string; identidadeDoFluxo: string; revisaoDoFluxo: string;
+  modeloDaFinalizacao?: ModeloDoProjeto | null;
 }
 
 export interface Projeto {
@@ -13,6 +25,11 @@ export interface Projeto {
   atualizadoEm: string; itens: ItemDoProjeto[]; podeApagar: boolean;
   featureId: number; epicId: number; iteracao: string; board: string;
   branchesDasTasks?: string[];
+  baseDoBranch?: string | null; fluxoPadrao?: string | null;
+  agente?: string | null; modelo?: string | null; modelos?: ModeloDoProjeto[] | null; politicaDeFinalizacao?: PoliticaDoProjeto | null;
+  alteradoEm?: string | null; papel?: string;
+  /** Projecao operacional; itens conserva o cadastro historico. */
+  itensDoGrafo?: number[] | null; pendenciaDoGrafo?: string | null;
 }
 
 /**
