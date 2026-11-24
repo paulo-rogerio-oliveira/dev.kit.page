@@ -54,8 +54,16 @@ function PendenciaSemDados({ pendencia: p, dispensada, dispensar }: { pendencia:
   </section>;
 }
 
-/** O projeto que já saiu do andamento: concluído ou em fechamento (todos os itens integrados, ajuste 8). */
+/** O projeto que já saiu do andamento: concluído ou em fechamento (ondas encerradas: itens integrados ou retirados, ajuste 8). */
 function projetoTerminando(situacao: string) { return situacao === 'concluido' || situacao === 'fechando'; }
+
+/**
+ * (runners · item 6, F10) Em fechamento, as ondas ENCERRARAM; só com todos os itens integrados elas integraram. O item retirado
+ * por decisão humana não vira integrado — no retrato ele ainda chega como planejado (limite F5), então a frase conta os integrados.
+ */
+function emFechamento(integrados: number, total: number) {
+  return integrados === total ? 'em fechamento · todos os itens integrados' : `em fechamento · ondas encerradas · ${integrados} de ${total} integrados`;
+}
 
 /** As pendências do retrato que o dev fechou no site (correções do board remoto): a decisão marcada ou a dispensa local. */
 function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[], locais: Map<string, boolean>) {
@@ -111,7 +119,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
         <Link className="br-proj br-abrir" to={`/projetos?slug=${encodeURIComponent(p.slug)}`} aria-label={`Abrir ${p.nome}`}>
           <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
           <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
-          <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
+          <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? emFechamento(integrados, itens.length) : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
         <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.porSlug.get(p.slug) ?? []} gerar={criacao.gerarArtefato}
           maquina={foto?.maquina.maquinaId ?? ''}
