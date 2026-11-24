@@ -15,10 +15,11 @@ type Estado = { tipo: 'carregando' } | { tipo: 'pronta'; versao: VersaoDoDevKit 
  * Desde a US #467 (task #471) é um LINK de verdade, e não mais um botão com fetch e blob: o navegador mostra o
  * endereço no hover, o "Copiar endereço do link" funciona e a URL, escrita abaixo, cola na barra de qualquer
  * navegador. O endereço é o alias permanente `/api/versoes/ultima/download`, que continua valendo quando sair a
- * próxima versão. O `rotulo` troca o texto (o "Testar grátis por 14 dias" dos planos); `discreto` é o link de
- * texto do hero, abaixo dos dois botões da proposta.
+ * próxima versão. O `rotulo` troca o texto e nomeia o grupo (o "Testar grátis por 14 dias" dos planos); `discreto` é o
+ * link de texto do hero, abaixo dos dois botões da proposta, e `texto` troca só o texto do link (o "Baixar o dev.kit
+ * para Windows" da proposta ajustes-2-landing v1): a versão, a data e o tamanho seguem na nota ao lado.
  */
-export function BaixarDevKit({ rotulo, discreto = false }: { rotulo?: string; discreto?: boolean } = {}) {
+export function BaixarDevKit({ rotulo, texto, discreto = false }: { rotulo?: string; texto?: string; discreto?: boolean } = {}) {
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
 
   useEffect(() => {
@@ -38,8 +39,8 @@ export function BaixarDevKit({ rotulo, discreto = false }: { rotulo?: string; di
     return (
       <div className={`baixar${discreto ? ' baixar-discreto' : ''}`} role="group" aria-label={grupo}>
         {discreto
-          ? <span className={`${classe} desabilitado`} aria-disabled="true">{rotulo ?? 'Baixar o dev.kit'}</span>
-          : <button className={classe} type="button" disabled>{rotulo ?? 'Baixar o dev.kit'}</button>}
+          ? <span className={`${classe} desabilitado`} aria-disabled="true">{texto ?? rotulo ?? 'Baixar o dev.kit'}</span>
+          : <button className={classe} type="button" disabled>{texto ?? rotulo ?? 'Baixar o dev.kit'}</button>}
         <span className="baixar-nota">{estado.tipo === 'carregando' ? 'Consultando a última versão…' : 'Download indisponível no momento.'}</span>
       </div>
     );
@@ -50,7 +51,7 @@ export function BaixarDevKit({ rotulo, discreto = false }: { rotulo?: string; di
   return (
     <div className={`baixar${discreto ? ' baixar-discreto' : ''}`} role="group" aria-label={grupo}>
       <a className={classe} href={endereco}>
-        {rotulo ?? `Baixar o ${formatar.versaoDoDevKit(versao.versao)}`}
+        {texto ?? rotulo ?? `Baixar o ${formatar.versaoDoDevKit(versao.versao)}`}
       </a>
       <span className="baixar-nota">
         versão {versao.versao} · {formatar.data(versao.publicadaEm)} · {formatar.megabytes(versao.tamanhoBytes)} · 14 dias grátis, sem login

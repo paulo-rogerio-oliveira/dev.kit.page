@@ -82,6 +82,38 @@ public sealed class CatalogoApiTests : IDisposable
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await _api.CreateClient().GetAsync("/api/catalogo/base")).StatusCode); // versão 7 numa tag catalogo-v2
     }
 
+    /// <summary>
+    /// Item 15 (ajustes-2): a validação do fallback só conhecia skill/plan/fluxo e recusava manifestos com GATILHOS.
+    /// Este cenário isolado comprova a correção desse mecanismo nas duas rotas e na lista anônima. O 503 observado
+    /// em produção exige correlação com o log e a configuração implantada para atribuir a mesma causa.
+    /// </summary>
+    [Fact]
+    public async Task Manifesto_com_gatilho_no_fallback_do_github_e_servido_e_nao_503()
+    {
+        _api.GitHub.Manifesto2 = """
+            {
+              "versao": 2, "minDevKit": 151,
+              "itens": [
+                { "tipo": "skill", "nome": "revisar-alteracoes", "versao": 2, "hash": "r2", "catalogo": 2, "arquivo": "skills/revisar-alteracoes.json",
+                  "descricao": "Revisa antes do commit", "tecnologia": "Git", "minDevKit": 151, "requer": ["git"], "dependencias": [], "hashes": ["r1", "r2"] },
+                { "tipo": "gatilho", "nome": "revisor-do-dev", "versao": 1, "hash": "g1", "catalogo": 2, "arquivo": "gatilhos/revisor-do-dev.json",
+                  "descricao": "Revisor do dev — push", "tecnologia": "Gatilhos", "minDevKit": 151, "requer": [], "dependencias": [], "hashes": ["g1"] }
+              ],
+              "retirados": []
+            }
+            """;
+        var cliente = _api.CreateClient();
+
+        var nova = await cliente.GetAsync("/api/catalogos/basico?desde=0");
+        var antiga = await cliente.GetAsync("/api/catalogo/base?desde=0");
+        var meus = (await cliente.GetFromJsonAsync<CatalogoDisponivelV1[]>("/api/catalogos/meus"))!;
+
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (nova.StatusCode, antiga.StatusCode));
+        var delta = (await nova.Content.ReadFromJsonAsync<CatalogoBaseV1>())!;
+        Assert.Equal(new[] { "skill:revisar-alteracoes", "gatilho:revisor-do-dev" }, delta.Manifesto.Itens.Select(i => $"{i.Tipo}:{i.Nome}"));
+        Assert.Equal(2, meus.Single(c => c.Basico).Versao);
+    }
+
     [Fact]
     public async Task Releases_do_catalogo_sao_so_do_admin()
     {

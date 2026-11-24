@@ -56,6 +56,7 @@ public static class FormatosDoCatalogo
     {
         TiposDeItem.Skill => "skills",
         TiposDeItem.Plan => "plans",
+        GatilhoDoCatalogo.Tipo => "gatilhos",
         _ => "fluxos",
     };
 

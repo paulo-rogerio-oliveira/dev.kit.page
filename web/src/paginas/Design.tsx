@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ProjetoDeDesign } from '../api/tipos';
 import { branchCurto, DesignCompartilhado, falhaDoDesign, ImagemDaVersao } from '../componentes/DesignCompartilhado';
@@ -33,10 +33,7 @@ export function Design() {
   const [consulta] = useSearchParams();
   return (
     <div className="pagina">
-      <Topo secao="design">
-        <Link className="botao botao-fantasma" to="/projetos">Projetos</Link>
-        <Link className="botao botao-fantasma" to="/conta">Conta</Link>
-      </Topo>
+      <Topo secao="design" />
       <Pagina rotulo={sessao!.empresa ?? 'Design'} titulo="Design" subtitulo="As capturas e as propostas de tela do dev.kit, por repositório.">
         {erro && <p className="erro" role="alert">{erro}</p>}
         <DesignCompartilhado token={sessao!.token} comEmpresa={Boolean(sessao!.empresa)} tratar={tratar} repositorio={consulta.get('repositorio')} />
@@ -57,6 +54,8 @@ export function VersaoDoDesign() {
   const [erro, setErro] = useState('');
   const tratar = useTratar(setErro);
   const numero = Number((rotuloDaVersao ?? '').replace(/^v/i, ''));
+  const [consulta] = useSearchParams();
+  const hashEsperado = consulta.get('hash');
 
   useEffect(() => {
     api.projetoDeDesign(sessao!.token, Number(idDoProjeto)).then(setProjeto).catch(tratar);
@@ -64,17 +63,17 @@ export function VersaoDoDesign() {
 
   const tela = projeto?.telas.find((t) => t.id === idDaTela);
   const versao = tela?.versoes.find((v) => v.numero === numero);
+  const divergente = Boolean(hashEsperado && versao && (versao.tipo !== 'proposta' || versao.sha256.toLowerCase() !== hashEsperado.toLowerCase()));
   return (
     <div className="pagina">
-      <Topo secao="design">
-        <Link className="botao botao-fantasma" to="/design">Design</Link>
-      </Topo>
+      <Topo secao="design" />
       <Pagina rotulo={projeto?.chave ?? 'Design'} titulo={tela ? `${tela.nome} · v${String(numero).padStart(3, '0')}` : 'Versão de design'}
         subtitulo={versao ? `${versao.tipo === 'proposta' ? 'Proposta visual — nada implementado' : 'Captura da tela real'} · ${versao.largura}x${versao.altura} · ${versao.tema}` : undefined}>
         {erro && <p className="erro" role="alert">{erro}</p>}
         {!projeto && !erro && <p className="carregando" role="status">Carregando…</p>}
         {projeto && !versao && <p className="erro" role="alert">{falhaDoDesign(new ErroDaApi(404, ''))}</p>}
-        {versao && (
+        {divergente && <p className="erro" role="alert">A versão não corresponde ao hash da proposta fixada no planejamento. A referência foi preservada; sincronize o Design.</p>}
+        {versao && !divergente && (
           <section className="cartao design-pagina-da-versao" aria-label="Versão de design">
             <p className="design-meta">
               <code>{branchCurto(versao.branch) || '—'}{versao.commit ? ` @ ${versao.commit}` : ''}</code> · {versao.origem} ·{' '}

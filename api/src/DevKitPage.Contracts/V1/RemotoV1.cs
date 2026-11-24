@@ -50,7 +50,16 @@ public sealed record ItemNoRetratoV1(int Numero, string Titulo, string Situacao,
 /// </param>
 public sealed record FluxoNoRetratoV1(
     string Id, string Nome, string Etapa, string Situacao, string? Projeto = null, int? Item = null, string? Agente = null,
-    DateTimeOffset? DesdeEm = null, bool? Conversavel = null);
+    DateTimeOffset? DesdeEm = null, bool? Conversavel = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public ReciboDaFinalizacaoV1? Finalizacao { get; init; }
+}
+
+/// <summary>Composição confirmada pelo host; não é uma declaração de tipo do desenho ou do vínculo.</summary>
+public sealed record ReciboDaFinalizacaoV1(int Contrato, string Sessao, long Execucao, string Projeto,
+    string Branch, string Destino, int RevisaoDaPolitica, string Fluxo, string RevisaoDoFluxo,
+    string Agente, string Modelo, IReadOnlyDictionary<string, string> Shas);
 
 /// <summary>
 /// Uma PENDÊNCIA do dev (o que espera decisão). A pergunta leva os MESMOS campos do <c>[GITKIT:PERGUNTA]</c> —
@@ -169,7 +178,11 @@ public static class RemotoV1
     /// o dev.kit só usa a rota do recurso que viu aqui.
     /// </summary>
     public static IReadOnlyList<string> RecursosDaApi { get; } =
-        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask, CicloDosItensV1.Recurso];
+        [RecursoFalasDoDesktop, "decisoes-com-snapshot", RecursoCatalogo, RecursoDecisoesAutorizar, "matrix-v1", "matrix-avaliacao-v1", RecursoConversaDaTask,
+            RecursoFluxosTipados, CicloDosItensV1.Recurso];
+
+    /// <summary>Política versionada e recibo da finalização confirmada pelo host.</summary>
+    public const string RecursoFluxosTipados = "fluxos-tipados-v1";
 
     /// <summary>
     /// (semana 7) A API guarda as falas POR TASK (<see cref="FalaDoDevKitV1.Sessao"/>), as devolve na conversa da task

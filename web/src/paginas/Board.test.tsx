@@ -723,10 +723,10 @@ describe('Board remoto', () => {
       responder(); comFila(() => ({ estado: 'concluido', texto: '' }));
       renderizar('/board', tokenDoDev());
       const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
-      expect(await painel.findByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto');
+      expect(await painel.findByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto&retorno=%2Fboard');
       expect(await painel.findByRole('link', { name: 'Abrir o design de github.com/acme/portal · main' }))
-        .toHaveAttribute('href', '/design?repositorio=github.com%2Facme%2Fportal');
-      expect(painel.getAllByRole('link', { name: 'Ver todos' }).map(l => l.getAttribute('href'))).toEqual(['/projetos', '/design']);
+        .toHaveAttribute('href', '/design?repositorio=github.com%2Facme%2Fportal&retorno=%2Fboard');
+      expect(painel.getAllByRole('link', { name: 'Ver todos' }).map(l => l.getAttribute('href'))).toEqual(['/projetos?retorno=%2Fboard', '/design?retorno=%2Fboard']);
       expect(painel.getByText('2 telas')).toBeInTheDocument();
     });
 
@@ -777,7 +777,7 @@ describe('Board remoto', () => {
       expect(card.getByText('Artefatos · 2')).toBeInTheDocument();
       expect(card.getByText(/nunca produção/)).toBeInTheDocument();
       // O card continua abrindo o projeto.
-      expect(painel.getByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto');
+      expect(painel.getByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto&retorno=%2Fboard');
     }, 15_000);
 
     it('cria o projeto pelo formulário com os repositórios do catálogo e mostra o desfecho do dev.kit, sem aprovar nem disparar', async () => {

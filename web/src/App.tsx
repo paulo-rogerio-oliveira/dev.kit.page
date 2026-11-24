@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { entraNoPainel, papelDa, useSessao } from './sessao';
 import { Landing } from './paginas/Landing';
 import { Login } from './paginas/Login';
@@ -20,6 +20,7 @@ import { Relatos } from './paginas/Relatos';
 import { Design, VersaoDoDesign } from './paginas/Design';
 import { Projetos } from './paginas/Projetos';
 import { Board } from './paginas/Board';
+import { inicioDaSessao, podeAbrir } from './navegacao';
 
 /**
  * A rota protegida: sem sessão (ou com ela vencida) volta ao login; com a troca de senha
@@ -40,8 +41,9 @@ export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin 
   const { sessao } = useSessao();
   const local = useLocation();
 
-  if (!sessao) return <Navigate to="/login" replace state={{ de: local.pathname + local.search }} />;
-  if (sessao.deveTrocarSenha && !permiteTrocaPendente) return <Navigate to="/trocar-senha" replace state={{ de: local.pathname + local.search }} />;
+  if (!sessao) return <Navigate to="/login" replace state={{ de: local.pathname + local.search + local.hash }} />;
+  if (sessao.deveTrocarSenha && !permiteTrocaPendente) return <Navigate to="/trocar-senha" replace state={{ de: local.pathname + local.search + local.hash }} />;
+  if (!permiteTrocaPendente && !podeAbrir(sessao, local.pathname)) return <Navigate to={inicioDaSessao(sessao)} replace state={{ acessoNegado: true }} />;
   if ((doPainel || soAdmin || soGestor) && !entraNoPainel(sessao)) return <Navigate to="/conta" replace />;
   if (soAdmin && papelDa(sessao) !== 'admin') return <Navigate to="/dashboard" replace />;
   if (soGestor && papelDa(sessao) !== 'gestor') return <Navigate to="/dashboard" replace />;
@@ -49,8 +51,40 @@ export function RotaProtegida({ children, permiteTrocaPendente = false, soAdmin 
   return <>{children}</>;
 }
 
+function FocoDaRota() {
+  const local = useLocation();
+  const consulta = new URLSearchParams(local.search);
+  const projeto = local.pathname === '/projetos' ? consulta.get('projeto') || consulta.get('slug') || '' : '';
+  const nivel = consulta.get('nivel') ?? '';
+  const situacao = consulta.get('situacao') ?? '';
+  const anterior = useRef({ caminho: local.pathname, projeto, nivel, situacao });
+  useEffect(() => {
+    const main = document.querySelector<HTMLElement>('main');
+    if (main) { main.id = 'conteudo-principal'; main.tabIndex = -1; }
+    const antes = anterior.current;
+    anterior.current = { caminho: local.pathname, projeto, nivel, situacao };
+    const mudouPagina = antes.caminho !== local.pathname;
+    // Filtrar também pode fechar o detalhe: nesse caso o foco permanece no próprio filtro.
+    const mudouProjeto = antes.projeto !== projeto && antes.nivel === nivel && antes.situacao === situacao;
+    if (!mudouPagina && !mudouProjeto) return;
+    const focar = () => {
+      const alvo = projeto ? document.querySelector<HTMLElement>('main [data-foco-navegacao="projeto"]')
+        : main?.querySelector<HTMLElement>('h1') ?? main;
+      if (!alvo) return false;
+      alvo.tabIndex = -1; alvo.focus({ preventScroll: true }); return true;
+    };
+    if (focar()) return;
+    // O retorno de outra página pode precisar aguardar os dados do projeto.
+    const observador = new MutationObserver(() => { if (focar()) observador.disconnect(); });
+    observador.observe(document.body, { childList: true, subtree: true });
+    return () => observador.disconnect();
+  }, [local.pathname, projeto, nivel, situacao]);
+  return null;
+}
+
 export function App() {
   return (
+    <><FocoDaRota />
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
@@ -77,6 +111,6 @@ export function App() {
       <Route path="/board" element={<RotaProtegida><Board /></RotaProtegida>} />
       <Route path="/design/:projeto/:tela/:versao" element={<RotaProtegida><VersaoDoDesign /></RotaProtegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    </Routes></>
   );
 }

@@ -67,7 +67,9 @@ public static class RegrasMatrix
             case "registro" when d.Registro is { } r:
                 Exigir(r.Evento is not null && r.SessaoAvaliada is not null && r.RevisaoDaEntrega is not null, "Metadados do resultado inválidos.");
                 Exigir(Identificador(r.Celula) && Identificador(r.Responsavel) && r.RevisaoDaDefinicao > 0, "Identifique célula, responsável e revisão.");
-                Exigir(r.Tipo is "implementacao" or "avaliacao", "Registro: implementação ou avaliação.");
+                Exigir(r.Tipo is "implementacao" or "avaliacao" or RegrasVerificacaoFinalMatrix.Tipo, "Registro: implementação, avaliação ou verificação final.");
+                Exigir(r.Tipo != RegrasVerificacaoFinalMatrix.Tipo || r.Evento.Length > 0 && r.Shas is { Count: > 0 },
+                    "Verificação final exige evento e SHAs emitidos pelo host.");
                 Exigir(r.Resultado is "atendido" or "parcial" or "nao-atendido" or "nao-aplicavel", "Resultado inválido.");
                 Texto(r.Justificativa, "justificativa");
                 Exigir(r.Evidencias is not null && r.Evidencias.All(e => !string.IsNullOrWhiteSpace(e)), "Evidências inválidas.");
@@ -83,6 +85,7 @@ public static class RegrasMatrix
                 break;
             default: throw new ArgumentException("Tipo e conteúdo do documento incompatíveis.");
         }
+        RegrasDaTransferenciaMatrix.Validar(d);
         Exigir(JsonSerializer.SerializeToUtf8Bytes(d, Json).Length <= 512 * 1024, "Documento passa de 512 KB.");
     }
 
@@ -130,6 +133,11 @@ public static class RegrasMatrix
             Exigir(evento.Celulas.Order().SequenceEqual(matriz!.Matriz!.Celulas
                 .Where(c => c.Responsaveis.Any(r => evento.Responsaveis.Contains(r.Id))).Select(c => c.Id).Order()),
                 "Recibo difere do recorte atribuído na revisão.");
+            if (evento.Finalizacao is not null)
+                Exigir(evento.Responsaveis.All(dono => matriz.Matriz.Celulas.Any(c => c.Responsaveis.Any(r => r.Id == dono && r.Item is null)))
+                    && matriz.Matriz.Celulas.Where(c => evento.Celulas.Contains(c.Id)).All(c => c.Responsaveis
+                        .Where(r => evento.Responsaveis.Contains(r.Id)).All(r => r.Item is null)),
+                    "Verificação final exige responsabilidade formal fora do grafo de itens.");
         }
         if (d.Registro is { Evento.Length: > 0 } registro)
         {
@@ -144,8 +152,10 @@ public static class RegrasMatrix
 
     public static void ValidarEstabilidade(IEnumerable<RevisaoMatrix> historico, DocumentoMatrix d)
     {
+        var revisoes = historico.OrderBy(r => r.Versao).ToArray();
+        RegrasDaTransferenciaMatrix.ConferirRevisao(revisoes.LastOrDefault(), d);
         if (d.Matriz is not { } matriz) return;
-        foreach (var antiga in historico.SelectMany(r => r.Documento.Matriz?.Celulas ?? []))
+        foreach (var antiga in revisoes.SelectMany(r => r.Documento.Matriz?.Celulas ?? []))
             foreach (var nova in matriz.Celulas)
             {
                 Exigir(antiga.Id != nova.Id || (antiga.Componente == nova.Componente && antiga.Layer == nova.Layer), "ID estável não pode mudar de componente/layer.");

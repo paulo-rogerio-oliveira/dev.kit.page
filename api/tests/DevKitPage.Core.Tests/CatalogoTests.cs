@@ -72,6 +72,84 @@ public sealed class CatalogoTests
         Assert.False(RegrasDoCatalogoBase.Valido(null, 3));
     }
 
+    /// <summary>
+    /// Item 15 (ajustes-2): o manifesto do básico admite GATILHOS desde a US #515, mas a validação do fallback do GitHub
+    /// só conhecia skill/plan/fluxo. O cenário comprova a aceitação de gatilhos e a recusa do tipo desconhecido com
+    /// motivo para o log; não atribui sozinho a causa do 503 observado em produção.
+    /// </summary>
+    [Fact]
+    public void Manifesto_com_gatilho_e_valido_e_o_invalido_diz_o_motivo()
+    {
+        var comGatilho = Manifesto with { Itens = [.. Manifesto.Itens, Item("revisor-do-dev", 3, "Gatilhos", GatilhoDoCatalogo.Tipo)] };
+
+        Assert.True(RegrasDoCatalogoBase.Valido(comGatilho, 3));
+        Assert.Null(RegrasDoCatalogoBase.Problema(comGatilho, 3));
+        Assert.True(RegrasDoCatalogoBase.TipoDoManifesto(GatilhoDoCatalogo.Tipo));
+        Assert.DoesNotContain(GatilhoDoCatalogo.Tipo, TiposDeItem.Todos); // o catálogo da empresa segue sem gatilho
+        Assert.Equal("o item \"x1\" tem o tipo desconhecido \"macro\"",
+            RegrasDoCatalogoBase.Problema(Manifesto with { Itens = [Item("x1", 1) with { Tipo = "macro" }] }, 3));
+        Assert.Equal("a versão do manifesto (3) não é a da tag (2)", RegrasDoCatalogoBase.Problema(Manifesto, 2));
+        Assert.Equal("o item skill:x1 não tem nome ou hash", RegrasDoCatalogoBase.Problema(Manifesto with { Itens = [Item("x1", 1) with { Hash = " " }] }, 3));
+        Assert.Equal("o manifesto não tem itens e retirados", RegrasDoCatalogoBase.Problema(null, 3));
+    }
+
+    /// <summary>
+    /// A sequência da publicação pelo Git: o manifesto do repositório não precisa ser a evolução de UM passo da release
+    /// publicada. A versão salta, os itens chegam com as versões acumuladas do repositório, o item novo entra livre, o
+    /// que sai vai para os retirados e o retirado volta sem andar para trás — e a versão maior sem mudança também passa.
+    /// </summary>
+    [Fact]
+    public void Sequencia_do_git_aceita_salto_versoes_acumuladas_itens_novos_e_retirados_coerentes()
+    {
+        var novo = Manifesto with
+        {
+            Versao = 9,
+            Itens =
+            [
+                Item("revisar-alteracoes", 60) with { Versao = 7 }, Item("compilar-angular", 3, "Angular"),
+                Item("geral", 2, "", TiposDeItem.Plan) with { Versao = 4 }, Item("nova", 61) with { Versao = 5 }, Item("velha", 62),
+            ],
+            Retirados = [new ItemRetiradoV1(TiposDeItem.Skill, "antiga", 2, 2), new ItemRetiradoV1(TiposDeItem.Skill, "abrir-pr", 1, 9)],
+        };
+
+        Assert.Null(RegrasDoCatalogoBase.ProblemaDaSequencia(3, Manifesto, novo));
+        Assert.Null(RegrasDoCatalogoBase.ProblemaDaSequencia(3, Manifesto, Manifesto with { Versao = 4 }));
+    }
+
+    /// <summary>A recusa da sequência diz a versão publicada e a recebida, ou o item e as duas versões.</summary>
+    [Theory]
+    [InlineData("igual", "A versao recebida (3) deve ser maior que a release publicada (3); igual ou menor substituiria uma release.")]
+    [InlineData("menor", "A versao recebida (2) deve ser maior que a release publicada (3); igual ou menor substituiria uma release.")]
+    [InlineData("item", "O item skill:abrir-pr retrocede da v4 (release 3) para a v3 (manifesto 4).")]
+    [InlineData("saiu", "O item skill:abrir-pr (v4 na release 3) saiu do manifesto 4 sem entrar nos retirados.")]
+    [InlineData("saiu-menor", "O item skill:abrir-pr retrocede da v4 (release 3) para a v2 nos retirados do manifesto 4.")]
+    [InlineData("sumiu", "O retirado skill:antiga (v2 na release 3) sumiu do manifesto 4 sem voltar ao catalogo.")]
+    [InlineData("voltou-menor", "O retirado skill:antiga retrocede da v2 (release 3) para a v1 (manifesto 4).")]
+    [InlineData("ativo-e-retirado", "O item skill:abrir-pr esta nos itens e nos retirados do manifesto 4.")]
+    [InlineData("item-repetido", "O item skill:revisar-alteracoes aparece mais de uma vez no manifesto 4.")]
+    [InlineData("retirado-repetido", "O retirado skill:antiga aparece mais de uma vez no manifesto 4.")]
+    public void Sequencia_do_git_recusa_substituir_ou_retroceder_nomeando_o_item_e_as_versoes(string caso, string motivo)
+    {
+        var anterior = Manifesto with { Itens = [.. Manifesto.Itens.SkipLast(1), Item("abrir-pr", 3) with { Versao = 4 }] };
+        var semAbrirPr = anterior.Itens.SkipLast(1).ToArray();
+        var novo = anterior with { Versao = 4 };
+        novo = caso switch
+        {
+            "igual" => novo with { Versao = 3 },
+            "menor" => novo with { Versao = 2 },
+            "item" => novo with { Itens = [.. semAbrirPr, Item("abrir-pr", 4) with { Versao = 3 }] },
+            "saiu" => novo with { Itens = semAbrirPr },
+            "saiu-menor" => novo with { Itens = semAbrirPr, Retirados = [.. anterior.Retirados, new ItemRetiradoV1(TiposDeItem.Skill, "abrir-pr", 2, 4)] },
+            "sumiu" => novo with { Retirados = [.. anterior.Retirados.Skip(1)] },
+            "voltou-menor" => novo with { Itens = [.. anterior.Itens, Item("antiga", 4)], Retirados = [.. anterior.Retirados.Skip(1)] },
+            "ativo-e-retirado" => novo with { Retirados = [.. anterior.Retirados, new ItemRetiradoV1(TiposDeItem.Skill, "abrir-pr", 4, 4)] },
+            "item-repetido" => novo with { Itens = [.. anterior.Itens, anterior.Itens[0]] },
+            _ => novo with { Retirados = [.. anterior.Retirados, anterior.Retirados[0]] },
+        };
+
+        Assert.Equal(motivo, RegrasDoCatalogoBase.ProblemaDaSequencia(3, anterior, novo));
+    }
+
     private static readonly IReadOnlySet<string> Basico = new HashSet<string> { "skill:revisar-alteracoes", "plan:geral" };
 
     private static PublicacaoV1 Publicacao(string nome = "compilar-uau", string tipo = TiposDeItem.Skill, string conteudo = "{\"name\":\"x\"}", string[]? deps = null)

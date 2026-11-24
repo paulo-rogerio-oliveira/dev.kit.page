@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi } from '../api/cliente';
 import type { ItemDaEmpresa } from '../api/tipos';
 import { Selo } from '../componentes/Selo';
-import { MenuDaEmpresa, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 import { NOME_DO_TIPO } from './catalogo/tipos';
@@ -51,7 +51,7 @@ export function EmpresaCatalogo() {
 
   return (
     <div className="pagina">
-      <Topo secao="catálogo da empresa"><MenuDaEmpresa /></Topo>
+      <Topo secao="catálogo da empresa" />
       <main className="painel">
         <section aria-labelledby="titulo-catalogo-da-empresa" className="painel-da-aba">
           <header className="cabecalho-da-pagina">
