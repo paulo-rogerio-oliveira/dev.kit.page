@@ -111,6 +111,9 @@ public sealed class ArtefatosDosProjetosTests
         Assert.Contains("OBJECT_ID(N'[dbo].[ArtefatosDosProjetos]', N'U') IS NULL", script);
         foreach (var coluna in BaseDeTeste.ColunasNoSqlServer("ArtefatosDosProjetos"))
             Assert.Contains(coluna, script);
+        foreach (var coluna in BaseDeTeste.ColunasNoSqlServer("PedidosDeArtefatos"))
+            Assert.Contains(coluna, script);
+        Assert.Contains("CONSTRAINT [PK_PedidosDeArtefatos] PRIMARY KEY ([ProjetoId], [Id])", script);
         Assert.Contains("THROW 50001", script);
         Assert.Contains("REFERENCES [dbo].[ProjetosCompartilhados] ([Id]) ON DELETE CASCADE", script);
         Assert.Contains("CREATE INDEX [IX_ArtefatosDosProjetos_ProjetoId_CriadoEmUtc]", script);
@@ -129,6 +132,7 @@ public sealed class ArtefatosDosProjetosTests
         });
 
         Assert.Contains(aplicadas, m => m.EndsWith("_ArtefatosDosProjetos", StringComparison.Ordinal));
+        Assert.Contains(aplicadas, m => m.EndsWith("_PedidosDeArtefatos", StringComparison.Ordinal));
         Assert.False(pendente);
     }
 
