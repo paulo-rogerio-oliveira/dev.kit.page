@@ -48,6 +48,21 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Artef
         ON [dbo].[ArtefatosDosProjetos] ([ProjetoId], [Publicacao]) WHERE [Publicacao] IS NOT NULL;
 GO
 
+-- O pedido agrupado é durável mesmo quando seus resultados ainda não têm publicação.
+IF OBJECT_ID(N'[dbo].[PedidosDeArtefatos]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[PedidosDeArtefatos] (
+        [ProjetoId] bigint NOT NULL,
+        [Id] nvarchar(64) NOT NULL,
+        [Conteudo] nvarchar(max) NOT NULL,
+        [Revisao] bigint NOT NULL,
+        CONSTRAINT [PK_PedidosDeArtefatos] PRIMARY KEY ([ProjetoId], [Id]),
+        CONSTRAINT [FK_PedidosDeArtefatos_ProjetosCompartilhados_ProjetoId]
+            FOREIGN KEY ([ProjetoId]) REFERENCES [dbo].[ProjetosCompartilhados] ([Id]) ON DELETE CASCADE
+    );
+END;
+GO
+
 -- Os últimos de cada projeto (o card do Board) e a retenção por projeto.
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ArtefatosDosProjetos_ProjetoId_CriadoEmUtc' AND object_id = OBJECT_ID(N'[dbo].[ArtefatosDosProjetos]'))
     CREATE INDEX [IX_ArtefatosDosProjetos_ProjetoId_CriadoEmUtc] ON [dbo].[ArtefatosDosProjetos] ([ProjetoId], [CriadoEmUtc]);

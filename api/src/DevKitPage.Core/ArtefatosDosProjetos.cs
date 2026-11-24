@@ -54,6 +54,10 @@ public sealed class ArtefatoDoProjeto
 /// </summary>
 public interface IArtefatosDosProjetos
 {
+    Task<ResultadoDaGestao<PedidoDeArtefatosV1>> RegistrarPedidoAsync(EscopoDoDesign escopo, long projeto,
+        PedidoDeArtefatosV1 pedido, CancellationToken ct);
+    Task<ResultadoDaGestao<PedidoDeArtefatosV1>> ConsultarPedidoAsync(EscopoDoDesign escopo, long projeto, string pedido, CancellationToken ct);
+
     Task<ResultadoDaGestao<ArtefatoV1>> RegistrarPacoteAsync(EscopoDoDesign escopo, long projeto, PacoteRecebido pacote, CancellationToken ct);
     Task<ResultadoDaGestao<ArtefatoV1>> RegistrarPreviewAsync(EscopoDoDesign escopo, long projeto, PreviewDoProjetoV1 preview, CancellationToken ct);
     Task<ResultadoDaGestao<ArtefatoV1[]>> ListarAsync(EscopoDoDesign escopo, long projeto, CancellationToken ct);

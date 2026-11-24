@@ -23,6 +23,19 @@ public static class EndpointsDosArtefatos
     public static void MapearArtefatos(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
+        grupo.MapGet("/{id:long}/artefatos/pedidos/{pedidoId}", (long id, string pedidoId, HttpRequest pedido, ClaimsPrincipal quem,
+            IArtefatosDosProjetos artefatos, CancellationToken ct) => ComEscopo(quem, async e =>
+                await artefatos.ConsultarPedidoAsync(e, id, pedidoId, ct) is { Valor: { } valor }
+                    ? Results.Ok(Absoluto(pedido, valor)) : Results.NotFound()));
+        grupo.MapPut("/{id:long}/artefatos/pedidos/{pedidoId}", (long id, string pedidoId, HttpRequest pedido, ClaimsPrincipal quem,
+            IArtefatosDosProjetos artefatos, CancellationToken ct) => ComEscopo(quem, async e =>
+        {
+            var (corpo, recusa) = await CorpoJson.LerAsync<PedidoDeArtefatosV1>(pedido, 256 * 1024, ct);
+            if (recusa is not null) return recusa;
+            if (corpo!.Id != pedidoId) return Results.BadRequest("O ID da rota diverge do pedido.");
+            var resultado = await artefatos.RegistrarPedidoAsync(e, id, corpo, ct);
+            return resultado.Valor is { } valor ? Results.Ok(Absoluto(pedido, valor)) : EndpointsDaUs425.Resultado(resultado);
+        })).RequireRateLimiting(LimiteDeTaxa.PoliticaDoDesign);
         grupo.MapGet("/artefatos", (HttpRequest pedido, ClaimsPrincipal quem, IArtefatosDosProjetos artefatos, CancellationToken ct)
             => ComEscopo(quem, async e => Results.Ok((await artefatos.RecentesAsync(e, ct))
                 .Select(p => p with { Artefatos = p.Artefatos.Select(a => Absoluto(pedido, a)).ToArray() }))));
@@ -109,6 +122,10 @@ public static class EndpointsDosArtefatos
     /// <summary>O link do armazém em disco é relativo à API: o dev.kit e o celular recebem o endereço inteiro.</summary>
     private static ArtefatoV1 Absoluto(HttpRequest pedido, ArtefatoV1 artefato)
         => artefato.Link.StartsWith('/') ? artefato with { Link = $"{pedido.Scheme}://{pedido.Host}{pedido.PathBase}{artefato.Link}" } : artefato;
+
+    private static PedidoDeArtefatosV1 Absoluto(HttpRequest pedido, PedidoDeArtefatosV1 valor)
+        => valor with { Resultados = valor.Resultados.Select(a => a.Link.StartsWith('/')
+            ? a with { Link = $"{pedido.Scheme}://{pedido.Host}{pedido.PathBase}{a.Link}" } : a).ToArray() };
 
     private static IResult Grande(OpcoesDosArtefatos opcoes)
         => Results.Problem($"O zip passa do teto de {opcoes.TamanhoMaximoMb} MB.", statusCode: StatusCodes.Status413PayloadTooLarge);

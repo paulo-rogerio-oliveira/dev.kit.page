@@ -3078,6 +3078,18 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.ToTable("AssercoesDoCliente");
                     b.HasOne("DevKitPage.Core.ClienteDaMaquina", null).WithMany().HasForeignKey("ClienteId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
+            modelBuilder.Entity("DevKitPage.Core.PedidoDeArtefatos", b =>
+                {
+                    b.Property<long>("ProjetoId").HasColumnType("INTEGER");
+                    b.Property<string>("Id").HasMaxLength(64).HasColumnType("TEXT");
+                    b.Property<string>("Conteudo").IsRequired().HasColumnType("TEXT");
+                    b.Property<long>("Revisao").IsConcurrencyToken().HasColumnType("INTEGER");
+                    b.HasKey("ProjetoId", "Id");
+                    b.ToTable("PedidosDeArtefatos");
+                    b.HasOne("DevKitPage.Core.ProjetoCompartilhado", "Projeto").WithMany()
+                        .HasForeignKey("ProjetoId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.Navigation("Projeto");
+                });
 #pragma warning restore 612, 618
         }
     }

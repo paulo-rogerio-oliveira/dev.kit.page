@@ -13,7 +13,7 @@ namespace DevKitPage.Infrastructure;
 /// saem do armazém e do banco. O link de download é gerado na leitura, com o prazo de <see cref="OpcoesDosArtefatos.LinkHoras"/>
 /// e nunca além da retenção do zip.
 /// </summary>
-public sealed class ArtefatosDosProjetosNoBanco(DevKitPageDb db, IArmazemDeArtefatos armazem, IOptions<OpcoesDosArtefatos> opcoes,
+public sealed partial class ArtefatosDosProjetosNoBanco(DevKitPageDb db, IArmazemDeArtefatos armazem, IOptions<OpcoesDosArtefatos> opcoes,
     TimeProvider relogio) : IArtefatosDosProjetos
 {
     public const string CodigoDoTeto = "teto";
