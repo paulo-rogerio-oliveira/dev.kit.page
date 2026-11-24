@@ -20,7 +20,6 @@ import { ChatDaTask } from '../componentes/ChatDaTask';
 import { useCatalogoRemoto } from '../componentes/useCatalogoRemoto';
 import { DesfechoDaCriacao, ehGerarArtefato, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
 import { ArtefatosDoCard, useArtefatosDoBoard } from '../componentes/ArtefatosDoProjeto';
-import type { Artefato } from '../api/projetos';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import { ImpactosDaTask } from '../componentes/matrix/Impactos';
 import './Board.css';
@@ -65,7 +64,7 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: Map<string, Artefato[]>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: ReturnType<typeof useArtefatosDoBoard>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
   const local = useLocation();
   const origem = local.pathname + local.search + local.hash;
   const retrato = foto?.retrato;
@@ -118,8 +117,12 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
           <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
-        <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.get(p.slug) ?? []} gerar={slug => void criacao.gerarArtefato(slug)}
-          desabilitado={criacao.desabilitado} motivo={criacao.motivo} agora={agora} />
+        <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.porSlug.get(p.slug) ?? []} gerar={criacao.gerarArtefato}
+          repositorios={p.repositorios ?? []} branch={p.branch ?? ''} estados={p.artefatos ?? []} capacidade={p.podeGerarArtefato === true}
+          plano={criacao.origemDoArtefato} erro={artefatos.erro} erroDoPedido={criacao.falha} atualizar={artefatos.atualizar} atualizando={artefatos.atualizando}
+          linksAutorizados={!artefatos.bloqueado}
+          desabilitado={criacao.desabilitado || desabilitado || p.podeGerarArtefato === false}
+          motivo={p.podeGerarArtefato === false ? 'Este projeto exige editor ou dono e precisa estar aberto para gerar artefatos.' : criacao.motivo} agora={agora} />
       </div>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />

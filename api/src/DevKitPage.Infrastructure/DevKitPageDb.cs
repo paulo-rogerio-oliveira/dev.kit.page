@@ -302,6 +302,8 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
         modelBuilder.Entity<ArtefatoDoProjeto>(e =>
         {
             e.ToTable("ArtefatosDosProjetos");
+            e.Property(a => a.Publicacao).HasMaxLength(64);
+            e.HasIndex(a => new { a.ProjetoId, a.Publicacao }).IsUnique().HasFilter("[Publicacao] IS NOT NULL");
             e.Property(a => a.Tipo).HasMaxLength(20);
             e.Property(a => a.Repositorio).HasMaxLength(Contracts.V1.ArtefatosV1.TamanhoMaximoDoRepositorio);
             e.Property(a => a.Sha).HasMaxLength(40);

@@ -991,6 +991,10 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.Property<long>("ProjetoId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Publicacao")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Repositorio")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -1020,6 +1024,10 @@ namespace DevKitPage.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProjetoId", "CriadoEmUtc");
+
+                    b.HasIndex("ProjetoId", "Publicacao")
+                        .IsUnique()
+                        .HasFilter("[Publicacao] IS NOT NULL");
 
                     b.ToTable("ArtefatosDosProjetos", (string)null);
                 });

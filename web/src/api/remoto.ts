@@ -24,6 +24,7 @@ export interface RetratoDaMaquina {
     projetos: Array<{
       slug: string; nome: string; situacao: string; ondaAtual: number;
       itens: Array<{ numero: number; titulo: string; situacao: string; onda: number }> | null;
+      repositorios?: string[] | null; branch?: string | null; artefatos?: EstadoDoArtefato[] | null; podeGerarArtefato?: boolean | null;
     }> | null;
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;
@@ -34,6 +35,12 @@ export interface RetratoDaMaquina {
     }> | null;
     pendencias: PendenciaRemota[] | null;
   };
+}
+
+/** Estado da execução no host. Nunca contém caminho local ou URL de download. */
+export interface EstadoDoArtefato {
+  id: number; tipo: string; repositorio: string; sha: string; estado: string; etapa: string;
+  detalhe: string; idRemoto: number; criadoEm: string;
 }
 
 export interface ReciboDaFinalizacao {

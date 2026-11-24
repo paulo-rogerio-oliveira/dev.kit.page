@@ -138,6 +138,19 @@
 .br-uso .br-bar {margin:6px 0 0}
 .br-uso.br-cheio {border-color:var(--needline); background:var(--tint); color:var(--accent)}
 .br-uso.br-cheio .br-bar i {background:var(--accent)}
+.br-artefato-form {border:1px solid var(--line); border-radius:8px; background:var(--surface); padding:14px; margin:10px 0}
+.br-artefato-form h3 {margin:0 0 8px; font-size:16px}
+.br-artefato-form p {color:var(--muted); font-size:12px; line-height:1.5}
+.br-artefato-form label {display:flex; flex-direction:column; gap:5px; margin:12px 0; min-width:0; font-weight:600; font-size:12px; color:var(--ink)}
+.br-artefato-form select, .br-artefato-form input {width:100%; min-width:0; border:1px solid var(--line); border-radius:7px; padding:10px; font:inherit; color:var(--ink); background:var(--panel)}
+.br-artefato-campos {display:flex; flex-wrap:wrap; gap:0 12px}
+.br-artefato-campos label {flex:1 1 220px}
+.br-artefato-origem, .br-artefato-estado small, .br-artefato-estado p {overflow-wrap:anywhere}
+.br-artefato-form code, .br-artefato-estado code {white-space:normal; overflow-wrap:anywhere}
+.br-artefato-estado, .br-artefato-publicado {border-top:1px solid var(--line); padding:12px 0; margin-top:10px; min-width:0}
+.br-artefato-estado strong, .br-artefato-estado small {display:block; margin:7px 0; overflow-wrap:anywhere}
+.br-artefato-estado p, .br-artefato-publicado p {font-size:12px; color:var(--muted); line-height:1.5}
+.br-artefatos button:focus-visible, .br-artefatos input:focus-visible, .br-artefatos select:focus-visible, .br-artefatos a:focus-visible {outline:2px solid var(--accent); outline-offset:3px}
 .br-chat {display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--panel); overflow:auto}
 .br-chathead {padding:10px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; background:var(--surface)}
 .br-chathead small {display:block}

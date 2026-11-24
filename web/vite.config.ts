@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { validarConfiguracaoDePreview } from './configuracaoDePreview';
 
 /**
  * A URL pública do site nas meta tags (canonical, Open Graph): o og:image precisa ser absoluto. Vem
@@ -18,19 +19,23 @@ function urlDoSite(url: string): Plugin {
 
 // A base da API vem de VITE_API_URL (ver .env.example); os testes de componente não a usam —
 // o MSW responde no lugar dela.
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), urlDoSite(loadEnv(mode, process.cwd(), 'VITE_').VITE_SITE_URL ?? '')],
-  server: { port: 5173 },
-  preview: { port: 4173 },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/testes/setup.ts'],
-    env: { VITE_API_URL: 'http://api.test' },
-    include: ['src/**/*.test.{ts,tsx}'],
-    // O teto por teste acima da espera dos findBy* (5 s, em testes/setup.ts): a suíte inteira em paralelo é mais lenta.
-    testTimeout: 20_000,
-    reporters: ['default', 'junit'],
-    outputFile: { junit: './test-results/vitest-junit.xml' },
-  },
-}));
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  if (process.env.DEVKIT_PREVIEW === '1' || mode === 'preview') validarConfiguracaoDePreview(env);
+  return {
+    plugins: [react(), urlDoSite(env.VITE_SITE_URL ?? '')],
+    server: { port: 5173 },
+    preview: { port: 4173 },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./src/testes/setup.ts'],
+      env: { VITE_API_URL: 'http://api.test' },
+      include: ['src/**/*.test.{ts,tsx}'],
+      // O teto por teste acima da espera dos findBy* (5 s, em testes/setup.ts): a suíte inteira em paralelo é mais lenta.
+      testTimeout: 20_000,
+      reporters: ['default', 'junit'],
+      outputFile: { junit: './test-results/vitest-junit.xml' },
+    },
+  };
+});
