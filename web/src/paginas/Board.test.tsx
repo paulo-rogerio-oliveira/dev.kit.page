@@ -284,6 +284,29 @@ describe('Board remoto', () => {
     expect(board.getByRole('link', { name: 'Abrir Projeto concluído' })).toHaveTextContent('incorporado ao projeto');
   });
 
+  // (runners · item 6, F10) As ondas que encerraram com item retirado por decisão humana (no retrato, ainda "planejado": limite
+  // F5) levam o projeto a fechamento, mas o card não diz "todos os itens integrados" — nem com zero integrados.
+  it('o projeto em fechamento com item retirado diz ondas encerradas e não todos os itens integrados', async () => {
+    responder();
+    const item = (numero: number, situacao: string) => ({ numero, titulo: `Item ${numero}`, onda: numero, situacao });
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => {
+      const r = retrato();
+      return HttpResponse.json({ ...r, retrato: { ...r.retrato, projetos: [
+        { slug: 'misto', nome: 'Projeto misto', ondaAtual: 2, situacao: 'fechando', itens: [item(1, 'integrado'), item(2, 'planejado')] },
+        { slug: 'retirados', nome: 'Projeto retirado', ondaAtual: 2, situacao: 'fechando', itens: [item(1, 'planejado'), item(2, 'planejado')] },
+      ] } });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    await userEvent.click(await board.findByRole('checkbox', { name: /Mostrar concluídos \(2\)/ }));
+    const misto = board.getByRole('link', { name: 'Abrir Projeto misto' });
+    expect(misto).toHaveTextContent('em fechamento · ondas encerradas · 1 de 2 integrados');
+    expect(misto).not.toHaveTextContent('todos os itens integrados');
+    const retirados = board.getByRole('link', { name: 'Abrir Projeto retirado' });
+    expect(retirados).toHaveTextContent('em fechamento · ondas encerradas · 0 de 2 integrados');
+    expect(retirados).not.toHaveTextContent('todos os itens integrados');
+  });
+
   it('a decisão já dispensada vem marcada da API e fica fora da contagem', async () => {
     responder();
     servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ request }) => {
