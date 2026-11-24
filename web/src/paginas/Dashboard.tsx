@@ -8,7 +8,7 @@ import { BarrasHorizontais, Kpi } from '../componentes/Graficos';
 import { PainelDeUtilidade } from '../componentes/PainelDeUtilidade';
 import { PedidosDeDemonstracao } from '../componentes/PedidosDeDemonstracao';
 import { RoiPorWorkItem } from '../componentes/RoiPorWorkItem';
-import { MenuDaEmpresa, MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar, ultimosDias } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 
@@ -133,7 +133,7 @@ export function Dashboard() {
 
   return (
     <div className="pagina">
-      <Topo secao="uso">{ehAdmin ? <MenuDoAdmin /> : <MenuDaEmpresa />}</Topo>
+      <Topo secao="uso" />
 
       <main className="painel">
         <div className="cabecalho-do-painel">
@@ -227,6 +227,7 @@ export function Dashboard() {
                 <p className="vazio">{filtrandoOLog ? 'Nenhum evento no período com este filtro.' : 'Nenhum evento no período.'}</p>
               ) : (
                 <>
+                  <div className="tabela-rolavel-simples" role="region" aria-label="Tabela de eventos" tabIndex={0}>
                   <table className="tabela">
                     <thead>
                       <tr><th>Quando</th><th>Máquina</th><th>Tipo</th><th>Detalhe</th><th className="numero">Qtd.</th><th className="numero">Valor</th></tr>
@@ -244,6 +245,7 @@ export function Dashboard() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                   <div className="paginacao">
                     <button className="botao botao-fantasma" type="button" disabled={pagina <= 1} onClick={() => setPagina(pagina - 1)}>Anterior</button>
                     <span>Página {pagina} de {totalDePaginas} · {dados.eventos.total} eventos</span>

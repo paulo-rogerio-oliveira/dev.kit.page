@@ -112,6 +112,15 @@ public static partial class RegrasDosProjetos
             return "Informe o branch do projeto (um nome de branch válido).";
         if ((envio.DestinoDaPr?.Trim().Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch)
             return "O destino da PR passa do tamanho de um branch.";
+        if ((envio.BaseDoBranch?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch
+            || (envio.FluxoPadrao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.Agente?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.Modelo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || envio.Modelos is { Count: > 20 }
+            || (envio.Modelos?.Any(m => m is null || string.IsNullOrWhiteSpace(m.Agente)
+                || m.Agente.Length > ProjetosV1.TamanhoMaximoDoNome || m.Modelo is null
+                || m.Modelo.Length > ProjetosV1.TamanhoMaximoDoNome) ?? false))
+            return "Base, fluxo ou modelos do projeto fora do contrato.";
         if (envio.Paralelismo < 1 || envio.Paralelismo > ProjetosV1.ParalelismoMaximo)
             return $"O paralelismo vai de 1 a {ProjetosV1.ParalelismoMaximo}.";
         if (!ProjetosV1.Situacoes.Contains(envio.Situacao ?? ProjetosV1.Rascunho))
@@ -121,6 +130,8 @@ public static partial class RegrasDosProjetos
         var anexos = envio.Anexos ?? [];
         if (anexos.Count > ProjetosV1.MaximoDeAnexos || anexos.Any(a => (a?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoTexto))
             return $"O projeto tem até {ProjetosV1.MaximoDeAnexos} anexos.";
+        if (envio.Situacao == ProjetosV1.Aprovado && (envio.Itens ?? []).Any(i => i.Design is { AlteraTela: true, Propostas.Count: 0 }))
+            return "Proposta visual ausente: fixe projeto/tela/versão/hash antes de aprovar o plano.";
         return ValidarItens(envio.Itens ?? []);
     }
 
@@ -132,6 +143,8 @@ public static partial class RegrasDosProjetos
         var numeros = new HashSet<int>();
         foreach (var item in itens)
         {
+            if (DesignDosItens.Validar(item.Design) is { Length: > 0 } design)
+                return $"Item {item.Numero}: {design}";
             if (item.Numero <= 0 || !numeros.Add(item.Numero))
                 return $"O número do item é positivo e único no plano (o {item.Numero} se repete ou não vale).";
             var titulo = item.Titulo?.Trim() ?? string.Empty;
@@ -139,6 +152,8 @@ public static partial class RegrasDosProjetos
                 return $"O item {item.Numero} precisa de título (até {ProjetosV1.TamanhoMaximoDoNome} caracteres).";
             if ((item.Descricao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoTexto || (item.Fluxo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome)
                 return $"Um dos textos do item {item.Numero} passa do tamanho do contrato.";
+            if ((item.Agente?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome || (item.Modelo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome)
+                return $"Agente ou modelo do item {item.Numero} passa do tamanho do contrato.";
             if (item.Prioridade is < 0 or > 4 || !double.IsFinite(item.Horas) || item.Horas < 0
                 || item.WorkItemId < 0 || item.Branch is null || item.Branch.Length > ProjetosV1.TamanhoMaximoDoBranch)
                 return $"Metadados inválidos no item {item.Numero}.";

@@ -29,7 +29,7 @@ describe('Empresas (US #381; visual da US #461)', () => {
     expect(screen.getByText('2 empresas · 11 assentos contratados · 4 em uso')).toBeInTheDocument();
     expect(within(linha).getByText('11.222.333/0001-81 · São Paulo/SP')).toBeInTheDocument();
     expect(within(outra).getByText('sem CNPJ cadastrado')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Empresas' })).toHaveClass('link-ativo');
+    expect(screen.getByRole('link', { name: 'Empresas' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Catálogo' })).toHaveAttribute('href', '/catalogo');
   });
 

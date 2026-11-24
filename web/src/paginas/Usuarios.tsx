@@ -9,7 +9,7 @@ import { situacaoDoRecurso } from '../componentes/FilaDoControleRemoto';
 import { apoioDaLicenca, BarraDaLicenca, descreverLicenca, PainelDaLicenca } from '../componentes/PainelDaLicenca';
 import { PainelLateral } from '../componentes/PainelLateral';
 import { Selo, type VarianteDoSelo } from '../componentes/Selo';
-import { MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 
@@ -370,7 +370,7 @@ export function Usuarios() {
 
   return (
     <div className="pagina">
-      <Topo secao="usuários"><MenuDoAdmin /></Topo>
+      <Topo secao="usuários" />
 
       <Pagina rotulo="Administração" titulo="Usuários" subtitulo={subtitulo || undefined} acao={novoUsuario} emLinha>
         {erro && <p className="erro" role="alert">{erro}</p>}

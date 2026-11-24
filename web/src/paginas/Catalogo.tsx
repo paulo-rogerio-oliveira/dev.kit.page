@@ -4,7 +4,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoNomeado, TipoDeItem, Vitrine as VitrineDoCatalogo } from '../api/tipos';
 import { Abas } from '../componentes/Abas';
 import { Pagina } from '../componentes/Pagina';
-import { MenuDoAdmin, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { papelDa, useSessao } from '../sessao';
 import { Catalogos } from './catalogo/Catalogos';
@@ -124,7 +124,7 @@ export function Catalogo() {
 
   return (
     <div className="pagina">
-      <Topo secao="catálogo">{ehAdmin && <MenuDoAdmin />}</Topo>
+      <Topo secao="catálogo" />
       <Pagina
         rotulo="Catálogo"
         titulo="Catálogo do dev.kit"

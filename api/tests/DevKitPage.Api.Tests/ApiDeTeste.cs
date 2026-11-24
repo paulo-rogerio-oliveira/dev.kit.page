@@ -50,6 +50,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
     private readonly int _comandosPorHora;
     private readonly int _duracaoDoSse;
     private readonly int _falasPorMinuto;
+    private readonly Action<IServiceCollection>? _configurarServicos;
 
     /// <summary>A pasta das imagens do design (US #669) desta API: temporária, apagada no fim.</summary>
     public string PastaDoDesign { get; } = Path.Combine(Path.GetTempPath(), $"devkitpage-design-{Guid.NewGuid():N}");
@@ -72,8 +73,9 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
         string ambiente = "Testing", bool comSegredo = true, string? ipDaConexao = null, string? redeConfiavel = null,
         string? repoKey = TokenDoGitHub, bool loginObrigatorio = false, bool comLicenca = true, int downloadsPorHora = 100,
         int relatosPorHora = 100, int? tetoDoDesign = null, int comandosPorHora = 100, int duracaoDoSse = 300,
-        int falasPorMinuto = 1000)
+        int falasPorMinuto = 1000, Action<IServiceCollection>? configurarServicos = null)
     {
+        _configurarServicos = configurarServicos;
         _falasPorMinuto = falasPorMinuto;
         _comandosPorHora = comandosPorHora;
         _duracaoDoSse = duracaoDoSse;
@@ -110,6 +112,7 @@ public sealed class ApiDeTeste : WebApplicationFactory<Program>
             s.AddHttpClient(ReleasesDoDevKit.NomeDoCliente).ConfigurePrimaryHttpMessageHandler(() => GitHub);
             s.AddSingleton<DevKitPage.Core.IEnvioDeEmail>(Emails);
             s.AddSingleton<DevKitPage.Core.IFilaDeComandos>(Fila);
+            _configurarServicos?.Invoke(s);
         });
         // A US #425: a licença assinada com a semente de teste, o webhook do gateway, o site do link e os limites
         // largos (os testes do limite usam os seus).

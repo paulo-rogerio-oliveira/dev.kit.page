@@ -1,17 +1,10 @@
 /* Tokens e proporções da proposta app-remoto v35–v40, restritos ao Board. */
 .board-remoto {
-  --accent:#c7362b; --tint:#fbedeb; --ink:#1d2129; --muted:#5b6270; --soft:#737d8e;
-  --line:#e3e6eb; --panel:#fafbfc; --surface:#fff; --violet:#6d3bd8; --violettint:#f3effd;
-  --ok:#1e6b3a; --warn:#8a5300; --warntint:#fbf0dd; --blue:#2f6fde; --bluetint:#e9f0fd; --needline:#e8b9b4;
+  --accent:var(--primaria); --tint:var(--marca-tinta); --ink:var(--texto); --muted:var(--texto-2); --soft:var(--texto-mudo);
+  --line:var(--borda); --panel:var(--pagina); --surface:var(--superficie); --violet:var(--papel); --violettint:var(--papel-tinta);
+  --ok:var(--sucesso); --warn:var(--alerta); --warntint:var(--alerta-tinta); --blue:var(--info); --bluetint:var(--info-tinta); --needline:#e8b9b4;
   color-scheme:light; color:var(--ink); background:var(--surface); font:13px/1.4 "Segoe UI",system-ui,sans-serif;
   height:100vh; height:100dvh; min-height:360px; display:flex; flex-direction:column;
-}
-@media (prefers-color-scheme:dark) {
-  .board-remoto {
-    color-scheme:dark; --accent:#ff786e; --tint:#352323; --ink:#f1f2f5; --muted:#b5bcc8; --soft:#a1aabb;
-    --line:#343943; --panel:#1b1e24; --surface:#242830; --violet:#b49aff; --violettint:#302743;
-    --ok:#83d7a2; --warn:#efc37c; --warntint:#3c3020; --blue:#9bbdff; --bluetint:#26354e; --needline:#73514b;
-  }
 }
 .board-remoto b,.board-remoto strong {font-weight:650}
 .board-remoto button,.board-remoto textarea,.board-remoto select {font:inherit; color:inherit}
@@ -29,9 +22,9 @@
 .br-host i {width:8px; height:8px; flex:none; border-radius:50%; background:currentColor}
 .br-host.br-offline {color:var(--muted)}
 .br-host>.br-desktop-state {flex:none; white-space:nowrap}
-.br-host select {min-width:0; max-width:190px; height:30px; min-height:30px; padding:4px 8px; border:1px solid var(--line); border-radius:5px; background:var(--surface)}
+.br-host select {min-width:0; max-width:190px; height:30px; min-height:30px; padding:4px 8px; border:1px solid var(--borda-controle); border-radius:5px; background:var(--surface)}
 .br-projeto-execucoes {display:grid; gap:5px; margin-bottom:10px; min-width:0; font-size:11.5px; color:var(--muted)}
-.br-projeto-execucoes select {appearance:auto; width:100%; min-width:0; max-width:100%; height:34px; min-height:34px; padding:5px 8px; border:1px solid var(--line); border-radius:5px; background:var(--surface); color:var(--ink); font-size:13px; font-weight:400}
+.br-projeto-execucoes select {appearance:auto; width:100%; min-width:0; max-width:100%; height:34px; min-height:34px; padding:5px 8px; border:1px solid var(--borda-controle); border-radius:5px; background:var(--surface); color:var(--ink); font-size:13px; font-weight:400}
 /* Item 8: Ligar/Reiniciar pelo serviço da máquina, a faixa do desfecho e a confirmação do reinício (propostas app-remoto v227–v235). */
 .br-acao {flex:none; border-color:var(--accent); color:var(--accent)}
 .br-acao.br-ligar {background:var(--accent); color:#fff}
@@ -48,12 +41,7 @@
 .br-dialogo .br-row {justify-content:flex-end; margin-top:14px}
 .br-dialogo .br-row .br-btn {flex:none}
 .br-perigo {background:var(--accent)!important; border-color:var(--accent)!important; color:#fff!important}
-@media (prefers-color-scheme:dark) {
-  .br-acionamento.br-ok {background:#1f3326}
-  .br-acao.br-ligar,.br-perigo {color:#1b1e24!important}
-  .board-remoto .br-side .chip[aria-pressed='true'],.board-remoto .aba-contagem {color:#1b1e24}
-}
-.br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--line); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
+.br-btn {min-height:34px; padding:6px 12px; border-radius:7px; border:1px solid var(--borda-controle); background:var(--surface); font-size:12px!important; font-weight:600!important; display:flex; align-items:center; justify-content:center}
 .br-mobile-state {display:none}
 .br-navegacao {display:flex; flex-direction:column; flex:1; min-height:0; min-width:0}
 .board-remoto .br-navegacao>.abas {display:none}
@@ -142,7 +130,7 @@
 .br-form label, .br-form fieldset {display:flex; flex-direction:column; gap:4px; margin:0 0 12px; font-size:12px; font-weight:600; color:var(--ink)}
 .br-form fieldset {border:1px solid var(--line); border-radius:8px; padding:8px 10px}
 .br-form legend {padding:0 4px}
-.br-form input[type='text'], .br-form textarea, .br-form select {font:inherit; font-weight:400; font-size:13px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--ink)}
+.br-form input[type='text'], .br-form textarea, .br-form select {font:inherit; font-weight:400; font-size:13px; padding:7px 9px; border:1px solid var(--borda-controle); border-radius:7px; background:var(--surface); color:var(--ink)}
 .br-form textarea {min-height:72px; resize:vertical}
 .br-form .br-opcao {flex-direction:row; align-items:center; gap:8px; margin:0; padding:3px 0; font-weight:400}
 .br-form .br-dica {font-weight:400; color:var(--muted); font-size:11.5px}
@@ -160,7 +148,7 @@
 .br-indisponivel h1 {font-size:17px; margin:0 0 8px; line-height:1.4}
 .br-indisponivel p {font-size:13px; color:var(--muted); margin:0 0 12px; line-height:1.65}
 .br-indisponivel small {display:block}
-.br-composer {border:1px solid var(--line); border-radius:12px; margin:10px 14px 8px; padding:9px 10px; background:var(--surface)}
+.br-composer {border:1px solid var(--borda-controle); border-radius:12px; margin:10px 14px 8px; padding:9px 10px; background:var(--surface)}
 .br-composer textarea {width:100%; height:28px; min-height:28px; resize:none; display:block; border:0; border-radius:0; background:transparent; color:var(--soft); padding:0; font-size:12px; overflow:hidden}
 .br-composer textarea::placeholder {color:var(--soft); opacity:1}
 .br-bottom {display:flex; gap:6px; align-items:center; flex-wrap:wrap}

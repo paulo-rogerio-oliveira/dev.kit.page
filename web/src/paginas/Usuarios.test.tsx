@@ -186,7 +186,7 @@ describe('Usuários (US #405; visual da US #461)', () => {
     await userEvent.click(await screen.findByRole('link', { name: 'Usuários' }));
 
     expect(await screen.findByRole('button', { name: '+ Novo usuário' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Usuários' })).toHaveClass('link-ativo');
+    expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('o gestor que abre Usuários volta ao dashboard; o dev, à conta dele (US #425)', async () => {
@@ -305,7 +305,7 @@ describe('A provisão liberada por usuário (controle remoto v2, item 4; a fila 
 
     await waitFor(() => expect(gestaoDeUsuarios).toEqual([{ metodo: 'PUT', caminho: '/api/usuarios/2/recursos/provisao', corpo: { liberado: true } }]));
     expect(await screen.findByText(/Provisão liberada para ana.dev: a fila do controle remoto \(conta dkq2novafila1\) foi pedida/)).toBeInTheDocument();
-    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Licença de Ana Souza' })).not.toBeInTheDocument();
   });
 
   it('retirar pelo menu abre a confirmação no painel; cancelar não grava, e sem marcar a fila fica', async () => {

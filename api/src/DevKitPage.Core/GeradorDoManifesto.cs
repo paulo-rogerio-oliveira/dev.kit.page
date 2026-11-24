@@ -43,6 +43,8 @@ public static partial class GeradorDoManifesto
     {
         switch (tipo)
         {
+            case GatilhoDoCatalogo.Tipo:
+                return GatilhoDoCatalogo.Ler(arquivo, conteudo);
             case TiposDeItem.Skill:
             {
                 var skill = FormatosDoCatalogo.LerSkill(conteudo);
@@ -137,6 +139,8 @@ public static partial class GeradorDoManifesto
     {
         if (tipo == TiposDeItem.Plan)
             return "Tech Plans";
+        if (tipo == GatilhoDoCatalogo.Tipo)
+            return "Gatilhos";
         if (tipo == TiposDeItem.Fluxo)
             return "Fluxos";
         if (nome.Contains("angular", StringComparison.OrdinalIgnoreCase))
@@ -164,12 +168,20 @@ public static partial class GeradorDoManifesto
         if (envelope["desenho"]?["nodes"] is JsonArray nos)
         {
             foreach (var no in nos.OfType<JsonObject>())
+            {
                 if (no["skillName"] is JsonValue v && v.TryGetValue<string>(out var skill) && skill.Trim().Length > 0)
                     deps.Add($"{TiposDeItem.Skill}:{skill.Trim()}");
+                if (no["createIfMissing"] is JsonValue c && c.TryGetValue<bool>(out var adota) && adota
+                    && no["title"] is JsonValue t && t.TryGetValue<string>(out var nome) && nome.Trim().Length > 0)
+                    deps.Add($"{GatilhoDoCatalogo.Tipo}:{FormatosDoCatalogo.Slug(nome.Trim(), GatilhoDoCatalogo.Tipo)}");
+            }
         }
 
         foreach (var chave in PlansEmbutidos(envelope))
             deps.Add($"{TiposDeItem.Plan}:{chave}");
+        foreach (var item in (envelope["planos"] as JsonArray ?? []).OfType<JsonObject>())
+            if (item["referencia"] is JsonValue r && r.TryGetValue<string>(out var referencia) && referencia.Trim().Length > 0)
+                deps.Add($"{TiposDeItem.Plan}:{referencia.Trim()}");
         return deps.ToArray();
     }
 

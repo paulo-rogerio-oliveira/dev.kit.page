@@ -72,21 +72,65 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                 : $"O projeto {envio.Slug} mudou (v{projeto.Versao}, você leu a v{envio.Versao}): releia e envie de novo.");
         }
 
-        var anterior = novo ? null : Leitura(escopo, projeto);
-        if (EscolhasDosProjetos.RebaixaReferencia(anterior?.FluxoPadrao, envio.FluxoPadrao)
-            || (envio.Itens ?? []).Any(i => EscolhasDosProjetos.RebaixaReferencia(anterior?.Itens.FirstOrDefault(a => a.Numero == i.Numero)?.Fluxo, i.Fluxo)))
+        var anteriorProjeto = novo ? null : Leitura(escopo, projeto);
+        var anteriores = anteriorProjeto?.Itens ?? [];
+        if (EscolhasDosProjetos.RebaixaReferencia(anteriorProjeto?.FluxoPadrao, envio.FluxoPadrao)
+            || (envio.Itens ?? []).Any(i => EscolhasDosProjetos.RebaixaReferencia(anteriorProjeto?.Itens.FirstOrDefault(a => a.Numero == i.Numero)?.Fluxo, i.Fluxo)))
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito,
                 "A escolha do fluxo tem identidade e revisão portáteis: preserve a referência ou selecione explicitamente outra referência compatível. Um ID local/nome de cliente antigo não pode sobrescrevê-la.");
-        if (envio.PoliticaDeFinalizacao is { } recebida && anterior?.PoliticaDeFinalizacao is { } politicaAnterior
+        if (envio.PoliticaDeFinalizacao is { } recebida && anteriorProjeto?.PoliticaDeFinalizacao is { } politicaAnterior
             && recebida != politicaAnterior && recebida.Revisao <= politicaAnterior.Revisao)
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Conflito,
                 "A política da finalização mudou: releia a revisão atual antes de reenviar.");
-        envio = EscolhasDosProjetos.Preservar(envio with { Itens = envio.Itens ?? [] }, anterior);
-        var anteriores = anterior?.Itens ?? Array.Empty<ItemDoProjetoV1>();
-        var enviados = envio.Itens ?? [];
+
+        // Campos opcionais ausentes em clientes antigos não apagam a definição portátil.
+        envio = envio with
+        {
+            BaseDoBranch = string.IsNullOrEmpty(envio.BaseDoBranch) ? anteriorProjeto?.BaseDoBranch ?? envio.BaseDoBranch : envio.BaseDoBranch,
+            FluxoPadrao = envio.FluxoPadrao ?? anteriorProjeto?.FluxoPadrao,
+            Agente = envio.Agente ?? anteriorProjeto?.Agente,
+            Modelo = envio.Modelo ?? anteriorProjeto?.Modelo,
+            Modelos = envio.Modelos ?? anteriorProjeto?.Modelos,
+            PoliticaDeFinalizacao = envio.PoliticaDeFinalizacao ?? anteriorProjeto?.PoliticaDeFinalizacao,
+            FeatureId = envio.FeatureId > 0 ? envio.FeatureId : anteriorProjeto?.FeatureId ?? 0,
+            EpicId = envio.EpicId > 0 ? envio.EpicId : anteriorProjeto?.EpicId ?? 0,
+            Iteracao = !string.IsNullOrEmpty(envio.Iteracao) ? envio.Iteracao : anteriorProjeto?.Iteracao ?? "",
+            Board = !string.IsNullOrEmpty(envio.Board) ? envio.Board : anteriorProjeto?.Board ?? "",
+            BranchesDasTasks = envio.BranchesDasTasks ?? anteriorProjeto?.BranchesDasTasks,
+        };
+        // O número muda no replanejamento. A proposta acompanha a identidade do item,
+        // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
+        ItemDoProjetoV1? AnteriorDoDesign(ItemDoProjetoV1 item)
+            => anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
+                ?? anteriores.FirstOrDefault(a => string.Equals(a.Titulo.Trim(), item.Titulo.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? anteriores.FirstOrDefault(a => a.Numero == item.Numero);
+        var enviados = (envio.Itens ?? []).Select(i =>
+        {
+            var anterior = AnteriorDoDesign(i);
+            return i with
+            {
+                Design = i.Design ?? anterior?.Design,
+                Fluxo = i.Fluxo ?? anterior?.Fluxo ?? "",
+                Agente = i.Agente ?? anterior?.Agente,
+                Modelo = i.Modelo ?? anterior?.Modelo,
+                WorkItemId = i.WorkItemId > 0 ? i.WorkItemId : anterior?.WorkItemId ?? 0,
+                Branch = i.Branch.Length > 0 ? i.Branch : anterior?.Branch ?? "",
+                Horas = i.AtualizadoEm is null && i.Horas == 0 ? anterior?.Horas ?? 0 : i.Horas,
+            };
+        }).ToArray();
+        foreach (var item in enviados)
+        {
+            var anterior = AnteriorDoDesign(item);
+            var recusa = DesignDosItens.Mudanca(anterior?.Design, item.Design);
+            if (recusa.Length > 0)
+                return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, $"Item {item.Numero}: {recusa}");
+            if (anterior is not null && envio.Situacao == ProjetosV1.Aprovado
+                && JsonSerializer.Serialize(anterior.Design) != JsonSerializer.Serialize(item.Design))
+                return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, "Alterar o design exige devolver o plano à aprovação (situação aguardando).");
+        }
         var itens = anteriores.Where(i => enviados.All(n => n.Numero != i.Numero))
             .Concat(enviados).OrderBy(i => i.Numero).ToArray();
-        var erroDoPlano = RegrasDosProjetos.ValidarItens(itens);
+        var erroDoPlano = RegrasDosProjetos.Validar(envio with { Itens = itens });
         if (erroDoPlano.Length > 0)
             return ResultadoDaGestao<ProjetoGravado>.Falhou(FalhaNaGestao.Recusada, erroDoPlano);
         envio = envio with { Itens = itens };
@@ -187,7 +231,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         RegrasDeAcesso.Papel(escopo, p) == AcessoV1.PapelDono,
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
         documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
-        documento?.BaseDoBranch, documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
+        documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
         documento?.PoliticaDeFinalizacao) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(

@@ -8,6 +8,15 @@ namespace DevKitPage.Core.Tests;
 /// </summary>
 public sealed class RegrasDosProjetosTests
 {
+    [Fact]
+    public void Design_incompleto_pode_ser_planejado_mas_nao_aprovado_e_hash_invalido_e_recusado()
+    {
+        var item = Item(1) with { Design = new(true, 1, []) };
+        Assert.Empty(RegrasDosProjetos.Validar(Envio(itens: [item], situacao: "aguardando")));
+        Assert.Contains("Proposta visual ausente", RegrasDosProjetos.Validar(Envio(itens: [item], situacao: "aprovado")));
+        item = item with { Design = new(true, 1, [new("repo", "tela", 1, "incorreto")]) };
+        Assert.Contains("SHA-256", RegrasDosProjetos.ValidarItens([item]));
+    }
     private static ItemDoProjetoV1 Item(int numero, params int[] dependencias)
         => new(numero, $"Item {numero}", string.Empty, "planejar-e-executar", ["https://github.com/acme/portal"], ["Core/Data"],
             dependencias, 0, 0, ProjetosV1.ItemPlanejado);

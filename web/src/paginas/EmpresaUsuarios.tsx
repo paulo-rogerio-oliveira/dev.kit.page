@@ -3,7 +3,7 @@ import { api, ErroDaApi } from '../api/cliente';
 import type { EmpresaDoGestor, UsuarioDaEmpresa } from '../api/tipos';
 import { iniciais } from '../componentes/Avatar';
 import { Selo } from '../componentes/Selo';
-import { MenuDaEmpresa, Topo } from '../componentes/Topo';
+import { Topo } from '../componentes/Topo';
 import { formatar } from '../formatar';
 import { useSessao } from '../sessao';
 
@@ -84,7 +84,7 @@ export function EmpresaUsuarios() {
   const politica: Politica = empresa === null || empresa.loginObrigatorio === null ? 'padrao' : empresa.loginObrigatorio ? 'sim' : 'nao';
   return (
     <div className="pagina">
-      <Topo secao="empresa"><MenuDaEmpresa /></Topo>
+      <Topo secao="empresa" />
       <main className="painel">
         {erro && <p className="erro" role="alert">{erro}</p>}
         {aviso && <p className="aviso" role="status">{aviso}</p>}

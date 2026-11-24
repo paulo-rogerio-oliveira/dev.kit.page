@@ -70,9 +70,10 @@ public sealed class ReleasesDoDevKit(HttpClient http, IOptions<OpcoesDeAtualizac
             if (resposta is null)
                 return null;
             var manifesto = await resposta.Content.ReadFromJsonAsync<ManifestoDoCatalogoV1>(JsonDoManifesto, ct);
-            if (!RegrasDoCatalogoBase.Valido(manifesto, release.Versao))
+            // O MOTIVO vai junto (item 15): o "inválido" sozinho deixava o 503 do básico sem causa no log.
+            if (RegrasDoCatalogoBase.Problema(manifesto, release.Versao) is { } problema)
             {
-                log.LogWarning("O manifesto da release {Tag} de {Repositorio} é inválido.", release.Tag, cfg.Repositorio);
+                log.LogWarning("O manifesto da release {Tag} de {Repositorio} é inválido: {Problema}.", release.Tag, cfg.Repositorio, problema);
                 return null;
             }
 
