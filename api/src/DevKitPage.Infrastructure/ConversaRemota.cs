@@ -39,6 +39,8 @@ public sealed class ConversaRemota(
         var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == pedido.MaquinaId, ct);
         if (maquina is null)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.NaoEncontrado, "Máquina não encontrada, ou não é sua.");
+        if (await new ProntidaoDoDisparoRemoto(db, relogio).PendenciaAsync(usuarioId, tipo, texto, ct) is { } matrix)
+            return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.MatrixPendente, matrix);
         if (tipo == ConversaV1.ComandoReiniciar && maquina.TurnoEmAndamento && !pedido.ConfirmarReinicio)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.TurnoEmAndamento,
                 "Há um turno do agente em andamento nesta máquina: reiniciar o interrompe. Confirme para reiniciar assim mesmo.");
@@ -127,6 +129,8 @@ public sealed class ConversaRemota(
     private async Task<ResultadoDaConversa<ComandoAceito>> EnfileirarAsync(
         ComandoRemoto comando, FilaDoUsuario filaDoUsuario, bool novo, bool confirmarReinicio, CancellationToken ct)
     {
+        if (await new ProntidaoDoDisparoRemoto(db, relogio).PendenciaAsync(comando.UsuarioId, comando.Tipo, comando.Texto, ct) is { } matrix)
+            return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.MatrixPendente, matrix);
         var agora = relogio.GetUtcNow().UtcDateTime;
         // O fluxo escolhido no chat vai em campos próprios da mensagem; sem ele, eles ficam de fora (o dev.kit antigo não os lê).
         var contexto = comando.Contexto.Length > 0 ? JsonSerializer.Deserialize<ContextoDoComando>(comando.Contexto, Json) : null;

@@ -16,7 +16,7 @@ namespace DevKitPage.Api.Tests;
 /// (retomado pelo <c>Last-Event-ID</c>). E as recusas: sem JWT, o comando e a máquina de outro usuário (404), sem fila, o
 /// reinício sem confirmação, o dado sensível, o limite por usuário com o <c>Retry-After</c> e a fila fora do ar.
 /// </summary>
-public sealed class ConversaApiTests : IDisposable
+public sealed partial class ConversaApiTests : IDisposable
 {
     private const string Maquina = "3f2b9c0e5d7a";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
