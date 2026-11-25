@@ -1,70 +1,100 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { Projeto } from '../api/projetos';
+import type { Projeto, ResumoDoProjeto } from '../api/projetos';
 import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
 import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
-import { PropostasDoPlano } from '../componentes/PropostasDoPlano';
-import { ImpactosDoProjeto } from '../componentes/matrix/Impactos';
+import { OndasDoProjeto } from '../componentes/OndasDoProjeto';
+import { AcoesDoProjeto } from '../componentes/AcoesDoProjeto';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
 import './Projetos.css';
 
+const Propostas = lazy(() => import('../componentes/PropostasDoPlano').then(m => ({ default: m.PropostasDoPlano })));
+const Impactos = lazy(() => import('../componentes/matrix/Impactos').then(m => ({ default: m.ImpactosDoProjeto })));
 const estados: Record<string, string> = {
   planejado: 'Planejado', rodando: 'Rodando', pergunta: 'Pergunta', integrado: 'Integrado', falhou: 'Falhou',
   rascunho: 'Rascunho', aguardando: 'Aguardando aprovação', aprovado: 'Em andamento', pausado: 'Pausado',
   fechando: 'Fechando', concluido: 'Concluído',
 };
-const situacoes = ['planejado', 'rodando', 'pergunta', 'integrado', 'falhou'];
 const curto = (url: string) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean).slice(-2).join('/');
-const itensDoGrafo = (p: Projeto) => p.itensDoGrafo == null ? p.itens : p.itens.filter(i => p.itensDoGrafo!.includes(i.numero));
-const ondaAtual = (p: Projeto) => Math.min(...itensDoGrafo(p).filter(i => i.situacao !== 'integrado').map(i => i.onda));
 
 export function Projetos() {
   const { sessao, sair } = useSessao();
+  const token = sessao!.token;
   const [consulta, setConsulta] = useSearchParams();
-  const [projetos, setProjetos] = useState<Projeto[]>([]);
+  const [projetos, setProjetos] = useState<ResumoDoProjeto[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  const sequencia = useRef(0);
+  const [detalhe, setDetalhe] = useState<Projeto | null>(null);
+  const [erroDoDetalhe, setErroDoDetalhe] = useState('');
+  const [revisao, setRevisao] = useState(0);
+  const cache = useRef(new Map<string, Projeto>());
   const nivel = consulta.get('nivel') ?? '';
   const situacao = consulta.get('situacao') ?? '';
-  const carregar = useCallback(async () => {
-    const numero = ++sequencia.current;
-    setCarregando(true);
-    setErro('');
-    try {
-      const recebidos = await api.projetos(sessao!.token);
-      if (numero === sequencia.current) setProjetos(recebidos);
-    } catch (e) {
-      if (numero !== sequencia.current) return;
-      if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
-      else setErro(`Não foi possível carregar os projetos. ${mensagemDaFalha(e)}`);
-    } finally { if (numero === sequencia.current) setCarregando(false); }
-  }, [sessao, sair]);
-  useEffect(() => { void carregar(); return () => { sequencia.current++; }; }, [carregar]);
-  const visiveis = projetos.filter(p => (!nivel || p.nivel === nivel) && (!situacao || p.situacao === situacao));
-  // O Board remoto (item 4 do remote-control-v3) abre o projeto pelo slug, que é o que a máquina conhece.
   const slug = consulta.get('slug');
-  const peloSlug = slug ? visiveis.find(p => p.slug === slug) : undefined;
-  const escolhido = visiveis.find(p => String(p.id) === consulta.get('projeto')) ?? peloSlug ?? visiveis[0];
+  const visiveis = projetos.filter(p => (!nivel || p.nivel === nivel) && (!situacao || p.situacao === situacao));
+  const escolhido = projetos.find(p => String(p.id) === consulta.get('projeto'))
+    ?? projetos.find(p => p.slug === slug) ?? visiveis[0];
+  const tratar = useCallback((e: unknown) => {
+    if (e instanceof ErroDaApi && e.status === 401) sair('expirou');
+    return mensagemDaFalha(e);
+  }, [sair]);
+  useEffect(() => {
+    const controlador = new AbortController();
+    setCarregando(true); setErro('');
+    void api.resumosDosProjetos(token, controlador.signal).then(lista => {
+      if (!controlador.signal.aborted) setProjetos(lista);
+    }).catch(e => {
+      if (!controlador.signal.aborted) setErro(`Não foi possível carregar os projetos. ${tratar(e)}`);
+    }).finally(() => { if (!controlador.signal.aborted) setCarregando(false); });
+    return () => controlador.abort();
+  }, [token, revisao, tratar]);
+  const id = escolhido?.id, versao = escolhido?.versao;
+  useEffect(() => {
+    if (id === undefined || versao === undefined) return;
+    const controlador = new AbortController();
+    const chave = `${token}/${id}/${versao}`;
+    const salvo = cache.current.get(chave);
+    setErroDoDetalhe('');
+    if (salvo) { setDetalhe(salvo); return; }
+    void api.projeto(token, id, controlador.signal).then(p => {
+      if (!controlador.signal.aborted) { cache.current.set(chave, p); setDetalhe(p); }
+    }).catch(e => { if (!controlador.signal.aborted) setErroDoDetalhe(tratar(e)); });
+    return () => controlador.abort();
+  }, [id, versao, token, revisao, tratar]);
+  function atualizar() { cache.current.clear(); setRevisao(r => r + 1); }
+  function salvo(p: Projeto) {
+    cache.current.clear(); cache.current.set(`${token}/${p.id}/${p.versao}`, p); setDetalhe(p);
+    setProjetos(lista => lista.map(r => r.id === p.id ? { ...r, versao: p.versao, situacao: p.situacao,
+      atualizadoEm: p.atualizadoEm, totalDeItens: p.itens.length } : r));
+  }
   function filtrar(chave: string, valor: string) {
-    const proxima = new URLSearchParams(consulta);
-    if (valor) proxima.set(chave, valor); else proxima.delete(chave);
-    if (chave !== 'projeto') proxima.delete('projeto');
-    proxima.delete('slug');
-    setConsulta(proxima);
-  }
-  function linkDoProjeto(id: number) {
     const q = new URLSearchParams(consulta);
-    q.set('projeto', String(id)); q.delete('slug');
-    return `/projetos?${q}`;
+    if (valor) q.set(chave, valor); else q.delete(chave);
+    if (chave !== 'projeto') q.delete('projeto');
+    q.delete('slug'); setConsulta(q);
   }
+  const p = detalhe?.id === id ? detalhe : null;
+  const lista = <aside className="projetos-lista" aria-label="Projetos sincronizados"><h3>Projetos</h3>{visiveis.map(r => {
+    const q = new URLSearchParams(consulta); q.set('projeto', String(r.id)); q.delete('slug');
+    return <div key={r.id} className={`cartao projeto-resumo${id === r.id ? ' escolhido' : ''}`}>
+      <button type="button" className="projeto-selecionar" aria-pressed={id === r.id} onClick={() => filtrar('projeto', String(r.id))}>
+        <strong>{r.nome}</strong><span>{estados[r.situacao] ?? r.situacao}</span>
+        <span>{r.itensConcluidos} de {r.totalDeItens} itens integrados</span>
+      </button><Link to={`/projetos?${q}`} aria-label={`Abrir projeto ${r.nome}`}>Abrir projeto →</Link>
+    </div>;
+  })}</aside>;
   return <div className={`pagina projetos-pagina${consulta.has('projeto') || slug ? ' com-projeto-aberto' : ''}`}>
     <Topo secao="projetos" />
-    <Pagina rotulo={sessao!.empresa ?? 'Meu espaço'} titulo="Projetos" subtitulo="Os projetos sincronizados do dev.kit, com seus branches, plano e andamento.">
+    <Pagina rotulo="Orquestrador › Projetos" titulo={escolhido?.nome ?? 'Projetos'} subtitulo={p?.branch ?? 'Projetos sincronizados do dev.kit'}>
       <div className="projetos-filtros">
+        <select aria-label="Projeto ativo" value={escolhido?.id ?? ''} onChange={e => filtrar('projeto', e.target.value)}>
+          {!escolhido && <option value="">Escolher projeto</option>}
+          {escolhido && !visiveis.some(r => r.id === escolhido.id) && <option value={escolhido.id}>{escolhido.nome} · fora do filtro atual</option>}
+          {visiveis.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+        </select>
         <select aria-label="Nível de compartilhamento" value={nivel} onChange={e => filtrar('nivel', e.target.value)}>
           <option value="">Todos os projetos</option><option value="usuario">Meus projetos</option>
           {sessao!.empresa && <><option value="time">Time</option><option value="empresa">Empresa</option></>}
@@ -73,68 +103,62 @@ export function Projetos() {
           <option value="">Todas as situações</option>
           {['rascunho', 'aguardando', 'aprovado', 'pausado', 'fechando', 'concluido'].map(e => <option key={e} value={e}>{estados[e]}</option>)}
         </select>
-        <button className="botao botao-fantasma" onClick={() => void carregar()} disabled={carregando}>↻ Atualizar</button>
+        <button className="botao botao-fantasma" onClick={atualizar} disabled={carregando}>↻ Atualizar</button>
         <span className="projetos-contagem">{visiveis.length} projeto(s)</span>
+        {escolhido && consulta.get('visao') && consulta.get('visao') !== 'plano' && (() => {
+          const q = new URLSearchParams(consulta); q.set('projeto', String(escolhido.id)); q.delete('slug');
+          return <Link to={`/projetos?${q}`} aria-label={`Abrir projeto ${escolhido.nome}`}>Abrir projeto →</Link>;
+        })()}
       </div>
-      {erro && <div role="alert" className="erro">{erro} <button className="botao botao-fantasma" onClick={() => void carregar()}>Tentar novamente</button></div>}
+      {erro && <div role="alert" className="erro">{erro} <button onClick={atualizar}>Tentar novamente</button></div>}
       {carregando && <p role="status">Carregando projetos…</p>}
-      {!carregando && !erro && slug && !peloSlug && !consulta.get('projeto') && <p role="status" className="projetos-nota">
-        O projeto {slug} ainda não chegou ao site: no dev.kit, abra Projetos e use Sincronizar (o criado pelo Board vai sozinho quando há login).</p>}
-      {!carregando && !erro && visiveis.length === 0 && <p>Nenhum projeto sincronizado com esses filtros. No dev.kit, abra Projetos e use Sincronizar.</p>}
-      {!carregando && !erro && escolhido && <div className="projetos-board">
-        <aside className="projetos-lista" aria-label="Projetos sincronizados">
-          {visiveis.map(p => {
-            const itens = itensDoGrafo(p), integrados = itens.filter(i => i.situacao === 'integrado').length;
-            return <div key={p.id} className={`cartao projeto-resumo${escolhido.id === p.id ? ' escolhido' : ''}`}>
-              <button type="button" className="projeto-selecionar" aria-pressed={escolhido.id === p.id} onClick={() => filtrar('projeto', String(p.id))}>
-              <strong>{p.nome}</strong><span className="projeto-resumo-repositorios">{p.repositorios.map(curto).join(' · ')}</span>
-              <code className="projeto-branch">{p.branch}</code>
-              <progress aria-label={`Andamento de ${p.nome}`} max={Math.max(1, itens.length)} value={integrados} />
-              <span>{integrados} de {itens.length} itens integrados</span><span>{estados[p.situacao] ?? p.situacao}</span>
-              </button>
-              <Link className="projeto-abrir" to={linkDoProjeto(p.id)} aria-label={`Abrir projeto ${p.nome}`}>Abrir projeto →</Link>
-            </div>;
-          })}
-        </aside>
-        <Detalhe projeto={escolhido} />
-      </div>}
+      {!carregando && !erro && slug && !projetos.some(r => r.slug === slug) && <p role="status">O projeto {slug} ainda não chegou ao site: use Sincronizar no dev.kit.</p>}
+      {!carregando && !erro && !escolhido && <p>Nenhum projeto sincronizado com esses filtros.</p>}
+      {escolhido && erroDoDetalhe && <div role="alert" className="erro">{erroDoDetalhe} <button onClick={atualizar}>Reler projeto</button></div>}
+      {escolhido && !p && !erroDoDetalhe && <p role="status">Carregando detalhe do projeto…</p>}
+      {p && escolhido && <Detalhe key={`${token}/${p.id}`} projeto={p} resumo={escolhido} lista={lista} salvo={salvo} tratar={tratar} />}
     </Pagina>
   </div>;
 }
 
-function Detalhe({ projeto: p }: { projeto: Projeto }) {
-  const { sessao, sair } = useSessao();
+function Detalhe({ projeto: p, resumo, lista, salvo, tratar }: {
+  projeto: Projeto; resumo: ResumoDoProjeto; lista: ReactNode; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
+}) {
+  const { sessao } = useSessao();
   const [consulta, setConsulta] = useSearchParams();
   const [emRevisao, setEmRevisao] = useState(false);
-  const visao = consulta.get('visao') ?? 'plano';
-  const impactos = ['impactos', 'entregas', 'historico'].includes(visao);
   const [erro, setErro] = useState('');
-  const tratar = useCallback((falha: unknown) => {
-    if (falha instanceof ErroDaApi && falha.status === 401) sair('expirou');
-    else setErro(mensagemDaFalha(falha));
-  }, [sair]);
-  useEffect(() => setErro(''), [p.id]);
-  const itens = itensDoGrafo(p);
-  const ondas = [...new Set(itens.map(i => i.onda))].sort((a, b) => a - b);
-  const atual = ondaAtual(p);
-  return <article className="cartao projeto-detalhe" aria-label="Detalhe do projeto">
-    <h2 tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2><code className="projeto-branch">{p.branch}</code>
-    <p>Repositórios: {p.repositorios.map(curto).join(' · ')}</p>
-    <p>{p.pendenciaDoGrafo || (Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano')}</p>
-    <div className="projeto-situacoes">{situacoes.map(s => <span key={s} className={`projeto-situacao ${s}`}>{itens.filter(i => i.situacao === s).length} {estados[s]}</span>)}</div>
-    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'impactos', 'propostas', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
-      onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', impactos: 'Impactos', propostas: 'Propostas visuais', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
-    {visao === 'propostas' ? <PropostasDoPlano key={`propostas-${p.id}`} token={sessao!.token} itens={p.itens} tratar={tratar} /> : impactos ? <ImpactosDoProjeto key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} /> : <div className="projeto-ondas">{ondas.map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
-      <h3>Onda {onda} · {onda < atual ? 'concluída' : onda === atual ? 'atual' : 'próxima'}</h3>
-      {itens.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
-        <h4>{i.numero} · {i.titulo}</h4><p className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</p>
-        <span>{i.repositorios.map(curto).join(' · ')}</span><code>{i.branch || 'Branch ainda não informado'}</code>
-        {i.dependencias.length > 0 && <p>Depende de: {i.dependencias.join(', ')}</p>}
-        {i.workItemId > 0 && <small>Work item #{i.workItemId}</small>}
-      </div>)}
-    </section>)}</div>}
-    <p className="projetos-nota">Última sincronização: {formatar.dataHora(p.atualizadoEm)}. No dev.kit de outra máquina, use Sincronizar para recuperar o projeto e continuar.</p>
+  const visao = consulta.get('visao') ?? 'plano';
+  const itens = p.itensDoGrafo == null ? p.itens : p.itens.filter(i => p.itensDoGrafo!.includes(i.numero));
+  const ondas = [...new Set(itens.map(i => i.onda))];
+  const atual = Math.min(...itens.filter(i => i.situacao !== 'integrado').map(i => i.onda));
+  return <article className="projeto-detalhe" aria-label="Detalhe do projeto">
+    <h2 className="somente-leitor" tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2>
+    <AcoesDoProjeto projeto={p} tratar={tratar} />
+    <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'ondas', 'impactos', 'propostas', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
+      onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', ondas: 'Ondas', impactos: 'Impactos', propostas: 'Propostas visuais', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
+    <div className="projeto-metricas cartao">
+      <div><strong>{resumo.itensConcluidos} de {resumo.totalDeItens}</strong><small>itens integrados</small></div>
+      <div><strong>{ondas.length} ondas</strong><small>até {p.paralelismo} itens em paralelo</small></div>
+      <div><strong>{p.agente && p.modelo ? `${p.agente} · ${p.modelo}` : 'Sem modelo selecionado'}</strong><small>{p.agente && p.modelo ? 'escolha do projeto' : 'escolha pendente'}</small></div>
+      <div><strong>{p.board === 'nao' ? 'Sem Azure Boards' : p.board || 'Azure Boards não configurado'}</strong><small>escolha do projeto</small></div>
+    </div>
+    {p.pendenciaDoGrafo && <p role="alert" className="erro">{p.pendenciaDoGrafo}</p>}
+    <Suspense fallback={<p role="status">Carregando aba…</p>}>
+      {visao === 'ondas' ? <OndasDoProjeto key={p.id} projeto={p} itens={itens} salvo={salvo} tratar={tratar} />
+        : visao === 'propostas' ? <Propostas key={`propostas-${p.id}`} token={sessao!.token} itens={p.itens} tratar={e => setErro(tratar(e))} />
+          : ['impactos', 'entregas', 'historico'].includes(visao) ? <Impactos key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} />
+            : <div className="projetos-board">{lista}<div className="projeto-plano">
+              <section className="cartao"><h3>Definição do projeto</h3><p className="projeto-definicao">{p.definicao || 'Ainda sem definição'}</p></section>
+              <section className="cartao"><h3>Repositórios e execução</h3><p>{p.repositorios.map(curto).join(' · ')}</p>
+                <p>Base: <code>{p.baseDoBranch || 'Não informada'}</code> · Destino da PR: <code>{p.destinoDaPr || 'Não informado'}</code></p>
+                <p>{Number.isFinite(atual) ? `Onda ${atual} de ${ondas.length}` : itens.length ? 'Todas as ondas integradas' : 'Ainda sem plano'}</p>
+                <p className="projetos-nota">Abra Ondas para consultar ou editar os itens deste projeto.</p></section>
+              <section className="cartao"><h3>Resumo disponível</h3><p>Os painéis de Ondas, Impactos e Entregas são montados ao abrir cada aba.</p></section>
+            </div></div>}
+    </Suspense>
+    <AcessoAoProjeto token={sessao!.token} recurso="projeto" projeto={{ id: p.id, chave: p.nome }} tratar={e => setErro(tratar(e))} />
     {erro && <p role="alert" className="erro">{erro}</p>}
-    <AcessoAoProjeto key={p.id} token={sessao!.token} recurso="projeto" projeto={{ id: p.id, chave: p.nome }} tratar={tratar} />
+    <p className="projetos-nota">Última sincronização: {formatar.dataHora(p.atualizadoEm)}. Dados preservados enquanto uma nova consulta está em andamento.</p>
   </article>;
 }

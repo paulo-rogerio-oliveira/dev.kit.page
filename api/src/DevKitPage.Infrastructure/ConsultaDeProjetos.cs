@@ -6,6 +6,10 @@ namespace DevKitPage.Infrastructure;
 
 public sealed class ConsultaDeProjetos(DevKitPageDb db) : IConsultaDeProjetos
 {
+    public Task<string?> PendenciaDoDisparoAsync(EscopoDoDesign escopo, string slug, CancellationToken ct)
+        => new ProntidaoDoDisparoRemoto(db, TimeProvider.System).PendenciaAsync(escopo.UsuarioId, "projeto",
+            System.Text.Json.JsonSerializer.Serialize(new { acao = "disparar", projeto = slug }), ct);
+
     public async Task<IReadOnlyList<ResumoDoProjetoV1>> ListarResumosAsync(
         EscopoDoDesign escopo, string? time, DateTimeOffset? desde, CancellationToken ct)
     {

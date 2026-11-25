@@ -116,6 +116,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                 WorkItemId = i.WorkItemId > 0 ? i.WorkItemId : anterior?.WorkItemId ?? 0,
                 Branch = i.Branch.Length > 0 ? i.Branch : anterior?.Branch ?? "",
                 Horas = i.AtualizadoEm is null && i.Horas == 0 ? anterior?.Horas ?? 0 : i.Horas,
+                VersaoDaEdicaoDoPlano = envio.EdicaoPeloBoard && i.AtualizadoEm != anterior?.AtualizadoEm
+                    ? projeto.Versao + 1 : anterior?.VersaoDaEdicaoDoPlano ?? 0,
             };
         }).ToArray();
         foreach (var item in enviados)

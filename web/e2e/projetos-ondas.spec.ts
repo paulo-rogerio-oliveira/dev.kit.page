@@ -1,0 +1,82 @@
+import { expect, test } from '@playwright/test';
+import { API } from './ambiente';
+import type { Projeto } from '../src/api/projetos';
+
+test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 390', async ({ page, request }) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 980 : 1100 });
+    const consultas: string[] = [];
+    const observar = (r: { url(): string }) => { const url = new URL(r.url()); if (url.pathname.startsWith('/api/projetos')) consultas.push(url.pathname); };
+    page.on('request', observar);
+    await page.goto('/__demo?estado=plano');
+    await expect(page.getByRole('heading', { name: 'Definição do projeto' })).toBeVisible();
+    expect(consultas.filter(r => r === '/api/projetos')).toHaveLength(0);
+    expect(consultas.filter(r => r === '/api/projetos/resumos')).toHaveLength(1);
+    expect(consultas.filter(r => /^\/api\/projetos\/\d+$/.test(r))).toHaveLength(1);
+    await expect(page.getByRole('button', { name: 'Disparar projeto', exact: true })).toBeDisabled();
+    await expect(page.getByText(/Projeto sem matriz definida/)).toBeVisible();
+    await page.getByRole('button', { name: 'Ondas', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '4 · Desktop: Ondas e modal' })).toBeVisible();
+    const card = page.getByRole('button', { name: 'Editar item 4', exact: true });
+    await card.click();
+    let modal = page.getByRole('dialog', { name: 'Editar item 4' });
+    await expect(modal.getByLabel('Título', { exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(modal.getByRole('button', { name: 'Fechar editor' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(modal.getByRole('button', { name: 'Salvar item' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveCount(0);
+    await expect(card).toBeFocused();
+    await card.click();
+    modal = page.getByRole('dialog', { name: 'Editar item 4' });
+    await modal.getByLabel('Título', { exact: true }).fill(`Edição persistida ${width}`);
+    const sessao = await page.evaluate(() => JSON.parse(sessionStorage.getItem('devkitpage.sessao')!).token as string);
+    const headers = { Authorization: `Bearer ${sessao}` };
+    const resumos = await (await request.get(`${API}/api/projetos/resumos`, { headers })).json() as { id: number; slug: string }[];
+    const id = resumos.find(p => p.slug === 'fixes')!.id;
+    const antes = await (await request.get(`${API}/api/projetos/${id}`, { headers })).json() as Projeto;
+    const salvamento = page.waitForResponse(r => r.url().endsWith(`/api/projetos/${id}/itens/4`) && r.request().method() === 'PUT');
+    await modal.getByRole('button', { name: 'Salvar item' }).click();
+    expect((await salvamento).status()).toBe(200);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const depois = await (await request.get(`${API}/api/projetos/${id}`, { headers })).json() as Projeto;
+    expect(depois.versao).toBe(antes.versao + 1);
+    expect(depois.situacao).toBe('aguardando');
+    expect(depois.itens.find(i => i.numero === 4)!.titulo).toBe(`Edição persistida ${width}`);
+    expect(depois.itens.find(i => i.numero === 5)).toEqual(antes.itens.find(i => i.numero === 5));
+    await page.reload();
+    await expect(page.getByRole('heading', { name: `4 · Edição persistida ${width}` })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.getByRole('button', { name: 'Editar item 4', exact: true }).click();
+    modal = page.getByRole('dialog');
+    await modal.getByLabel('Título', { exact: true }).fill(`Rascunho conservado ${width}`);
+    const outro = depois.itens.find(i => i.numero === 5)!;
+    const concorrente = await request.put(`${API}/api/projetos/${id}/itens/5`, { headers, data: {
+      versaoEsperada: depois.versao, titulo: `Outro cliente ${width}`, descricao: outro.descricao, fluxo: outro.fluxo,
+      agente: outro.agente, modelo: outro.modelo, dependencias: outro.dependencias, componentes: outro.componentes, prioridade: outro.prioridade,
+    } });
+    expect(concorrente.status()).toBe(200);
+    await modal.getByRole('button', { name: 'Salvar item' }).click();
+    await expect(modal.getByRole('alert')).toContainText('O projeto mudou');
+    await expect(modal.getByLabel('Título', { exact: true })).toHaveValue(`Rascunho conservado ${width}`);
+    await modal.getByRole('button', { name: 'Reler versão atual' }).click();
+    await expect(modal.getByRole('button', { name: 'Aplicar rascunho à versão relida' })).toBeVisible();
+    await modal.getByRole('button', { name: 'Aplicar rascunho à versão relida' }).click();
+    await modal.getByRole('button', { name: 'Salvar item' }).click();
+    await expect(page.getByRole('heading', { name: `4 · Rascunho conservado ${width}` })).toBeVisible();
+    const final = await (await request.get(`${API}/api/projetos/${id}`, { headers })).json() as Projeto;
+    expect(final.itens.find(i => i.numero === 5)!.titulo).toBe(`Outro cliente ${width}`);
+    await page.goto('/projetos?slug=fixes&nivel=usuario&extra=teste&visao=plano');
+    await page.getByRole('button', { name: 'Ondas', exact: true }).click();
+    await expect(page).toHaveURL(/slug=fixes&nivel=usuario&extra=teste&visao=ondas/);
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Ondas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Plano', exact: true }).click();
+    await page.goBack();
+    await expect(page.getByRole('button', { name: 'Ondas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.goForward();
+    await expect(page.getByRole('button', { name: 'Plano', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    page.off('request', observar);
+  }
+});

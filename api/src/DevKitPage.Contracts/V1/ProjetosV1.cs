@@ -6,7 +6,11 @@ public sealed record ItemDoProjetoV1(
     IReadOnlyList<string> Componentes, IReadOnlyList<int> Dependencias, int Onda, int WorkItemId, string Situacao,
     string Tipo = "", int Prioridade = 0, double Horas = 0, string Branch = "",
     DateTimeOffset? AtualizadoEm = null,
-    DesignDoItemV1? Design = null, string? Agente = null, string? Modelo = null);
+    DesignDoItemV1? Design = null, string? Agente = null, string? Modelo = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public int VersaoDaEdicaoDoPlano { get; init; }
+}
 
 public sealed record ReferenciaDePropostaV1(string Projeto, string Tela, int Versao, string Hash);
 public sealed record DesignDoItemV1(bool AlteraTela, int Revisao, IReadOnlyList<ReferenciaDePropostaV1> Propostas);
@@ -28,7 +32,12 @@ public sealed record EnvioDeProjetoV1(
     int FeatureId = 0, int EpicId = 0, string Iteracao = "", string Board = "",
     IReadOnlyList<string>? BranchesDasTasks = null, DateTimeOffset? AtualizadoEm = null,
     string? BaseDoBranch = null, string? FluxoPadrao = null, string? Agente = null, string? Modelo = null,
-    IReadOnlyList<ModeloDoProjetoV1>? Modelos = null, PoliticaDoProjetoV1? PoliticaDeFinalizacao = null);
+    IReadOnlyList<ModeloDoProjetoV1>? Modelos = null, PoliticaDoProjetoV1? PoliticaDeFinalizacao = null)
+{
+    /// <summary>Origem interna da rota de edição; não pode ser definida por um snapshot HTTP.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool EdicaoPeloBoard { get; init; }
+}
 
 public sealed record ProjetoV1(
     long Id, string Slug, string Nome, string Nivel, string Time, IReadOnlyList<string> Repositorios, string Branch,

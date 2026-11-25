@@ -18,10 +18,32 @@ public static class EndpointsDosProjetos
         grupo.MapGet("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => ComEscopo(quem, async e => await projetos.ObterAsync(e, id, ct) is { } p
                 ? Results.Ok(p) : Results.Problem("Projeto não encontrado.", statusCode: 404)));
+        grupo.MapGet("/{id:long}/prontidao-disparo", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos,
+            IConsultaDeProjetos consulta, CancellationToken ct)
+            => ComEscopo(quem, async e => await projetos.ObterAsync(e, id, ct) is { } p
+                ? Results.Ok(new { pendencia = await consulta.PendenciaDoDisparoAsync(e, p.Slug, ct) })
+                : Results.Problem("Projeto não encontrado.", statusCode: 404)));
         grupo.MapPut("", (EnvioDeProjetoV1 envio, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => Gravar(quem, projetos, null, envio, ct));
         grupo.MapPut("/{id:long}", (long id, EnvioDeProjetoV1 envio, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => Gravar(quem, projetos, id, envio, ct));
+        grupo.MapPut("/{id:long}/itens/{numero:int}", (long id, int numero, EdicaoRemotaDoItemV1 edicao,
+            ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
+            => ComEscopo(quem, async e =>
+            {
+                var atual = await projetos.ObterAsync(e, id, ct);
+                if (atual is null) return Results.Problem("Projeto não encontrado.", statusCode: 404);
+                if (!RegrasDeAcesso.PodeEditar(atual.Papel))
+                    return Results.Problem("Edição exige editor ou dono do projeto.", statusCode: 403);
+                if (edicao.VersaoEsperada != atual.Versao)
+                    return Results.Problem("O projeto mudou. Rascunho preservado: releia antes de salvar.", statusCode: 409);
+                try
+                {
+                    var envio = EdicaoRemotaDoItem.Preparar(atual, numero, edicao, DateTimeOffset.UtcNow);
+                    return await Gravar(quem, projetos, id, envio, ct);
+                }
+                catch (ArgumentException ex) { return Results.Problem(ex.Message, statusCode: 400); }
+            }));
     }
 
     private static Task<IResult> Gravar(ClaimsPrincipal quem, IProjetosCompartilhados projetos, long? id, EnvioDeProjetoV1 envio, CancellationToken ct)

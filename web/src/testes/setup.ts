@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { transferableAbortController } from 'node:util';
 import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { instalarNavegador, observadores, restaurarNavegador } from './navegador';
@@ -7,6 +8,12 @@ import { cadastros, downloads, escritas, gestaoDeUsuarios, pedidosRecebidos, rea
 // Com a suíte inteira em paralelo no jsdom, o findBy* passava do 1 s padrão em máquina carregada (o Dashboard e a
 // Compra, com o topo e o painel da marca): 5 s de espera, e o teste segue falhando de verdade quando o elemento não vem.
 configure({ asyncUtilTimeout: 5_000 });
+
+// O fetch nativo (Node 26) exige o AbortSignal do mesmo runtime. O JSDOM troca os
+// construtores globais, mas mantém esse fetch; usar o par nativo conserva o cancelamento real.
+const cancelamentoNativo = transferableAbortController();
+Object.defineProperty(globalThis, 'AbortController', { configurable: true, writable: true, value: cancelamentoNativo.constructor });
+Object.defineProperty(globalThis, 'AbortSignal', { configurable: true, writable: true, value: cancelamentoNativo.signal.constructor });
 
 instalarNavegador();
 
