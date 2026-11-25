@@ -26,6 +26,19 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+it('destaque acompanha a primeira onda não integrada e conserva a onda real quando filtrada', async () => {
+  servidor.use(http.get(`${API}/api/projetos/5`, () => HttpResponse.json({ ...p, itens: [
+    { ...p.itens[0], situacao: 'integrado' },
+    { ...p.itens[0], numero: 2, titulo: 'Serviço', onda: 2 },
+    { ...p.itens[0], numero: 3, titulo: 'Entrega', onda: 3 },
+  ] })));
+  renderizar('/projetos?slug=fixes&visao=ondas', tokenDoDev());
+  expect(await screen.findByRole('region', { name: 'Onda 2' })).toHaveAttribute('aria-current', 'step');
+  expect(screen.getByRole('region', { name: 'Onda 1' })).not.toHaveAttribute('aria-current');
+  await userEvent.type(screen.getByLabelText('Buscar item'), 'Entrega');
+  expect(screen.getByRole('region', { name: 'Onda 3' })).not.toHaveAttribute('aria-current');
+});
+
 it('consulta resumos e somente o detalhe ativo; monta painéis ao abrir e reutiliza cache por versão', async () => {
   const lista = vi.spyOn(api, 'projetos');
   const detalhe = vi.spyOn(api, 'projeto');

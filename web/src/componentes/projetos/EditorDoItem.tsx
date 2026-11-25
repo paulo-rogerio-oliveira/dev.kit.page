@@ -77,10 +77,10 @@ export function EditorDoItem({ projeto, item, fechar, salvo, tratar }: {
       <p className="projetos-nota">A escolha de modelo é deste item. Salvar preserva o modelo dos outros itens.<br />Alterações no plano recalculam as ondas quando necessário e exigem nova aprovação.</p>
       {erro && <p role="alert" className="erro">{erro}</p>}
       {conflito && <div className="projeto-conflito"><p>Seu rascunho foi preservado.</p>
-        <button type="button" disabled={ocupado} onClick={() => void executar(async signal => { const p = await api.projeto(sessao!.token, projeto.id, signal); if (!signal.aborted) setAtual(p); })}>Reler versão atual</button>
+        <button className="botao botao-fantasma" type="button" disabled={ocupado} onClick={() => void executar(async signal => { const p = await api.projeto(sessao!.token, projeto.id, signal); if (!signal.aborted) setAtual(p); })}>Reler versão atual</button>
         {atual && <><p>Versão {atual.versao}: {atual.itens.find(i => i.numero === item?.numero)?.titulo ?? 'Item ausente'}</p>
           <details><summary>Comparar versão atual</summary><pre>{JSON.stringify(atual.itens.find(i => i.numero === item?.numero), null, 2)}</pre></details>
-          <button type="button" disabled={ocupado} onClick={() => { setVersao(atual.versao); setConflito(false); setErro(''); }}>Aplicar rascunho à versão relida</button></>}
+          <button className="botao botao-fantasma" type="button" disabled={ocupado} onClick={() => { setVersao(atual.versao); setConflito(false); setErro(''); }}>Aplicar rascunho à versão relida</button></>}
       </div>}
       <footer><button className="botao botao-fantasma" type="button" disabled={ocupado} onClick={fechar}>Cancelar</button>
         <button className="botao botao-primario" type="submit" disabled={ocupado || conflito}>{ocupado ? 'Salvando…' : 'Salvar item'}</button></footer>

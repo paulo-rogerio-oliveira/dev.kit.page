@@ -17,10 +17,22 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     await expect(page.getByText(/Projeto sem matriz definida/)).toBeVisible();
     await page.getByRole('button', { name: 'Ondas', exact: true }).click();
     await expect(page.getByRole('heading', { name: '4 · Desktop: Ondas e modal' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Onda 1', exact: true })).toHaveAttribute('aria-current', 'step');
+    await expect(page.getByRole('region', { name: 'Onda 2', exact: true })).not.toHaveAttribute('aria-current');
+    expect(await page.getByRole('region', { name: 'Onda 1', exact: true }).evaluate(e => getComputedStyle(e).borderColor))
+      .not.toBe(await page.getByRole('region', { name: 'Onda 2', exact: true }).evaluate(e => getComputedStyle(e).borderColor));
     const card = page.getByRole('button', { name: 'Editar item 4', exact: true });
     await card.click();
     let modal = page.getByRole('dialog', { name: 'Editar item 4' });
     await expect(modal.getByLabel('Título', { exact: true })).toBeFocused();
+    for (const nome of ['Fluxo', 'Agente e modelo', 'Prioridade']) {
+      await expect(modal.getByRole('combobox', { name: nome, exact: true })).toBeVisible();
+      expect(await modal.getByRole('combobox', { name: nome, exact: true }).evaluate(e => getComputedStyle(e).backgroundImage)).not.toBe('none');
+    }
+    if (width === 390) {
+      expect((await modal.boundingBox())!.width).toBe(370);
+      expect((await modal.locator('form').boundingBox())!.width).toBe(332);
+    }
     await page.keyboard.press('Shift+Tab');
     await expect(modal.getByRole('button', { name: 'Fechar editor' })).toBeFocused();
     await page.keyboard.press('Shift+Tab');
@@ -30,6 +42,13 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     await expect(card).toBeFocused();
     await card.click();
     modal = page.getByRole('dialog', { name: 'Editar item 4' });
+    await modal.getByRole('combobox', { name: 'Fluxo', exact: true }).selectOption('13');
+    await expect(modal.getByRole('combobox', { name: 'Fluxo', exact: true })).toHaveValue('13');
+    await modal.getByRole('combobox', { name: 'Fluxo', exact: true }).selectOption('14');
+    await modal.getByRole('combobox', { name: 'Agente e modelo', exact: true }).selectOption('\n');
+    await expect(modal.getByRole('combobox', { name: 'Agente e modelo', exact: true })).toHaveValue('\n');
+    await modal.getByRole('combobox', { name: 'Agente e modelo', exact: true }).selectOption('codex\ngpt-6.1-sol');
+    await modal.getByRole('combobox', { name: 'Prioridade', exact: true }).selectOption('2');
     await modal.getByLabel('Título', { exact: true }).fill(`Edição persistida ${width}`);
     const sessao = await page.evaluate(() => JSON.parse(sessionStorage.getItem('devkitpage.sessao')!).token as string);
     const headers = { Authorization: `Bearer ${sessao}` };
@@ -44,6 +63,7 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     expect(depois.versao).toBe(antes.versao + 1);
     expect(depois.situacao).toBe('aguardando');
     expect(depois.itens.find(i => i.numero === 4)!.titulo).toBe(`Edição persistida ${width}`);
+    expect(depois.itens.find(i => i.numero === 4)!.prioridade).toBe(2);
     expect(depois.itens.find(i => i.numero === 5)).toEqual(antes.itens.find(i => i.numero === 5));
     await page.reload();
     await expect(page.getByRole('heading', { name: `4 · Edição persistida ${width}` })).toBeVisible();
@@ -78,5 +98,32 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     await page.goForward();
     await expect(page.getByRole('button', { name: 'Plano', exact: true })).toHaveAttribute('aria-pressed', 'true');
     page.off('request', observar);
+  }
+});
+
+test('Ondas: vazios, troca de detalhe em espera, erro e recuperação conservam contexto em 1440 e 390', async ({ page }) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 980 : 1100 });
+    await page.goto('/__demo?estado=sem-itens');
+    await expect(page.getByText('Ainda sem itens no plano.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ondas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await page.goto('/__demo?estado=sem-resultados');
+    await expect(page.getByText('Nenhum item corresponde aos filtros.', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Buscar item')).toHaveValue('Busca sem correspondência');
+    await page.goto('/__demo?estado=detalhe-carregando');
+    await expect(page.getByLabel('Projeto ativo').locator('option:checked')).toHaveText('runners');
+    await expect(page.getByText('Carregando detalhe do projeto…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '4 · Desktop: Ondas e modal' })).toHaveCount(0);
+    await page.getByRole('button', { name: /Atualizar/ }).click();
+    await expect(page.getByRole('heading', { name: '4 · runners: Desktop: Ondas e modal' })).toBeVisible();
+    await expect(page).toHaveURL(/visao=ondas&nivel=usuario&extra=contexto/);
+    await page.goto('/__demo?estado=detalhe-erro');
+    await expect(page.getByRole('alert')).toContainText('Detalhe temporariamente indisponível');
+    await expect(page.getByRole('heading', { name: '4 · Desktop: Ondas e modal' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Reler projeto', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '4 · runners: Desktop: Ondas e modal' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ondas', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/visao=ondas&nivel=usuario&extra=contexto/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });

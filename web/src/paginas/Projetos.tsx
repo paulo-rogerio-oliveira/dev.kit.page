@@ -145,7 +145,7 @@ function Detalhe({ projeto: p, resumo, lista, salvo, tratar }: {
     </div>
     {p.pendenciaDoGrafo && <p role="alert" className="erro">{p.pendenciaDoGrafo}</p>}
     <Suspense fallback={<p role="status">Carregando aba…</p>}>
-      {visao === 'ondas' ? <OndasDoProjeto key={p.id} projeto={p} itens={itens} salvo={salvo} tratar={tratar} />
+      {visao === 'ondas' ? <OndasDoProjeto key={p.id} projeto={p} itens={itens} ondaAtual={atual} salvo={salvo} tratar={tratar} />
         : visao === 'propostas' ? <Propostas key={`propostas-${p.id}`} token={sessao!.token} itens={p.itens} tratar={e => setErro(tratar(e))} />
           : ['impactos', 'entregas', 'historico'].includes(visao) ? <Impactos key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} />
             : <div className="projetos-board">{lista}<div className="projeto-plano">

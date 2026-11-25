@@ -10,8 +10,8 @@ export function fluxoDoItem(projeto: Projeto, item: ItemDoProjeto) {
   return `${nome || 'Fluxo pendente'} · ${item.fluxo ? 'item' : projeto.fluxoPadrao ? 'projeto' : 'escolha pendente'}`;
 }
 
-export function OndasDoProjeto({ projeto, itens, salvo, tratar }: {
-  projeto: Projeto; itens: ItemDoProjeto[]; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
+export function OndasDoProjeto({ projeto, itens, ondaAtual, salvo, tratar }: {
+  projeto: Projeto; itens: ItemDoProjeto[]; ondaAtual: number; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
 }) {
   const [filtro, setFiltro] = useState('');
   const [busca, setBusca] = useState('');
@@ -29,7 +29,7 @@ export function OndasDoProjeto({ projeto, itens, salvo, tratar }: {
     </div>
     {mensagem && <p role="status">{mensagem}</p>}
     {visiveis.length === 0 && <p role="status">{itens.length ? 'Nenhum item corresponde aos filtros.' : 'Ainda sem itens no plano.'}</p>}
-    <div className="projeto-ondas">{ondas.filter(o => visiveis.some(i => i.onda === o)).map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`}>
+    <div className="projeto-ondas">{ondas.filter(o => visiveis.some(i => i.onda === o)).map(onda => <section className="projeto-onda" key={onda} aria-label={`Onda ${onda}`} aria-current={onda === ondaAtual ? 'step' : undefined}>
       <h3>Onda {onda}<small>{itens.filter(i => i.onda === onda && i.situacao === 'integrado').length} de {itens.filter(i => i.onda === onda).length}</small></h3>
       {visiveis.filter(i => i.onda === onda).map(i => <div className="projeto-item" key={i.numero}>
         <div className="projeto-item-topo"><span className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</span>
