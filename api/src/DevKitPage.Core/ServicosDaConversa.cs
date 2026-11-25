@@ -94,6 +94,7 @@ public enum FalhaNaConversa
 
     /// <summary>A fila não aceitou (ou a SAS não pôde ser assinada): 503 <c>fila-indisponivel</c>.</summary>
     FilaIndisponivel,
+    MatrixPendente,
 }
 
 /// <summary>

@@ -22,6 +22,7 @@ public static class RegrasDaCriacaoRemota
         {
             return tipo switch
             {
+                ConversaV1.ComandoProjeto when DisparoDeProjetoRemoto.Ler(texto) is not null => string.Empty,
                 // (controle-v4, item 2) Com "acao", o texto é uma ação no projeto que já existe; sem ela, a criação de sempre.
                 ConversaV1.ComandoProjeto when EhAcao(texto) => RegrasDosArtefatos.ValidarAcao(JsonSerializer.Deserialize<AcaoNoProjetoRemotoV1>(texto, Json)),
                 ConversaV1.ComandoProjeto => Validar(JsonSerializer.Deserialize<NovoProjetoRemotoV1>(texto, Json)),
@@ -33,6 +34,7 @@ public static class RegrasDaCriacaoRemota
         {
             return "O formulário da criação não é um JSON válido.";
         }
+        catch (ArgumentException ex) { return ex.Message; }
     }
 
     /// <summary>O problema do novo projeto, ou vazio quando ele vale.</summary>
