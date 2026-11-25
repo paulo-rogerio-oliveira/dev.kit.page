@@ -11,6 +11,8 @@ public static class EndpointsDosProjetos
         app.MapearMatrix();
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
         grupo.MapearAcessosDosProjetos();
+        grupo.MapGet("/resumos", (string? time, DateTimeOffset? desde, ClaimsPrincipal quem, IConsultaDeProjetos projetos, CancellationToken ct)
+            => ComEscopo(quem, async e => Results.Ok(await projetos.ListarResumosAsync(e, time, desde, ct))));
         grupo.MapGet("", (string? time, DateTimeOffset? desde, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => ComEscopo(quem, async e => Results.Ok(await projetos.ListarAsync(e, time, desde, ct))));
         grupo.MapGet("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
