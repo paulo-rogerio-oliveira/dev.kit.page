@@ -127,3 +127,41 @@ test('Ondas: vazios, troca de detalhe em espera, erro e recuperação conservam 
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
+
+test('Entrada móvel abre um ou vários projetos sem id e inclui item com título repetido pela API', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 980 });
+  for (const estado of ['entrada-unica', 'entrada-varios']) {
+    await page.goto('/__demo?estado=' + estado);
+    const abrir = page.getByRole('link', { name: /^Abrir projeto selecionado / });
+    await expect(abrir).toBeVisible();
+    const opcoes = await page.getByLabel('Projeto ativo').locator('option').count();
+    if (estado === 'entrada-unica') expect(opcoes).toBe(1); else expect(opcoes).toBeGreaterThan(1);
+    await expect(page).not.toHaveURL(/projeto=\d|slug=/);
+    await abrir.click();
+    await expect(page.getByRole('heading', { name: 'Definição do projeto' })).toBeVisible();
+    await expect(page).toHaveURL(/projeto=\d/);
+    await expect(page).toHaveURL(/nivel=usuario&extra=contexto/);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Definição do projeto' })).toBeVisible();
+  }
+  await page.goto('/__demo?estado=ondas');
+  await page.getByRole('button', { name: '+ Item', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Novo item' });
+  await modal.getByLabel('Título', { exact: true }).fill('Desktop: Ondas e modal');
+  await modal.getByLabel('Descrição', { exact: true }).fill('Novo trabalho, título repetido');
+  await modal.getByRole('combobox', { name: 'Fluxo', exact: true }).selectOption('14');
+  await modal.getByRole('combobox', { name: 'Agente e modelo', exact: true }).selectOption('codex\ngpt-6.1-sol');
+  await modal.getByLabel('Componentes', { exact: true }).fill('web/novo-item');
+  const salvamento = page.waitForResponse(r => /\/itens\/0$/.test(r.url()) && r.request().method() === 'PUT');
+  await modal.getByRole('button', { name: 'Salvar item', exact: true }).click();
+  const resposta = await salvamento;
+  expect(resposta.status()).toBe(200);
+  const salvo = await resposta.json() as Projeto;
+  const novo = salvo.itens.find(i => i.descricao === 'Novo trabalho, título repetido')!;
+  expect(novo.workItemId).toBe(0); expect(novo.branch).toBe(''); expect(novo.design ?? null).toBeNull();
+  const token = await page.evaluate(() => JSON.parse(sessionStorage.getItem('devkitpage.sessao')!).token as string);
+  const relido = await (await request.get(`${API}/api/projetos/${salvo.id}`, { headers: { Authorization: `Bearer ${token}` } })).json() as Projeto;
+  expect(relido.itens.find(i => i.numero === novo.numero)).toEqual(novo);
+  await expect(page.getByRole('heading', { name: `${novo.numero} · Desktop: Ondas e modal`, exact: true })).toBeVisible();
+  await expect(page.getByText(/Item salvo\. O plano aguarda aprovação/)).toBeVisible();
+});

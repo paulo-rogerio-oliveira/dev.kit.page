@@ -61,6 +61,36 @@ public sealed class EdicaoRemotaDoItemApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonimo.PutAsJsonAsync(rota + "/itens/1", Editar(p))).StatusCode);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Inclusao_e_renomeacao_com_titulo_repetido_nao_herdam_identidade_de_outro_item(int numero)
+    {
+        var cliente = await _api.AdminAsync();
+        var envio = Envio() with { Nivel = "usuario", Itens = [Envio().Itens[0], Envio().Itens[1] with
+        {
+            WorkItemId = 202, Branch = "feature/editar-item-2", Horas = 8,
+            Design = new(true, 1, [new("repo", "tela-do-segundo", 2, new string('b', 64))]),
+        }] };
+        var criada = await cliente.PutAsJsonAsync("/api/projetos", envio);
+        Assert.Equal(HttpStatusCode.Created, criada.StatusCode);
+        var p = (await criada.Content.ReadFromJsonAsync<ProjetoV1>())!;
+        var resposta = await cliente.PutAsJsonAsync($"/api/projetos/{p.Id}/itens/{numero}",
+            Editar(p) with { Titulo = "Segundo", Componentes = numero == 0 ? ["novo"] : ["api"] });
+        Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
+        var relido = (await cliente.GetFromJsonAsync<ProjetoV1>($"/api/projetos/{p.Id}"))!;
+        var alvo = relido.Itens.Single(i => i.Numero == (numero == 0 ? 3 : 1));
+        Assert.Equal("Segundo", alvo.Titulo);
+        Assert.Equal(0, alvo.WorkItemId);
+        Assert.Equal("", alvo.Branch);
+        Assert.Equal(0, alvo.Horas);
+        Assert.Equal(JsonSerializer.Serialize(numero == 0 ? null : p.Itens[0].Design), JsonSerializer.Serialize(alvo.Design));
+        Assert.Equal(JsonSerializer.Serialize(p.Itens[1]), JsonSerializer.Serialize(relido.Itens[1]));
+        if (numero == 0) Assert.Equal(JsonSerializer.Serialize(p.Itens[0]), JsonSerializer.Serialize(relido.Itens[0]));
+        Assert.Equal("aguardando", relido.Situacao);
+        Assert.Equal(p.Versao + 1, relido.Versao);
+    }
+
     [Fact]
     public async Task Ciclo_componente_que_moveria_iniciado_e_modelo_estranho_nao_gravam()
     {

@@ -9,6 +9,31 @@ namespace DevKitPage.Infrastructure.Tests;
 public sealed class EdicaoRemotaDoItemTests
 {
     [Fact]
+    public async Task Inclusao_com_titulo_repetido_persiste_sem_duplicar_metadados_por_outra_conexao()
+    {
+        await using var banco = new BaseDeTeste();
+        await banco.InicializarAsync();
+        var usuario = await banco.ComAsync(sp => sp.GetRequiredService<DevKitPageDb>().Usuarios.Select(u => u.Id).SingleAsync());
+        var escopo = new EscopoDoDesign(usuario, null, false);
+        var envio = new EnvioDeProjetoV1("colisao", "Colisão", "usuario", "", ["repo"], "feature/colisao", false,
+            "Definição", [], true, 2, "develop", "rascunho", null,
+            [new(1, "Repetido", "Original", "14", [], ["web"], [], 1, 202, "planejado", Branch: "feature/colisao-item-1",
+                Design: new(true, 1, [new("repo", "tela-original", 2, new string('a', 64))]), Agente: "codex", Modelo: "modelo")]);
+        var p = await banco.ComAsync(async sp => (await sp.GetRequiredService<IProjetosDaEmpresa>().GravarAsync(escopo, envio, default)).Valor!.Projeto);
+        var preparado = EdicaoRemotaDoItem.Preparar(p, 0,
+            new(p.Versao, "Repetido", "Inclusão", "14", "codex", "modelo", [], ["api"], 1), banco.Relogio.Agora);
+        var gravado = await banco.ComAsync(sp => sp.GetRequiredService<IProjetosCompartilhados>().GravarAsync(escopo, p.Id, preparado, default));
+        Assert.Equal(200, gravado.Status);
+        var relido = (await banco.ComAsync(sp => sp.GetRequiredService<IProjetosCompartilhados>().ObterAsync(escopo, p.Id, default)))!;
+        Assert.Equal(JsonSerializer.Serialize(p.Itens[0]), JsonSerializer.Serialize(relido.Itens[0]));
+        Assert.Equal(0, relido.Itens[1].WorkItemId);
+        Assert.Equal("", relido.Itens[1].Branch);
+        Assert.Null(relido.Itens[1].Design);
+        Assert.Equal(2, relido.Itens[1].Numero);
+        Assert.Equal(relido.Versao, relido.Itens[1].VersaoDaEdicaoDoPlano);
+    }
+
+    [Fact]
     public async Task Grava_e_rele_em_conexao_independente_conflito_e_cancelamento_preservam_banco()
     {
         await using var banco = new BaseDeTeste();

@@ -34,7 +34,8 @@ async function demonstracao(res, url) {
   const projetos = await (await fetch(`${api}/api/projetos/resumos`, { headers })).json();
   const alvo = projetos.find(p => p.slug === 'runners').id;
   falhasDoDetalhe.delete(alvo);
-  const destino = `/projetos?slug=${principal}&visao=${estado === 'plano' ? 'plano' : 'ondas'}&nivel=usuario&extra=contexto&demonstracao=${encodeURIComponent(estado)}&alvo=${alvo}`;
+  const entrada = estado.startsWith('entrada-');
+  const destino = `/projetos?${entrada ? '' : `slug=${principal}&visao=${estado === 'plano' ? 'plano' : 'ondas'}&`}nivel=usuario&extra=contexto&demonstracao=${encodeURIComponent(estado)}&alvo=${alvo}`;
   res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
   res.end(`<script>sessionStorage.setItem('devkitpage.sessao',${JSON.stringify(JSON.stringify(sessao))});location.replace(${JSON.stringify(destino)});</script>`);
 }
@@ -46,6 +47,12 @@ createServer(async (req, res) => {
       const contexto = new URL(req.headers.referer ?? `http://localhost:${porta}`);
       const estado = contexto.searchParams.get('demonstracao');
       const alvo = Number(contexto.searchParams.get('alvo'));
+      if (url.pathname === '/api/projetos/resumos' && estado === 'entrada-unica') {
+        // Projeção controlada de uma única opção, com dados reais do mesmo cadastro/API.
+        const resposta = await fetch(api + url.pathname, { headers: { Authorization: req.headers.authorization ?? '' } });
+        res.writeHead(resposta.status, { 'Content-Type': 'application/json' });
+        return res.end(resposta.ok ? JSON.stringify((await resposta.json()).filter(p => p.slug === 'fixes')) : await resposta.text());
+      }
       if (['detalhe-erro', 'detalhe-recuperado'].includes(estado) && url.pathname === `/api/projetos/${alvo}` && !falhasDoDetalhe.has(alvo)) {
         falhasDoDetalhe.add(alvo);
         res.writeHead(503, { 'Content-Type': 'application/json' });
@@ -65,6 +72,24 @@ createServer(async (req, res) => {
     if (!extname(arquivo) || !(await stat(arquivo).catch(() => null))?.isFile()) arquivo = resolve(raiz, 'index.html');
     let bytes = await readFile(arquivo);
     const estado = url.searchParams.get('demonstracao');
+    if (arquivo.endsWith('index.html') && process.env.DEVKIT_DEMO_PROJETOS === '1' && ['novo-item', 'inclusao-persistida'].includes(estado)) {
+      const preparar = `<script>
+        const estadoDaInclusao=${JSON.stringify(estado)};
+        const observerDaInclusao=new MutationObserver(async()=>{
+          const b=[...document.querySelectorAll('button')].find(b=>b.textContent==='+ Item');if(!b)return;
+          observerDaInclusao.disconnect();b.click();if(estadoDaInclusao==='novo-item')return;
+          await new Promise(r=>setTimeout(r,50));
+          const campos=document.querySelectorAll('dialog input');
+          for(const [campo,valor] of [[campos[0],'Desktop: Ondas e modal'],[campos[2],'web/novo-item']]){
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(campo,valor);campo.dispatchEvent(new Event('input',{bubbles:true}));
+          }
+          const modelo=document.querySelectorAll('dialog select')[1];
+          Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(modelo,'codex\\ngpt-6.1-sol');modelo.dispatchEvent(new Event('change',{bubbles:true}));
+          await new Promise(r=>setTimeout(r,0));document.querySelector('dialog form').requestSubmit();
+        });observerDaInclusao.observe(document.body,{childList:true,subtree:true});
+      </script>`;
+      bytes = Buffer.from(bytes.toString().replace('</body>', preparar + '</body>'));
+    }
     if (arquivo.endsWith('index.html') && process.env.DEVKIT_DEMO_PROJETOS === '1' && (estado?.startsWith('detalhe-') || estado === 'sem-resultados')) {
       const preparar = `<script>
         const estadoDaCaptura=${JSON.stringify(estado)}, alvoDaCaptura=${JSON.stringify(url.searchParams.get('alvo'))};

@@ -101,7 +101,9 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         // O número muda no replanejamento. A proposta acompanha a identidade do item,
         // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
         ItemDoProjetoV1? AnteriorDoDesign(ItemDoProjetoV1 item)
-            => anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
+            // Edição mínima conserva o número; inclusão recebe um número novo. Título repetido não é identidade.
+            => envio.EdicaoPeloBoard ? anteriores.FirstOrDefault(a => a.Numero == item.Numero)
+                : anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
                 ?? anteriores.FirstOrDefault(a => string.Equals(a.Titulo.Trim(), item.Titulo.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? anteriores.FirstOrDefault(a => a.Numero == item.Numero);
         var enviados = (envio.Itens ?? []).Select(i =>

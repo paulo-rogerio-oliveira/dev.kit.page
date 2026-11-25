@@ -26,6 +26,17 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
+it.each([1, 2])('entrada sem slug ou id oferece abertura do selecionado com %i projeto(s)', async quantidade => {
+  servidor.use(http.get(`${API}/api/projetos/resumos`, () => HttpResponse.json(
+    [resumo(p), resumo({ ...p, id: 6, slug: 'outro', nome: 'Outro' })].slice(0, quantidade))));
+  renderizar('/projetos?nivel=usuario&extra=1', tokenDoDev());
+  const abrir = await screen.findByRole('link', { name: 'Abrir projeto selecionado fixes' });
+  expect(abrir).toHaveAttribute('href', '/projetos?nivel=usuario&extra=1&projeto=5');
+  await userEvent.click(abrir);
+  await waitFor(() => expect(within(screen.getByRole('article', { name: 'Detalhe do projeto' }))
+    .getByRole('heading', { name: 'fixes' })).toHaveFocus());
+});
+
 it('destaque acompanha a primeira onda não integrada e conserva a onda real quando filtrada', async () => {
   servidor.use(http.get(`${API}/api/projetos/5`, () => HttpResponse.json({ ...p, itens: [
     { ...p.itens[0], situacao: 'integrado' },

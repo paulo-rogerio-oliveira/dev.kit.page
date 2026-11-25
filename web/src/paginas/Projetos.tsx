@@ -77,6 +77,7 @@ export function Projetos() {
     q.delete('slug'); setConsulta(q);
   }
   const p = detalhe?.id === id ? detalhe : null;
+  const entradaDoPlano = !consulta.has('projeto') && !slug && (consulta.get('visao') ?? 'plano') === 'plano';
   const lista = <aside className="projetos-lista" aria-label="Projetos sincronizados"><h3>Projetos</h3>{visiveis.map(r => {
     const q = new URLSearchParams(consulta); q.set('projeto', String(r.id)); q.delete('slug');
     return <div key={r.id} className={`cartao projeto-resumo${id === r.id ? ' escolhido' : ''}`}>
@@ -105,9 +106,9 @@ export function Projetos() {
         </select>
         <button className="botao botao-fantasma" onClick={atualizar} disabled={carregando}>↻ Atualizar</button>
         <span className="projetos-contagem">{visiveis.length} projeto(s)</span>
-        {escolhido && consulta.get('visao') && consulta.get('visao') !== 'plano' && (() => {
+        {escolhido && (entradaDoPlano || consulta.get('visao') && consulta.get('visao') !== 'plano') && (() => {
           const q = new URLSearchParams(consulta); q.set('projeto', String(escolhido.id)); q.delete('slug');
-          return <Link to={`/projetos?${q}`} aria-label={`Abrir projeto ${escolhido.nome}`}>Abrir projeto →</Link>;
+          return <Link to={`/projetos?${q}`} aria-label={`Abrir projeto ${entradaDoPlano ? 'selecionado ' : ''}${escolhido.nome}`}>Abrir projeto →</Link>;
         })()}
       </div>
       {erro && <div role="alert" className="erro">{erro} <button onClick={atualizar}>Tentar novamente</button></div>}
