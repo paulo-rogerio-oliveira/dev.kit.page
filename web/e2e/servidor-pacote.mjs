@@ -10,6 +10,8 @@ const cenarios = new Map();
 const tipos = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const agora = () => new Date().toISOString();
 const repositorios = ['https://github.com/acme/git.kit', 'https://github.com/acme/dev.kit.page'];
+// Projeção real do host: a API de projetos conserva URL, mas o retrato publica host/caminho.
+const nomeNoRetrato = repo => { const url = new URL(repo); return (url.hostname + url.pathname).replace(/\/+$/, '').replace(/\.git$/i, ''); };
 const pedidoAtual = 'a'.repeat(32), pedidoAnterior = 'b'.repeat(32);
 function cenario(estado) {
   if (cenarios.has(estado)) return cenarios.get(estado);
@@ -89,11 +91,11 @@ export const servidor = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) {
       if (url.pathname === '/api/remoto/maquinas') return json(res, [maquina]);
       if (url.pathname.endsWith('/retrato')) return json(res, { maquina, recebidoEm: agora(), retrato: { contrato: 1, maquinaId: 'demo', geradoEm: agora(), pendencias: [], fluxos: [],
-        projetos: [{ ...dados.projeto, ondaAtual: 3, itens: [], podeGerarArtefato: estado !== 'leitor',
-          previsaoDoPacote: dados.projeto.repositorios.map((repo, i) => ({ repositorio: repo, produtor: { nome: i ? '' : dados.projeto.skillDoPacote, tipo: i ? 'previa' : 'skill' },
+        projetos: [{ ...dados.projeto, repositorios: dados.projeto.repositorios.map(nomeNoRetrato), ondaAtual: 3, itens: [], podeGerarArtefato: estado !== 'leitor',
+          previsaoDoPacote: dados.projeto.repositorios.map((repo, i) => ({ repositorio: nomeNoRetrato(repo), produtor: { nome: i ? '' : dados.projeto.skillDoPacote, tipo: i ? 'previa' : 'skill' },
             motivo: i ? 'Front Vite' : 'Comando direto', aplicavel: true, formato: i ? 'preview' : 'pacote' })),
           artefatos: dados.pedidos.flatMap(p => p.resultados).map(r => ({ id: r.id, tipo: r.tipo,
-          repositorio: r.repositorio, sha: r.sha, estado: r.estado, etapa: r.ciclo.etapa, detalhe: r.detalhe, idRemoto: r.idRemoto, criadoEm: r.criadoEm,
+          repositorio: nomeNoRetrato(r.repositorio), sha: r.sha, estado: r.estado, etapa: r.ciclo.etapa, detalhe: r.detalhe, idRemoto: r.idRemoto, criadoEm: r.criadoEm,
           pedidoId: r.ciclo.pedidoId, branch: r.ciclo.branch, produtor: r.produtor })) }] } });
       if (url.pathname.endsWith('/decisoes')) return json(res, []);
       if (url.pathname.endsWith('/catalogo')) return json(res, { maquinaId: 'demo', recebidoEm: agora(), catalogo: { contrato: 1, maquinaId: 'demo', geradoEm: agora(),

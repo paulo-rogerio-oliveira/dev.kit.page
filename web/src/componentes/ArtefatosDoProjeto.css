@@ -16,6 +16,7 @@
 .pacote-resultado {border-top:1px solid var(--line, var(--borda-controle)); padding:12px 0}
 .pacote-resultado>strong,.pacote-resultado>small {display:block; margin-top:5px}
 .pacote-resultado small {color:var(--muted)}
+.pacote-projeto .pacote-motivo-erro {color:var(--perigo, #bd251b)}
 .pacote-resultado-acoes {display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap}
 .pacote-projeto details {border-top:1px solid var(--line, var(--borda-controle)); padding:9px 0}
 .pacote-projeto summary {cursor:pointer; line-height:1.6}

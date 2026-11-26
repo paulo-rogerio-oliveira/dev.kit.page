@@ -3,7 +3,7 @@ import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { PedidoDoPacote, Projeto, Artefato, PrevisaoRemotaDoPacote } from '../api/projetos';
 import type { EstadoDoArtefato } from '../api/remoto';
 import { useSessao } from '../sessao';
-import { ArtefatosDoCard, rotuloDoProdutor } from './ArtefatosDoProjeto';
+import { ArtefatosDoCard, normalizarRepo, rotuloDoProdutor } from './ArtefatosDoProjeto';
 import type { CriacaoDoBoard } from './CriacaoRemota';
 
 /** Só o painel aberto lê o detalhe, os pedidos e seus links. Chat e Board continuam montados. */
@@ -78,7 +78,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
     ? criacao.origensDoPacote.find(p => p.projeto === slug && p.comandoId === consultaDaPrevisao.comandoId) : undefined;
   const previsaoRemotaAtual = previsaoRemota != null && !!projeto && projeto.branch === branch
     && (projeto.skillDoPacote ?? '') === (skillNoRetrato ?? '')
-    && JSON.stringify([...projeto.repositorios].sort()) === JSON.stringify([...repositorios].sort());
+    && JSON.stringify(projeto.repositorios.map(normalizarRepo).sort()) === JSON.stringify(repositorios.map(normalizarRepo).sort());
   const produtores = previsaoRemotaAtual
     ? previsaoRemota.map(p => ({ ...p, produtor: rotuloDoProdutor(p.produtor) })) : previsao?.resultados;
   // A previsão usa a consulta do projeto inteiro já oferecida pelo host; não enfileira geração.

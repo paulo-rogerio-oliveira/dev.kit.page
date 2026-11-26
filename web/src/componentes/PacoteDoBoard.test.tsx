@@ -150,6 +150,51 @@ it('usa previsão nome/tipo projetada pelo host, inclusive para leitor', async (
   expect(tela.gerar).not.toHaveBeenCalled();
 });
 
+it.each(['leitor', 'editor'])('previsão de %s compara a URL da API com o nome sanitizado do retrato sem pedir conferência', async papel => {
+  const tela = montar({ ...projeto, papel, repositorios: ['https://github.com/acme/app', 'https://github.com/acme/web.git/'] });
+  tela.unmount();
+  render(<PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['github.com/acme/web', 'github.com/acme/app']}
+    estados={[]} capacidade={papel === 'editor'} desabilitado={false} agora={Date.now()} criacao={tela.criacao}
+    previsaoRemota={[{ repositorio: 'github.com/acme/app', produtor: { nome: '', tipo: 'principal' }, motivo: 'Motivo do host', aplicavel: true, formato: 'pacote' },
+      { repositorio: 'github.com/acme/web', produtor: { nome: '', tipo: 'previa' }, motivo: 'Front do host', aplicavel: true, formato: 'preview' }]} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  expect(await screen.findByText('executável principal · Motivo do host')).toBeInTheDocument();
+  expect(screen.getByText('prévia · Front do host')).toBeInTheDocument();
+  expect(tela.conferir).not.toHaveBeenCalled(); expect(tela.gerar).not.toHaveBeenCalled();
+  if (papel === 'leitor') {
+    expect(screen.getByRole('button', { name: 'Gerar pacote' })).toBeDisabled();
+    expect(screen.getByLabelText('Skill do pacote (opcional)')).toBeDisabled();
+  }
+});
+
+it.each(['git@github.com:acme/app.git', 'ssh://git@github.com/acme/app.git', 'HTTPS://GitHub.com/acme/App.git/'])
+('leitor reconhece a identidade sanitizada da origem %s', async url => {
+  const tela = montar({ ...projeto, papel: 'leitor', repositorios: [url] }); tela.unmount();
+  render(<PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['github.com/acme/app']} estados={[]}
+    capacidade={false} desabilitado={false} agora={Date.now()} criacao={tela.criacao}
+    previsaoRemota={[{ repositorio: 'github.com/acme/app', produtor: { nome: '', tipo: 'principal' }, motivo: 'Motivo do host', aplicavel: true, formato: 'pacote' }]} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  expect(await screen.findByText('executável principal · Motivo do host')).toBeInTheDocument();
+  expect(tela.conferir).not.toHaveBeenCalled(); expect(tela.gerar).not.toHaveBeenCalled();
+});
+
+it.each([
+  { repo: 'github.com/outro/app', branch: 'feature/demo', skill: '' },
+  { repo: 'outro.example/acme/app', branch: 'feature/demo', skill: '' },
+  { repo: 'github.com/acme/app', branch: 'feature/outra', skill: '' },
+  { repo: 'github.com/acme/app', branch: 'feature/demo', skill: 'outra-skill' },
+])('normalização não aceita outra origem, branch ou skill: %j', async retrato => {
+  const tela = montar({ ...projeto, papel: 'leitor', repositorios: ['https://github.com/acme/app'] }); tela.unmount();
+  render(<PacoteDoBoard nome="Demo" slug="demo" branch={retrato.branch} skillNoRetrato={retrato.skill} repositorios={[retrato.repo]}
+    estados={[]} capacidade={false} desabilitado={false} agora={Date.now()} criacao={tela.criacao}
+    previsaoRemota={[{ repositorio: retrato.repo, produtor: { nome: '', tipo: 'principal' }, motivo: 'PREVISAO_DIVERGENTE', aplicavel: true, formato: 'pacote' }]} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  await screen.findByRole('option', { name: 'pacote-demo · somente comando' });
+  expect(screen.queryByText(/PREVISAO_DIVERGENTE/)).not.toBeInTheDocument();
+  expect(screen.getByText('Aguardando a previsão do produtor no host.')).toBeInTheDocument();
+  expect(tela.conferir).not.toHaveBeenCalled(); expect(tela.gerar).not.toHaveBeenCalled();
+});
+
 it('editor usa a previsão atual sem conferir de novo e descarta a previsão da skill anterior ao editar', async () => {
   const tela = montar(); tela.unmount();
   const salvar = vi.spyOn(api, 'editarSkillDoPacote').mockResolvedValue({ ...projeto, versao: 8, skillDoPacote: 'pacote-demo' });

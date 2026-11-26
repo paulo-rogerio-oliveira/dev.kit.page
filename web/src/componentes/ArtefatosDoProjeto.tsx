@@ -58,7 +58,17 @@ export function rotuloDoEstado(estado: string) {
     'nao-aplicavel': 'Não gerado', falhou: 'Falhou', parcial: 'Parcial', expirado: 'Link vencido',
     'publicacao-pendente': 'Envio pendente' } as Record<string, string>)[estado] ?? 'Aguardando resultado';
 }
-const normalizarRepo = (repo: string) => repo.replace(/^https?:\/\//i, '').replace(/\.git$/i, '').replace(/\/$/, '').toLowerCase();
+/** Mesma identidade do NomeDoRepositorio do host: host/caminho, sem transporte, usuário ou sufixo Git. */
+export function normalizarRepo(repo: string) {
+  let nome = repo.trim();
+  try {
+    const url = new URL(nome);
+    if (url.hostname) nome = url.hostname + url.pathname;
+  } catch {
+    nome = nome.replace(/^[^@]+@([^:]+):(.+)$/, '$1/$2');
+  }
+  return nome.replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+}
 export const rotuloDoProdutor = (p?: MetadadosDoProdutor | string | null) => typeof p === 'string' ? p : p
   ? p.tipo === 'skill' ? `skill ${p.nome}` : ({ principal: 'executável principal', 'todos-os-executaveis': 'todos os executáveis', previa: 'prévia', 'nao-aplicavel': 'não gera' }[p.tipo]) : '';
 const rotuloDoPedido = (pedido: PedidoDoPacote) => pedido.resultados.some(r => r.estado === 'agente-pendente')
@@ -137,7 +147,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
       <strong>{repositorioCurto(r.repositorio)}</strong>
       <small><code>{r.sha.slice(0, 7)}</code>{branchDaOrigem && ` · ${branchDaOrigem}`} · {produtor || tipo || 'produtor a detectar'}
         {tipo !== 'preview' && ` · ${tamanhoDoArtefato(link?.tamanho ?? completo?.tamanho ?? 0)}`}{expira && ` · ${prazo(expira, agora)}`}</small>
-      <p>{r.detalhe}</p>
+      <p className={['nao-aplicavel', 'falhou'].includes(r.estado) ? 'pacote-motivo-erro' : undefined}>{r.detalhe}</p>
       {destinoAusente && destinosAbertos.includes(r.id) && <div role="note" className="pacote-orientacao-destino">
         <p>Abra Configurar destino no desktop desta máquina ou execute no host o comando abaixo. O destino é compartilhado por todos os projetos da máquina.</p>
         <code>{`devcli projeto --projeto ${slug} --artefato --swa-app <app> --swa-grupo <grupo> --swa-assinatura <id> --aplicar`}</code>
