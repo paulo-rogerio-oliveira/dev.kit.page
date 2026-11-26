@@ -24,8 +24,11 @@ public sealed partial class ArtefatosDosProjetosNoBanco
         {
             var anterior = JsonSerializer.Deserialize<PedidoDeArtefatosV1>(linha.Conteudo)!;
             if (anterior.Resultados.Count != pedido.Resultados.Count || anterior.Resultados.Any(a =>
-                !pedido.Resultados.Any(b => (a.Id, a.Repositorio, a.Sha, a.Tipo, a.Ciclo?.Branch, a.Ambiente)
-                    == (b.Id, b.Repositorio, b.Sha, b.Tipo, b.Ciclo?.Branch, b.Ambiente))))
+                !pedido.Resultados.Any(b => (a.Id, a.Repositorio, a.Ciclo?.Branch) == (b.Id, b.Repositorio, b.Ciclo?.Branch)
+                    && ((a.Sha, a.Tipo, a.Ambiente) == (b.Sha, b.Tipo, b.Ambiente)
+                        || a.Estado == "falhou" && a.Ciclo?.Etapa == "preparacao" && a.IdRemoto == 0
+                        && (a.Sha == "" || a.Sha == b.Sha) && b.Sha.Length == 40
+                        && (b.Ciclo?.ComandoId ?? 0) >= (a.Ciclo?.ComandoId ?? 0)))))
                 return ResultadoDaGestao<PedidoDeArtefatosV1>.Falhou(FalhaNaGestao.Recusada, "A origem e os IDs do pedido são imutáveis.");
             // Publicado é terminal no mesmo comando: outro executor pode enviar um retrato ainda pendente.
             // Um ComandoId posterior continua autorizando a evolução de uma nova tentativa.
@@ -90,11 +93,13 @@ public sealed partial class ArtefatosDosProjetosNoBanco
         foreach (var a in pedido.Resultados)
         {
             if (a is null || a.Id <= 0 || a.ProjetoId != projeto || string.IsNullOrWhiteSpace(a.Repositorio) || a.Repositorio.Length > 300
-                || a.Sha is not { Length: 40 } || !a.Sha.All(char.IsAsciiHexDigit)
+                || !(a.Sha is { Length: 40 } && a.Sha.All(char.IsAsciiHexDigit)
+                    || a.Sha == "" && a.Estado == "falhou" && a.Ciclo?.Etapa == "preparacao" && a.IdRemoto == 0)
                 || a.Tipo is not ("" or "pacote" or "preview") || a.Ciclo is null
-                || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou" or "nao-aplicavel" or "expirado"))
+                || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "agente-pendente" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou" or "nao-aplicavel" or "expirado"))
                 return "Cada resultado exige origem, SHA integral, tipo e estado conhecidos.";
-            if (a.Estado == "nao-aplicavel" && string.IsNullOrWhiteSpace(a.Detalhe)) return "Informe o motivo do resultado não aplicável.";
+            if (a.Estado is "nao-aplicavel" or "falhou" or "agente-pendente" && string.IsNullOrWhiteSpace(a.Detalhe))
+                return "Informe o motivo do resultado não gerado, falho ou pendente.";
             if (a.Estado == "publicado" && a.IdRemoto <= 0) return "Publicado exige o registro individual no site.";
         }
         return "";

@@ -88,6 +88,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         {
             BaseDoBranch = string.IsNullOrEmpty(envio.BaseDoBranch) ? anteriorProjeto?.BaseDoBranch ?? envio.BaseDoBranch : envio.BaseDoBranch,
             FluxoPadrao = envio.FluxoPadrao ?? anteriorProjeto?.FluxoPadrao,
+            SkillDoPacote = envio.SkillDoPacote ?? anteriorProjeto?.SkillDoPacote,
+            SkillsDoPacote = envio.SkillsDoPacote ?? anteriorProjeto?.SkillsDoPacote,
             Agente = envio.Agente ?? anteriorProjeto?.Agente,
             Modelo = envio.Modelo ?? anteriorProjeto?.Modelo,
             Modelos = envio.Modelos ?? anteriorProjeto?.Modelos,
@@ -236,7 +238,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
         documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
         documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
-        documento?.PoliticaDeFinalizacao) with
+        documento?.PoliticaDeFinalizacao, documento?.SkillDoPacote, documento?.SkillsDoPacote) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),

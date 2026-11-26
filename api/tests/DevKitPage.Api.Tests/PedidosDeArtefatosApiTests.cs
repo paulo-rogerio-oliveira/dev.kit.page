@@ -11,6 +11,35 @@ namespace DevKitPage.Api.Tests;
 public sealed partial class ArtefatosApiTests
 {
     [Theory]
+    [InlineData("agente-pendente", "fila", "skill pacote-x: pendente da etapa com agente")]
+    [InlineData("falhou", "preparacao", "Não foi possível consultar o repositório")]
+    public async Task Motivo_pendente_ou_falho_persiste_sem_link_e_preparacao_pode_resolver_origem(string estado, string etapa, string motivo)
+    {
+        var (ana, bia, _, projeto) = await CenarioAsync();
+        var id = Guid.NewGuid().ToString("N");
+        var a = new ResultadoDoPedidoDeArtefatosV1(101, projeto, "pacote", "https://github.com/acme/app-desktop",
+            etapa == "preparacao" ? "" : Sha, "gerando", "", null, "", 0, "", motivo, DateTimeOffset.UtcNow,
+            Ciclo: new(estado, etapa, "", 0, "feature/dev/projeto-controle-v4", "pacote", id));
+        var pedido = new PedidoDeArtefatosV1(id, projeto, DateTimeOffset.UtcNow, [a]);
+        var rota = $"https://localhost/api/projetos/{projeto}/artefatos/pedidos/{id}";
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, pedido)).StatusCode);
+        var lido = (await bia.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!;
+        Assert.Equal((estado, motivo, ""), (lido.Resultados[0].Estado, lido.Resultados[0].Detalhe, lido.Resultados[0].Link));
+        using var escopo = _api.Services.CreateScope();
+        var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
+        var persistido = System.Text.Json.JsonSerializer.Deserialize<PedidoDeArtefatosV1>((await db.PedidosDeArtefatos.SingleAsync()).Conteudo)!;
+        Assert.Equal(motivo, persistido.Resultados[0].Detalhe);
+        var semMotivo = pedido with { Resultados = [a with { Detalhe = "" }] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync(rota, semMotivo)).StatusCode);
+        if (etapa == "preparacao")
+        {
+            var resolvido = pedido with { Resultados = [a with { Sha = Sha, Ciclo = a.Ciclo! with { Estado = "enfileirado", Etapa = "fila", ComandoId = 1 } }] };
+            Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync(rota, resolvido)).StatusCode);
+            Assert.Equal(Sha, (await ana.GetFromJsonAsync<PedidoDeArtefatosV1>(rota))!.Resultados[0].Sha);
+        }
+    }
+
+    [Theory]
     [InlineData("pacote", "envio-pendente")]
     [InlineData("preview", "registro-pendente")]
     public async Task Pedido_preserva_publicacao_concluida_contra_snapshot_atrasado_do_mesmo_comando(string tipo, string pendencia)

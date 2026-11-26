@@ -92,13 +92,16 @@ public static partial class RegrasDoRemoto
             if ((projeto.Repositorios?.Count ?? 0) > 20 || (projeto.Branch?.Length ?? 0) > 200
                 || (projeto.Repositorios ?? []).Any(r => string.IsNullOrWhiteSpace(r) || r.Length > 300 || CaminhoLocal(r)))
                 return $"projetos[{i}]: repositórios e branch inválidos para a geração de artefatos.";
+            if ((projeto.SkillDoPacote?.Length ?? 0) > 200 || CaminhoLocal(projeto.SkillDoPacote ?? ""))
+                return $"projetos[{i}]: skill do pacote inválida.";
             if ((projeto.Artefatos?.Count ?? 0) > 5)
                 return $"projetos[{i}]: até 5 estados de artefatos.";
             foreach (var a in projeto.Artefatos ?? [])
                 if (a is null || a.Id <= 0 || a.IdRemoto < 0 || a.Tipo is not ("" or "pacote" or "preview")
                     || string.IsNullOrWhiteSpace(a.Repositorio) || a.Repositorio.Length > 300 || CaminhoLocal(a.Repositorio)
-                    || string.IsNullOrEmpty(a.Sha) || a.Sha.Length is < 7 or > 40 || !a.Sha.All(char.IsAsciiHexDigit)
-                    || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou")
+                    || !(a.Sha is { Length: >= 7 and <= 40 } && a.Sha.All(char.IsAsciiHexDigit)
+                        || a.Sha == "" && a.Estado == "falhou" && a.Etapa == "preparacao" && a.IdRemoto == 0)
+                    || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "agente-pendente" or "nao-aplicavel" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou")
                     || a.Etapa is null || a.Etapa.Length > 100 || a.Detalhe is null || a.Detalhe.Length > 1000 || CaminhoLocal(a.Detalhe))
                     return $"projetos[{i}]: estado de artefato inválido ou com caminho local.";
             var itens = projeto.Itens ?? [];
