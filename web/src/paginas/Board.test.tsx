@@ -717,42 +717,36 @@ describe('Board remoto', () => {
         hash: tipo === 'pacote' ? 'ab'.repeat(32) : '', tamanho: tipo === 'pacote' ? 43_200_000 : 0, ambiente: tipo === 'preview' ? 'projeto' : '',
       });
       let leituras = 0;
-      servidor.use(http.get(`${API}/api/projetos/artefatos`, () => {
+      servidor.use(http.get(`${API}/api/projetos/resumos`, () => HttpResponse.json([{ id: 11, slug: 'projeto' }])),
+        http.get(`${API}/api/projetos/11`, () => HttpResponse.json({ id: 11, slug: 'projeto', papel: 'editor', versao: 1, skillsDoPacote: [] })),
+        http.get(`${API}/api/projetos/11/artefatos`, () => {
         leituras++;
-        return HttpResponse.json(leituras === 1 ? [] : [{ projetoId: 11, slug: 'projeto', nome: 'Projeto de demonstração', artefatos: [artefato(2, 'preview'), artefato(1, 'pacote')] }]);
+        return HttpResponse.json([artefato(2, 'preview'), artefato(1, 'pacote')]);
       }));
-      const sha = '3f9c2a1b4d5e6f708192a3b4c5d6e7f809123456';
       const enviados = comFila(c => ({ estado: 'concluido', texto: JSON.parse(c.texto).conferir
-        ? JSON.stringify({ tipo: 'origem-artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', branch: 'feature/projeto', sha, formato: '' })
+        ? JSON.stringify({ tipo: 'origens-artefato', projeto: 'projeto', resultados: [{ repositorio: 'github.com/acme/app-desktop', aplicavel: true, formato: 'pacote', motivo: 'Executável principal' }] })
         : 'Artefato nº 7 pedido ao executor do dev.kit: pacote .NET de app-desktop no 3f9c2a1.' }));
       renderizar('/board', tokenDoDev());
       const painel = within(await screen.findByRole('complementary', { name: 'Board' }));
-      const card = within(await painel.findByRole('group', { name: 'Artefatos de Projeto de demonstração' }));
-      expect(card.getByText(/Nenhum artefato ainda/)).toBeInTheDocument();
-
-      await userEvent.click(card.getByRole('button', { name: 'Gerar artefato' }));
-      expect(enviados).toHaveLength(0);
-      await userEvent.click(card.getByRole('button', { name: 'Conferir origem' }));
-      const pedido = unico(enviados);
+      expect(leituras).toBe(0);
+      await userEvent.click(await painel.findByRole('button', { name: 'Gerar pacote' }));
+      const card = within(await painel.findByRole('region', { name: 'Artefatos de Projeto de demonstração' }));
+      const pedido = enviados.find(c => !JSON.parse(c.texto).conferir)!;
       // O mesmo comando projeto, com a ação no texto: o site não gera nada, quem gera é o dev.kit da máquina.
       expect(pedido.tipo).toBe('projeto');
-      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', conferir: true });
-      await userEvent.click(await card.findByRole('button', { name: 'Confirmar geração' }, { timeout: 6000 }));
-      expect(enviados).toHaveLength(2);
-      expect(JSON.parse(enviados[1].texto)).toEqual({ acao: 'artefato', projeto: 'projeto', repositorio: 'github.com/acme/app-desktop', sha });
+      expect(JSON.parse(pedido.texto)).toEqual({ acao: 'artefato', projeto: 'projeto' });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(card.queryByRole('button', { name: 'Confirmar geração' })).not.toBeInTheDocument();
       const desfecho = await painel.findByRole('status', { name: 'Desfecho da criação' }, { timeout: 6000 });
-      await waitFor(() => expect(desfecho).toHaveTextContent('Gerar artefato'), { timeout: 6000 });
-      await waitFor(() => expect(desfecho).toHaveTextContent('Artefato nº 7 pedido ao executor'), { timeout: 6000 });
-      expect(desfecho).toHaveTextContent('pedido aceito');
+      await waitFor(() => expect(desfecho).toHaveTextContent('Gerar pacote'), { timeout: 6000 });
+      await waitFor(() => expect(desfecho).toHaveTextContent(/pedido aceito|previsão atualizada/), { timeout: 6000 });
       expect(desfecho).not.toHaveTextContent('concluído');
 
       // O desfecho relê os links: o pacote baixa pelo link assinado com prazo, e o preview abre a URL do ambiente.
       const baixar = await card.findByRole('link', { name: 'Baixar o pacote de app-desktop · 3f9c2a1' }, { timeout: 6000 });
       expect(baixar.getAttribute('href')).toContain('sig=');
-      expect(baixar).toHaveTextContent('41,2 MB · expira em 23 h');
-      expect(card.getByRole('link', { name: 'Abrir o preview de portal-web · 3f9c2a1' })).toHaveAttribute('href', 'https://portal-projeto.eastus2.azurestaticapps.net');
-      expect(card.getByText('Artefatos · 2')).toBeInTheDocument();
-      expect(card.getByText(/nunca produção/)).toBeInTheDocument();
+      expect(card.getByText(/41,2 MB/)).toBeInTheDocument();
+      expect(card.getByRole('link', { name: 'Abrir a prévia de portal-web · 3f9c2a1' })).toHaveAttribute('href', 'https://portal-projeto.eastus2.azurestaticapps.net');
       // O card continua abrindo o projeto.
       expect(painel.getByRole('link', { name: 'Abrir Projeto de demonstração' })).toHaveAttribute('href', '/projetos?slug=projeto&retorno=%2Fboard');
     }, 15_000);

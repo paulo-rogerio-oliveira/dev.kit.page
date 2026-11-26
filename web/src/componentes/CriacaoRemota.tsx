@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
 import type { CatalogoRemoto, ComandoRemoto, ConversaRemota, MaquinaRemota, NovoDesignRemoto, NovoProjetoRemoto, TipoDeCriacao } from '../api/remoto';
 import type { UsoDoDesign } from '../api/tipos';
-import type { AcaoNoProjetoRemoto, OrigemDoArtefato } from '../api/projetos';
+import type { AcaoNoProjetoRemoto, OrigemDoArtefato, OrigensDoPacote } from '../api/projetos';
 import type { ConversaDaMaquina } from './useConversaRemota';
 import { tiposDeCriacao } from './useCatalogoRemoto';
 import { useSessao } from '../sessao';
@@ -19,7 +19,7 @@ export function ehGerarArtefato(comando: Pick<ComandoRemoto, 'tipo' | 'texto'>) 
   try { return (JSON.parse(comando.texto) as { acao?: string } | null)?.acao === 'artefato'; } catch { return false; }
 }
 export function rotuloDaCriacao(tipo: string, texto = '') {
-  return ehGerarArtefato({ tipo, texto }) ? 'Gerar artefato' : tipo === 'projeto' ? 'Novo projeto' : 'Novo design';
+  return ehGerarArtefato({ tipo, texto }) ? 'Gerar pacote' : tipo === 'projeto' ? 'Novo projeto' : 'Novo design';
 }
 
 /** Onde a criação está, com o texto do dev.kit quando ele já respondeu (o que criou, ou o motivo da recusa). */
@@ -32,7 +32,8 @@ function situacao(comando: ComandoRemoto, conversa: ConversaRemota) {
       : 'O pedido está na fila: quem cria é o dev.kit da máquina, pelo mesmo caminho do devcli.' };
     case 'entregue': return { classe: '', titulo: 'em execução no dev.kit', texto: artefato ? 'O dev.kit recebeu o pedido e está gerando o artefato.' : 'O dev.kit recebeu o pedido e está criando.' };
     case 'concluido': case 'respondido': return artefato
-      ? { classe: '', titulo: origemConferida(resposta) ? 'origem conferida' : 'pedido aceito', texto: origemConferida(resposta)
+      ? origensDoPacote(resposta) ? { classe: '', titulo: 'previsão atualizada', texto: 'Produtores consultados no host. Consulte a previsão por repositório no painel do pacote.' }
+      : { classe: '', titulo: origemConferida(resposta) ? 'origem conferida' : 'pedido aceito', texto: origemConferida(resposta)
         ? 'Confira o repositório e o commit no painel antes de confirmar a geração.'
         : resposta || 'Pedido aceito. Acompanhe a execução e a publicação nos artefatos do projeto.' }
       : { classe: ' br-ok', titulo: 'concluído', texto: resposta || 'Criado pelo dev.kit.' };
@@ -49,6 +50,19 @@ export function origemConferida(texto: string): OrigemDoArtefato | null {
     const origem = JSON.parse(texto) as OrigemDoArtefato;
     return origem?.tipo === 'origem-artefato' && typeof origem.repositorio === 'string' && typeof origem.branch === 'string'
       && typeof origem.projeto === 'string' && typeof origem.formato === 'string' && /^[a-f0-9]{40}$/i.test(origem.sha) ? origem : null;
+  } catch { return null; }
+}
+
+/** O host envia os resultados do projeto inteiro; a projeção descarta qualquer campo interno da skill. */
+export function origensDoPacote(texto: string): OrigensDoPacote | null {
+  try {
+    const origem = JSON.parse(texto) as { tipo: string; projeto: string; resultados: Record<string, unknown>[] };
+    if (origem.tipo !== 'origens-artefato' || typeof origem.projeto !== 'string' || !Array.isArray(origem.resultados)) return null;
+    return { tipo: 'origens-artefato', projeto: origem.projeto, resultados: origem.resultados.map(o => ({
+      repositorio: String(o.repositorio ?? o.Repositorio ?? ''), formato: String(o.formato ?? o.Formato ?? ''),
+      aplicavel: (o.aplicavel ?? o.Aplicavel) === true, motivo: String(o.motivo ?? o.Motivo ?? ''),
+      produtor: String(o.produtor ?? o.Produtor ?? ''), falhou: (o.falhou ?? o.Falhou) === true,
+    })) };
   } catch { return null; }
 }
 
@@ -88,6 +102,13 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
     gerarArtefato: (projeto: string, opcoes: Omit<AcaoNoProjetoRemoto, 'acao' | 'projeto'> = {}) => criar('projeto', { acao: 'artefato', projeto, ...opcoes }),
     origemDoArtefato: ultima && ehGerarArtefato(ultima)
       ? origemConferida(conversa.conversa.respostas.filter(r => r.comandoId === ultima.id).at(-1)?.texto ?? '') : null,
+    origensDoPacote: conversa.conversa.respostas.map(r => origensDoPacote(r.texto)).filter((o): o is OrigensDoPacote => o !== null),
+    pedidosDoPacote: conversa.conversa.respostas.flatMap(r => {
+      const comando = conversa.conversa.comandos.find(c => c.id === r.comandoId && ehGerarArtefato(c));
+      const id = /^Pedido ([a-f0-9]{32}):/i.exec(r.texto)?.[1];
+      if (!comando || !id) return [];
+      try { return [{ id, projeto: (JSON.parse(comando.texto) as AcaoNoProjetoRemoto).projeto }]; } catch { return []; }
+    }),
     desabilitado: !maquina || ocupado,
     abrir: (tipo: TipoDeCriacao) => { setFalha(''); setAberta(tipo); },
     fechar: () => { setFalha(''); setAberta(null); },

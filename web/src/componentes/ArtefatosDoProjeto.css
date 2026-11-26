@@ -1,0 +1,16 @@
+.pacote-projeto {font-size:12px; overflow-wrap:anywhere}
+.pacote-projeto .pacote-card {border:1px solid var(--line, var(--borda-controle)); border-radius:9px; padding:14px; margin:12px 0; background:var(--surface)}
+.pacote-projeto h3 {font-size:14px; margin:0 0 8px; color:var(--ink)}
+.pacote-projeto p {white-space:pre-wrap; line-height:1.5; margin:7px 0; overflow:visible}
+.pacote-projeto label {display:block; margin:12px 0 5px}
+.pacote-projeto select {display:block; width:100%; margin-top:5px; min-height:38px}
+.pacote-produtores {border:1px solid var(--line, var(--borda-controle)); border-radius:7px; margin-top:12px}
+.pacote-produtores>div {padding:9px 11px; display:flex; flex-wrap:wrap; gap:5px 16px}
+.pacote-produtores>div+div {border-top:1px solid var(--line, var(--borda-controle))}
+.pacote-produtores strong {min-width:90px}
+.pacote-resultado {border-top:1px solid var(--line, var(--borda-controle)); padding:12px 0}
+.pacote-resultado>strong,.pacote-resultado>small {display:block; margin-top:5px}
+.pacote-resultado small {color:var(--muted)}
+.pacote-resultado-acoes {display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap}
+.pacote-projeto details {border-top:1px solid var(--line, var(--borda-controle)); padding:9px 0}
+.pacote-projeto summary {cursor:pointer; line-height:1.6}

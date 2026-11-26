@@ -40,7 +40,19 @@ export interface Projeto {
   alteradoEm?: string | null; papel?: string;
   /** Projecao operacional; itens conserva o cadastro historico. */
   itensDoGrafo?: number[] | null; pendenciaDoGrafo?: string | null;
+  skillDoPacote?: string | null; skillsDoPacote?: OpcaoDeSkillDoPacote[] | null;
 }
+
+/** A tela recebe somente metadados; conteúdo, comando e argumentos ficam no host. */
+export interface OpcaoDeSkillDoPacote { nome: string; tipo: 'somente-comando' | 'com-parametros' }
+export interface ProdutorDoPacote { repositorio: string; formato: string; aplicavel: boolean; motivo: string; produtor?: string; falhou?: boolean }
+export interface OrigensDoPacote { tipo: 'origens-artefato'; projeto: string; resultados: ProdutorDoPacote[] }
+export interface ResultadoDoPacote {
+  id: number; projetoId: number; tipo: string; repositorio: string; sha: string; situacao: string; link: string;
+  validoAte: string | null; hash: string; tamanho: number; ambiente: string; detalhe: string; criadoEm: string; idRemoto: number;
+  estado: string; ciclo?: { estado: string; etapa: string; branch: string; pedidoId: string } | null;
+}
+export interface PedidoDoPacote { id: string; projetoId: number; criadoEm: string; estado: string; resultados: ResultadoDoPacote[] }
 
 /**
  * (controle-v4, item 2) Um artefato do projeto (Contracts/V1/ArtefatosV1.cs): o pacote .NET para baixar (o link assinado vence

@@ -41,6 +41,7 @@ export interface RetratoDaMaquina {
 export interface EstadoDoArtefato {
   id: number; tipo: string; repositorio: string; sha: string; estado: string; etapa: string;
   detalhe: string; idRemoto: number; criadoEm: string;
+  pedidoId?: string; branch?: string; produtor?: string;
 }
 
 export interface ReciboDaFinalizacao {
