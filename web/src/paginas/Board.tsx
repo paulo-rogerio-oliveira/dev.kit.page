@@ -18,8 +18,8 @@ import { BotaoDoDevKit, FaixaDoAcionamento, useControleDoDevKit } from '../compo
 import { useConversaRemota } from '../componentes/useConversaRemota';
 import { ChatDaTask } from '../componentes/ChatDaTask';
 import { useCatalogoRemoto } from '../componentes/useCatalogoRemoto';
-import { DesfechoDaCriacao, ehGerarArtefato, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
-import { ArtefatosDoCard, useArtefatosDoBoard } from '../componentes/ArtefatosDoProjeto';
+import { DesfechoDaCriacao, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRemota, type CriacaoDoBoard } from '../componentes/CriacaoRemota';
+import { PacoteDoBoard } from '../componentes/PacoteDoBoard';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import { ImpactosDaTask } from '../componentes/matrix/Impactos';
 import './Board.css';
@@ -64,7 +64,7 @@ function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
 }
 
-function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, artefatos, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; artefatos: ReturnType<typeof useArtefatosDoBoard>; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
+function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilitado, decidir, revisar, designs, criacao, dispensadas, dispensar, abrirTask, solicitarImpactos }: { foto: RetratoDaMaquina | null; agora: number; periodo: PeriodoDoDia; decisoes: DecisaoPendente[]; destacada: string; desabilitado: boolean; decidir: AoDecidir; revisar: (d: DecisaoPendente) => void; designs: NonNullable<CatalogoRemoto['designs']>; criacao: CriacaoDoBoard; dispensadas: Set<string>; dispensar: AoDispensar; abrirTask: (id: string) => void; solicitarImpactos: (id: string, motivo?: string) => void }) {
   const local = useLocation();
   const origem = local.pathname + local.search + local.hash;
   const retrato = foto?.retrato;
@@ -117,12 +117,11 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
           <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
-        <ArtefatosDoCard nome={p.nome} slug={p.slug} artefatos={artefatos.porSlug.get(p.slug) ?? []} gerar={criacao.gerarArtefato}
+        <PacoteDoBoard nome={p.nome} slug={p.slug} criacao={criacao}
+          previsaoRemota={p.previsaoDoPacote} skillNoRetrato={p.skillDoPacote}
           repositorios={p.repositorios ?? []} branch={p.branch ?? ''} estados={p.artefatos ?? []} capacidade={p.podeGerarArtefato === true}
-          plano={criacao.origemDoArtefato} erro={artefatos.erro} erroDoPedido={criacao.falha} atualizar={artefatos.atualizar} atualizando={artefatos.atualizando}
-          linksAutorizados={!artefatos.bloqueado}
           desabilitado={criacao.desabilitado || desabilitado || p.podeGerarArtefato === false}
-          motivo={p.podeGerarArtefato === false ? 'Este projeto exige editor ou dono e precisa estar aberto para gerar artefatos.' : criacao.motivo} agora={agora} />
+          agora={agora} />
       </div>;
     })}
     <VerMais total={projetos.length} todos={todosOsProjetos} alternar={() => setTodosOsProjetos(t => !t)} />
@@ -361,9 +360,6 @@ export function Board() {
   // (item 4) O catálogo da máquina (o handshake) é UM para o chat e o painel: os atalhos, os designs e os formulários.
   const catalogo = useCatalogoRemoto({ maquina, conectada, conversa });
   const criacao = useCriacaoRemota({ maquina, conversa, agora });
-  // (controle-v4, item 2) Os links do card relidos a cada desfecho de um "Gerar artefato".
-  const desfechosDoArtefato = conversa.conversa.comandos.filter(c => ehGerarArtefato(c) && c.estado === 'concluido').map(c => c.id).join(',');
-  const artefatos = useArtefatosDoBoard(sessao?.token, desfechosDoArtefato);
   const doCatalogo = catalogo.catalogo?.catalogo ?? null;
   const dispensadas = dispensadasDe(foto?.retrato?.pendencias ?? [], decisoes, dispensasLocais);
   const abertas = (foto?.retrato?.pendencias ?? []).filter(p => !dispensadas.has(p.id)).length;
@@ -401,7 +397,7 @@ export function Board() {
         {maquina && !conectada && <p role="status" className="br-note">Máquina desconectada. O último retrato pode estar desatualizado.</p>}
         {!carregando && maquina && !foto && !erro && <p className="br-note">Aguardando o primeiro retrato desta máquina.</p>}
         {(!carregando || foto) && <ConteudoDoBoard key={selecionada} foto={foto} agora={agora} periodo={periodo} decisoes={decisoes} destacada={destacada} desabilitado={desabilitado} decidir={decidir} revisar={setRevisao}
-          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} artefatos={artefatos} abrirTask={abrirTask}
+          designs={doCatalogo?.designs ?? []} criacao={criacao} dispensadas={dispensadas} dispensar={dispensar} abrirTask={abrirTask}
           solicitarImpactos={(id, motivo) => {
             void conversa.enviar(`${motivo ?? 'Revisar explicitamente a matriz de impactos'} da task ${id}: novo impacto a apurar. Preserve as atribuições das demais tasks e os portões existentes.`)
               .then(enviado => avisar(enviado ? 'Pedido de revisão da matriz enviado ao Orquestrador.' : 'Pedido não enviado. Confira a conexão e tente novamente.'));

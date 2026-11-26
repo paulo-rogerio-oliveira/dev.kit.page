@@ -180,13 +180,13 @@ it('falha de envio preserva ID do pedido para tentar de novo sem duplicar', asyn
       return HttpResponse.json({ detail: 'Fila indisponível' }, { status: 503 }); }),
   );
   renderizar('/projetos?slug=fixes', tokenDoDev());
-  await userEvent.click(await screen.findByRole('button', { name: 'Gerar artefato' }));
-  const enviar = screen.getByRole('button', { name: 'Enviar pedido' });
-  await waitFor(() => expect(enviar).toBeEnabled()); await userEvent.click(enviar);
+  const enviar = await screen.findByRole('button', { name: 'Gerar pacote' });
+  await userEvent.click(enviar);
   expect(await screen.findByRole('alert')).toHaveTextContent('Fila indisponível');
   await userEvent.click(enviar);
   await waitFor(() => expect(ids).toHaveLength(2));
   expect(ids[0]).toBe(ids[1]);
+  expect(screen.queryByRole('button', { name: 'Enviar pedido' })).not.toBeInTheDocument();
 });
 
 it('leitor não recebe editor e item sem modelo mantém disparo bloqueado', async () => {

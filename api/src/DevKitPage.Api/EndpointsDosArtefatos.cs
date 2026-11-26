@@ -23,6 +23,13 @@ public static class EndpointsDosArtefatos
     public static void MapearArtefatos(this IEndpointRouteBuilder app)
     {
         var grupo = app.MapGroup("/api/projetos").WithTags("Projetos");
+        grupo.MapGet("/{id:long}/artefatos/pedidos", (long id, int? limite, HttpRequest pedido, ClaimsPrincipal quem,
+            IArtefatosDosProjetos artefatos, CancellationToken ct) => ComEscopo(quem, async e =>
+        {
+            if (limite is < 1 or > 50) return Results.BadRequest("O limite de pedidos deve estar entre 1 e 50.");
+            var resultado = await artefatos.ListarPedidosAsync(e, id, limite ?? 10, ct);
+            return resultado.Valor is { } lista ? Results.Ok(lista.Select(p => Absoluto(pedido, p))) : EndpointsDaUs425.Resultado(resultado);
+        }));
         grupo.MapGet("/{id:long}/artefatos/pedidos/{pedidoId}", (long id, string pedidoId, HttpRequest pedido, ClaimsPrincipal quem,
             IArtefatosDosProjetos artefatos, CancellationToken ct) => ComEscopo(quem, async e =>
                 await artefatos.ConsultarPedidoAsync(e, id, pedidoId, ct) is { Valor: { } valor }

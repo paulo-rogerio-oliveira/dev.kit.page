@@ -192,6 +192,14 @@ export const api = {
     chamar<{ pendencia: string | null }>(`/api/projetos/${id}/prontidao-disparo`, { token, signal }),
   /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
   artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
+  artefatosDoProjeto: (token: string, id: number, signal?: AbortSignal) =>
+    chamar<import('./projetos').Artefato[]>(`/api/projetos/${id}/artefatos`, { token, signal }),
+  pedidoDoPacote: (token: string, id: number, pedido: string, signal?: AbortSignal) =>
+    chamar<import('./projetos').PedidoDoPacote>(`/api/projetos/${id}/artefatos/pedidos/${encodeURIComponent(pedido)}`, { token, signal }),
+  pedidosDoPacote: (token: string, id: number, signal?: AbortSignal) =>
+    chamar<import('./projetos').PedidoDoPacote[]>(`/api/projetos/${id}/artefatos/pedidos?limite=10`, { token, signal }),
+  editarSkillDoPacote: (token: string, id: number, versaoEsperada: number, skillDoPacote: string, signal?: AbortSignal) =>
+    chamar<Projeto>(`/api/projetos/${id}/skill-do-pacote`, { token, signal, metodo: 'PUT', corpo: { versaoEsperada, skillDoPacote } }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 
