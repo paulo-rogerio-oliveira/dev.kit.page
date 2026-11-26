@@ -27,6 +27,7 @@ export interface RetratoDaMaquina {
       repositorios?: string[] | null; branch?: string | null; artefatos?: EstadoDoArtefato[] | null; podeGerarArtefato?: boolean | null;
       previsaoDoPacote?: import('./projetos').PrevisaoRemotaDoPacote[] | null;
       skillDoPacote?: string | null;
+      configuracaoDoPacote?: 'Debug' | 'Release' | null;
     }> | null;
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;
@@ -44,6 +45,7 @@ export interface EstadoDoArtefato {
   id: number; tipo: string; repositorio: string; sha: string; estado: string; etapa: string;
   detalhe: string; idRemoto: number; criadoEm: string;
   pedidoId?: string; branch?: string; produtor?: import('./projetos').MetadadosDoProdutor | string | null;
+  configuracaoDoPacote?: 'Debug' | 'Release' | null;
 }
 
 export interface ReciboDaFinalizacao {

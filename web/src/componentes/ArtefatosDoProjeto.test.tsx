@@ -158,11 +158,23 @@ describe('pacote do projeto sem confirmação', () => {
       SkillDoPacote: { Conteudo: 'SEGREDO', Argumento: 'SEGREDO' },
     }] }));
     expect(JSON.stringify(previsao)).not.toMatch(/SEGREDO|Conteudo|Argumento|comando|conteudo|argumentos/);
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ skillDoPacote: 'pacote-dev' }));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ skillDoPacote: 'pacote-dev' }));
     try {
       await api.editarSkillDoPacote('token', 1, 7, 'pacote-dev');
       expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ versaoEsperada: 7, skillDoPacote: 'pacote-dev' });
+      await api.editarConfiguracaoDoPacote('token', 1, 8, 'Release');
+      expect(String(fetch.mock.calls[1][0])).toContain('/api/projetos/1/configuracao-do-pacote');
+      expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toEqual({ versaoEsperada: 8, configuracaoDoPacote: 'Release' });
     } finally { fetch.mockRestore(); }
+  });
+
+  it('resultado mostra a configuração congelada mesmo quando o próximo pacote escolhe Release', () => {
+    render(<ArtefatosDoCard {...base} configuracaoDoPacote="Release" pedidos={[{ ...pedido,
+      resultados: [{ ...resultado, ciclo: { ...resultado.ciclo, configuracaoDoPacote: 'Debug' } }] }]} />);
+    expect(screen.getByLabelText('Configuração do pacote')).toHaveValue('Release');
+    const metadados = document.querySelector('.pacote-resultado small');
+    expect(metadados).toHaveTextContent('Debug');
+    expect(metadados).not.toHaveTextContent('Release');
   });
 
   it('recusa de autenticação preserva metadados e bloqueia downloads', () => {

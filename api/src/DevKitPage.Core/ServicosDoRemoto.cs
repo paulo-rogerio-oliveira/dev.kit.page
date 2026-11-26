@@ -96,6 +96,8 @@ public static partial class RegrasDoRemoto
                 return $"projetos[{i}]: repositórios e branch inválidos para a geração de artefatos.";
             if ((projeto.SkillDoPacote?.Length ?? 0) > 200 || CaminhoLocal(projeto.SkillDoPacote ?? ""))
                 return $"projetos[{i}]: skill do pacote inválida.";
+            if (projeto.ConfiguracaoDoPacote is not (null or "Debug" or "Release"))
+                return $"projetos[{i}]: configuração do pacote inválida.";
             if ((projeto.Artefatos?.Count ?? 0) > 500
                 || (projeto.Artefatos ?? []).Where(a => a is not null).Select(a => a.Id).Distinct().Count() != (projeto.Artefatos?.Count ?? 0)
                 || (projeto.Artefatos ?? [])
@@ -114,6 +116,7 @@ public static partial class RegrasDoRemoto
                     || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "agente-pendente" or "nao-aplicavel" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou" or "expirado")
                     || a.Etapa is null || a.Etapa.Length > 100 || a.Detalhe is null || a.Detalhe.Length > 1000 || CaminhoLocal(a.Detalhe)
                     || (a.PedidoId is { } pedidoId && (pedidoId.Length > 64 || !pedidoId.All(char.IsAsciiLetterOrDigit)))
+                    || a.ConfiguracaoDoPacote is not (null or "Debug" or "Release")
                     || (a.Branch?.Length ?? 0) > 200 || CaminhoLocal(a.Branch ?? "") || !ProdutorValido(a.Produtor))
                     return $"projetos[{i}]: estado de artefato inválido ou com caminho local.";
             var itens = projeto.Itens ?? [];

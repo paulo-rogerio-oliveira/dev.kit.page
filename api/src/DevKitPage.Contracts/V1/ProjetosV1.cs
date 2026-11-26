@@ -33,7 +33,7 @@ public sealed record EnvioDeProjetoV1(
     IReadOnlyList<string>? BranchesDasTasks = null, DateTimeOffset? AtualizadoEm = null,
     string? BaseDoBranch = null, string? FluxoPadrao = null, string? Agente = null, string? Modelo = null,
     IReadOnlyList<ModeloDoProjetoV1>? Modelos = null, PoliticaDoProjetoV1? PoliticaDeFinalizacao = null,
-    string? SkillDoPacote = null, IReadOnlyList<OpcaoDeSkillDoPacoteV1>? SkillsDoPacote = null)
+    string? SkillDoPacote = null, IReadOnlyList<OpcaoDeSkillDoPacoteV1>? SkillsDoPacote = null, string? ConfiguracaoDoPacote = null)
 {
     /// <summary>Origem interna da rota de edição; não pode ser definida por um snapshot HTTP.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -49,7 +49,7 @@ public sealed record ProjetoV1(
     IReadOnlyList<string>? BranchesDasTasks = null, DateTimeOffset? AlteradoEm = null, string Papel = "",
     string? BaseDoBranch = null, string? FluxoPadrao = null, string? Agente = null, string? Modelo = null,
     IReadOnlyList<ModeloDoProjetoV1>? Modelos = null, PoliticaDoProjetoV1? PoliticaDeFinalizacao = null,
-    string? SkillDoPacote = null, IReadOnlyList<OpcaoDeSkillDoPacoteV1>? SkillsDoPacote = null)
+    string? SkillDoPacote = null, IReadOnlyList<OpcaoDeSkillDoPacoteV1>? SkillsDoPacote = null, string? ConfiguracaoDoPacote = null)
 {
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<int>? ItensDoGrafo { get; init; }
@@ -59,6 +59,7 @@ public sealed record ProjetoV1(
 
 public sealed record OpcaoDeSkillDoPacoteV1(string Nome, string Tipo);
 public sealed record EdicaoDaSkillDoPacoteV1(int VersaoEsperada, string SkillDoPacote);
+public sealed record EdicaoDaConfiguracaoDoPacoteV1(int VersaoEsperada, string ConfiguracaoDoPacote);
 
 public static class ProjetosV1
 {

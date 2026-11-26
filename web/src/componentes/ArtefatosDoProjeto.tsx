@@ -89,12 +89,14 @@ export interface PropsDoPacote {
   atualizar?: () => void; atualizando?: boolean; linksAutorizados?: boolean;
   pedidos?: PedidoDoPacote[]; produtores?: ProdutorDoPacote[];
   skillDoPacote?: string; skillsDoPacote?: OpcaoDeSkillDoPacote[]; salvarSkill?: (nome: string) => Promise<void>;
+  configuracaoDoPacote?: 'Debug' | 'Release'; salvarConfiguracao?: (valor: 'Debug' | 'Release') => Promise<void>;
 }
 
 /** Painel do projeto inteiro. As ações individuais existentes se limitam a retomar a etapa do mesmo resultado. */
 export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, motivo, agora, repositorios = [], branch = '',
   estados = [], capacidade = false, erro = '', erroDoPedido = '', atualizar, atualizando = false, linksAutorizados = true,
-  pedidos = [], produtores = [], skillDoPacote = '', skillsDoPacote = [], salvarSkill }: PropsDoPacote) {
+  pedidos = [], produtores = [], skillDoPacote = '', skillsDoPacote = [], salvarSkill,
+  configuracaoDoPacote = 'Debug', salvarConfiguracao }: PropsDoPacote) {
   const [enviando, setEnviando] = useState(false);
   const [destinosAbertos, setDestinosAbertos] = useState<number[]>([]);
   const [aguardando, setAguardando] = useState(false);
@@ -125,6 +127,13 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     catch (falha) { setMensagem(mensagemDaFalha(falha)); }
     finally { trava.current = false; setEnviando(false); }
   }
+  async function escolherConfiguracao(valor: 'Debug' | 'Release') {
+    if (bloqueado || !salvarConfiguracao || trava.current) return;
+    trava.current = true; setEnviando(true); setMensagem('');
+    try { await salvarConfiguracao(valor); setMensagem(`Configuração do pacote salva: ${valor}.`); }
+    catch (falha) { setMensagem(mensagemDaFalha(falha)); }
+    finally { trava.current = false; setEnviando(false); }
+  }
   const ordenados = [...pedidos].sort((a, b) => Date.parse(b.criadoEm) - Date.parse(a.criadoEm));
   const ultimo = ordenados[0];
   function linha(r: ResultadoDoPacote | EstadoDoArtefato, link?: Artefato) {
@@ -136,6 +145,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     const valido = r.estado === 'publicado' && linksAutorizados && retido && !vencido && linkValido(url);
     const tipo = link?.tipo ?? r.tipo;
     const produtor = rotuloDoProdutor(r.produtor);
+    const configuracao = completo?.ciclo?.configuracaoDoPacote ?? ('configuracaoDoPacote' in r ? r.configuracaoDoPacote : null);
     const branchDaOrigem = completo?.ciclo?.branch ?? ('branch' in r ? r.branch : '') ?? branch;
     const destinoAusente = tipo === 'preview' && ['falhou', 'nao-aplicavel', 'local-pronto'].includes(r.estado)
       && /destino|--swa-app/i.test(r.detalhe);
@@ -146,6 +156,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
       </div>
       <strong>{repositorioCurto(r.repositorio)}</strong>
       <small><code>{r.sha.slice(0, 7)}</code>{branchDaOrigem && ` · ${branchDaOrigem}`} · {produtor || tipo || 'produtor a detectar'}
+        {tipo === 'pacote' && configuracao && ` · ${configuracao}`}
         {tipo !== 'preview' && ` · ${tamanhoDoArtefato(link?.tamanho ?? completo?.tamanho ?? 0)}`}{expira && ` · ${prazo(expira, agora)}`}</small>
       <p className={['nao-aplicavel', 'falhou'].includes(r.estado) ? 'pacote-motivo-erro' : undefined}>{r.detalhe}</p>
       {destinoAusente && destinosAbertos.includes(r.id) && <div role="note" className="pacote-orientacao-destino">
@@ -177,11 +188,15 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
         {skillDoPacote && !skillsDoPacote.some(s => s.nome === skillDoPacote) && <option value={skillDoPacote}>{skillDoPacote} · indisponível no cadastro atual</option>}
         {skillsDoPacote.map(s => <option key={s.nome} value={s.nome} aria-label={`${s.nome} · ${s.tipo === 'somente-comando' ? 'somente comando' : 'com parâmetros'}`}>{s.nome}</option>)}
       </select>{skillsDoPacote.find(s => s.nome === skillDoPacote) && <span className="pacote-skill-tipo" aria-hidden="true">{skillsDoPacote.find(s => s.nome === skillDoPacote)?.tipo === 'somente-comando' ? 'somente comando' : 'com parâmetros'}</span>}</div></label>
-      <p>Sem skill: executável principal ou todos os executáveis, cada um na sua subpasta. Front web: prévia.</p>
+      <label>Configuração<select aria-label="Configuração do pacote" value={configuracaoDoPacote}
+        disabled={bloqueado || !salvarConfiguracao} onChange={e => void escolherConfiguracao(e.target.value as 'Debug' | 'Release')}>
+        <option value="Debug">Debug · padrão</option><option value="Release">Release</option>
+      </select></label>
+      <p>Debug abre ao lado do dev.kit instalado (sem a trava de instância única). Release é a distribuição: uma instância por máquina. Sem skill: executável principal ou todos os executáveis, cada um na sua subpasta. Front web: prévia.</p>
       <div className="pacote-produtores">{repositorios.map(repo => {
         const produtor = produtores.find(p => normalizarRepo(p.repositorio) === normalizarRepo(repo));
         return <div key={repo}><strong>{repositorioCurto(repo)}</strong><span>{produtor
-          ? `${produtor.falhou ? 'Falhou' : !produtor.aplicavel ? 'Não gera' : produtor.produtor || produtor.formato} · ${produtor.motivo}`
+          ? `${produtor.falhou ? 'Falhou' : !produtor.aplicavel ? 'Não gera' : produtor.produtor || produtor.formato} · ${produtor.motivo}${produtor.formato === 'pacote' ? ` · ${configuracaoDoPacote}` : ''}`
           : 'Aguardando a previsão do produtor no host.'}</span></div>;
       })}</div>
     </div>

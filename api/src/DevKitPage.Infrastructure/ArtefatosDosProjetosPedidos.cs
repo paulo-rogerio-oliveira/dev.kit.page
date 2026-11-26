@@ -120,6 +120,7 @@ public sealed partial class ArtefatosDosProjetosNoBanco
                 || !(a.Sha is { Length: 40 } && a.Sha.All(char.IsAsciiHexDigit)
                     || a.Sha == "" && a.Estado == "falhou" && a.Ciclo?.Etapa == "preparacao" && a.IdRemoto == 0)
                 || a.Tipo is not ("" or "pacote" or "preview") || a.Ciclo is null || !RegrasDoRemoto.ProdutorValido(a.Produtor)
+                || a.Ciclo.ConfiguracaoDoPacote is not (null or "Debug" or "Release")
                 || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "agente-pendente" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou" or "nao-aplicavel" or "expirado"))
                 return "Cada resultado exige origem, SHA integral, tipo e estado conhecidos.";
             if (a.Estado is "nao-aplicavel" or "falhou" or "agente-pendente" && string.IsNullOrWhiteSpace(a.Detalhe))

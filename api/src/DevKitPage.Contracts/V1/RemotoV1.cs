@@ -30,12 +30,13 @@ public sealed record RetratoV1(
 /// <summary>Um projeto do Orquestrador no retrato: a situação (<see cref="ProjetosV1.Situacoes"/>), a onda corrente e os itens.</summary>
 public sealed record ProjetoNoRetratoV1(string Slug, string Nome, string Situacao, int OndaAtual, IReadOnlyList<ItemNoRetratoV1>? Itens,
     IReadOnlyList<string>? Repositorios = null, string? Branch = null, IReadOnlyList<ArtefatoNoRetratoV1>? Artefatos = null,
-    bool? PodeGerarArtefato = null, string? SkillDoPacote = null, IReadOnlyList<PrevisaoDoPacoteV1>? PrevisaoDoPacote = null);
+    bool? PodeGerarArtefato = null, string? SkillDoPacote = null, IReadOnlyList<PrevisaoDoPacoteV1>? PrevisaoDoPacote = null,
+    string? ConfiguracaoDoPacote = null);
 
 /// <summary>Progresso do executor. Sem caminho local ou link; download é consultado pela API com a ACL do projeto.</summary>
 public sealed record ArtefatoNoRetratoV1(long Id, string Tipo, string Repositorio, string Sha, string Estado,
     string Etapa, string Detalhe, long IdRemoto, DateTimeOffset CriadoEm,
-    string? PedidoId = null, string? Branch = null, ProdutorDoArtefatoV1? Produtor = null);
+    string? PedidoId = null, string? Branch = null, ProdutorDoArtefatoV1? Produtor = null, string? ConfiguracaoDoPacote = null);
 
 public sealed record ProdutorDoArtefatoV1(string Nome, string Tipo);
 public sealed record PrevisaoDoPacoteV1(string Repositorio, ProdutorDoArtefatoV1 Produtor, string Motivo, bool Aplicavel, string Formato);

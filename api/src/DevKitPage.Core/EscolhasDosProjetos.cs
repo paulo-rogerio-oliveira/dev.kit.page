@@ -22,6 +22,7 @@ public static class EscolhasDosProjetos
         BaseDoBranch = envio.BaseDoBranch ?? anterior?.BaseDoBranch,
         FluxoPadrao = envio.FluxoPadrao ?? anterior?.FluxoPadrao,
         SkillDoPacote = envio.SkillDoPacote ?? anterior?.SkillDoPacote,
+        ConfiguracaoDoPacote = envio.ConfiguracaoDoPacote ?? anterior?.ConfiguracaoDoPacote,
         SkillsDoPacote = envio.SkillsDoPacote ?? anterior?.SkillsDoPacote,
         Agente = envio.Agente ?? anterior?.Agente,
         Modelo = envio.Modelo ?? anterior?.Modelo,
