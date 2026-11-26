@@ -153,7 +153,8 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     </div>;
   }
   const reposDoUltimo = new Set(ultimo?.resultados.map(r => normalizarRepo(r.repositorio)));
-  const semPedido = estados.filter(e => !ultimo?.resultados.some(r => r.id === e.id));
+  const idsAgrupados = new Set(resultados.map(r => r.id));
+  const semPedido = estados.filter(e => !idsAgrupados.has(e.id));
   const semEstado = artefatos.filter(a => !estados.some(e => e.idRemoto === a.id) && !resultados.some(r => r.idRemoto === a.id));
   return <section className="br-artefatos pacote-projeto" aria-label={`Artefatos de ${nome}`}>
     <div className="br-artefatos-titulo"><span>Pacote do projeto · {nome}</span>

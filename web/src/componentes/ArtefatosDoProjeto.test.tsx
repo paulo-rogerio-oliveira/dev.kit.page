@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ArtefatosDoCard, tamanhoDoArtefato, useArtefatosDoBoard, type PropsDoPacote } from './ArtefatosDoProjeto';
 import { origensDoPacote } from './CriacaoRemota';
@@ -69,6 +69,23 @@ describe('pacote do projeto sem confirmação', () => {
   it('não esconde repositórios sem resultado', () => {
     render(<ArtefatosDoCard {...base} pedidos={[{ ...pedido, resultados: [resultado] }]} />);
     expect(screen.getByText(/Sem resultado neste pedido/)).toHaveTextContent('web');
+  });
+
+  it('coleção e retrato simultâneos não duplicam pedidos anteriores e conservam resultado legado avulso', async () => {
+    const anterior = { ...pedido, id: 'anterior', criadoEm: new Date(agora - 60000).toISOString(),
+      resultados: pedido.resultados.map((r, i) => ({ ...r, id: 10 + i })) };
+    const estados = [...pedido.resultados, ...anterior.resultados].map(r => ({ ...r, etapa: 'concluido' }));
+    const legado = { ...estados[0], id: 99, repositorio: 'repo-legado', detalhe: 'Legado preservado' };
+    render(<ArtefatosDoCard {...base} pedidos={[pedido, anterior]} estados={[...estados, legado]} />);
+    const anteriores = within(screen.getByText('Anteriores').parentElement!);
+    expect(anteriores.getAllByRole('group')).toHaveLength(2);
+    expect(anteriores.getAllByText(/repo-legado/)).toHaveLength(2);
+    const resumo = anteriores.getAllByRole('group')[0].querySelector('summary')!;
+    await userEvent.click(resumo);
+    expect(resumo.closest('details')).toHaveAttribute('open');
+    expect(anteriores.getAllByText('desktop')).toHaveLength(1);
+    expect(anteriores.getAllByText('web')).toHaveLength(1);
+    expect(anteriores.getByText('Legado preservado')).toBeInTheDocument();
   });
 
   it('Configurar mostra o comando do host sem formulário, geração ou escrita remota', async () => {

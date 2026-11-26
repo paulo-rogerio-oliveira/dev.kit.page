@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { api, ErroDaApi } from '../api/cliente';
-import type { Projeto, ResumoDoProjeto, PedidoDoPacote } from '../api/projetos';
+import type { Projeto, ResumoDoProjeto, PedidoDoPacote, OrigensDoPacote } from '../api/projetos';
 import { PacoteDoBoard } from './PacoteDoBoard';
-import type { CriacaoDoBoard } from './CriacaoRemota';
+import { useCriacaoRemota, type CriacaoDoBoard } from './CriacaoRemota';
+import type { ConversaDaMaquina } from './useConversaRemota';
 
 vi.mock('../sessao', () => ({ useSessao: () => ({ sessao: { token: 'token-demo' } }) }));
 const projeto: Projeto = { id: 1, slug: 'demo', nome: 'Demo', nivel: 'usuario', time: '', repositorios: ['repo'], branch: 'feature/demo',
@@ -16,12 +17,32 @@ function montar(p = projeto) {
   const links = vi.spyOn(api, 'artefatosDoProjeto').mockResolvedValue([]);
   const pedido = vi.spyOn(api, 'pedidosDoPacote').mockResolvedValue([]);
   const gerar = vi.fn().mockResolvedValue(true);
-  const criacao = { gerarArtefato: gerar, desabilitado: false, motivo: '', falha: '', origensDoPacote: [], pedidosDoPacote: [] } as unknown as CriacaoDoBoard;
+  const conferir = vi.fn().mockResolvedValue('conferencia-atual');
+  const criacao = { gerarArtefato: gerar, conferirPacote: conferir, desabilitado: false, motivo: '', falha: '', origensDoPacote: [], pedidosDoPacote: [] } as unknown as CriacaoDoBoard;
   const tela = render(<PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['repo']} estados={[]}
     capacidade desabilitado={false} criacao={criacao} agora={Date.now()} />);
-  return { ...tela, resumos, detalhe, links, pedido, gerar };
+  return { ...tela, resumos, detalhe, links, pedido, gerar, conferir, criacao };
 }
 afterEach(() => vi.restoreAllMocks());
+
+it('a conferência usa o mesmo ID do transporte e descarta respostas sem comando associado', async () => {
+  const texto = JSON.stringify({ tipo: 'origens-artefato', projeto: 'demo', resultados: [] });
+  const criar = vi.fn().mockResolvedValue({ ok: true });
+  const conversa = { conversa: { comandos: [], respostas: [
+    { comandoId: null, texto }, { comandoId: '', texto }, { comandoId: 'conferencia-conhecida', texto },
+  ] }, criar } as unknown as ConversaDaMaquina;
+  const hook = renderHook(() => useCriacaoRemota({ maquina: undefined, conversa, agora: Date.now() }));
+  expect(hook.result.current.origensDoPacote).toEqual([
+    { tipo: 'origens-artefato', projeto: 'demo', resultados: [], comandoId: 'conferencia-conhecida' },
+  ]);
+  let id: string | null = null;
+  await act(async () => { id = await hook.result.current.conferirPacote('demo'); });
+  expect(id).toBeTruthy();
+  expect(criar).toHaveBeenCalledExactlyOnceWith('projeto', { acao: 'artefato', projeto: 'demo', conferir: true }, id);
+  criar.mockResolvedValue({ ok: false });
+  await act(async () => { id = await hook.result.current.conferirPacote('demo'); });
+  expect(id).toBeNull();
+});
 
 it('painel fechado não carrega detalhe, pedidos ou links; abrir consulta só o projeto e recolher mantém o Board', async () => {
   const tela = montar();
@@ -30,7 +51,8 @@ it('painel fechado não carrega detalhe, pedidos ou links; abrir consulta só o 
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
   await waitFor(() => expect(tela.links).toHaveBeenCalledWith('token-demo', 1, expect.any(AbortSignal)));
   expect(tela.detalhe).toHaveBeenCalledExactlyOnceWith('token-demo', 1, expect.any(AbortSignal));
-  expect(tela.gerar).toHaveBeenCalledExactlyOnceWith('demo', { conferir: true });
+  expect(tela.conferir).toHaveBeenCalledExactlyOnceWith('demo');
+  expect(tela.gerar).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole('button', { name: 'Recolher pacote' }));
   expect(screen.queryByLabelText('Skill do pacote (opcional)')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Ver pacote do projeto' })).toBeInTheDocument();
@@ -119,7 +141,7 @@ it('reabrir após refresh descobre pedidos do desktop sem IDs na conversa e cons
 it('usa previsão nome/tipo projetada pelo host, inclusive para leitor', async () => {
   const tela = montar({ ...projeto, papel: 'leitor' }); tela.unmount();
   render(<PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['repo']} estados={[]}
-    capacidade desabilitado={false} agora={Date.now()} criacao={{ gerarArtefato: tela.gerar, desabilitado: false, motivo: '',
+    capacidade desabilitado={false} agora={Date.now()} criacao={{ gerarArtefato: tela.gerar, conferirPacote: tela.conferir, desabilitado: false, motivo: '',
       origensDoPacote: [], pedidosDoPacote: [] } as unknown as CriacaoDoBoard}
     previsaoRemota={[{ repositorio: 'repo', produtor: { nome: 'pacote-demo', tipo: 'skill' }, motivo: 'Comando direto', aplicavel: true, formato: 'pacote' }]} />);
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
@@ -132,7 +154,7 @@ it('editor usa a previsão atual sem conferir de novo e descarta a previsão da 
   const tela = montar(); tela.unmount();
   const salvar = vi.spyOn(api, 'editarSkillDoPacote').mockResolvedValue({ ...projeto, versao: 8, skillDoPacote: 'pacote-demo' });
   render(<PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['repo']} estados={[]}
-    capacidade desabilitado={false} agora={Date.now()} criacao={{ gerarArtefato: tela.gerar, desabilitado: false, motivo: '',
+    capacidade desabilitado={false} agora={Date.now()} criacao={{ gerarArtefato: tela.gerar, conferirPacote: tela.conferir, desabilitado: false, motivo: '',
       origensDoPacote: [], pedidosDoPacote: [] } as unknown as CriacaoDoBoard}
     skillNoRetrato="" previsaoRemota={[{ repositorio: 'repo', produtor: { nome: '', tipo: 'principal' },
       motivo: 'Previsão antes da edição', aplicavel: true, formato: 'pacote' }]} />);
@@ -141,6 +163,39 @@ it('editor usa a previsão atual sem conferir de novo e descarta a previsão da 
   expect(tela.gerar).not.toHaveBeenCalled();
   await userEvent.selectOptions(screen.getByLabelText('Skill do pacote (opcional)'), 'pacote-demo');
   expect(salvar).toHaveBeenCalledExactlyOnceWith('token-demo', 1, 7, 'pacote-demo');
-  await waitFor(() => expect(tela.gerar).toHaveBeenCalledExactlyOnceWith('demo', { conferir: true }));
+  await waitFor(() => expect(tela.conferir).toHaveBeenCalledExactlyOnceWith('demo'));
   expect(screen.queryByText(/Previsão antes da edição/)).not.toBeInTheDocument();
+});
+
+it('trocar e limpar skill ignora previsão não vazia da conversa e respostas tardias de outras conferências', async () => {
+  const atual = { ...projeto, skillDoPacote: 'pacote-demo', skillsDoPacote: [...projeto.skillsDoPacote!,
+    { nome: 'pacote-parametros', tipo: 'com-parametros' as const }] };
+  const tela = montar(atual); tela.unmount();
+  tela.conferir.mockResolvedValueOnce('nova-1').mockResolvedValueOnce('nova-2');
+  const salvar = vi.spyOn(api, 'editarSkillDoPacote').mockResolvedValue({ ...atual, versao: 8, skillDoPacote: 'pacote-parametros' });
+  const origem = (comandoId: string, motivo: string): OrigensDoPacote => ({ tipo: 'origens-artefato', projeto: 'demo', comandoId,
+    resultados: [{ repositorio: 'repo', formato: 'pacote', aplicavel: true, produtor: motivo, motivo }] });
+  let respostas = [origem('antiga', 'Produtor antigo')];
+  const painel = () => <PacoteDoBoard nome="Demo" slug="demo" branch="feature/demo" repositorios={['repo']} estados={[]}
+    capacidade desabilitado={false} agora={Date.now()} skillNoRetrato="pacote-demo"
+    previsaoRemota={[{ repositorio: 'repo', produtor: { nome: 'pacote-demo', tipo: 'skill' }, motivo: 'Previsão original', aplicavel: true, formato: 'pacote' }]}
+    criacao={{ ...tela.criacao, origensDoPacote: respostas }} />;
+  const vista = render(painel());
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  await screen.findByText(/Previsão original/);
+  await userEvent.selectOptions(screen.getByLabelText('Skill do pacote (opcional)'), 'pacote-parametros');
+  await waitFor(() => expect(tela.conferir).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText(/Produtor antigo/)).not.toBeInTheDocument();
+  respostas = [...respostas, origem('outra-antiga', 'Resposta tardia antiga')]; vista.rerender(painel());
+  expect(screen.queryByText(/Resposta tardia antiga/)).not.toBeInTheDocument();
+  respostas = [...respostas, origem('nova-1', 'Produtor com parâmetros')]; vista.rerender(painel());
+  expect(await screen.findByText(/Produtor com parâmetros/)).toBeInTheDocument();
+  salvar.mockResolvedValue({ ...atual, versao: 9, skillDoPacote: '' });
+  await userEvent.selectOptions(screen.getByLabelText('Skill do pacote (opcional)'), '');
+  await waitFor(() => expect(tela.conferir).toHaveBeenCalledTimes(2));
+  respostas = [...respostas, origem('nova-1', 'Parâmetros atrasados')]; vista.rerender(painel());
+  expect(screen.queryByText(/Parâmetros atrasados|Produtor com parâmetros/)).not.toBeInTheDocument();
+  respostas = [...respostas, origem('nova-2', 'Executável principal')]; vista.rerender(painel());
+  expect(await screen.findByText(/Executável principal · Executável principal/)).toBeInTheDocument();
+  expect(tela.gerar).not.toHaveBeenCalled();
 });

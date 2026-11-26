@@ -48,7 +48,7 @@ export interface OpcaoDeSkillDoPacote { nome: string; tipo: 'somente-comando' | 
 export interface MetadadosDoProdutor { nome: string; tipo: 'skill' | 'principal' | 'todos-os-executaveis' | 'previa' | 'nao-aplicavel' }
 export interface PrevisaoRemotaDoPacote { repositorio: string; produtor: MetadadosDoProdutor; motivo: string; aplicavel: boolean; formato: string }
 export interface ProdutorDoPacote { repositorio: string; formato: string; aplicavel: boolean; motivo: string; produtor?: string; falhou?: boolean }
-export interface OrigensDoPacote { tipo: 'origens-artefato'; projeto: string; resultados: ProdutorDoPacote[] }
+export interface OrigensDoPacote { tipo: 'origens-artefato'; projeto: string; resultados: ProdutorDoPacote[]; comandoId?: string }
 export interface ResultadoDoPacote {
   id: number; projetoId: number; tipo: string; repositorio: string; sha: string; situacao: string; link: string;
   validoAte: string | null; hash: string; tamanho: number; ambiente: string; detalhe: string; criadoEm: string; idRemoto: number;

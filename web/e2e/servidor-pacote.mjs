@@ -128,8 +128,12 @@ export const servidor = createServer(async (req, res) => {
             r.validoAte = new Date(Date.now() + 23 * 3600_000).toISOString(); r.detalhe = 'Retomada concluída no mesmo ID pelo cenário isolado.'; }
         }
         const comando = { ...dados.comandos[0], ...corpo, estado: 'concluido', criadoEm: agora() };
+        const previsaoAtual = { ...dados.origens, resultados: dados.origens.resultados.map((r, i) => ({ ...r,
+          Produtor: i ? 'prévia web' : dados.projeto.skillDoPacote || 'Executável principal',
+          Motivo: i ? 'Front Vite' : dados.projeto.skillDoPacote === 'pacote-com-parametros' ? 'Agente resolve os parâmetros'
+            : dados.projeto.skillDoPacote ? 'Comando direto' : 'src/App/App.csproj' })) };
         const resposta = { ...dados.respostas[0], id: `r-${corpo.id}`, comandoId: corpo.id,
-          texto: opcoes.conferir ? JSON.stringify(dados.origens) : `Pedido ${pedidoAtual}: em-andamento. Demonstração isolada.` };
+          texto: opcoes.conferir ? JSON.stringify(previsaoAtual) : `Pedido ${pedidoAtual}: em-andamento. Demonstração isolada.` };
         dados.comandos.push(comando); dados.respostas.push(resposta);
         for (const par of [{ tipo: 'comando', comando, resposta: null }, { tipo: 'resposta', comando: null, resposta }])
           dados.eventos.push({ id: dados.eventos.length + 1, maquinaId: 'demo', em: agora(), ...par });

@@ -24,6 +24,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
   const [revisao, setRevisao] = useState(0);
   const [atualizando, setAtualizando] = useState(false);
   const previsaoPedida = useRef('');
+  const [consultaDaPrevisao, setConsultaDaPrevisao] = useState<{ assinatura: string; comandoId: string | null }>();
   const token = sessao?.token;
   const ids = [...new Set([...estados.map(e => e.pedidoId).filter((id): id is string => !!id),
     ...criacao.pedidosDoPacote.filter(p => p.projeto === slug).map(p => p.id)])].sort().join(',');
@@ -72,17 +73,22 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
   const podeEditar = !projeto || projeto.papel === 'editor' || projeto.papel === 'dono';
   const bloqueado = desabilitado || criacao.desabilitado || semAcesso || edicaoConflitante || !podeEditar || !capacidade;
   const motivo = !podeEditar || semAcesso ? 'Gerar pacote e editar a skill exige editor ou dono do projeto.' : criacao.motivo;
-  const previsao = criacao.origensDoPacote.filter(p => p.projeto === slug).at(-1);
+  const assinatura = JSON.stringify([slug, projeto?.versao, projeto?.branch, projeto?.skillDoPacote ?? '', projeto?.repositorios, revisao]);
+  const previsao = consultaDaPrevisao?.assinatura === assinatura && consultaDaPrevisao.comandoId
+    ? criacao.origensDoPacote.find(p => p.projeto === slug && p.comandoId === consultaDaPrevisao.comandoId) : undefined;
   const previsaoRemotaAtual = previsaoRemota != null && !!projeto && projeto.branch === branch
-    && (projeto.skillDoPacote ?? '') === (skillNoRetrato ?? '');
+    && (projeto.skillDoPacote ?? '') === (skillNoRetrato ?? '')
+    && JSON.stringify([...projeto.repositorios].sort()) === JSON.stringify([...repositorios].sort());
   const produtores = previsaoRemotaAtual
     ? previsaoRemota.map(p => ({ ...p, produtor: rotuloDoProdutor(p.produtor) })) : previsao?.resultados;
   // A previsão usa a consulta do projeto inteiro já oferecida pelo host; não enfileira geração.
-  const assinatura = `${slug}/${projeto?.versao ?? ''}/${projeto?.skillDoPacote ?? ''}/${revisao}`;
   useEffect(() => {
     if (!aberto || bloqueado || !projeto || previsaoRemotaAtual || previsaoPedida.current === assinatura) return;
     previsaoPedida.current = assinatura;
-    void criacao.gerarArtefato(slug, { conferir: true });
+    setConsultaDaPrevisao({ assinatura, comandoId: null });
+    void criacao.conferirPacote(slug).then(comandoId => {
+      if (previsaoPedida.current === assinatura) setConsultaDaPrevisao({ assinatura, comandoId });
+    });
   }, [aberto, bloqueado, projeto, previsaoRemotaAtual, assinatura, criacao, slug]);
 
   async function salvarSkill(nomeDaSkill: string) {

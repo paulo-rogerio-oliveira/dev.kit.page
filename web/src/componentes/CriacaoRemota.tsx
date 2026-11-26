@@ -84,10 +84,10 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
 
   useEffect(() => { setAberta(null); setFalha(''); }, [maquina?.maquinaId]);
 
-  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto) {
+  async function criar(tipo: TipoDeCriacao, formulario: NovoProjetoRemoto | NovoDesignRemoto | AcaoNoProjetoRemoto, id = crypto.randomUUID()) {
     setEnviando(true); setFalha('');
     try {
-      const desfecho = await conversa.criar(tipo, formulario, crypto.randomUUID());
+      const desfecho = await conversa.criar(tipo, formulario, id);
       // Aceito pela fila, o formulário fecha: o desfecho do dev.kit aparece no painel. A recusa da API (a antiga não conhece
       // o tipo, o formulário fora da regra) fica no formulário, com o motivo.
       if (desfecho.ok) setAberta(null);
@@ -100,9 +100,16 @@ export function useCriacaoRemota({ maquina, conversa, agora }: { maquina: Maquin
     maquina, aberta, enviando, falha, motivo, criar,
     /** (controle-v4, item 2) O "Gerar artefato" do card: a ação no projeto pela mesma fila, sem formulário. */
     gerarArtefato: (projeto: string, opcoes: Omit<AcaoNoProjetoRemoto, 'acao' | 'projeto'> = {}) => criar('projeto', { acao: 'artefato', projeto, ...opcoes }),
+    conferirPacote: async (projeto: string) => {
+      const id = crypto.randomUUID();
+      return await criar('projeto', { acao: 'artefato', projeto, conferir: true }, id) ? id : null;
+    },
     origemDoArtefato: ultima && ehGerarArtefato(ultima)
       ? origemConferida(conversa.conversa.respostas.filter(r => r.comandoId === ultima.id).at(-1)?.texto ?? '') : null,
-    origensDoPacote: conversa.conversa.respostas.map(r => origensDoPacote(r.texto)).filter((o): o is OrigensDoPacote => o !== null),
+    origensDoPacote: conversa.conversa.respostas.flatMap<OrigensDoPacote>(r => {
+      const origem = origensDoPacote(r.texto);
+      return origem && r.comandoId ? [{ ...origem, comandoId: r.comandoId }] : [];
+    }),
     pedidosDoPacote: conversa.conversa.respostas.flatMap(r => {
       const comando = conversa.conversa.comandos.find(c => c.id === r.comandoId && ehGerarArtefato(c));
       const id = /^Pedido ([a-f0-9]{32}):/i.exec(r.texto)?.[1];
