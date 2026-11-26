@@ -7,6 +7,27 @@ namespace DevKitPage.Infrastructure;
 
 public sealed partial class ArtefatosDosProjetosNoBanco
 {
+    public async Task<ResultadoDaGestao<PedidoDeArtefatosV1[]>> ListarPedidosAsync(EscopoDoDesign escopo, long projeto,
+        int limite, CancellationToken ct)
+    {
+        if (!await db.ProjetosCompartilhados.AsNoTracking().Visiveis(escopo).AnyAsync(p => p.Id == projeto, ct))
+            return ResultadoDaGestao<PedidoDeArtefatosV1[]>.Falhou(FalhaNaGestao.NaoEncontrado, "Projeto não encontrado.");
+        // CriadoEm está no snapshot versionado, não na linha. Ordenar os pedidos, nunca suas origens.
+        var snapshots = await db.PedidosDeArtefatos.AsNoTracking().Where(p => p.ProjetoId == projeto).Select(p => p.Conteudo).ToListAsync(ct);
+        var pedidos = snapshots.Select(p => JsonSerializer.Deserialize<PedidoDeArtefatosV1>(p)!).ToList();
+        var publicados = pedidos.SelectMany(p => p.Resultados).Where(a => a.IdRemoto > 0).Select(a => a.IdRemoto).ToHashSet();
+        var antigos = await db.ArtefatosDosProjetos.AsNoTracking().Where(a => a.ProjetoId == projeto).ToListAsync(ct);
+        pedidos.AddRange(antigos.Where(a => !publicados.Contains(a.Id)).Select(PedidoAntigo));
+        var recentes = pedidos.OrderByDescending(p => p.CriadoEm).ThenBy(p => p.Id, StringComparer.Ordinal)
+            .Take(Math.Clamp(limite, 1, 50)).ToArray();
+        return new(await ResolverLinksAsync(projeto, recentes, ct));
+    }
+
+    private static PedidoDeArtefatosV1 PedidoAntigo(ArtefatoDoProjeto a)
+        => new(a.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), a.ProjetoId, new DateTimeOffset(a.CriadoEmUtc, TimeSpan.Zero),
+            [new(a.Id, a.ProjetoId, a.Tipo, a.Repositorio, a.Sha, "pronto", "", null, a.Hash, a.Tamanho, a.Ambiente, "",
+                new DateTimeOffset(a.CriadoEmUtc, TimeSpan.Zero), IdRemoto: a.Id, Ciclo: new("publicado", "concluido"))]);
+
     public async Task<ResultadoDaGestao<PedidoDeArtefatosV1>> RegistrarPedidoAsync(EscopoDoDesign escopo, long projeto,
         PedidoDeArtefatosV1 pedido, CancellationToken ct)
     {
@@ -62,23 +83,26 @@ public sealed partial class ArtefatosDosProjetosNoBanco
         if (valor is null && long.TryParse(pedido, out var antigo))
         {
             var a = await db.ArtefatosDosProjetos.AsNoTracking().SingleOrDefaultAsync(a => a.ProjetoId == projeto && a.Id == antigo, ct);
-            if (a is not null) valor = new(pedido, projeto, new DateTimeOffset(a.CriadoEmUtc, TimeSpan.Zero),
-                [new(a.Id, projeto, a.Tipo, a.Repositorio, a.Sha, "pronto", "", null, a.Hash, a.Tamanho, a.Ambiente, "",
-                    new DateTimeOffset(a.CriadoEmUtc, TimeSpan.Zero), IdRemoto: a.Id, Ciclo: new("publicado", "concluido"))]);
+            if (a is not null) valor = PedidoAntigo(a);
         }
         if (valor is null) return ResultadoDaGestao<PedidoDeArtefatosV1>.Falhou(FalhaNaGestao.NaoEncontrado, "Pedido não encontrado.");
-        var ids = valor.Resultados.Where(a => a.IdRemoto > 0).Select(a => a.IdRemoto).ToArray();
+        return new((await ResolverLinksAsync(projeto, [valor], ct))[0]);
+    }
+
+    private async Task<PedidoDeArtefatosV1[]> ResolverLinksAsync(long projeto, PedidoDeArtefatosV1[] pedidos, CancellationToken ct)
+    {
+        var ids = pedidos.SelectMany(p => p.Resultados).Where(a => a.IdRemoto > 0).Select(a => a.IdRemoto).Distinct().ToArray();
         var publicacoes = await db.ArtefatosDosProjetos.AsNoTracking().Where(a => a.ProjetoId == projeto && ids.Contains(a.Id)).ToListAsync(ct);
         var vigentes = publicacoes.Where(a => a.RetidoAteUtc is null || a.RetidoAteUtc > relogio.GetUtcNow().UtcDateTime).ToList();
         var links = (await LeituraAsync(vigentes, ct)).ToDictionary(a => a.Id);
-        return new(valor with { Resultados = valor.Resultados.Select(a =>
+        return pedidos.Select(valor => valor with { Resultados = valor.Resultados.Select(a =>
         {
             if (a.IdRemoto <= 0) return a with { Link = "" };
             if (!links.TryGetValue(a.IdRemoto, out var link)) return a with { Link = "", Ciclo = (a.Ciclo ?? new("expirado", "retencao")) with { Estado = "expirado" } };
             if ((a.Repositorio, a.Sha, a.Tipo) != (link.Repositorio, link.Sha, link.Tipo))
                 return a with { Link = "", Ciclo = (a.Ciclo ?? new("falhou", "origem")) with { Estado = "falhou" }, Detalhe = "Publicação diverge da origem do resultado." };
             return a with { Link = link.Link, ValidoAte = link.ExpiraEm };
-        }).ToArray() });
+        }).ToArray() }).ToArray();
     }
 
     private static string ValidarPedido(PedidoDeArtefatosV1 pedido, long projeto)
@@ -95,7 +119,7 @@ public sealed partial class ArtefatosDosProjetosNoBanco
             if (a is null || a.Id <= 0 || a.ProjetoId != projeto || string.IsNullOrWhiteSpace(a.Repositorio) || a.Repositorio.Length > 300
                 || !(a.Sha is { Length: 40 } && a.Sha.All(char.IsAsciiHexDigit)
                     || a.Sha == "" && a.Estado == "falhou" && a.Ciclo?.Etapa == "preparacao" && a.IdRemoto == 0)
-                || a.Tipo is not ("" or "pacote" or "preview") || a.Ciclo is null
+                || a.Tipo is not ("" or "pacote" or "preview") || a.Ciclo is null || !RegrasDoRemoto.ProdutorValido(a.Produtor)
                 || a.Estado is not ("enfileirando" or "enfileirado" or "gerando" or "agente-pendente" or "local-pronto" or "envio-pendente" or "registro-pendente" or "publicado" or "falhou" or "nao-aplicavel" or "expirado"))
                 return "Cada resultado exige origem, SHA integral, tipo e estado conhecidos.";
             if (a.Estado is "nao-aplicavel" or "falhou" or "agente-pendente" && string.IsNullOrWhiteSpace(a.Detalhe))

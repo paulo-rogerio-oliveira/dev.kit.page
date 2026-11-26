@@ -34,12 +34,20 @@ function cenario(estado) {
               : 'Gerado pela skill pacote-demo: aplicativo, agendador, CLI e sandbox.',
       criadoEm: new Date(Date.now() - (antigo ? 86400_000 : 12 * 60000)).toISOString(),
       idRemoto: ciclo === 'publicado' ? (antigo ? 41 : 51) + i : 0, estado: ciclo,
+      produtor: { nome: web ? '' : projeto.skillDoPacote, tipo: web ? 'previa' : 'skill' },
       ciclo: { estado: ciclo, etapa: 'demonstracao', branch: projeto.branch, pedidoId: antigo ? pedidoAnterior : pedidoAtual },
     };
   };
   const pedidos = [false, true].map(antigo => ({ id: antigo ? pedidoAnterior : pedidoAtual, projetoId: 11,
     criadoEm: resultado(0, antigo).criadoEm, estado: antigo ? 'publicado' : estado === 'gerando' ? 'em-andamento' : estado === 'falhou' ? 'falhou'
       : estado === 'local' ? 'local-pronto' : estado === 'vencido' ? 'expirado' : 'publicado', resultados: [resultado(0, antigo), resultado(1, antigo)] }));
+  if (estado === 'anteriores') {
+    pedidos[1].estado = 'em-andamento';
+    pedidos[1].resultados[0].estado = 'agente-pendente';
+    pedidos[1].resultados[0].ciclo.estado = 'agente-pendente';
+    pedidos[1].resultados[0].detalhe = 'Agente resolvendo os parâmetros da skill.';
+    pedidos[1].resultados[0].link = '';
+  }
   const comando = { id: 'c-demo', maquinaId: 'demo', tipo: 'projeto', texto: JSON.stringify({ acao: 'artefato', projeto: 'fixes' }),
     dispositivo: 'desktop', estado: 'concluido', criadoEm: pedidos[0].criadoEm, expiraEm: new Date(Date.now() + 3600_000).toISOString(),
     entregueEm: agora(), concluidoEm: agora(), erro: '' };
@@ -70,11 +78,23 @@ export const servidor = createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       return res.end(`<script>sessionStorage.setItem('devkitpage.sessao',${JSON.stringify(JSON.stringify(sessao))});location.replace('/board?aba=board&demoPacote=${encodeURIComponent(estado)}');</script>`);
     }
+    // Controle exclusivo do ambiente temporário: o navegador aciona depois a ação real de atualizar links.
+    if (url.pathname === '/__controle/renovar' && req.method === 'POST') {
+      const origem = dados.pedidos[0].resultados.map(r => ({ id: r.id, sha: r.sha }));
+      for (const r of dados.pedidos[0].resultados.filter(r => r.estado === 'publicado'))
+        r.validoAte = new Date(Date.now() + 23 * 3600_000).toISOString();
+      dados.pedidos[0].estado = 'publicado';
+      return json(res, origem);
+    }
     if (url.pathname.startsWith('/api/')) {
       if (url.pathname === '/api/remoto/maquinas') return json(res, [maquina]);
       if (url.pathname.endsWith('/retrato')) return json(res, { maquina, recebidoEm: agora(), retrato: { contrato: 1, maquinaId: 'demo', geradoEm: agora(), pendencias: [], fluxos: [],
-        projetos: [{ ...dados.projeto, ondaAtual: 3, itens: [], podeGerarArtefato: estado !== 'leitor', artefatos: dados.pedidos[0].resultados.map(r => ({ id: r.id, tipo: r.tipo,
-          repositorio: r.repositorio, sha: r.sha, estado: r.estado, etapa: r.ciclo.etapa, detalhe: r.detalhe, idRemoto: r.idRemoto, criadoEm: r.criadoEm })) }] } });
+        projetos: [{ ...dados.projeto, ondaAtual: 3, itens: [], podeGerarArtefato: estado !== 'leitor',
+          previsaoDoPacote: dados.projeto.repositorios.map((repo, i) => ({ repositorio: repo, produtor: { nome: i ? '' : dados.projeto.skillDoPacote, tipo: i ? 'previa' : 'skill' },
+            motivo: i ? 'Front Vite' : 'Comando direto', aplicavel: true, formato: i ? 'preview' : 'pacote' })),
+          artefatos: dados.pedidos.flatMap(p => p.resultados).map(r => ({ id: r.id, tipo: r.tipo,
+          repositorio: r.repositorio, sha: r.sha, estado: r.estado, etapa: r.ciclo.etapa, detalhe: r.detalhe, idRemoto: r.idRemoto, criadoEm: r.criadoEm,
+          pedidoId: r.ciclo.pedidoId, branch: r.ciclo.branch, produtor: r.produtor })) }] } });
       if (url.pathname.endsWith('/decisoes')) return json(res, []);
       if (url.pathname.endsWith('/catalogo')) return json(res, { maquinaId: 'demo', recebidoEm: agora(), catalogo: { contrato: 1, maquinaId: 'demo', geradoEm: agora(),
         comandoId: null, workItems: [], repositorios: [], fluxos: [], projetos: [], designs: [], agentes: [], membros: [] } });
@@ -86,10 +106,9 @@ export const servidor = createServer(async (req, res) => {
       }
       if (url.pathname === '/api/projetos/resumos') return json(res, [{ ...dados.projeto, totalDeItens: 7, itensConcluidos: 3 }]);
       if (url.pathname === '/api/projetos/11') return json(res, dados.projeto);
+      if (url.pathname.endsWith('/artefatos/pedidos')) return json(res, dados.pedidos);
       if (url.pathname.includes('/artefatos/pedidos/')) return json(res, dados.pedidos.find(p => p.id === url.pathname.split('/').at(-1)), 200);
       if (url.pathname.endsWith('/artefatos')) {
-        if (estado === 'vencido' && dados.leiturasDosLinks++ > 0)
-          for (const r of dados.pedidos[0].resultados.filter(r => r.estado === 'publicado')) r.validoAte = new Date(Date.now() + 23 * 3600_000).toISOString();
         return json(res, dados.pedidos.flatMap(p => p.resultados).filter(r => r.estado === 'publicado').map(r => ({
           ...r, id: r.idRemoto, expiraEm: r.validoAte, autor: 'Demonstração' })));
       }

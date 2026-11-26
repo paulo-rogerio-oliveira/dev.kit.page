@@ -23,7 +23,8 @@ public sealed record PedidoDeArtefatosV1(string Id, long ProjetoId, DateTimeOffs
 
 public sealed record ResultadoDoPedidoDeArtefatosV1(long Id, long ProjetoId, string Tipo, string Repositorio, string Sha,
     string Situacao, string Link, DateTimeOffset? ValidoAte, string Hash, long Tamanho, string Ambiente, string Detalhe,
-    DateTimeOffset CriadoEm, DateTimeOffset? TerminadoEm = null, long IdRemoto = 0, CicloDoResultadoV1? Ciclo = null)
+    DateTimeOffset CriadoEm, DateTimeOffset? TerminadoEm = null, long IdRemoto = 0, CicloDoResultadoV1? Ciclo = null,
+    ProdutorDoArtefatoV1? Produtor = null)
 {
     public string Estado => Ciclo?.Estado ?? (Situacao == "falhou" ? "falhou" : Situacao == "gerando" ? "gerando"
         : IdRemoto > 0 ? "publicado" : "local-pronto");

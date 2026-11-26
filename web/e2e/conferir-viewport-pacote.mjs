@@ -9,7 +9,7 @@ import { once } from 'node:events';
 const estado = process.argv[2] ?? 'gerado';
 const largura = Number(process.argv[3] ?? 390);
 const altura = Number(process.argv[4] ?? 1800);
-if (!['gerado', 'gerando', 'falhou', 'local', 'vencido', 'leitor'].includes(estado) || ![390, 1440].includes(largura)) throw new Error('Estado ou viewport inválido.');
+if (!['gerado', 'gerando', 'falhou', 'local', 'vencido', 'leitor', 'anteriores'].includes(estado) || ![390, 1440].includes(largura)) throw new Error('Estado ou viewport inválido.');
 process.env.DEVKIT_DEMO_PACOTE_PORTA = '4186';
 const { servidor } = await import('./servidor-pacote.mjs');
 if (!servidor.listening) await once(servidor, 'listening');
@@ -28,4 +28,18 @@ try {
   const arquivo = resolve(pasta, `pacote-${estado}-${largura}-${sha}.png`);
   await pagina.screenshot({ path: arquivo });
   process.stdout.write(JSON.stringify({ sha, estado, largura, altura, medidas, arquivo, origem: 'Board real; dados isolados; viewport Playwright; complementar ao devcli design' }) + '\n');
+  if (estado === 'vencido') {
+    const ultimo = pagina.locator('.pacote-card').filter({ has: pagina.getByRole('heading', { name: 'Último pacote' }) });
+    if (await ultimo.getByRole('link', { name: /Baixar/ }).count()) throw new Error('O link vencido foi oferecido.');
+    const antes = await pagina.request.get('http://127.0.0.1:4186/api/projetos/11/artefatos/pedidos?estado=vencido').then(r => r.json());
+    await pagina.request.post('http://127.0.0.1:4186/__controle/renovar?estado=vencido');
+    await ultimo.getByRole('button', { name: 'Atualizar lista e links' }).click();
+    await ultimo.getByRole('link', { name: /Baixar/ }).waitFor();
+    const depois = await pagina.request.get('http://127.0.0.1:4186/api/projetos/11/artefatos/pedidos?estado=vencido').then(r => r.json());
+    const identidade = p => JSON.stringify(p.map(g => ({ id: g.id, resultados: g.resultados.map(r => ({ id: r.id, sha: r.sha })) })));
+    if (identidade(antes) !== identidade(depois)) throw new Error('Renovação alterou a identidade do resultado.');
+    const renovado = resolve(pasta, `pacote-renovado-${largura}-${sha}.png`);
+    await pagina.screenshot({ path: renovado });
+    process.stdout.write(JSON.stringify({ sha, estado: 'renovado', largura, altura, arquivo: renovado, identidade: identidade(depois), origem: 'Clique real no Board; renovação simulada somente no ambiente isolado' }) + '\n');
+  }
 } finally { await navegador.close(); servidor.closeAllConnections(); await new Promise(pronto => servidor.close(pronto)); }

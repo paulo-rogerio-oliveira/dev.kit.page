@@ -8,7 +8,7 @@ const estado = process.argv[2] ?? 'gerado';
 const largura = Number(process.argv[3] ?? 1440);
 const altura = Number(process.argv[4] ?? 1100);
 const aplicar = process.argv.includes('--aplicar');
-if (!['gerado', 'gerando', 'falhou', 'local', 'vencido', 'leitor'].includes(estado) || ![390, 1440].includes(largura))
+if (!['gerado', 'gerando', 'falhou', 'local', 'vencido', 'leitor', 'anteriores'].includes(estado) || ![390, 1440].includes(largura))
   throw new Error('Informe um estado da demonstração e a largura 390 ou 1440.');
 process.env.DEVKIT_DEMO_PACOTE_PORTA = '4186';
 const { servidor } = await import('./servidor-pacote.mjs');

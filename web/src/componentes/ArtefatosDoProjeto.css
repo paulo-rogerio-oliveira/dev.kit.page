@@ -6,13 +6,21 @@
 .pacote-projeto p {white-space:pre-wrap; line-height:1.5; margin:7px 0; overflow:visible}
 .pacote-projeto label {display:block; margin:12px 0 5px}
 .pacote-projeto select {display:block; width:100%; margin-top:5px; min-height:38px}
+.pacote-skill-selecao {display:flex; align-items:center; flex-wrap:wrap; gap:5px; border:1px solid var(--line, var(--borda-controle)); border-radius:7px; padding:4px 7px; margin-top:5px}
+.pacote-projeto .pacote-skill-selecao select {flex:1 1 100px; width:0; min-width:0; border:0; padding:2px; margin:0; min-height:28px; background:transparent}
+.pacote-skill-tipo {font-size:10px; background:var(--bluetint, #eef1f7); border-radius:9px; padding:2px 6px; white-space:normal}
 .pacote-produtores {border:1px solid var(--line, var(--borda-controle)); border-radius:7px; margin-top:12px}
-.pacote-produtores>div {padding:9px 11px; display:flex; flex-wrap:wrap; gap:5px 16px}
+.pacote-produtores>div {padding:9px 11px; display:grid; grid-template-columns:minmax(65px, .8fr) minmax(0, 1.3fr); gap:5px 12px}
 .pacote-produtores>div+div {border-top:1px solid var(--line, var(--borda-controle))}
-.pacote-produtores strong {min-width:90px}
+.pacote-produtores strong {min-width:0}
 .pacote-resultado {border-top:1px solid var(--line, var(--borda-controle)); padding:12px 0}
 .pacote-resultado>strong,.pacote-resultado>small {display:block; margin-top:5px}
 .pacote-resultado small {color:var(--muted)}
 .pacote-resultado-acoes {display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap}
 .pacote-projeto details {border-top:1px solid var(--line, var(--borda-controle)); padding:9px 0}
 .pacote-projeto summary {cursor:pointer; line-height:1.6}
+.pacote-projeto .br-chip {white-space:normal; max-width:100%; overflow-wrap:anywhere; flex-shrink:1}
+.pacote-projeto .br-chip.pacote-selo-sucesso {background:var(--sucesso-tinta, #e7f3eb); color:var(--sucesso, #226638)}
+.pacote-projeto .br-chip.pacote-selo-erro {background:var(--perigo-tinta, #fdecec); color:var(--perigo, #bd251b)}
+.pacote-projeto .br-chip.pacote-selo-pendente {background:var(--alerta-tinta, #fff4d4); color:var(--alerta, #875800)}
+.pacote-anterior-origem {display:block; margin-top:3px; color:var(--muted)}

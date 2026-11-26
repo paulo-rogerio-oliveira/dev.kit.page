@@ -118,6 +118,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
           <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
         </Link>
         <PacoteDoBoard nome={p.nome} slug={p.slug} criacao={criacao}
+          previsaoRemota={p.previsaoDoPacote} skillNoRetrato={p.skillDoPacote}
           repositorios={p.repositorios ?? []} branch={p.branch ?? ''} estados={p.artefatos ?? []} capacidade={p.podeGerarArtefato === true}
           desabilitado={criacao.desabilitado || desabilitado || p.podeGerarArtefato === false}
           agora={agora} />

@@ -57,6 +57,7 @@ public interface IArtefatosDosProjetos
     Task<ResultadoDaGestao<PedidoDeArtefatosV1>> RegistrarPedidoAsync(EscopoDoDesign escopo, long projeto,
         PedidoDeArtefatosV1 pedido, CancellationToken ct);
     Task<ResultadoDaGestao<PedidoDeArtefatosV1>> ConsultarPedidoAsync(EscopoDoDesign escopo, long projeto, string pedido, CancellationToken ct);
+    Task<ResultadoDaGestao<PedidoDeArtefatosV1[]>> ListarPedidosAsync(EscopoDoDesign escopo, long projeto, int limite, CancellationToken ct);
 
     Task<ResultadoDaGestao<ArtefatoV1>> RegistrarPacoteAsync(EscopoDoDesign escopo, long projeto, PacoteRecebido pacote, CancellationToken ct);
     Task<ResultadoDaGestao<ArtefatoV1>> RegistrarPreviewAsync(EscopoDoDesign escopo, long projeto, PreviewDoProjetoV1 preview, CancellationToken ct);

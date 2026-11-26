@@ -71,6 +71,21 @@ describe('pacote do projeto sem confirmação', () => {
     expect(screen.getByText(/Sem resultado neste pedido/)).toHaveTextContent('web');
   });
 
+  it('Configurar mostra o comando do host sem formulário, geração ou escrita remota', async () => {
+    const gerar = vi.fn();
+    const escrever = vi.spyOn(globalThis, 'fetch');
+    render(<ArtefatosDoCard {...base} gerar={gerar} pedidos={[{ ...pedido, resultados: [
+      { ...resultado, tipo: 'preview', estado: 'nao-aplicavel', detalhe: 'Destino da prévia não configurado.', link: '' },
+    ] }]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar' }));
+    expect(screen.getByRole('note')).toHaveTextContent('devcli projeto --projeto');
+    expect(screen.getByRole('note')).toHaveTextContent('--swa-app <app> --swa-grupo <grupo> --swa-assinatura <id> --aplicar');
+    expect(screen.getByRole('note')).toHaveTextContent('todos os projetos da máquina');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(gerar).not.toHaveBeenCalled(); expect(escrever).not.toHaveBeenCalled();
+    escrever.mockRestore();
+  });
+
   it.each(['local-pronto', 'envio-pendente', 'registro-pendente'])('retoma %s do pacote no mesmo ID', async estado => {
     const gerar = vi.fn().mockResolvedValue(true);
     render(<ArtefatosDoCard {...base} gerar={gerar} estados={[{ ...resultado, estado, etapa: 'upload', idRemoto: 0 }]} />);

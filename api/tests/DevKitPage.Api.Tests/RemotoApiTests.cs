@@ -44,6 +44,41 @@ public sealed class RemotoApiTests : IDisposable
     private static StringContent Json(string json, string tipo = "application/json") => new(json, Encoding.UTF8, tipo);
 
     [Fact]
+    public async Task Retrato_aceita_cinco_pedidos_completos_e_previsao_sem_campos_internos_no_HTTP()
+    {
+        var (ana, _) = await DevAsync("pacote-remoto");
+        await ana.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat());
+        var origem = Retrato();
+        var resultados = Enumerable.Range(0, 5).SelectMany(i => Enumerable.Range(1, 3).Select(n =>
+            new ArtefatoNoRetratoV1(i * 3 + n, "pacote", $"github.com/acme/repo-{n}", new string('a', 40), "falhou", "compilacao",
+                "SDK ausente", 0, Gerado.AddMinutes(i), $"pedido{i}", "feature/demo", new("pacote-x", "skill")))).ToArray();
+        var projeto = origem.Projetos![0] with { Artefatos = resultados,
+            PrevisaoDoPacote = [new("github.com/acme/repo-1", new("pacote-x", "skill"), "Comando direto", true, "pacote")] };
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(origem with { Projetos = [projeto] },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)))!;
+        foreach (var a in json["projetos"]![0]!["artefatos"]!.AsArray())
+        {
+            a!["caminhoLocal"] = @"C:\SENTINELA_LOCAL\zip";
+            a["produtor"]!["comando"] = "SENTINELA_COMANDO";
+            a["produtor"]!["conteudo"] = "SENTINELA_CONTEUDO";
+            a["produtor"]!["argumentos"] = "SENTINELA_ARGUMENTOS";
+        }
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsync("/api/remoto/retrato", Json(json.ToJsonString()))).StatusCode);
+        var resposta = await ana.GetAsync("/api/remoto/maquinas/3f2b9c0e5d7a/retrato");
+        var texto = await resposta.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("SENTINELA", texto, StringComparison.Ordinal);
+        var lido = (await resposta.Content.ReadFromJsonAsync<RetratoDaMaquinaV1>())!.Retrato.Projetos![0];
+        Assert.Equal(15, lido.Artefatos!.Count);
+        Assert.All(lido.Artefatos.GroupBy(a => a.PedidoId), g => Assert.Equal(3, g.Count()));
+        Assert.Equal(projeto.PrevisaoDoPacote, lido.PrevisaoDoPacote);
+        var sexto = resultados[0] with { Id = 99, PedidoId = "sexto" };
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/api/remoto/retrato",
+            origem with { GeradoEm = Gerado.AddHours(1), Projetos = [projeto with { Artefatos = [.. resultados, sexto] }] })).StatusCode);
+        var local = projeto with { PrevisaoDoPacote = [new("github.com/acme/repo-1", new(@"C:\privado\skill", "skill"), "Motivo", true, "pacote")] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/api/remoto/retrato", origem with { Projetos = [local] })).StatusCode);
+    }
+
+    [Fact]
     public async Task Estados_do_artefato_chegam_ao_polling_do_board_depois_do_aceite_sem_expor_arquivo_local()
     {
         var admin = await _api.AdminAsync();

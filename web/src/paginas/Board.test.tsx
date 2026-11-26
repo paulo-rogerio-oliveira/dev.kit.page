@@ -718,6 +718,7 @@ describe('Board remoto', () => {
       });
       let leituras = 0;
       servidor.use(http.get(`${API}/api/projetos/resumos`, () => HttpResponse.json([{ id: 11, slug: 'projeto' }])),
+        http.get(`${API}/api/projetos/11/artefatos/pedidos`, () => HttpResponse.json([])),
         http.get(`${API}/api/projetos/11`, () => HttpResponse.json({ id: 11, slug: 'projeto', papel: 'editor', versao: 1, skillsDoPacote: [] })),
         http.get(`${API}/api/projetos/11/artefatos`, () => {
         leituras++;

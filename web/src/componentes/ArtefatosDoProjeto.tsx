@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { AcaoNoProjetoRemoto, Artefato, OpcaoDeSkillDoPacote, PedidoDoPacote, ProdutorDoPacote, ResultadoDoPacote } from '../api/projetos';
+import type { AcaoNoProjetoRemoto, Artefato, OpcaoDeSkillDoPacote, PedidoDoPacote, ProdutorDoPacote, ResultadoDoPacote, MetadadosDoProdutor } from '../api/projetos';
 import type { EstadoDoArtefato } from '../api/remoto';
 import './ArtefatosDoProjeto.css';
 
@@ -59,8 +59,13 @@ export function rotuloDoEstado(estado: string) {
     'publicacao-pendente': 'Envio pendente' } as Record<string, string>)[estado] ?? 'Aguardando resultado';
 }
 const normalizarRepo = (repo: string) => repo.replace(/^https?:\/\//i, '').replace(/\.git$/i, '').replace(/\/$/, '').toLowerCase();
+export const rotuloDoProdutor = (p?: MetadadosDoProdutor | string | null) => typeof p === 'string' ? p : p
+  ? p.tipo === 'skill' ? `skill ${p.nome}` : ({ principal: 'executável principal', 'todos-os-executaveis': 'todos os executáveis', previa: 'prévia', 'nao-aplicavel': 'não gera' }[p.tipo]) : '';
 const rotuloDoPedido = (pedido: PedidoDoPacote) => pedido.resultados.some(r => r.estado === 'agente-pendente')
   ? rotuloDoEstado('agente-pendente') : rotuloDoEstado(pedido.estado);
+const corDoSelo = (estado: string) => ['publicado', 'local-pronto'].includes(estado) ? 'pacote-selo-sucesso'
+  : ['nao-aplicavel', 'falhou', 'parcial'].includes(estado) ? 'pacote-selo-erro' : 'pacote-selo-pendente';
+const seloCurto = (rotulo: string) => rotulo.startsWith('Gerando') ? 'Gerando' : rotulo;
 function linkValido(link: string) {
   try { const url = new URL(link); return !url.username && !url.password && (url.protocol === 'https:' || url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)); }
   catch { return false; }
@@ -81,6 +86,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
   estados = [], capacidade = false, erro = '', erroDoPedido = '', atualizar, atualizando = false, linksAutorizados = true,
   pedidos = [], produtores = [], skillDoPacote = '', skillsDoPacote = [], salvarSkill }: PropsDoPacote) {
   const [enviando, setEnviando] = useState(false);
+  const [destinosAbertos, setDestinosAbertos] = useState<number[]>([]);
   const [aguardando, setAguardando] = useState(false);
   const [mensagem, setMensagem] = useState('');
   const trava = useRef(false);
@@ -119,16 +125,25 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     const vencido = !!expira && Date.parse(expira) <= agora;
     const valido = r.estado === 'publicado' && linksAutorizados && retido && !vencido && linkValido(url);
     const tipo = link?.tipo ?? r.tipo;
-    const produtor = 'produtor' in r ? r.produtor : undefined;
+    const produtor = rotuloDoProdutor(r.produtor);
     const branchDaOrigem = completo?.ciclo?.branch ?? ('branch' in r ? r.branch : '') ?? branch;
+    const destinoAusente = tipo === 'preview' && ['falhou', 'nao-aplicavel', 'local-pronto'].includes(r.estado)
+      && /destino|--swa-app/i.test(r.detalhe);
     return <div className="pacote-resultado" key={`${r.id}-${r.repositorio}`}>
-      <div className="pacote-resultado-acoes"><span className={`br-chip${r.estado === 'falhou' || r.estado === 'nao-aplicavel' ? ' br-warn' : ''}`}>{rotuloDoEstado(r.estado)}</span>
+      <div className="pacote-resultado-acoes"><span className={`br-chip ${corDoSelo(vencido ? 'expirado' : r.estado)}`}>{vencido ? 'Link vencido' : seloCurto(rotuloDoEstado(r.estado))}</span>
+        {destinoAusente && <button className="br-btn" onClick={() => setDestinosAbertos(ids => ids.includes(r.id) ? ids : [...ids, r.id])}>Configurar</button>}
         {valido && <a className="br-btn" href={url} target="_blank" rel="noopener noreferrer" aria-label={`${tipo === 'preview' ? 'Abrir a prévia' : 'Baixar o pacote'} de ${repositorioCurto(r.repositorio)} · ${r.sha.slice(0, 7)}`}>{tipo === 'preview' ? 'Abrir prévia' : 'Baixar'}</a>}
       </div>
       <strong>{repositorioCurto(r.repositorio)}</strong>
       <small><code>{r.sha.slice(0, 7)}</code>{branchDaOrigem && ` · ${branchDaOrigem}`} · {produtor || tipo || 'produtor a detectar'}
         {tipo !== 'preview' && ` · ${tamanhoDoArtefato(link?.tamanho ?? completo?.tamanho ?? 0)}`}{expira && ` · ${prazo(expira, agora)}`}</small>
       <p>{r.detalhe}</p>
+      {destinoAusente && destinosAbertos.includes(r.id) && <div role="note" className="pacote-orientacao-destino">
+        <p>Abra Configurar destino no desktop desta máquina ou execute no host o comando abaixo. O destino é compartilhado por todos os projetos da máquina.</p>
+        <code>{`devcli projeto --projeto ${slug} --artefato --swa-app <app> --swa-grupo <grupo> --swa-assinatura <id> --aplicar`}</code>
+        <p>Use o Static Web App da prévia e informe também --preview-api-url e --preview-site-url quando exigidos pelo projeto. Esta orientação não altera a configuração.</p>
+      </div>}
+      {r.estado === 'agente-pendente' && !r.detalhe.toLowerCase().includes('agente resolvendo os parâmetros da skill') && <p>Gerando · agente resolvendo os parâmetros da skill</p>}
       {!linksAutorizados && <p>Consulte a lista com uma sessão autorizada para abrir o resultado.</p>}
       {vencido && <p>O link venceu. Atualize os links sem gerar novamente.</p>}
       {(r.estado === 'envio-pendente' || r.estado === 'registro-pendente' || r.estado === 'local-pronto' && tipo === 'pacote') && <button className="br-btn" disabled={bloqueado} onClick={() => void pedir({ retomar: r.id })}>
@@ -146,11 +161,11 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
     {bloqueado && razao && <p>{razao}</p>}
     <div className="pacote-card"><h3>Pacote do projeto</h3>
       <p>Um clique gera o projeto integrado: o estado atual de {branch || 'cada branch do projeto'} em todos os repositórios. Sem perguntas.</p>
-      <label>Skill do pacote (opcional)<select value={skillDoPacote} disabled={bloqueado || !salvarSkill} onChange={e => void escolherSkill(e.target.value)}>
+      <label>Skill do pacote (opcional)<div className="pacote-skill-selecao"><select aria-label="Skill do pacote (opcional)" value={skillDoPacote} disabled={bloqueado || !salvarSkill} onChange={e => void escolherSkill(e.target.value)}>
         <option value="">Nenhuma</option>
         {skillDoPacote && !skillsDoPacote.some(s => s.nome === skillDoPacote) && <option value={skillDoPacote}>{skillDoPacote} · indisponível no cadastro atual</option>}
-        {skillsDoPacote.map(s => <option key={s.nome} value={s.nome}>{s.nome} · {s.tipo === 'somente-comando' ? 'somente comando' : 'com parâmetros'}</option>)}
-      </select></label>
+        {skillsDoPacote.map(s => <option key={s.nome} value={s.nome} aria-label={`${s.nome} · ${s.tipo === 'somente-comando' ? 'somente comando' : 'com parâmetros'}`}>{s.nome}</option>)}
+      </select>{skillsDoPacote.find(s => s.nome === skillDoPacote) && <span className="pacote-skill-tipo" aria-hidden="true">{skillsDoPacote.find(s => s.nome === skillDoPacote)?.tipo === 'somente-comando' ? 'somente comando' : 'com parâmetros'}</span>}</div></label>
       <p>Sem skill: executável principal ou todos os executáveis, cada um na sua subpasta. Front web: prévia.</p>
       <div className="pacote-produtores">{repositorios.map(repo => {
         const produtor = produtores.find(p => normalizarRepo(p.repositorio) === normalizarRepo(repo));
@@ -177,7 +192,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
       {atualizar && <button className="br-btn" disabled={atualizando} onClick={atualizar}>{atualizando ? 'Atualizando links…' : 'Atualizar lista e links'}</button>}
     </div>
     <div className="pacote-card"><h3>Anteriores</h3>
-      {ordenados.slice(1).map(p => <details key={p.id}><summary><span className="br-chip">{rotuloDoPedido(p)}</span> {new Date(p.criadoEm).toLocaleString('pt-BR')} · {p.resultados.map(r => repositorioCurto(r.repositorio)).join(' · ')}</summary>
+      {ordenados.slice(1).map(p => <details key={p.id}><summary><span className={`br-chip ${corDoSelo(p.estado)}`}>{seloCurto(rotuloDoPedido(p))}</span>{rotuloDoPedido(p).includes('agente resolvendo') && <span> · agente resolvendo os parâmetros da skill</span>}<span className="pacote-anterior-origem">{new Date(p.criadoEm).toLocaleString('pt-BR')} · {p.resultados.map(r => repositorioCurto(r.repositorio)).join(' · ')}</span></summary>
         {p.resultados.map(r => linha(r, artefatos.find(a => a.id === r.idRemoto)))}</details>)}
       {(ultimo ? semPedido : semPedido.filter(e => estados.find(a => normalizarRepo(a.repositorio) === normalizarRepo(e.repositorio))?.id !== e.id)).map(e => <details key={`local-${e.id}`}><summary>{rotuloDoEstado(e.estado)} · {repositorioCurto(e.repositorio)}</summary>{linha(e)}</details>)}
       {semEstado.filter(a => ultimo || artefatos.find(e => normalizarRepo(e.repositorio) === normalizarRepo(a.repositorio))?.id !== a.id).map(a => <details key={`remoto-${a.id}`}><summary>Gerado · {repositorioCurto(a.repositorio)} · {a.sha.slice(0, 7)}</summary>{linha(estadoDe(a), a)}</details>)}

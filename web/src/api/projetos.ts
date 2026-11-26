@@ -45,12 +45,15 @@ export interface Projeto {
 
 /** A tela recebe somente metadados; conteúdo, comando e argumentos ficam no host. */
 export interface OpcaoDeSkillDoPacote { nome: string; tipo: 'somente-comando' | 'com-parametros' }
+export interface MetadadosDoProdutor { nome: string; tipo: 'skill' | 'principal' | 'todos-os-executaveis' | 'previa' | 'nao-aplicavel' }
+export interface PrevisaoRemotaDoPacote { repositorio: string; produtor: MetadadosDoProdutor; motivo: string; aplicavel: boolean; formato: string }
 export interface ProdutorDoPacote { repositorio: string; formato: string; aplicavel: boolean; motivo: string; produtor?: string; falhou?: boolean }
 export interface OrigensDoPacote { tipo: 'origens-artefato'; projeto: string; resultados: ProdutorDoPacote[] }
 export interface ResultadoDoPacote {
   id: number; projetoId: number; tipo: string; repositorio: string; sha: string; situacao: string; link: string;
   validoAte: string | null; hash: string; tamanho: number; ambiente: string; detalhe: string; criadoEm: string; idRemoto: number;
   estado: string; ciclo?: { estado: string; etapa: string; branch: string; pedidoId: string } | null;
+  produtor?: MetadadosDoProdutor | null;
 }
 export interface PedidoDoPacote { id: string; projetoId: number; criadoEm: string; estado: string; resultados: ResultadoDoPacote[] }
 

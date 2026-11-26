@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { PedidoDoPacote, Projeto, Artefato } from '../api/projetos';
+import type { PedidoDoPacote, Projeto, Artefato, PrevisaoRemotaDoPacote } from '../api/projetos';
 import type { EstadoDoArtefato } from '../api/remoto';
 import { useSessao } from '../sessao';
-import { ArtefatosDoCard } from './ArtefatosDoProjeto';
+import { ArtefatosDoCard, rotuloDoProdutor } from './ArtefatosDoProjeto';
 import type { CriacaoDoBoard } from './CriacaoRemota';
 
 /** Só o painel aberto lê o detalhe, os pedidos e seus links. Chat e Board continuam montados. */
-export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capacidade, desabilitado, criacao, agora }: {
+export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previsaoRemota, skillNoRetrato, capacidade, desabilitado, criacao, agora }: {
   nome: string; slug: string; branch: string; repositorios: string[]; estados: EstadoDoArtefato[];
   capacidade: boolean; desabilitado: boolean; criacao: CriacaoDoBoard; agora: number;
+  previsaoRemota?: PrevisaoRemotaDoPacote[] | null;
+  skillNoRetrato?: string | null;
 }) {
   const { sessao } = useSessao();
   const [aberto, setAberto] = useState(false);
@@ -18,6 +20,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capac
   const [pedidos, setPedidos] = useState<PedidoDoPacote[]>([]);
   const [erro, setErro] = useState('');
   const [semAcesso, setSemAcesso] = useState(false);
+  const [edicaoConflitante, setEdicaoConflitante] = useState(false);
   const [revisao, setRevisao] = useState(0);
   const [atualizando, setAtualizando] = useState(false);
   const previsaoPedida = useRef('');
@@ -33,7 +36,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capac
       const resumo = resumos.find(p => p.slug === slug);
       if (!resumo) throw new Error('Sincronize este projeto no host para editar a skill do pacote.');
       const p = await api.projeto(token, resumo.id, controlador.signal);
-      if (!controlador.signal.aborted) { setProjeto(p); setSemAcesso(false); setErro(''); }
+      if (!controlador.signal.aborted) { setProjeto(p); setSemAcesso(false); setEdicaoConflitante(false); setErro(''); }
     }).catch(e => { if (!controlador.signal.aborted) {
       setErro(mensagemDaFalha(e));
       if (e instanceof ErroDaApi && [401, 403].includes(e.status)) setSemAcesso(true);
@@ -50,7 +53,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capac
       try {
         const [links, grupos] = await Promise.all([
           api.artefatosDoProjeto(token!, id!, controlador.signal),
-          Promise.all(ids ? ids.split(',').map(p => api.pedidoDoPacote(token!, id!, p, controlador.signal)) : []),
+          api.pedidosDoPacote(token!, id!, controlador.signal),
         ]);
         if (!controlador.signal.aborted) { setArtefatos(links); setPedidos(grupos); setErro(''); setSemAcesso(false); }
       } catch (e) {
@@ -67,22 +70,27 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capac
   }, [aberto, token, id, ids, revisao, desfecho]);
 
   const podeEditar = !projeto || projeto.papel === 'editor' || projeto.papel === 'dono';
-  const bloqueado = desabilitado || criacao.desabilitado || semAcesso || !podeEditar || !capacidade;
+  const bloqueado = desabilitado || criacao.desabilitado || semAcesso || edicaoConflitante || !podeEditar || !capacidade;
   const motivo = !podeEditar || semAcesso ? 'Gerar pacote e editar a skill exige editor ou dono do projeto.' : criacao.motivo;
   const previsao = criacao.origensDoPacote.filter(p => p.projeto === slug).at(-1);
+  const previsaoRemotaAtual = previsaoRemota != null && !!projeto && projeto.branch === branch
+    && (projeto.skillDoPacote ?? '') === (skillNoRetrato ?? '');
+  const produtores = previsaoRemotaAtual
+    ? previsaoRemota.map(p => ({ ...p, produtor: rotuloDoProdutor(p.produtor) })) : previsao?.resultados;
   // A previsão usa a consulta do projeto inteiro já oferecida pelo host; não enfileira geração.
   const assinatura = `${slug}/${projeto?.versao ?? ''}/${projeto?.skillDoPacote ?? ''}/${revisao}`;
   useEffect(() => {
-    if (!aberto || bloqueado || !projeto || previsaoPedida.current === assinatura) return;
+    if (!aberto || bloqueado || !projeto || previsaoRemotaAtual || previsaoPedida.current === assinatura) return;
     previsaoPedida.current = assinatura;
     void criacao.gerarArtefato(slug, { conferir: true });
-  }, [aberto, bloqueado, projeto, assinatura, criacao, slug]);
+  }, [aberto, bloqueado, projeto, previsaoRemotaAtual, assinatura, criacao, slug]);
 
   async function salvarSkill(nomeDaSkill: string) {
     if (!projeto || !token || bloqueado) throw new Error(motivo);
     try { setProjeto(await api.editarSkillDoPacote(token, projeto.id, projeto.versao, nomeDaSkill)); }
     catch (e) {
-      if (e instanceof ErroDaApi && [401, 403, 409].includes(e.status)) setSemAcesso(true);
+      if (e instanceof ErroDaApi && [401, 403].includes(e.status)) setSemAcesso(true);
+      if (e instanceof ErroDaApi && e.status === 409) setEdicaoConflitante(true);
       throw e;
     }
   }
@@ -90,7 +98,7 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, capac
   return <div className="pacote-do-board">
     <button className="br-ver" aria-expanded={aberto} onClick={() => setAberto(a => !a)}>{aberto ? 'Recolher pacote' : 'Ver pacote do projeto'}</button>
     {aberto ? <ArtefatosDoCard nome={nome} slug={slug} branch={branch} repositorios={repositorios} estados={estados}
-      artefatos={artefatos} pedidos={pedidos} produtores={previsao?.resultados} gerar={gerar} desabilitado={bloqueado}
+      artefatos={artefatos} pedidos={pedidos} produtores={produtores} gerar={gerar} desabilitado={bloqueado}
       capacidade={capacidade} motivo={motivo} agora={agora} erro={erro} erroDoPedido={criacao.falha}
       atualizar={() => setRevisao(r => r + 1)} atualizando={atualizando} linksAutorizados={!semAcesso}
       skillDoPacote={projeto?.skillDoPacote ?? ''} skillsDoPacote={projeto?.skillsDoPacote ?? []} salvarSkill={projeto ? salvarSkill : undefined} />
