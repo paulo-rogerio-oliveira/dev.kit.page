@@ -94,10 +94,12 @@ describe('pacote do projeto sem confirmação', () => {
 
   it('ACL bloqueia geração, retomada e edição da skill; host incompatível não envia', async () => {
     const gerar = vi.fn(); const salvarSkill = vi.fn();
-    const tela = render(<ArtefatosDoCard {...base} gerar={gerar} salvarSkill={salvarSkill} desabilitado motivo="Exige editor" estados={[{ ...resultado, estado: 'local-pronto', etapa: 'upload' }]} />);
+    const tela = render(<ArtefatosDoCard {...base} gerar={gerar} salvarSkill={salvarSkill} desabilitado capacidade={false} motivo="Exige editor" estados={[{ ...resultado, estado: 'local-pronto', etapa: 'upload' }]} />);
     expect(screen.getByRole('button', { name: 'Gerar pacote' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Tentar envio novamente' })).toBeDisabled();
     expect(screen.getByLabelText('Skill do pacote (opcional)')).toBeDisabled();
+    expect(screen.getByText('Exige editor')).toBeInTheDocument();
+    expect(screen.queryByText(/Atualize o host/)).not.toBeInTheDocument();
     tela.rerender(<ArtefatosDoCard {...base} gerar={gerar} capacidade={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Gerar pacote' }));
     expect(gerar).not.toHaveBeenCalled(); expect(salvarSkill).not.toHaveBeenCalled();

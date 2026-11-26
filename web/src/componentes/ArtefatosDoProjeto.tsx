@@ -90,7 +90,7 @@ export function ArtefatosDoCard({ nome, slug, artefatos, gerar, desabilitado, mo
   useEffect(() => { setAguardando(false); }, [revisao, erroDoPedido]);
   const bloqueado = desabilitado || enviando || aguardando || emAndamento || !capacidade;
   const razao = emAndamento || aguardando ? 'Um pedido deste projeto está em andamento. Aguarde o resultado.'
-    : !capacidade ? 'Atualize o host para gerar o pacote do projeto.' : motivo;
+    : desabilitado && motivo ? motivo : !capacidade ? 'Atualize o host para gerar o pacote do projeto.' : motivo;
   async function pedir(opcoes: Opcoes = {}) {
     if (bloqueado || trava.current) return;
     trava.current = true; setEnviando(true); setMensagem('');
