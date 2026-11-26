@@ -168,6 +168,8 @@ export const api = {
   /** A mensagem ao Orquestrador ou o Ligar/Reiniciar do serviço: o MESMO envio idempotente pelo id. */
   enviarComandoRemoto: (token: string, corpo: ComandoNovo, signal?: AbortSignal) =>
     chamar<ComandoRemoto>('/api/remoto/comandos', { token, corpo, metodo: 'POST', signal }),
+  comandoRemoto: (token: string, id: string, signal?: AbortSignal) =>
+    chamar<ComandoRemoto>(`/api/remoto/comandos/${encodeURIComponent(id)}`, { token, signal }),
   eventosDaConversa: (token: string, maquina: string, ultimoEvento: number, signal: AbortSignal) =>
     requisitar(`/api/remoto/conversa/eventos?maquinaId=${encodeURIComponent(maquina)}`, { token, signal, ultimoEvento, aceita: 'text/event-stream' }),
   maquinasRemotas: (token: string, signal?: AbortSignal) =>
@@ -181,7 +183,13 @@ export const api = {
   catalogoRemoto: (token: string, maquina: string, signal?: AbortSignal) =>
     chamar<CatalogoDaMaquina>(`/api/remoto/maquinas/${encodeURIComponent(maquina)}/catalogo`, { token, signal }),
   projetos: (token: string) => chamar<Projeto[]>('/api/projetos', { token }),
-  projeto: (token: string, id: number) => chamar<Projeto>(`/api/projetos/${id}`, { token }),
+  projeto: (token: string, id: number, signal?: AbortSignal) => chamar<Projeto>(`/api/projetos/${id}`, { token, signal }),
+  resumosDosProjetos: (token: string, signal?: AbortSignal) =>
+    chamar<import('./projetos').ResumoDoProjeto[]>('/api/projetos/resumos', { token, signal }),
+  editarItemDoProjeto: (token: string, id: number, numero: number, edicao: import('./projetos').EdicaoDoItem, signal?: AbortSignal) =>
+    chamar<Projeto>(`/api/projetos/${id}/itens/${numero}`, { token, signal, metodo: 'PUT', corpo: edicao }),
+  prontidaoDoProjeto: (token: string, id: number, signal?: AbortSignal) =>
+    chamar<{ pendencia: string | null }>(`/api/projetos/${id}/prontidao-disparo`, { token, signal }),
   /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
   artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
   login: (login: string, senha: string) =>

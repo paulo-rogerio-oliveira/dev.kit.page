@@ -14,6 +14,22 @@ const acessoInicial: AcessosDoProjeto = {
 };
 
 beforeEach(() => {
+  // Fixtures completas antigas alimentam as duas rotas novas apenas no servidor de teste.
+  servidor.use(
+    http.get(`${API}/api/projetos/resumos`, async () => {
+      const resposta = await fetch(`${API}/api/projetos`);
+      if (!resposta.ok) return resposta;
+      const lista = await resposta.json() as Projeto[];
+      return HttpResponse.json(lista.map(p => { const itens = p.itensDoGrafo ? p.itens.filter(i => p.itensDoGrafo!.includes(i.numero)) : p.itens;
+        return { ...p, itens: undefined, totalDeItens: itens.length, itensConcluidos: itens.filter(i => i.situacao === 'integrado').length }; }));
+    }),
+    http.get(`${API}/api/projetos/:id`, async ({ params }) => {
+      const resposta = await fetch(`${API}/api/projetos`);
+      const lista = await resposta.json() as Projeto[];
+      return HttpResponse.json(lista.find(p => p.id === Number(params.id)));
+    }),
+    http.get(`${API}/api/projetos/:id/prontidao-disparo`, () => HttpResponse.json({ pendencia: 'Projeto sem matriz definida.' })),
+  );
   servidor.use(http.get(`${API}/api/projetos/:id/acessos`, ({ params }) =>
     HttpResponse.json({ ...acessoInicial, projeto: Number(params.id) })));
 });
@@ -23,7 +39,7 @@ const projeto: Projeto = {
   id: 7, slug: 'portal', nome: 'Portal', nivel: 'usuario', time: '', repositorios: ['https://github.com/acme/portal'],
   branch: 'feature/dev/projeto-portal', semanaConvertida: false, definicao: 'Plano', anexos: [], autonomia: true,
   paralelismo: 2, destinoDaPr: 'main', situacao: 'aprovado', versao: 1, autor: 'Dev', atualizadoEm: '2026-10-28T12:00:00Z',
-  podeApagar: true, featureId: 700, epicId: 600, iteracao: 'DevKit/Sprint 3', board: 'vincular', itens: [
+  podeApagar: true, papel: 'dono', featureId: 700, epicId: 600, iteracao: 'DevKit/Sprint 3', board: 'vincular', itens: [
     { numero: 1, titulo: 'Contratos', descricao: '', fluxo: '6', repositorios: ['https://github.com/acme/portal'], componentes: [],
       dependencias: [], onda: 1, workItemId: 747, situacao: 'integrado', tipo: '', prioridade: 1, horas: 4, branch: 'feature/dev/projeto-portal-item-1' },
     { numero: 2, titulo: 'Cliente', descricao: '', fluxo: '6', repositorios: ['https://github.com/acme/portal'], componentes: [],
@@ -41,7 +57,7 @@ describe('Projetos sincronizados', () => {
     const detalhe = within(screen.getByRole('article', { name: 'Detalhe do projeto' }));
     await waitFor(() => expect(detalhe.getByRole('heading', { name: 'Portal' })).toHaveFocus());
     await userEvent.click(screen.getByRole('button', { name: /Outro/ }));
-    await waitFor(() => expect(detalhe.getByRole('heading', { name: 'Outro' })).toHaveFocus());
+    await waitFor(() => expect(within(screen.getByRole('article', { name: 'Detalhe do projeto' })).getByRole('heading', { name: 'Outro' })).toHaveFocus());
     const aba = screen.getByRole('button', { name: 'Propostas visuais' });
     await userEvent.click(aba);
     expect(aba).toHaveFocus();
@@ -73,17 +89,19 @@ describe('Projetos sincronizados', () => {
       http.put(`${API}/api/projetos`, () => { envios++; return HttpResponse.json(snapshot); }),
       http.put(`${API}/api/projetos/7`, () => { envios++; return HttpResponse.json(snapshot); }),
     );
-    renderizar('/projetos?slug=portal', tokenDoDev());
+    renderizar('/projetos?slug=portal&visao=ondas', tokenDoDev());
     const detalhe = within(await screen.findByRole('article', { name: 'Detalhe do projeto' }));
-    expect(detalhe.getByText('1 Integrado')).toBeInTheDocument();
+    expect(detalhe.getByText('Integrado')).toBeInTheDocument();
     expect(detalhe.getByText('Depende de: 1')).toBeInTheDocument();
+    expect(detalhe.queryByRole('button', { name: 'Editar item 1' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Plano$/ }));
     const acesso = within(await screen.findByRole('region', { name: 'Acesso' }));
     expect(await acesso.findByText(/Seu papel:/)).toHaveTextContent('Leitor');
     expect(acesso.queryByRole('button', { name: 'Dar acesso' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Propostas visuais' }));
     expect(await screen.findByText('repo-fixado/plano/v6')).toBeInTheDocument();
     expect(screen.getByText(`SHA-256: ${referencia.hash}`)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^Plano$/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Ondas$/ }));
     expect(await screen.findByText('Depende de: 1')).toBeInTheDocument();
     expect(envios).toBe(0);
   });
@@ -120,13 +138,15 @@ describe('Projetos sincronizados', () => {
     servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto, { ...projeto, id: 8, nome: 'Outro' }])));
     renderizar('/projetos?nivel=usuario&situacao=aprovado', tokenDoDev());
     const detalhe = await screen.findByRole('article', { name: 'Detalhe do projeto' });
-    expect(within(detalhe).getByText('feature/dev/projeto-portal')).toBeInTheDocument();
-    expect(within(detalhe).getByText('feature/dev/projeto-portal-item-2')).toBeInTheDocument();
+    expect(screen.getByText('feature/dev/projeto-portal')).toBeInTheDocument();
     expect(within(detalhe).getByText('Onda 2 de 2')).toBeInTheDocument();
-    expect(within(detalhe).getByText('1 Integrado')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ondas' }));
+    expect(within(detalhe).getByText('feature/dev/projeto-portal-item-2')).toBeInTheDocument();
+    expect(within(detalhe).getByText('Integrado')).toBeInTheDocument();
     expect(within(detalhe).getByText('Depende de: 1')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Plano' }));
     await userEvent.click(screen.getByRole('button', { name: /Outro/ }));
-    expect(within(detalhe).getByRole('heading', { name: 'Outro' })).toBeInTheDocument();
+    expect(await within(await screen.findByRole('article', { name: 'Detalhe do projeto' })).findByRole('heading', { name: 'Outro' })).toBeInTheDocument();
     expect(screen.getByLabelText('Nível de compartilhamento')).toHaveValue('usuario');
     expect(screen.getByLabelText('Situação do projeto')).toHaveValue('aprovado');
   });
@@ -143,7 +163,7 @@ describe('Projetos sincronizados', () => {
     servidor.use(http.get(`${API}/api/projetos`, () => HttpResponse.json([projeto])));
     renderizar('/projetos?slug=criado-agora', tokenDoDev());
     expect(await screen.findByText(/O projeto criado-agora ainda não chegou ao site/)).toBeInTheDocument();
-    expect(within(screen.getByRole('article', { name: 'Detalhe do projeto' })).getByRole('heading', { name: 'Portal' })).toBeInTheDocument();
+    expect(within(await screen.findByRole('article', { name: 'Detalhe do projeto' })).getByRole('heading', { name: 'Portal' })).toBeInTheDocument();
   });
 
   it('mostra estado vazio e permite repetir uma consulta que falhou', async () => {

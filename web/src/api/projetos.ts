@@ -2,6 +2,16 @@ export interface ReferenciaDeProposta { projeto: string; tela: string; versao: n
 export interface DesignDoItem { alteraTela: boolean; revisao: number; propostas: ReferenciaDeProposta[] }
 export interface ModeloDoProjeto { agente: string; modelo: string }
 
+export interface ResumoDoProjeto {
+  id: number; slug: string; nome: string; nivel: string; time: string; situacao: string; versao: number;
+  atualizadoEm: string; papel: string; totalDeItens: number; itensConcluidos: number;
+  itensEmExecucao: number; itensComPergunta: number; itensFalhos: number; progresso: number; temPendencias: boolean;
+}
+export interface EdicaoDoItem {
+  versaoEsperada: number; titulo: string; descricao: string; fluxo: string; agente: string; modelo: string;
+  dependencias: number[]; componentes: string[]; prioridade: number;
+}
+
 export interface ItemDoProjeto {
   numero: number; titulo: string; descricao: string; fluxo: string;
   repositorios: string[]; componentes: string[]; dependencias: number[];

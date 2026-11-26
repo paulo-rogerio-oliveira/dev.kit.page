@@ -18,9 +18,11 @@ public sealed class ProntidaoDoDisparoRemoto(DevKitPageDb db, TimeProvider relog
             var u = await db.Usuarios.AsNoTracking().SingleAsync(u => u.Id == usuario, ct);
             var escopo = new EscopoDoDesign(usuario, u.EmpresaId, u.Papel is "admin" or "gestor");
             var projetos = new ProjetosDaEmpresa(db, relogio);
-            var encontrados = (await projetos.ListarAsync(escopo, null, null, ct)).Where(p => p.Slug == pedido.Projeto).ToArray();
+            var encontrados = await db.ProjetosCompartilhados.AsNoTracking().Visiveis(escopo)
+                .Where(p => p.Slug == pedido.Projeto).Select(p => p.Id).Take(2).ToArrayAsync(ct);
             RegrasMatrix.Exigir(encontrados.Length == 1, "Projeto indisponível ou ambíguo neste escopo.");
-            var projeto = encontrados[0];
+            var projeto = await projetos.ObterAsync(escopo, encontrados[0], ct)
+                ?? throw new ArgumentException("Projeto indisponível neste escopo.");
             RegrasMatrix.Exigir(RegrasDeAcesso.PodeEditar(projeto.Papel), "Disparo exige editor ou dono do projeto.");
             RegrasMatrix.Exigir(projeto.Situacao == (pedido.Acao == "retomar" ? ProjetosV1.Pausado : ProjetosV1.Aprovado),
                 "Projeto não está disponível para esta ação.");
