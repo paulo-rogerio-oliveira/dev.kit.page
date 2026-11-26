@@ -1,6 +1,8 @@
 .pacote-projeto {font-size:12px; overflow-wrap:anywhere}
 .pacote-projeto .pacote-card {border:1px solid var(--line, var(--borda-controle)); border-radius:9px; padding:14px; margin:12px 0; background:var(--surface)}
 .pacote-projeto h3 {font-size:14px; margin:0 0 8px; color:var(--ink)}
+.pacote-projeto .br-gerar {background:var(--accent); border-color:var(--accent); color:white}
+.pacote-projeto .br-gerar:disabled {opacity:.55}
 .pacote-projeto p {white-space:pre-wrap; line-height:1.5; margin:7px 0; overflow:visible}
 .pacote-projeto label {display:block; margin:12px 0 5px}
 .pacote-projeto select {display:block; width:100%; margin-top:5px; min-height:38px}
