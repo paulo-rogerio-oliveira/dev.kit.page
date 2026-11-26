@@ -55,7 +55,8 @@ public static class EdicaoRemotaDoItem
             projeto.SemanaConvertida, projeto.Definicao, projeto.Anexos, projeto.Autonomia, projeto.Paralelismo,
             projeto.DestinoDaPr, ProjetosV1.AguardandoAprovacao, edicao.VersaoEsperada, itens,
             projeto.FeatureId, projeto.EpicId, projeto.Iteracao, projeto.Board, projeto.BranchesDasTasks, agora,
-            projeto.BaseDoBranch, projeto.FluxoPadrao, projeto.Agente, projeto.Modelo, projeto.Modelos, projeto.PoliticaDeFinalizacao)
+            projeto.BaseDoBranch, projeto.FluxoPadrao, projeto.Agente, projeto.Modelo, projeto.Modelos, projeto.PoliticaDeFinalizacao,
+            projeto.SkillDoPacote, projeto.SkillsDoPacote)
             { EdicaoPeloBoard = true };
     }
 }

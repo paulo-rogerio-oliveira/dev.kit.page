@@ -95,6 +95,26 @@ public sealed class DadosSensiveisTests
 /// <summary>As regras do contrato v1 do controle remoto (<see cref="RegrasDoRemoto"/>): a forma do envio e o caminho do campo sensível.</summary>
 public sealed class RegrasDoRemotoTests
 {
+    [Theory]
+    [InlineData("agente-pendente", "fila")]
+    [InlineData("nao-aplicavel", "deteccao")]
+    [InlineData("falhou", "preparacao")]
+    public void Retrato_preserva_skill_e_motivo_sem_exigir_SHA_inventado_na_falha_de_preparacao(string estado, string etapa)
+    {
+        var artefato = new ArtefatoNoRetratoV1(17, "pacote", "github.com/acme/app",
+            etapa == "preparacao" ? "" : new string('a', 40), estado, etapa, "Motivo legível", 0, DateTimeOffset.UtcNow);
+        var original = Retrato();
+        var projeto = original.Projetos![0] with { SkillDoPacote = "pacote-x", Artefatos = [artefato] };
+        var retrato = original with { Projetos = [projeto] };
+        Assert.Empty(RegrasDoRemoto.Validar(retrato));
+        var roundTrip = System.Text.Json.JsonSerializer.Deserialize<RetratoV1>(System.Text.Json.JsonSerializer.Serialize(retrato))!;
+        Assert.Equal("pacote-x", roundTrip.Projetos![0].SkillDoPacote);
+        Assert.Equal("Motivo legível", roundTrip.Projetos[0].Artefatos![0].Detalhe);
+        if (etapa == "preparacao")
+            Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with
+                { Artefatos = [artefato with { Estado = "publicado", IdRemoto = 1 }] }] }));
+    }
+
     [Fact]
     public void Estado_do_executor_e_aditivo_limitado_e_nao_aceita_caminho_local()
     {
