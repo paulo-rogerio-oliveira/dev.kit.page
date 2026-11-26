@@ -5,7 +5,7 @@ import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '../dist');
-const porta = Number(process.argv[2] ?? 4186);
+const porta = Number(process.env.DEVKIT_DEMO_PACOTE_PORTA ?? process.argv[2] ?? 4186);
 const cenarios = new Map();
 const tipos = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webp': 'image/webp' };
 const agora = () => new Date().toISOString();
@@ -56,7 +56,7 @@ function cenario(estado) {
   return dados;
 }
 function json(res, dados, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(dados)); }
-createServer(async (req, res) => {
+export const servidor = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://127.0.0.1:${porta}`);
     const contexto = new URL(req.headers.referer ?? url, url);
