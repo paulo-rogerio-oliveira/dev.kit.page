@@ -64,6 +64,7 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
     public DbSet<ClienteDaMaquina> ClientesDaMaquina => Set<ClienteDaMaquina>();
     public DbSet<AssercaoDoCliente> AssercoesDoCliente => Set<AssercaoDoCliente>();
     public DbSet<ArtefatoDoProjeto> ArtefatosDosProjetos => Set<ArtefatoDoProjeto>();
+    public DbSet<PedidoDeArtefatos> PedidosDeArtefatos => Set<PedidoDeArtefatos>();
 
     private void ConfigurarMatrix(ModelBuilder modelBuilder)
     {
@@ -299,6 +300,14 @@ public sealed class DevKitPageDb(DbContextOptions<DevKitPageDb> options) : DbCon
 
         // Os artefatos do projeto (controle-v4, item 2): o zip no armazém e a URL do preview. No Azure SQL a tabela vem de
         // api/scripts/sqlserver/ArtefatosDosProjetos.sql; apagar o projeto apaga as linhas (o zip vence na retenção do contêiner).
+        modelBuilder.Entity<PedidoDeArtefatos>(e =>
+        {
+            e.ToTable("PedidosDeArtefatos");
+            e.HasKey(p => new { p.ProjetoId, p.Id });
+            e.Property(p => p.Id).HasMaxLength(64);
+            e.Property(p => p.Revisao).IsConcurrencyToken();
+            e.HasOne(p => p.Projeto).WithMany().HasForeignKey(p => p.ProjetoId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<ArtefatoDoProjeto>(e =>
         {
             e.ToTable("ArtefatosDosProjetos");

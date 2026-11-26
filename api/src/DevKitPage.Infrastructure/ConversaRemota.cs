@@ -39,6 +39,8 @@ public sealed class ConversaRemota(
         var maquina = await db.MaquinasRemotas.AsNoTracking().FirstOrDefaultAsync(m => m.UsuarioId == usuarioId && m.MaquinaId == pedido.MaquinaId, ct);
         if (maquina is null)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.NaoEncontrado, "Máquina não encontrada, ou não é sua.");
+        if (await new ProntidaoDoDisparoRemoto(db, relogio).PendenciaAsync(usuarioId, tipo, texto, ct) is { } matrix)
+            return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.MatrixPendente, matrix);
         if (tipo == ConversaV1.ComandoReiniciar && maquina.TurnoEmAndamento && !pedido.ConfirmarReinicio)
             return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.TurnoEmAndamento,
                 "Há um turno do agente em andamento nesta máquina: reiniciar o interrompe. Confirme para reiniciar assim mesmo.");
@@ -94,7 +96,13 @@ public sealed class ConversaRemota(
         {
             // Dois envios com o mesmo id ao mesmo tempo: o índice único deixa um; o outro devolve o que ficou.
             db.ChangeTracker.Clear();
-            var vencedor = await db.ComandosRemotos.AsNoTracking().FirstAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
+            var vencedor = await db.ComandosRemotos.AsNoTracking().FirstOrDefaultAsync(c => c.UsuarioId == usuarioId && c.ComandoId == id, ct);
+            if (vencedor is null)
+            {
+                if (tipo != ConversaV1.ComandoProjeto || DisparoDeProjetoRemoto.Ler(texto) is null) throw;
+                return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.MatrixPendente,
+                    "A tentativa concorrente foi recusada antes da fila. Repita o pedido com o mesmo id.");
+            }
             return await ReenviarAsync(vencedor, pedido.MaquinaId, tipo, texto, pedido.ConfirmarReinicio, ct);
         }
 
@@ -127,6 +135,14 @@ public sealed class ConversaRemota(
     private async Task<ResultadoDaConversa<ComandoAceito>> EnfileirarAsync(
         ComandoRemoto comando, FilaDoUsuario filaDoUsuario, bool novo, bool confirmarReinicio, CancellationToken ct)
     {
+        if (await new ProntidaoDoDisparoRemoto(db, relogio).PendenciaAsync(comando.UsuarioId, comando.Tipo, comando.Texto, ct) is { } matrix)
+        {
+            // A fila ainda não foi chamada. Desfaz somente o INSERT desta tentativa, sem retirar histórico ou trabalho entregue.
+            if (novo && await db.ComandosRemotos.Where(c => c.Id == comando.Id && c.UsuarioId == comando.UsuarioId
+                && c.Estado == ConversaV1.EstadoPendente).ExecuteDeleteAsync(ct) == 1)
+                db.Entry(comando).State = EntityState.Detached;
+            return ResultadoDaConversa<ComandoAceito>.Falhou(FalhaNaConversa.MatrixPendente, matrix);
+        }
         var agora = relogio.GetUtcNow().UtcDateTime;
         // O fluxo escolhido no chat vai em campos próprios da mensagem; sem ele, eles ficam de fora (o dev.kit antigo não os lê).
         var contexto = comando.Contexto.Length > 0 ? JsonSerializer.Deserialize<ContextoDoComando>(comando.Contexto, Json) : null;

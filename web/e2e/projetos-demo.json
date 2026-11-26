@@ -1,0 +1,17 @@
+{
+  "slug": "fixes", "nome": "fixes", "nivel": "usuario", "time": "",
+  "repositorios": ["https://github.com/paulo-rogerio-oliveira/git.kit", "https://github.com/paulo-rogerio-oliveira/dev.kit.page"],
+  "branch": "feature/dev/projeto-fixes", "baseDoBranch": "develop", "semanaConvertida": false,
+  "definicao": "Ajustar a geração de artefato por projeto e evidenciar o projeto ajustes_2.\nCarregar os detalhes quando forem abertos e organizar cada item em um card na aba Ondas.",
+  "anexos": [], "autonomia": true, "paralelismo": 3, "destinoDaPr": "develop", "situacao": "aprovado", "board": "nao",
+  "agente": "codex", "modelo": "gpt-6.1-sol", "modelos": [{ "agente": "codex", "modelo": "gpt-6.1-sol" }], "fluxoPadrao": "13",
+  "itens": [
+    { "numero": 1, "titulo": "Garantir matriz antes do disparo", "descricao": "Conferir matriz e responsáveis antes de executar.", "fluxo": "13", "repositorios": [], "componentes": ["host/disparo"], "dependencias": [], "onda": 1, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 2, "titulo": "Consultas leves de projetos", "descricao": "Separar resumo e detalhe.", "fluxo": "13", "repositorios": [], "componentes": ["host/consultas"], "dependencias": [], "onda": 1, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 3, "titulo": "Artefatos por projeto", "descricao": "Agrupar resultados por origem.", "fluxo": "13", "repositorios": [], "componentes": ["host/artefatos"], "dependencias": [], "onda": 1, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 4, "titulo": "Desktop: Ondas e modal", "descricao": "Carregar os detalhes ao abrir a aba e editar o item em um modal.", "fluxo": "14", "repositorios": [], "componentes": ["desktop/projetos"], "dependencias": [1, 2, 3], "onda": 2, "workItemId": 0, "situacao": "planejado", "prioridade": 1, "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 5, "titulo": "Board: Ondas e modal", "descricao": "Consultas sob demanda e edição segura.", "fluxo": "14", "repositorios": [], "componentes": ["web/projetos"], "dependencias": [1, 2, 3], "onda": 2, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 6, "titulo": "Escopo e resultados de artefatos", "descricao": "Exibir os resultados do projeto.", "fluxo": "13", "repositorios": [], "componentes": ["artefatos/interface"], "dependencias": [3, 4, 5], "onda": 3, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" },
+    { "numero": 7, "titulo": "Evidenciar o ajustes_2", "descricao": "Conferir a entrega integrada.", "fluxo": "13", "repositorios": [], "componentes": ["evidencias"], "dependencias": [6], "onda": 4, "workItemId": 0, "situacao": "planejado", "agente": "codex", "modelo": "gpt-6.1-sol" }
+  ]
+}

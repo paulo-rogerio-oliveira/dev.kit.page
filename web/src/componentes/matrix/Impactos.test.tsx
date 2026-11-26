@@ -13,6 +13,11 @@ const projeto: Projeto = { id: 9, slug: 'matrix', nome: 'Matrix', nivel: 'usuari
 
 beforeEach(() => {
   vi.spyOn(api, 'projetos').mockResolvedValue([projeto]);
+  vi.spyOn(api, 'resumosDosProjetos').mockResolvedValue([{ ...projeto, papel: 'dono', totalDeItens: 0,
+    itensConcluidos: 0, itensEmExecucao: 0, itensComPergunta: 0, itensFalhos: 0, progresso: 0, temPendencias: false }]);
+  vi.spyOn(api, 'projeto').mockResolvedValue(projeto);
+  vi.spyOn(api, 'prontidaoDoProjeto').mockResolvedValue({ pendencia: 'Matriz indisponível' });
+  vi.spyOn(api, 'maquinasRemotas').mockResolvedValue([]);
   vi.spyOn(api, 'acessosDoRecurso').mockResolvedValue({ projeto: 9, recurso: 'projeto', nome: 'Matrix', papel: 'dono', dono: { id: 1, login: 'demo', nome: 'Demo' }, acessos: [], candidatos: [] });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -22,7 +27,7 @@ it('cliente anterior sem Matrix mantém o projeto e explica que o recurso está 
   const gravar = vi.spyOn(api, 'editarMatrix');
   renderizar('/projetos?slug=matrix&visao=impactos', tokenDoDev());
   expect(await screen.findByText(/Impactos indisponíveis neste servidor ou cliente anterior/)).toBeInTheDocument();
-  expect(screen.getByRole('article', { name: 'Detalhe do projeto' })).toHaveTextContent('feature/demo');
+  expect(screen.getByText('feature/demo')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Ver recursos disponíveis' }));
   expect(screen.getByRole('navigation', { name: 'Recursos disponíveis' })).toHaveTextContent('Board');
   expect(gravar).not.toHaveBeenCalled();

@@ -114,6 +114,10 @@ public static partial class RegrasDosProjetos
             return "O destino da PR passa do tamanho de um branch.";
         if ((envio.BaseDoBranch?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch
             || (envio.FluxoPadrao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.SkillDoPacote?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
+            || (envio.SkillsDoPacote?.Count ?? 0) > 1000
+            || (envio.SkillsDoPacote?.Any(s => s is null || string.IsNullOrWhiteSpace(s.Nome)
+                || s.Nome.Length > ProjetosV1.TamanhoMaximoDoNome || s.Tipo is not ("somente-comando" or "com-parametros")) ?? false)
             || (envio.Agente?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
             || (envio.Modelo?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
             || envio.Modelos is { Count: > 20 }

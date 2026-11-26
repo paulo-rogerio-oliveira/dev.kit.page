@@ -91,6 +91,7 @@ public static class Composicao
         servicos.AddScoped<IDesignDaEmpresa, DesignDaEmpresa>();
         servicos.AddScoped<IAcessosAosProjetos, AcessosAosProjetos>();
         servicos.AddScoped<IProjetosDaEmpresa, ProjetosDaEmpresa>();
+        servicos.AddScoped<IConsultaDeProjetos, ConsultaDeProjetos>();
         servicos.AddScoped<IProjetosCompartilhados, ProjetosCompartilhados>();
         // Os artefatos do projeto (controle-v4, item 2): sem a seção Artefatos, o armazém e a conexão do Blob são os do design.
         servicos.AddOptions<OpcoesDosArtefatos>().Bind(configuracao.GetSection(OpcoesDosArtefatos.Secao))

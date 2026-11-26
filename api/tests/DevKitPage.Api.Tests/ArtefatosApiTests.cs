@@ -14,7 +14,7 @@ namespace DevKitPage.Api.Tests;
 /// permissão do projeto, o preview guardado (nunca produção) e a retenção. O armazém dos testes é a pasta temporária, e o link é o
 /// token cifrado da rota anônima — o mesmo papel da SAS do Blob.
 /// </summary>
-public sealed class ArtefatosApiTests : IDisposable
+public sealed partial class ArtefatosApiTests : IDisposable
 {
     private readonly ApiDeTeste _api = new();
     public void Dispose() => _api.Dispose();

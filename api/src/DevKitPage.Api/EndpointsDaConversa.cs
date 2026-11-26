@@ -216,6 +216,7 @@ public static class EndpointsDaConversa
         {
             FalhaNaConversa.NaoEncontrado => (StatusCodes.Status404NotFound, (string?)null),
             FalhaNaConversa.SemFila => (StatusCodes.Status409Conflict, ConversaV1.CodigoSemFila),
+            FalhaNaConversa.MatrixPendente => (StatusCodes.Status409Conflict, "matrix-pendente"),
             FalhaNaConversa.TurnoEmAndamento => (StatusCodes.Status409Conflict, ConversaV1.CodigoTurnoEmAndamento),
             FalhaNaConversa.IdEmUso => (StatusCodes.Status409Conflict, ConversaV1.CodigoIdEmUso),
             FalhaNaConversa.OutraMaquina => (StatusCodes.Status409Conflict, ConversaV1.CodigoOutraMaquina),

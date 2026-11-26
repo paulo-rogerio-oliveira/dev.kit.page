@@ -88,6 +88,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         {
             BaseDoBranch = string.IsNullOrEmpty(envio.BaseDoBranch) ? anteriorProjeto?.BaseDoBranch ?? envio.BaseDoBranch : envio.BaseDoBranch,
             FluxoPadrao = envio.FluxoPadrao ?? anteriorProjeto?.FluxoPadrao,
+            SkillDoPacote = envio.SkillDoPacote ?? anteriorProjeto?.SkillDoPacote,
+            SkillsDoPacote = envio.SkillsDoPacote ?? anteriorProjeto?.SkillsDoPacote,
             Agente = envio.Agente ?? anteriorProjeto?.Agente,
             Modelo = envio.Modelo ?? anteriorProjeto?.Modelo,
             Modelos = envio.Modelos ?? anteriorProjeto?.Modelos,
@@ -101,7 +103,9 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         // O número muda no replanejamento. A proposta acompanha a identidade do item,
         // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
         ItemDoProjetoV1? AnteriorDoDesign(ItemDoProjetoV1 item)
-            => anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
+            // Edição mínima conserva o número; inclusão recebe um número novo. Título repetido não é identidade.
+            => envio.EdicaoPeloBoard ? anteriores.FirstOrDefault(a => a.Numero == item.Numero)
+                : anteriores.FirstOrDefault(a => item.WorkItemId > 0 && a.WorkItemId == item.WorkItemId)
                 ?? anteriores.FirstOrDefault(a => string.Equals(a.Titulo.Trim(), item.Titulo.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? anteriores.FirstOrDefault(a => a.Numero == item.Numero);
         var enviados = (envio.Itens ?? []).Select(i =>
@@ -116,6 +120,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
                 WorkItemId = i.WorkItemId > 0 ? i.WorkItemId : anterior?.WorkItemId ?? 0,
                 Branch = i.Branch.Length > 0 ? i.Branch : anterior?.Branch ?? "",
                 Horas = i.AtualizadoEm is null && i.Horas == 0 ? anterior?.Horas ?? 0 : i.Horas,
+                VersaoDaEdicaoDoPlano = envio.EdicaoPeloBoard && i.AtualizadoEm != anterior?.AtualizadoEm
+                    ? projeto.Versao + 1 : anterior?.VersaoDaEdicaoDoPlano ?? 0,
             };
         }).ToArray();
         foreach (var item in enviados)
@@ -232,7 +238,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
         documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
         documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
-        documento?.PoliticaDeFinalizacao) with
+        documento?.PoliticaDeFinalizacao, documento?.SkillDoPacote, documento?.SkillsDoPacote) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),
