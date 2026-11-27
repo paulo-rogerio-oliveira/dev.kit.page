@@ -96,6 +96,26 @@ public sealed class DadosSensiveisTests
 public sealed class RegrasDoRemotoTests
 {
     [Theory]
+    [InlineData(null)]
+    [InlineData("Debug")]
+    [InlineData("Release")]
+    public void Configuracao_no_retrato_e_aditiva_e_so_aceita_valores_da_lista_branca(string? configuracao)
+    {
+        var original = Retrato();
+        var artefato = new ArtefatoNoRetratoV1(17, "pacote", "github.com/acme/app", new string('a', 40),
+            "gerando", "compilacao", "Gerando", 0, DateTimeOffset.UtcNow, ConfiguracaoDoPacote: configuracao);
+        var projeto = original.Projetos![0] with { ConfiguracaoDoPacote = configuracao, Artefatos = [artefato] };
+        var retrato = original with { Projetos = [projeto] };
+        Assert.Empty(RegrasDoRemoto.Validar(retrato));
+        var roundTrip = System.Text.Json.JsonSerializer.Deserialize<RetratoV1>(System.Text.Json.JsonSerializer.Serialize(retrato))!;
+        Assert.Equal(configuracao, roundTrip.Projetos![0].ConfiguracaoDoPacote);
+        Assert.Equal(configuracao, roundTrip.Projetos[0].Artefatos![0].ConfiguracaoDoPacote);
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with { ConfiguracaoDoPacote = "SENTINELA_COMANDO" }] }));
+        Assert.NotEmpty(RegrasDoRemoto.Validar(retrato with { Projetos = [projeto with
+            { Artefatos = [artefato with { ConfiguracaoDoPacote = @"C:\SENTINELA_LOCAL" }] }] }));
+    }
+
+    [Theory]
     [InlineData("agente-pendente", "fila")]
     [InlineData("nao-aplicavel", "deteccao")]
     [InlineData("falhou", "preparacao")]

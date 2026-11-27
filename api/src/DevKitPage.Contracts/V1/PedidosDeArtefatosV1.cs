@@ -31,4 +31,4 @@ public sealed record ResultadoDoPedidoDeArtefatosV1(long Id, long ProjetoId, str
 }
 
 public sealed record CicloDoResultadoV1(string Estado, string Etapa, string Recibo = "", long ComandoId = 0,
-    string Branch = "", string Formato = "", string PedidoId = "");
+    string Branch = "", string Formato = "", string PedidoId = "", string? ConfiguracaoDoPacote = null);

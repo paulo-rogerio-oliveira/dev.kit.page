@@ -41,6 +41,7 @@ export interface Projeto {
   /** Projecao operacional; itens conserva o cadastro historico. */
   itensDoGrafo?: number[] | null; pendenciaDoGrafo?: string | null;
   skillDoPacote?: string | null; skillsDoPacote?: OpcaoDeSkillDoPacote[] | null;
+  configuracaoDoPacote?: 'Debug' | 'Release' | null;
 }
 
 /** A tela recebe somente metadados; conteúdo, comando e argumentos ficam no host. */
@@ -52,7 +53,7 @@ export interface OrigensDoPacote { tipo: 'origens-artefato'; projeto: string; re
 export interface ResultadoDoPacote {
   id: number; projetoId: number; tipo: string; repositorio: string; sha: string; situacao: string; link: string;
   validoAte: string | null; hash: string; tamanho: number; ambiente: string; detalhe: string; criadoEm: string; idRemoto: number;
-  estado: string; ciclo?: { estado: string; etapa: string; branch: string; pedidoId: string } | null;
+  estado: string; ciclo?: { estado: string; etapa: string; branch: string; pedidoId: string; configuracaoDoPacote?: 'Debug' | 'Release' | null } | null;
   produtor?: MetadadosDoProdutor | null;
 }
 export interface PedidoDoPacote { id: string; projetoId: number; criadoEm: string; estado: string; resultados: ResultadoDoPacote[] }

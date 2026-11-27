@@ -19,6 +19,7 @@ function cenario(estado) {
     semanaConvertida: false, definicao: 'Pacote do projeto integrado.', anexos: [], autonomia: true, paralelismo: 3, destinoDaPr: 'develop',
     situacao: 'aprovado', versao: 7, autor: 'Demonstração', atualizadoEm: agora(), itens: [], podeApagar: false, featureId: 0, epicId: 0,
     iteracao: '', board: 'nao', papel: estado === 'leitor' ? 'leitor' : 'editor', skillDoPacote: 'pacote-demo',
+    configuracaoDoPacote: estado === 'release' ? 'Release' : 'Debug',
     skillsDoPacote: [{ nome: 'pacote-demo', tipo: 'somente-comando' }, { nome: 'pacote-com-parametros', tipo: 'com-parametros' }] };
   const resultado = (i, antigo = false) => {
     const web = i === 1;
@@ -37,7 +38,8 @@ function cenario(estado) {
       criadoEm: new Date(Date.now() - (antigo ? 86400_000 : 12 * 60000)).toISOString(),
       idRemoto: ciclo === 'publicado' ? (antigo ? 41 : 51) + i : 0, estado: ciclo,
       produtor: { nome: web ? '' : projeto.skillDoPacote, tipo: web ? 'previa' : 'skill' },
-      ciclo: { estado: ciclo, etapa: 'demonstracao', branch: projeto.branch, pedidoId: antigo ? pedidoAnterior : pedidoAtual },
+      ciclo: { estado: ciclo, etapa: 'demonstracao', branch: projeto.branch, pedidoId: antigo ? pedidoAnterior : pedidoAtual,
+        configuracaoDoPacote: antigo ? 'Debug' : projeto.configuracaoDoPacote },
     };
   };
   const pedidos = [false, true].map(antigo => ({ id: antigo ? pedidoAnterior : pedidoAtual, projetoId: 11,
@@ -96,7 +98,7 @@ export const servidor = createServer(async (req, res) => {
             motivo: i ? 'Front Vite' : 'Comando direto', aplicavel: true, formato: i ? 'preview' : 'pacote' })),
           artefatos: dados.pedidos.flatMap(p => p.resultados).map(r => ({ id: r.id, tipo: r.tipo,
           repositorio: nomeNoRetrato(r.repositorio), sha: r.sha, estado: r.estado, etapa: r.ciclo.etapa, detalhe: r.detalhe, idRemoto: r.idRemoto, criadoEm: r.criadoEm,
-          pedidoId: r.ciclo.pedidoId, branch: r.ciclo.branch, produtor: r.produtor })) }] } });
+          pedidoId: r.ciclo.pedidoId, branch: r.ciclo.branch, produtor: r.produtor, configuracaoDoPacote: r.ciclo.configuracaoDoPacote })) }] } });
       if (url.pathname.endsWith('/decisoes')) return json(res, []);
       if (url.pathname.endsWith('/catalogo')) return json(res, { maquinaId: 'demo', recebidoEm: agora(), catalogo: { contrato: 1, maquinaId: 'demo', geradoEm: agora(),
         comandoId: null, workItems: [], repositorios: [], fluxos: [], projetos: [], designs: [], agentes: [], membros: [] } });
@@ -119,6 +121,15 @@ export const servidor = createServer(async (req, res) => {
         const edicao = JSON.parse(texto);
         if (edicao.versaoEsperada !== dados.projeto.versao) return json(res, { detail: 'O projeto mudou. Releia antes de salvar.' }, 409);
         dados.projeto.skillDoPacote = edicao.skillDoPacote; dados.projeto.versao++;
+        return json(res, dados.projeto);
+      }
+      if (url.pathname.endsWith('/configuracao-do-pacote') && req.method === 'PUT') {
+        let texto = ''; for await (const parte of req) texto += parte;
+        const edicao = JSON.parse(texto);
+        if (dados.projeto.papel === 'leitor') return json(res, { detail: 'Edição exige editor ou dono.' }, 403);
+        if (edicao.versaoEsperada !== dados.projeto.versao) return json(res, { detail: 'O projeto mudou. Releia antes de salvar.' }, 409);
+        if (!['Debug', 'Release'].includes(edicao.configuracaoDoPacote)) return json(res, { detail: 'Configuração inválida.' }, 400);
+        dados.projeto.configuracaoDoPacote = edicao.configuracaoDoPacote; dados.projeto.versao++;
         return json(res, dados.projeto);
       }
       if (url.pathname === '/api/remoto/comandos' && req.method === 'POST') {

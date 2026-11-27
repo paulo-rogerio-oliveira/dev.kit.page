@@ -25,6 +25,33 @@ function montar(p = projeto) {
 }
 afterEach(() => vi.restoreAllMocks());
 
+it('configuração padrão é Debug e a edição envia só o valor com a versão atual', async () => {
+  const tela = montar();
+  const salvar = vi.spyOn(api, 'editarConfiguracaoDoPacote').mockResolvedValue({ ...projeto, versao: 8, configuracaoDoPacote: 'Release' });
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  await screen.findByRole('option', { name: 'pacote-demo · somente comando' });
+  expect(screen.getByLabelText('Configuração do pacote')).toHaveValue('Debug');
+  await userEvent.selectOptions(screen.getByLabelText('Configuração do pacote'), 'Release');
+  expect(salvar).toHaveBeenCalledExactlyOnceWith('token-demo', 1, 7, 'Release');
+  await waitFor(() => expect(screen.getByLabelText('Configuração do pacote')).toHaveValue('Release'));
+  expect(tela.gerar).not.toHaveBeenCalled();
+  salvar.mockResolvedValue({ ...projeto, versao: 9, configuracaoDoPacote: 'Debug' });
+  await userEvent.selectOptions(screen.getByLabelText('Configuração do pacote'), 'Debug');
+  expect(salvar).toHaveBeenLastCalledWith('token-demo', 1, 8, 'Debug');
+});
+
+it.each([401, 403, 409])('configuração recusada com %i conserva a escolha até releitura', async status => {
+  montar({ ...projeto, configuracaoDoPacote: 'Release' });
+  const salvar = vi.spyOn(api, 'editarConfiguracaoDoPacote').mockRejectedValue(new ErroDaApi(status, 'Releia a configuração.'));
+  await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
+  await screen.findByRole('option', { name: 'pacote-demo · somente comando' });
+  await userEvent.selectOptions(screen.getByLabelText('Configuração do pacote'), 'Debug');
+  expect(salvar).toHaveBeenCalledOnce();
+  expect(screen.getByRole('status')).toHaveTextContent('Releia a configuração');
+  expect(screen.getByLabelText('Configuração do pacote')).toHaveValue('Release');
+  expect(screen.getByLabelText('Configuração do pacote')).toBeDisabled();
+});
+
 it('a conferência usa o mesmo ID do transporte e descarta respostas sem comando associado', async () => {
   const texto = JSON.stringify({ tipo: 'origens-artefato', projeto: 'demo', resultados: [] });
   const criar = vi.fn().mockResolvedValue({ ok: true });
@@ -91,6 +118,7 @@ it('leitor consulta o pacote mas não gera nem altera skill', async () => {
   expect(screen.getByRole('button', { name: 'Gerar pacote' })).toBeDisabled();
   expect(screen.getByLabelText('Skill do pacote (opcional)')).toBeDisabled();
   expect(tela.gerar).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Configuração do pacote')).toBeDisabled();
 });
 
 it('resposta de links em andamento não libera a skill após 409; só reler o projeto libera com a nova versão', async () => {
@@ -145,7 +173,7 @@ it('usa previsão nome/tipo projetada pelo host, inclusive para leitor', async (
       origensDoPacote: [], pedidosDoPacote: [] } as unknown as CriacaoDoBoard}
     previsaoRemota={[{ repositorio: 'repo', produtor: { nome: 'pacote-demo', tipo: 'skill' }, motivo: 'Comando direto', aplicavel: true, formato: 'pacote' }]} />);
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
-  expect(await screen.findByText('skill pacote-demo · Comando direto')).toBeInTheDocument();
+  expect(await screen.findByText('skill pacote-demo · Comando direto · Debug')).toBeInTheDocument();
   await screen.findByRole('option', { name: 'pacote-demo · somente comando' });
   expect(tela.gerar).not.toHaveBeenCalled();
 });
@@ -158,7 +186,7 @@ it.each(['leitor', 'editor'])('previsão de %s compara a URL da API com o nome s
     previsaoRemota={[{ repositorio: 'github.com/acme/app', produtor: { nome: '', tipo: 'principal' }, motivo: 'Motivo do host', aplicavel: true, formato: 'pacote' },
       { repositorio: 'github.com/acme/web', produtor: { nome: '', tipo: 'previa' }, motivo: 'Front do host', aplicavel: true, formato: 'preview' }]} />);
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
-  expect(await screen.findByText('executável principal · Motivo do host')).toBeInTheDocument();
+  expect(await screen.findByText('executável principal · Motivo do host · Debug')).toBeInTheDocument();
   expect(screen.getByText('prévia · Front do host')).toBeInTheDocument();
   expect(tela.conferir).not.toHaveBeenCalled(); expect(tela.gerar).not.toHaveBeenCalled();
   if (papel === 'leitor') {
@@ -174,18 +202,19 @@ it.each(['git@github.com:acme/app.git', 'ssh://git@github.com/acme/app.git', 'HT
     capacidade={false} desabilitado={false} agora={Date.now()} criacao={tela.criacao}
     previsaoRemota={[{ repositorio: 'github.com/acme/app', produtor: { nome: '', tipo: 'principal' }, motivo: 'Motivo do host', aplicavel: true, formato: 'pacote' }]} />);
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));
-  expect(await screen.findByText('executável principal · Motivo do host')).toBeInTheDocument();
+  expect(await screen.findByText('executável principal · Motivo do host · Debug')).toBeInTheDocument();
   expect(tela.conferir).not.toHaveBeenCalled(); expect(tela.gerar).not.toHaveBeenCalled();
 });
 
 it.each([
-  { repo: 'github.com/outro/app', branch: 'feature/demo', skill: '' },
-  { repo: 'outro.example/acme/app', branch: 'feature/demo', skill: '' },
-  { repo: 'github.com/acme/app', branch: 'feature/outra', skill: '' },
-  { repo: 'github.com/acme/app', branch: 'feature/demo', skill: 'outra-skill' },
-])('normalização não aceita outra origem, branch ou skill: %j', async retrato => {
+  { repo: 'github.com/outro/app', branch: 'feature/demo', skill: '', configuracao: 'Debug' as const },
+  { repo: 'outro.example/acme/app', branch: 'feature/demo', skill: '', configuracao: 'Debug' as const },
+  { repo: 'github.com/acme/app', branch: 'feature/outra', skill: '', configuracao: 'Debug' as const },
+  { repo: 'github.com/acme/app', branch: 'feature/demo', skill: 'outra-skill', configuracao: 'Debug' as const },
+  { repo: 'github.com/acme/app', branch: 'feature/demo', skill: '', configuracao: 'Release' as const },
+])('normalização não aceita outra origem, branch, skill ou configuração: %j', async retrato => {
   const tela = montar({ ...projeto, papel: 'leitor', repositorios: ['https://github.com/acme/app'] }); tela.unmount();
-  render(<PacoteDoBoard nome="Demo" slug="demo" branch={retrato.branch} skillNoRetrato={retrato.skill} repositorios={[retrato.repo]}
+  render(<PacoteDoBoard nome="Demo" slug="demo" branch={retrato.branch} skillNoRetrato={retrato.skill} configuracaoNoRetrato={retrato.configuracao} repositorios={[retrato.repo]}
     estados={[]} capacidade={false} desabilitado={false} agora={Date.now()} criacao={tela.criacao}
     previsaoRemota={[{ repositorio: retrato.repo, produtor: { nome: '', tipo: 'principal' }, motivo: 'PREVISAO_DIVERGENTE', aplicavel: true, formato: 'pacote' }]} />);
   await userEvent.click(screen.getByRole('button', { name: 'Ver pacote do projeto' }));

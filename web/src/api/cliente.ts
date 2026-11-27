@@ -200,6 +200,8 @@ export const api = {
     chamar<import('./projetos').PedidoDoPacote[]>(`/api/projetos/${id}/artefatos/pedidos?limite=10`, { token, signal }),
   editarSkillDoPacote: (token: string, id: number, versaoEsperada: number, skillDoPacote: string, signal?: AbortSignal) =>
     chamar<Projeto>(`/api/projetos/${id}/skill-do-pacote`, { token, signal, metodo: 'PUT', corpo: { versaoEsperada, skillDoPacote } }),
+  editarConfiguracaoDoPacote: (token: string, id: number, versaoEsperada: number, configuracaoDoPacote: 'Debug' | 'Release', signal?: AbortSignal) =>
+    chamar<Projeto>(`/api/projetos/${id}/configuracao-do-pacote`, { token, signal, metodo: 'PUT', corpo: { versaoEsperada, configuracaoDoPacote } }),
   login: (login: string, senha: string) =>
     chamar<LoginResponse>('/api/auth/login', { metodo: 'POST', corpo: { login, senha } }),
 

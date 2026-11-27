@@ -112,6 +112,8 @@ public static partial class RegrasDosProjetos
             return "Informe o branch do projeto (um nome de branch válido).";
         if ((envio.DestinoDaPr?.Trim().Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch)
             return "O destino da PR passa do tamanho de um branch.";
+        if (envio.ConfiguracaoDoPacote is not (null or "Debug" or "Release"))
+            return "A configuração do pacote deve ser Debug ou Release.";
         if ((envio.BaseDoBranch?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoBranch
             || (envio.FluxoPadrao?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome
             || (envio.SkillDoPacote?.Length ?? 0) > ProjetosV1.TamanhoMaximoDoNome

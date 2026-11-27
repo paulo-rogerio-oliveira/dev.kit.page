@@ -7,11 +7,12 @@ import { ArtefatosDoCard, normalizarRepo, rotuloDoProdutor } from './ArtefatosDo
 import type { CriacaoDoBoard } from './CriacaoRemota';
 
 /** Só o painel aberto lê o detalhe, os pedidos e seus links. Chat e Board continuam montados. */
-export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previsaoRemota, skillNoRetrato, capacidade, desabilitado, criacao, agora }: {
+export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previsaoRemota, skillNoRetrato, configuracaoNoRetrato, capacidade, desabilitado, criacao, agora }: {
   nome: string; slug: string; branch: string; repositorios: string[]; estados: EstadoDoArtefato[];
   capacidade: boolean; desabilitado: boolean; criacao: CriacaoDoBoard; agora: number;
   previsaoRemota?: PrevisaoRemotaDoPacote[] | null;
   skillNoRetrato?: string | null;
+  configuracaoNoRetrato?: 'Debug' | 'Release' | null;
 }) {
   const { sessao } = useSessao();
   const [aberto, setAberto] = useState(false);
@@ -73,11 +74,12 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
   const podeEditar = !projeto || projeto.papel === 'editor' || projeto.papel === 'dono';
   const bloqueado = desabilitado || criacao.desabilitado || semAcesso || edicaoConflitante || !podeEditar || !capacidade;
   const motivo = !podeEditar || semAcesso ? 'Gerar pacote e editar a skill exige editor ou dono do projeto.' : criacao.motivo;
-  const assinatura = JSON.stringify([slug, projeto?.versao, projeto?.branch, projeto?.skillDoPacote ?? '', projeto?.repositorios, revisao]);
+  const assinatura = JSON.stringify([slug, projeto?.versao, projeto?.branch, projeto?.skillDoPacote ?? '', projeto?.configuracaoDoPacote ?? 'Debug', projeto?.repositorios, revisao]);
   const previsao = consultaDaPrevisao?.assinatura === assinatura && consultaDaPrevisao.comandoId
     ? criacao.origensDoPacote.find(p => p.projeto === slug && p.comandoId === consultaDaPrevisao.comandoId) : undefined;
   const previsaoRemotaAtual = previsaoRemota != null && !!projeto && projeto.branch === branch
     && (projeto.skillDoPacote ?? '') === (skillNoRetrato ?? '')
+    && (projeto.configuracaoDoPacote ?? 'Debug') === (configuracaoNoRetrato ?? 'Debug')
     && JSON.stringify(projeto.repositorios.map(normalizarRepo).sort()) === JSON.stringify(repositorios.map(normalizarRepo).sort());
   const produtores = previsaoRemotaAtual
     ? previsaoRemota.map(p => ({ ...p, produtor: rotuloDoProdutor(p.produtor) })) : previsao?.resultados;
@@ -100,6 +102,15 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
       throw e;
     }
   }
+  async function salvarConfiguracao(valor: 'Debug' | 'Release') {
+    if (!projeto || !token || bloqueado) throw new Error(motivo);
+    try { setProjeto(await api.editarConfiguracaoDoPacote(token, projeto.id, projeto.versao, valor)); }
+    catch (e) {
+      if (e instanceof ErroDaApi && [401, 403].includes(e.status)) setSemAcesso(true);
+      if (e instanceof ErroDaApi && e.status === 409) setEdicaoConflitante(true);
+      throw e;
+    }
+  }
   async function gerar(projeto: string, opcoes = {}) { setAberto(true); return criacao.gerarArtefato(projeto, opcoes); }
   return <div className="pacote-do-board">
     <button className="br-ver" aria-expanded={aberto} onClick={() => setAberto(a => !a)}>{aberto ? 'Recolher pacote' : 'Ver pacote do projeto'}</button>
@@ -107,7 +118,8 @@ export function PacoteDoBoard({ nome, slug, branch, repositorios, estados, previ
       artefatos={artefatos} pedidos={pedidos} produtores={produtores} gerar={gerar} desabilitado={bloqueado}
       capacidade={capacidade} motivo={motivo} agora={agora} erro={erro} erroDoPedido={criacao.falha}
       atualizar={() => setRevisao(r => r + 1)} atualizando={atualizando} linksAutorizados={!semAcesso}
-      skillDoPacote={projeto?.skillDoPacote ?? ''} skillsDoPacote={projeto?.skillsDoPacote ?? []} salvarSkill={projeto ? salvarSkill : undefined} />
+      skillDoPacote={projeto?.skillDoPacote ?? ''} skillsDoPacote={projeto?.skillsDoPacote ?? []} salvarSkill={projeto ? salvarSkill : undefined}
+      configuracaoDoPacote={projeto?.configuracaoDoPacote ?? 'Debug'} salvarConfiguracao={projeto ? salvarConfiguracao : undefined} />
       : <button className="br-btn br-gerar" disabled={bloqueado || estados.some(e => ['enfileirando', 'enfileirado', 'gerando', 'agente-pendente'].includes(e.estado))}
         title={motivo} onClick={() => void gerar(slug)}>Gerar pacote</button>}
   </div>;
