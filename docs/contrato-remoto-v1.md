@@ -88,6 +88,10 @@ Uma FOTO inteira do estado, enviada quando ele muda. Substitui a anterior; a mai
 
 - Situação do projeto e do item: as de `ProjetosV1` (`rascunho`, `aguardando`, `aprovado`, `pausado`, `fechando`,
   `concluido`; `planejado`, `rodando`, `pergunta`, `integrado`, `falhou`).
+- (campo novo, boards-estados) `disparadoEm`, opcional no projeto: a marca de disparo, a mesma de `ProjetoV1.disparadoEm`,
+  produzida pelo host. Com ela, o card do Board mostra o aprovado como em execução. Ausente ou nula (o dev.kit anterior, ou o
+  aprovado ainda não disparado), o Board deriva como antes: um item fora de `planejado` ou uma execução do projeto no retrato.
+  Data fora do formato ISO é 400, como qualquer forma fora do contrato.
 - Pendência: `tipo` é `pergunta`, `aprovacao` ou `falha`. `pergunta`, `opcoes` e `jaTentei` são os campos do
   `[GITKIT:PERGUNTA]` — as decisões remotas (fase 3 da proposta, item 9 do plano) os mostram como botões. O `id` é estável: é por ele que a resposta volta.
 - Tetos: 256 KB de corpo; 50 projetos de até 100 itens, 100 fluxos, 100 pendências de até 10 opções; nomes e títulos

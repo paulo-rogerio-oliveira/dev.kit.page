@@ -28,9 +28,15 @@ public sealed record RetratoV1(
     IReadOnlyList<FluxoNoRetratoV1>? Fluxos, IReadOnlyList<PendenciaNoRetratoV1>? Pendencias);
 
 /// <summary>Um projeto do Orquestrador no retrato: a situação (<see cref="ProjetosV1.Situacoes"/>), a onda corrente e os itens.</summary>
+/// <param name="DisparadoEm">
+/// (campo novo, boards-estados r3) A marca de disparo do projeto, a mesma de <see cref="ProjetoV1.DisparadoEm"/>, que o host
+/// produz: com ela, o card do Board separa o aprovado em execução do que aguarda o disparo. Ausente ou nula (o dev.kit
+/// anterior, ou o aprovado ainda não disparado), o Board deriva pelos itens e pelas execuções, como antes.
+/// </param>
 public sealed record ProjetoNoRetratoV1(string Slug, string Nome, string Situacao, int OndaAtual, IReadOnlyList<ItemNoRetratoV1>? Itens,
     IReadOnlyList<string>? Repositorios = null, string? Branch = null, IReadOnlyList<ArtefatoNoRetratoV1>? Artefatos = null,
-    bool? PodeGerarArtefato = null, string? SkillDoPacote = null, IReadOnlyList<PrevisaoDoPacoteV1>? PrevisaoDoPacote = null);
+    bool? PodeGerarArtefato = null, string? SkillDoPacote = null, IReadOnlyList<PrevisaoDoPacoteV1>? PrevisaoDoPacote = null,
+    DateTimeOffset? DisparadoEm = null);
 
 /// <summary>Progresso do executor. Sem caminho local ou link; download é consultado pela API com a ACL do projeto.</summary>
 public sealed record ArtefatoNoRetratoV1(long Id, string Tipo, string Repositorio, string Sha, string Estado,

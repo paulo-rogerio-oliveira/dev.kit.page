@@ -79,6 +79,9 @@ describe('Landing', () => {
     expect(cartoes.find((c) => c.textContent!.includes('Conversa remota'))).toHaveTextContent('Com a fila liberada');
     const condicoes = within(secao).getByRole('list', { name: 'O que é preciso' });
     expect(condicoes).toHaveTextContent('criada quando o administrador do dev.kit libera a provisão para a sua conta');
+    // (boards-estados r3) A página diz que aprovar e disparar viram pedido à máquina, e não mais que continuam só nela.
+    expect(condicoes).toHaveTextContent('Aprovar o plano e disparar um projeto viram pedido à máquina, pela fila do controle remoto');
+    expect(condicoes).not.toHaveTextContent('continuam no dev.kit da máquina');
     expect(within(secao).getByRole('link', { name: 'Entrar no Board web' })).toHaveAttribute('href', '/board');
     expect(within(secao).getByRole('link', { name: 'Ver os planos' })).toHaveAttribute('href', '#planos');
   });

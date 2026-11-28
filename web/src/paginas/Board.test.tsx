@@ -310,6 +310,34 @@ describe('Board remoto', () => {
     expect(board.queryByRole('button', { name: /Aprovar|Disparar/ })).not.toBeInTheDocument();
   });
 
+  it('(boards-estados r3) a marca de disparo do retrato põe o aprovado em execução; sem ela, a derivação de antes', async () => {
+    responder();
+    const item = (numero: number, situacao: string, onda = 1) => ({ numero, titulo: `Item ${numero}`, onda, situacao });
+    const disparadoEm = '2026-11-27T19:40:00Z';
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => {
+      const r = retrato();
+      return HttpResponse.json({ ...r, retrato: { ...r.retrato, fluxos: [], projetos: [
+        // A marca, sem item iniciado e sem execução no retrato: só ela diz que o projeto foi disparado.
+        { slug: 'com-marca', nome: 'Disparado pela marca', ondaAtual: 1, situacao: 'aprovado', disparadoEm, itens: [item(1, 'planejado'), item(2, 'planejado', 2)] },
+        // O host novo manda a marca nula no aprovado que espera o disparo; o anterior nem manda o campo.
+        { slug: 'marca-nula', nome: 'Marca nula', ondaAtual: 1, situacao: 'aprovado', disparadoEm: null, itens: [item(1, 'planejado')] },
+        { slug: 'sem-campo', nome: 'Sem o campo', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'planejado')] },
+        // Sem a marca, o item que saiu do planejado continua valendo (o dev.kit anterior).
+        { slug: 'sem-marca-andando', nome: 'Sem marca andando', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'rodando'), item(2, 'planejado', 2)] },
+        // A marca não muda as outras situações.
+        { slug: 'pausado', nome: 'Pausado com marca', ondaAtual: 2, situacao: 'pausado', disparadoEm, itens: [item(1, 'integrado'), item(2, 'planejado', 2)] },
+      ] } });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    expect(await board.findByRole('link', { name: 'Abrir Disparado pela marca' })).toHaveTextContent('em execução · onda 1 de 2 · 0 rodando');
+    expect(board.getByRole('link', { name: 'Abrir Marca nula' })).toHaveTextContent('aprovado · aguardando disparo');
+    expect(board.getByRole('link', { name: 'Abrir Sem o campo' })).toHaveTextContent('aprovado · aguardando disparo');
+    expect(board.getByRole('link', { name: 'Abrir Sem marca andando' })).toHaveTextContent('em execução · onda 1 de 2 · 1 rodando');
+    expect(board.getByRole('link', { name: 'Abrir Pausado com marca' })).toHaveTextContent('pausado · onda 2 de 2');
+    expect(board.getByRole('link', { name: 'Abrir Pausado com marca' })).not.toHaveTextContent('em execução');
+  });
+
   it('a decisão já dispensada vem marcada da API e fica fora da contagem', async () => {
     responder();
     servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ request }) => {

@@ -27,6 +27,11 @@ export interface RetratoDaMaquina {
       repositorios?: string[] | null; branch?: string | null; artefatos?: EstadoDoArtefato[] | null; podeGerarArtefato?: boolean | null;
       previsaoDoPacote?: import('./projetos').PrevisaoRemotaDoPacote[] | null;
       skillDoPacote?: string | null;
+      /**
+       * (boards-estados r3, campo novo) A marca de disparo do projeto, produzida pelo host. Ausente ou nula (o dev.kit
+       * anterior, ou o aprovado ainda não disparado), o card deriva pelos itens e pelas execuções.
+       */
+      disparadoEm?: string | null;
     }> | null;
     fluxos: Array<{
       id: string; nome: string; etapa: string; situacao: string;

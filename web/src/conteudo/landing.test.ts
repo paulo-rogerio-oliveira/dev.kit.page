@@ -99,7 +99,9 @@ describe('conteúdo da landing', () => {
     expect(condicoes).toContain('mesma conta do dev.kit');
     expect(condicoes).toContain('criada quando o administrador do dev.kit libera a provisão para a sua conta');
     expect(condicoes).toContain('Os avisos dependem do navegador');
-    expect(condicoes).toContain('Aprovar o plano e disparar um projeto continuam no dev.kit da máquina.');
+    // (boards-estados r3) Aprovar e disparar viram pedido pela fila, com os portões repetidos; a frase antiga não volta.
+    expect(condicoes).toContain('Aprovar o plano e disparar um projeto viram pedido à máquina, pela fila do controle remoto: o dev.kit repete os portões antes de executar.');
+    expect(condicoes).not.toContain('continuam no dev.kit da máquina');
     // A aprovação remota só com o snapshot: o retrato sem ele deixa a aprovação no dev.kit.
     expect(BOARD_WEB.recursos[1].texto).toContain('Sem o snapshot, a aprovação fica no dev.kit.');
     expect(BOARD_WEB.ctas).toEqual({

@@ -277,7 +277,7 @@ export const PLATAFORMA = {
 /**
  * O Board web (dev.kit.page com login): os recursos remotos que existem hoje, cada um com a rota do site e o que ele
  * exige — dito na etiqueta, sem prometer o que depende de liberação ou do navegador. Aprovar o plano e disparar um
- * projeto continuam no dev.kit da máquina.
+ * projeto viram pedido à máquina, pela fila do controle remoto, e o dev.kit repete os portões antes de executar.
  */
 export const BOARD_WEB = {
   rotulo: 'Board web',
@@ -339,7 +339,7 @@ export const BOARD_WEB = {
       'Entrar no dev.kit.page com a mesma conta do dev.kit, logado na máquina que você quer acompanhar.',
       'A conversa e os comandos remotos passam pela fila do controle remoto, criada quando o administrador do dev.kit libera a provisão para a sua conta.',
       'Os avisos dependem do navegador e do sistema (no iPhone, o site adicionado à Tela de Início); sem eles, o Board continua mostrando o estado atual.',
-      'Aprovar o plano e disparar um projeto continuam no dev.kit da máquina.',
+      'Aprovar o plano e disparar um projeto viram pedido à máquina, pela fila do controle remoto: o dev.kit repete os portões antes de executar.',
     ],
   },
   /** As chamadas da seção: o Board pede login (o Entrar diz isso), e a conta vem de um dos planos. */

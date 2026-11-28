@@ -22,6 +22,7 @@ import { DesfechoDaCriacao, NovoDesignNoBoard, NovoProjetoNoBoard, useCriacaoRem
 import { PacoteDoBoard } from '../componentes/PacoteDoBoard';
 import { VinculoDoServico } from '../componentes/VinculoDoServico';
 import { ImpactosDaTask } from '../componentes/matrix/Impactos';
+import { foiDisparado } from '../componentes/projetos/situacaoDoProjeto';
 import './Board.css';
 import '../componentes/ChatRemoto.css';
 
@@ -60,18 +61,19 @@ function PendenciaSemDados({ pendencia: p, dispensada, dispensar }: { pendencia:
 function projetoTerminando(situacao: string) { return situacao === 'concluido' || situacao === 'fechando'; }
 
 /**
- * (boards-estados, item 5) A situação no card do projeto. O aprovado se divide em aguardando disparo e em execução: o
- * retrato não traz a marca de disparo, então vale a mesma regra do site para o dev.kit sem ela — um item que saiu do
- * planejado ou uma execução do projeto no retrato.
+ * (boards-estados, item 5) A situação no card do projeto. O aprovado se divide em aguardando disparo e em execução pela
+ * marca de disparo do retrato (`disparadoEm`, r3), com a regra da página do projeto (`foiDisparado`). Sem a marca (o
+ * dev.kit anterior), vale como antes um item que saiu do planejado ou uma execução do projeto no retrato.
  */
-function situacaoNoCard(p: { situacao: string; ondaAtual: number }, itens: { situacao: string }[], ondas: number, emExecucao: boolean) {
+function situacaoNoCard(p: { situacao: string; ondaAtual: number; disparadoEm?: string | null }, itens: { situacao: string }[], ondas: number, emExecucao: boolean) {
   const rodando = itens.filter(i => i.situacao === 'rodando').length;
   if (p.situacao === 'concluido') return 'incorporado ao projeto';
   if (p.situacao === 'fechando') return 'em fechamento · todos os itens integrados';
   if (p.situacao === 'rascunho') return 'rascunho';
   if (p.situacao === 'aguardando') return 'aguardando aprovação';
   if (p.situacao === 'pausado') return `pausado · onda ${p.ondaAtual} de ${ondas}`;
-  if (p.situacao === 'aprovado' && !emExecucao && itens.every(i => i.situacao === 'planejado')) return 'aprovado · aguardando disparo';
+  if (p.situacao === 'aprovado' && !emExecucao && !foiDisparado(p.disparadoEm, itens.some(i => i.situacao !== 'planejado')))
+    return 'aprovado · aguardando disparo';
   return `${p.situacao === 'aprovado' ? 'em execução · ' : ''}onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`;
 }
 

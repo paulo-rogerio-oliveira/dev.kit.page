@@ -55,7 +55,10 @@ const retrato = () => ({ maquina: { ...maquina, ultimoHeartbeatEm: agora() }, re
   geradoEm: agora(), pendencias: [], fluxos: [{ id: 'exec-fixes-7', nome: 'Item 7 · fixes', etapa: 'Implementação', situacao: 'rodando', projeto: 'fixes', item: 7, agente: 'codex' }],
   projetos: [
     { slug: 'boards-estados', nome: 'Projetos em qualquer nível do Boards', situacao: 'aprovado', ondaAtual: 1, podeGerarArtefato: true,
-      itens: plano.map(i => itemNoRetrato(i.numero, 'planejado', i.onda)) },
+      disparadoEm: null, itens: plano.map(i => itemNoRetrato(i.numero, 'planejado', i.onda)) },
+    // (r3) A marca de disparo no retrato, sem item iniciado nem execução: o card mostra o projeto em execução.
+    { slug: 'controle-v5', nome: 'controle-v5', situacao: 'aprovado', ondaAtual: 1, podeGerarArtefato: true, disparadoEm: disparo,
+      itens: [itemNoRetrato(1, 'planejado', 1), itemNoRetrato(2, 'planejado', 2)] },
     { slug: 'fixes', nome: 'fixes', situacao: 'aprovado', ondaAtual: 3, podeGerarArtefato: true,
       itens: [itemNoRetrato(1, 'integrado', 1), itemNoRetrato(2, 'integrado', 2), itemNoRetrato(7, 'rodando', 3), itemNoRetrato(8, 'planejado', 4)] },
     { slug: 'runners', nome: 'runners', situacao: 'aguardando', ondaAtual: 0, podeGerarArtefato: true, itens: [itemNoRetrato(1, 'planejado', 1)] },

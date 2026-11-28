@@ -78,6 +78,41 @@ public sealed class RemotoApiTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsJsonAsync("/api/remoto/retrato", origem with { Projetos = [local] })).StatusCode);
     }
 
+    /// <summary>
+    /// (boards-estados r3) A marca de disparo no retrato: volta sem perda para o card do Board; o dev.kit anterior, que não manda
+    /// o campo, continua valendo com a marca nula (o Board deriva como antes); e a data fora do contrato é 400, sem perder a foto.
+    /// </summary>
+    [Fact]
+    public async Task Retrato_leva_a_marca_de_disparo_sem_perda_e_o_dev_kit_anterior_sem_ela_continua_valendo()
+    {
+        var (ana, _) = await DevAsync("retrato-disparo");
+        await ana.PostAsJsonAsync("/api/remoto/heartbeat", Heartbeat());
+        var origem = Retrato();
+        var disparo = new DateTimeOffset(2026, 11, 27, 19, 40, 0, TimeSpan.FromHours(-3));
+        var disparado = origem with { Projetos = [origem.Projetos![0] with { DisparadoEm = disparo }] };
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsJsonAsync("/api/remoto/retrato", disparado)).StatusCode);
+        var lido = (await ana.GetFromJsonAsync<RetratoDaMaquinaV1>("/api/remoto/maquinas/3f2b9c0e5d7a/retrato"))!;
+        Assert.Equal(disparo, Assert.Single(lido.Retrato.Projetos!).DisparadoEm);
+
+        // O dev.kit anterior não conhece o campo: o retrato sem ele vale, e a marca volta nula.
+        var opcoes = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var antigo = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(origem with { GeradoEm = Gerado.AddMinutes(1) }, opcoes))!;
+        antigo["projetos"]![0]!.AsObject().Remove("disparadoEm");
+        Assert.DoesNotContain("disparadoEm", antigo.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, (await ana.PutAsync("/api/remoto/retrato", Json(antigo.ToJsonString()))).StatusCode);
+        var semMarca = (await ana.GetFromJsonAsync<RetratoDaMaquinaV1>("/api/remoto/maquinas/3f2b9c0e5d7a/retrato"))!;
+        Assert.Equal(Gerado.AddMinutes(1), semMarca.Retrato.GeradoEm);
+        Assert.Null(Assert.Single(semMarca.Retrato.Projetos!).DisparadoEm);
+
+        // A data fora do formato do contrato é 400, e a última foto aceita fica.
+        var invalido = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(origem with { GeradoEm = Gerado.AddMinutes(2) }, opcoes))!;
+        invalido["projetos"]![0]!["disparadoEm"] = "ontem à tarde";
+        Assert.Equal(HttpStatusCode.BadRequest, (await ana.PutAsync("/api/remoto/retrato", Json(invalido.ToJsonString()))).StatusCode);
+        var preservado = (await ana.GetFromJsonAsync<RetratoDaMaquinaV1>("/api/remoto/maquinas/3f2b9c0e5d7a/retrato"))!;
+        Assert.Equal(Gerado.AddMinutes(1), preservado.Retrato.GeradoEm);
+        Assert.Null(Assert.Single(preservado.Retrato.Projetos!).DisparadoEm);
+    }
+
     [Fact]
     public async Task Estados_do_artefato_chegam_ao_polling_do_board_depois_do_aceite_sem_expor_arquivo_local()
     {
