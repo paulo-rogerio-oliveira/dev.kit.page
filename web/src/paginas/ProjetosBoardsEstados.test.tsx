@@ -212,3 +212,44 @@ it('a lista e o filtro usam a situação derivada do resumo, preservando o filtr
   expect(screen.getByRole('combobox', { name: 'Situação do projeto' })).toHaveValue('aprovado');
   expect(within(screen.getByRole('combobox', { name: 'Situação do projeto' })).getByRole('option', { name: 'Aprovado' })).toBeInTheDocument();
 });
+
+it('card compacto da proposta: situação, Editar, título e work item; fluxo, modelo e repositórios em Detalhes, recolhido', async () => {
+  servir(aprovado);
+  renderizar('/projetos?slug=boards-estados&visao=ondas', tokenDoDev());
+  const d = await detalhe();
+  const onda1 = await d.findByRole('region', { name: 'Onda 1' });
+  // Antes do disparo nenhuma onda está em andamento: a onda 1 não é destacada como a atual.
+  expect(onda1).not.toHaveAttribute('aria-current');
+  const card = within(onda1).getByRole('heading', { name: '1 · Espelho configurável' }).closest('.projeto-item') as HTMLElement;
+  expect(within(card).getByText('Planejado')).toHaveClass('projeto-situacao', 'planejado');
+  expect(within(card).getByRole('button', { name: 'Editar item 1' })).toBeEnabled();
+  expect(card).toHaveTextContent('User Story #813 · New');
+  const detalhes = within(card).getByText('Detalhes').closest('details')!;
+  expect(detalhes.open).toBe(false);
+  expect(within(detalhes).getByText('14 · item')).toBeInTheDocument();
+  expect(within(detalhes).getByText('codex · gpt-6.1-sol')).toBeInTheDocument();
+  expect(within(detalhes).getByText('acme/dev.kit.page')).toBeInTheDocument();
+  // O seletor mostra o slug, como a proposta; o nome fica no título da página.
+  expect(screen.getByRole('combobox', { name: 'Projeto ativo' })).toHaveDisplayValue('boards-estados');
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Projetos em qualquer nível do Boards');
+});
+
+it('disparado: a onda atual volta a ser destacada; pausado também, e o aguardando aprovação não', async () => {
+  servir({ ...aprovado, disparadoEm: '2026-11-27T19:40:00Z' });
+  const { unmount } = renderizar('/projetos?slug=boards-estados&visao=ondas', tokenDoDev());
+  let d = await detalhe();
+  expect(await d.findByRole('region', { name: 'Onda 1' })).toHaveAttribute('aria-current', 'step');
+  expect(d.getByRole('region', { name: 'Onda 2' })).not.toHaveAttribute('aria-current');
+  unmount();
+  servir({ ...aprovado, situacao: 'pausado', disparadoEm: '2026-11-27T19:40:00Z' });
+  renderizar('/projetos?slug=boards-estados&visao=ondas', tokenDoDev());
+  d = await detalhe();
+  expect(await d.findByRole('region', { name: 'Onda 1' })).toHaveAttribute('aria-current', 'step');
+});
+
+it('aguardando aprovação não destaca onda atual', async () => {
+  servir(aguardando);
+  renderizar('/projetos?slug=boards-estados&visao=ondas', tokenDoDev());
+  const d = await detalhe();
+  expect(await d.findByRole('region', { name: 'Onda 1' })).not.toHaveAttribute('aria-current');
+});

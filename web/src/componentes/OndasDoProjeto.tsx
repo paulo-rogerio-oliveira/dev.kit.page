@@ -22,8 +22,13 @@ export function fluxoDoItem(projeto: Projeto, item: ItemDoProjeto) {
   return `${nome || 'Fluxo pendente'} · ${item.fluxo ? 'item' : projeto.fluxoPadrao ? 'projeto' : 'escolha pendente'}`;
 }
 
+/**
+ * As ondas do plano. (boards-estados, item 5) A onda atual só é destacada com o projeto em andamento (nula antes do disparo),
+ * e o card do item é o compacto da proposta: situação, Editar, título e work item; o fluxo, o modelo, os repositórios e o
+ * branch ficam em Detalhes.
+ */
 export function OndasDoProjeto({ projeto, itens, ondaAtual, salvo, tratar }: {
-  projeto: Projeto; itens: ItemDoProjeto[]; ondaAtual: number; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
+  projeto: Projeto; itens: ItemDoProjeto[]; ondaAtual: number | null; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
 }) {
   const [filtro, setFiltro] = useState('');
   const [busca, setBusca] = useState('');
@@ -49,10 +54,13 @@ export function OndasDoProjeto({ projeto, itens, ondaAtual, salvo, tratar }: {
         <h4>{i.numero} · {i.titulo}</h4>
         <p>{i.dependencias.length ? <span>Depende de: {i.dependencias.join(', ')}</span> : i.workItemId <= 0 && 'Sem dependências'}
           {i.dependencias.length > 0 && i.workItemId > 0 && ' · '}<WorkItemDoItem projeto={projeto} item={i} /></p>
-        <p title={i.fluxo || projeto.fluxoPadrao || ''}>{fluxoDoItem(projeto, i)}</p>
-        <span className="projeto-situacao">{i.agente && i.modelo ? `${i.agente} · ${i.modelo}` : 'Sem modelo selecionado'}</span>
-        <p>{(i.repositorios.length ? i.repositorios : projeto.repositorios).map(curto).join(' · ')}</p>
-        {i.branch && <code>{i.branch}</code>}
+        <details className="projeto-item-detalhes">
+          <summary>Detalhes<span className="somente-leitor"> do item {i.numero}</span></summary>
+          <p title={i.fluxo || projeto.fluxoPadrao || ''}>{fluxoDoItem(projeto, i)}</p>
+          <span className="projeto-situacao">{i.agente && i.modelo ? `${i.agente} · ${i.modelo}` : 'Sem modelo selecionado'}</span>
+          <p>{(i.repositorios.length ? i.repositorios : projeto.repositorios).map(curto).join(' · ')}</p>
+          {i.branch && <code>{i.branch}</code>}
+        </details>
       </div>)}
     </section>)}</div>
     {editor && <EditorDoItem projeto={projeto} item={editor === 'novo' ? null : editor} fechar={() => setEditor(null)} tratar={tratar}

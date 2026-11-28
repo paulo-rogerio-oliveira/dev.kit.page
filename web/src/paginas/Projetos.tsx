@@ -112,8 +112,9 @@ export function Projetos() {
       <div className="projetos-filtros">
         <select aria-label="Projeto ativo" value={escolhido?.id ?? ''} onChange={e => filtrar('projeto', e.target.value)}>
           {!escolhido && <option value="">Escolher projeto</option>}
-          {escolhido && !visiveis.some(r => r.id === escolhido.id) && <option value={escolhido.id}>{escolhido.nome} · fora do filtro atual</option>}
-          {visiveis.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+          {/* (boards-estados, item 5) O seletor mostra o slug, como a proposta; o nome fica no título e na lista. */}
+          {escolhido && !visiveis.some(r => r.id === escolhido.id) && <option value={escolhido.id}>{escolhido.slug} · fora do filtro atual</option>}
+          {visiveis.map(r => <option key={r.id} value={r.id}>{r.slug}</option>)}
         </select>
         <select aria-label="Nível de compartilhamento" value={nivel} onChange={e => filtrar('nivel', e.target.value)}>
           <option value="">Todos os projetos</option><option value="usuario">Meus projetos</option>
@@ -176,6 +177,8 @@ function Detalhe({ projeto: p, resumo, lista, salvo, tratar, topoDasAcoes }: {
   const itens = p.itensDoGrafo == null ? p.itens : p.itens.filter(i => p.itensDoGrafo!.includes(i.numero));
   const ondas = [...new Set(itens.map(i => i.onda))];
   const atual = Math.min(...itens.filter(i => i.situacao !== 'integrado').map(i => i.onda));
+  // (boards-estados, item 5) Antes do disparo nenhuma onda está em andamento: o destaque da onda atual espera o disparo.
+  const emAndamento = p.situacao === 'pausado' || (p.situacao === 'aprovado' && disparadoNoDetalhe(p));
   const comEspelho = !!espelhoNoResumo(p);
   return <article className="projeto-detalhe" aria-label="Detalhe do projeto">
     <h2 className="somente-leitor" tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2>
@@ -196,7 +199,7 @@ function Detalhe({ projeto: p, resumo, lista, salvo, tratar, topoDasAcoes }: {
     </div>
     {p.pendenciaDoGrafo && <p role="alert" className="erro">{p.pendenciaDoGrafo}</p>}
     <Suspense fallback={<p role="status">Carregando aba…</p>}>
-      {visao === 'ondas' ? <OndasDoProjeto key={p.id} projeto={p} itens={itens} ondaAtual={atual} salvo={salvo} tratar={tratar} />
+      {visao === 'ondas' ? <OndasDoProjeto key={p.id} projeto={p} itens={itens} ondaAtual={emAndamento && Number.isFinite(atual) ? atual : null} salvo={salvo} tratar={tratar} />
         : visao === 'propostas' ? <Propostas key={`propostas-${p.id}`} token={sessao!.token} itens={p.itens} tratar={e => setErro(tratar(e))} />
           : ['impactos', 'entregas', 'historico'].includes(visao) ? <Impactos key={`impactos-${p.id}`} projeto={p} visao={visao === 'impactos' ? 'matriz' : visao} aoRevisar={setEmRevisao} />
             : <div className="projetos-board">{lista}<div className="projeto-plano">
