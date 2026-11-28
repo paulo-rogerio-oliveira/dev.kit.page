@@ -11,7 +11,9 @@ const tipos = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/cs
 const falhasDoDetalhe = new Set();
 async function demonstracao(res, url) {
   const estado = url.searchParams.get('estado') ?? 'plano';
-  const principal = estado === 'sem-itens' ? 'fixes-sem-itens' : 'fixes';
+  // (boards-estados, item 5) O disparado tem projeto próprio: a API preserva a marca quando o envio seguinte não a traz, e o
+  // fixes continua aguardando o disparo nos outros estados.
+  const principal = estado === 'sem-itens' ? 'fixes-sem-itens' : estado === 'disparado' ? 'fixes-disparado' : 'fixes';
   let login = await fetch(`${api}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: 'admin', senha: 'senhaNovaE2e2026' }) });
   if (!login.ok) {
     const inicial = await fetch(`${api}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login: 'admin', senha: 'senhaInicialE2e2026' }) });
@@ -23,9 +25,10 @@ async function demonstracao(res, url) {
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${sessao.token}` };
   const existentes = await (await fetch(`${api}/api/projetos`, { headers })).json();
   const modelo = JSON.parse(await readFile(resolve(aqui, 'projetos-demo.json'), 'utf8'));
-  for (const [slug, nome] of [[principal, estado === 'sem-itens' ? 'fixes · plano vazio' : 'fixes'], ['runners', 'runners'], ['ajustes-2', 'ajustes_2']]) {
+  for (const [slug, nome] of [[principal, estado === 'sem-itens' ? 'fixes · plano vazio' : estado === 'disparado' ? 'fixes · disparado' : 'fixes'], ['runners', 'runners'], ['ajustes-2', 'ajustes_2']]) {
     const p = { ...modelo, slug, nome, versao: existentes.find(p => p.slug === slug)?.versao ?? null };
     if (estado === 'sem-itens' && slug === principal) p.itens = [];
+    if (estado === 'disparado' && slug === principal) p.disparadoEm = '2026-11-27T19:40:00Z';
     if (estado.startsWith('detalhe-') && slug === 'runners') p.itens = p.itens.map(i => ({ ...i, titulo: 'runners: ' + i.titulo }));
     if (url.searchParams.get('estado') === 'modelos') { p.agente = ''; p.modelo = ''; p.modelos = []; p.itens = p.itens.map(i => ({ ...i, agente: '', modelo: '' })); }
     const escrita = await fetch(`${api}/api/projetos`, { method: 'PUT', headers, body: JSON.stringify(p) });

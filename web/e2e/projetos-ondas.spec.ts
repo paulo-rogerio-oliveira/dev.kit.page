@@ -17,10 +17,12 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     await expect(page.getByText(/Projeto sem matriz definida/)).toBeVisible();
     await page.getByRole('button', { name: 'Ondas', exact: true }).click();
     await expect(page.getByRole('heading', { name: '4 · Desktop: Ondas e modal' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Onda 1', exact: true })).toHaveAttribute('aria-current', 'step');
+    // (boards-estados, item 5) Aprovado e ainda não disparado: nenhuma onda está em andamento, então nenhuma é a atual (o
+    // destaque volta com o disparo, conferido no fim deste laço).
+    await expect(page.getByRole('region', { name: 'Onda 1', exact: true })).not.toHaveAttribute('aria-current');
     await expect(page.getByRole('region', { name: 'Onda 2', exact: true })).not.toHaveAttribute('aria-current');
     expect(await page.getByRole('region', { name: 'Onda 1', exact: true }).evaluate(e => getComputedStyle(e).borderColor))
-      .not.toBe(await page.getByRole('region', { name: 'Onda 2', exact: true }).evaluate(e => getComputedStyle(e).borderColor));
+      .toBe(await page.getByRole('region', { name: 'Onda 2', exact: true }).evaluate(e => getComputedStyle(e).borderColor));
     const card = page.getByRole('button', { name: 'Editar item 4', exact: true });
     await card.click();
     let modal = page.getByRole('dialog', { name: 'Editar item 4' });
@@ -97,6 +99,14 @@ test('Ondas: navegação, foco, edição persistida e conflito real em 1440 e 39
     await expect(page.getByRole('button', { name: 'Ondas', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.goForward();
     await expect(page.getByRole('button', { name: 'Plano', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // Disparado (a marca gravada e devolvida pela API real): em execução, e a onda atual volta a ser destacada, com a borda própria.
+    await page.goto('/__demo?estado=disparado');
+    const atual = page.getByRole('region', { name: 'Onda 1', exact: true });
+    await expect(atual).toHaveAttribute('aria-current', 'step');
+    await expect(page.getByText('Em execução', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Onda 2', exact: true })).not.toHaveAttribute('aria-current');
+    expect(await atual.evaluate(e => getComputedStyle(e).borderColor))
+      .not.toBe(await page.getByRole('region', { name: 'Onda 2', exact: true }).evaluate(e => getComputedStyle(e).borderColor));
     page.off('request', observar);
   }
 });
