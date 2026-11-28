@@ -99,6 +99,11 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
             Iteracao = !string.IsNullOrEmpty(envio.Iteracao) ? envio.Iteracao : anteriorProjeto?.Iteracao ?? "",
             Board = !string.IsNullOrEmpty(envio.Board) ? envio.Board : anteriorProjeto?.Board ?? "",
             BranchesDasTasks = envio.BranchesDasTasks ?? anteriorProjeto?.BranchesDasTasks,
+            // (boards-estados, item 5) O espelho e a marca de disparo vêm do host; ausentes, ficam os gravados. O nível
+            // vazio é explícito (feature), e os estados enviados substituem os anteriores inteiros (vazio = padrão).
+            NivelNoBoard = envio.NivelNoBoard is { } nivelNoBoard ? nivelNoBoard.Trim().ToLowerInvariant() : anteriorProjeto?.NivelNoBoard,
+            EstadosNoBoard = envio.EstadosNoBoard ?? anteriorProjeto?.EstadosNoBoard,
+            DisparadoEm = envio.DisparadoEm ?? anteriorProjeto?.DisparadoEm,
         };
         // O número muda no replanejamento. A proposta acompanha a identidade do item,
         // como no desktop/CLI; o número fica como reserva para renomeações de clientes antigos.
@@ -157,6 +162,7 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         projeto.Paralelismo = envio.Paralelismo;
         projeto.DestinoDaPr = envio.DestinoDaPr?.Trim() ?? string.Empty;
         projeto.Situacao = envio.Situacao ?? ProjetosV1.Rascunho;
+        projeto.DisparadoEmUtc = envio.DisparadoEm?.UtcDateTime;
         projeto.Versao++;
         projeto.AtualizadoPorId = escopo.UsuarioId;
         projeto.AtualizadoEmUtc = agora;
@@ -238,7 +244,8 @@ public sealed class ProjetosDaEmpresa(DevKitPageDb db, TimeProvider relogio) : I
         documento?.FeatureId ?? 0, documento?.EpicId ?? 0, documento?.Iteracao ?? "", documento?.Board ?? "",
         documento?.BranchesDasTasks, documento?.AtualizadoEm, RegrasDeAcesso.Papel(escopo, p),
         documento?.BaseDoBranch ?? "", documento?.FluxoPadrao, documento?.Agente, documento?.Modelo, documento?.Modelos,
-        documento?.PoliticaDeFinalizacao, documento?.SkillDoPacote, documento?.SkillsDoPacote) with
+        documento?.PoliticaDeFinalizacao, documento?.SkillDoPacote, documento?.SkillsDoPacote,
+        documento?.NivelNoBoard, documento?.EstadosNoBoard, p.DisparadoEmUtc is { } disparado ? DevKitPageDb.Utc(disparado) : null) with
         {
             Itens = documento?.Itens ?? p.Itens.OrderBy(i => i.Numero).Select(i => new ItemDoProjetoV1(
                 i.Numero, i.Titulo, i.Descricao, i.Fluxo, RegrasDosProjetos.Lista(i.Repositorios),

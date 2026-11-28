@@ -345,7 +345,15 @@ caminho do `devcli` e responde `concluido` (com o slug ou o projeto de design) o
 - Tetos: nome e repositório até 200 caracteres; até 20 repositórios; definição até 3000; `nivel` é `usuario`, `time` ou
   `empresa` (vazio é o padrão do `devcli`). Contam no `Remoto:ComandosPorHora`, como a mensagem.
 - Depois de criar, o dev.kit republica o catálogo com o `comandoId` da criação: o site relê a lista sem outro handshake.
-- **O site não aprova nem dispara projeto**: não há comando para isso.
+- **Aprovar, disparar e retomar pelo site (boards-estados, item 5):** o `texto` do `projeto` com
+  `{ "acao": "aprovar" | "disparar" | "retomar", "projeto": slug, "item"? }` (`DisparoDeProjetoRemoto`) é o pedido
+  tipado à máquina, sem comando de shell nem opção de pular portões. `aprovar` não leva item e só vale no projeto que
+  aguarda aprovação (o dev.kit grava a aprovação e, com espelho, cria os work items no estado inicial, sem disparar);
+  `disparar` só no aprovado (a onda que espera; `item` opcional) e `retomar` só no pausado, sem item. A API confere,
+  ANTES da fila, o papel de editor ou dono, a situação exigida e a matriz do projeto (`ProntidaoDoDisparoRemoto`): a
+  recusa é **409** `matrix-pendente`, sem gravar comando nem enviar à fila. O dev.kit repete os portões antes de
+  executar e responde `concluido` ou `recusado` com o motivo; enfileirar não confirma a execução. Um dev.kit anterior à
+  separação de Aprovar e Disparar não executa `aprovar`: o pedido fica recusado ou expira na fila, sem aprovar nada.
 - **Teto de versões do design:** a criação não grava versão, então não consome o teto do plano (`GET /api/design/uso`); o
   formulário do site mostra o uso e avisa quando o teto está cheio, porque as versões seguintes do projeto serão recusadas
   no envio (413).

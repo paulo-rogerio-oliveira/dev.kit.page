@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import type { ItemDoProjeto, Projeto } from '../api/projetos';
 import { EditorDoItem } from './projetos/EditorDoItem';
+import { espelhoNoResumo, estadoDoItem } from './projetos/situacaoDoProjeto';
+
+/**
+ * (boards-estados, item 5) O work item do item no espelho: o tipo, o id e, com espelho, o estado configurado para a fase do
+ * item (o board pode ter sido mexido à mão: o site mostra a configuração, não lê o estado do board).
+ */
+function WorkItemDoItem({ projeto, item }: { projeto: Projeto; item: ItemDoProjeto }) {
+  if (item.workItemId <= 0) return null;
+  const estado = espelhoNoResumo(projeto) ? estadoDoItem(item, projeto.estadosNoBoard) : '';
+  return <span title={estado ? 'Estado configurado no espelho para a fase do item.' : undefined}>
+    {item.tipo?.trim() || 'Work item'} #{item.workItemId}{estado && ` · ${estado}`}</span>;
+}
 
 const estados: Record<string, string> = { planejado: 'Planejado', rodando: 'Rodando', integrado: 'Integrado', falhou: 'Falhou', pergunta: 'Pergunta' };
 const curto = (url: string) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean).slice(-2).join('/');
@@ -35,12 +47,12 @@ export function OndasDoProjeto({ projeto, itens, ondaAtual, salvo, tratar }: {
         <div className="projeto-item-topo"><span className={`projeto-situacao ${i.situacao}`}>{estados[i.situacao] ?? i.situacao}</span>
           {editar && <button className="botao botao-fantasma" disabled={i.situacao !== 'planejado'} onClick={() => setEditor(i)} aria-label={`Editar item ${i.numero}`}>Editar ↗</button>}</div>
         <h4>{i.numero} · {i.titulo}</h4>
-        <p>{i.dependencias.length ? `Depende de: ${i.dependencias.join(', ')}` : 'Sem dependências'}</p>
+        <p>{i.dependencias.length ? <span>Depende de: {i.dependencias.join(', ')}</span> : i.workItemId <= 0 && 'Sem dependências'}
+          {i.dependencias.length > 0 && i.workItemId > 0 && ' · '}<WorkItemDoItem projeto={projeto} item={i} /></p>
         <p title={i.fluxo || projeto.fluxoPadrao || ''}>{fluxoDoItem(projeto, i)}</p>
         <span className="projeto-situacao">{i.agente && i.modelo ? `${i.agente} · ${i.modelo}` : 'Sem modelo selecionado'}</span>
         <p>{(i.repositorios.length ? i.repositorios : projeto.repositorios).map(curto).join(' · ')}</p>
         {i.branch && <code>{i.branch}</code>}
-        {i.workItemId > 0 && <small>Work item #{i.workItemId}</small>}
       </div>)}
     </section>)}</div>
     {editor && <EditorDoItem projeto={projeto} item={editor === 'novo' ? null : editor} fechar={() => setEditor(null)} tratar={tratar}

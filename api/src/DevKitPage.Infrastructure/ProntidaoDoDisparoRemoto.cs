@@ -5,7 +5,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DevKitPage.Infrastructure;
 
-/// <summary>Confere origem e ACL antes de persistir/enfileirar. O host refaz a leitura antes de reservar.</summary>
+/// <summary>
+/// Confere origem e ACL antes de persistir/enfileirar. O host refaz a leitura antes de reservar. Cada ação exige a sua
+/// situação (<see cref="DisparoDeProjetoRemoto.SituacaoExigida"/>: aprovar só o que aguarda aprovação, disparar só o
+/// aprovado, retomar só o pausado), o papel de editor ou dono e a mesma conferência da matriz.
+/// </summary>
 public sealed class ProntidaoDoDisparoRemoto(DevKitPageDb db, TimeProvider relogio)
 {
     public async Task<string?> PendenciaAsync(int usuario, string tipo, string texto, CancellationToken ct)
@@ -23,9 +27,14 @@ public sealed class ProntidaoDoDisparoRemoto(DevKitPageDb db, TimeProvider relog
             RegrasMatrix.Exigir(encontrados.Length == 1, "Projeto indisponível ou ambíguo neste escopo.");
             var projeto = await projetos.ObterAsync(escopo, encontrados[0], ct)
                 ?? throw new ArgumentException("Projeto indisponível neste escopo.");
-            RegrasMatrix.Exigir(RegrasDeAcesso.PodeEditar(projeto.Papel), "Disparo exige editor ou dono do projeto.");
-            RegrasMatrix.Exigir(projeto.Situacao == (pedido.Acao == "retomar" ? ProjetosV1.Pausado : ProjetosV1.Aprovado),
-                "Projeto não está disponível para esta ação.");
+            RegrasMatrix.Exigir(RegrasDeAcesso.PodeEditar(projeto.Papel), pedido.Acao == DisparoDeProjetoRemoto.Aprovar
+                ? "Aprovação exige editor ou dono do projeto." : "Disparo exige editor ou dono do projeto.");
+            RegrasMatrix.Exigir(projeto.Situacao == DisparoDeProjetoRemoto.SituacaoExigida(pedido.Acao), pedido.Acao switch
+            {
+                DisparoDeProjetoRemoto.Aprovar => "Projeto não está aguardando aprovação: só o plano que aguarda aprovação é aprovado.",
+                DisparoDeProjetoRemoto.Retomar => "Projeto não está pausado: só o pausado é retomado.",
+                _ => "Projeto não está aprovado: aprove o plano antes de disparar.",
+            });
             RegrasMatrix.Exigir(pedido.Item is null || projeto.Itens.Any(i => i.Numero == pedido.Item), "Item não pertence ao projeto.");
             RegrasMatrix.Exigir(string.IsNullOrEmpty(projeto.PendenciaDoGrafo), "Grafo do projeto indisponível.");
             var loja = new MatrizesNoBanco(db, relogio);

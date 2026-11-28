@@ -284,6 +284,32 @@ describe('Board remoto', () => {
     expect(board.getByRole('link', { name: 'Abrir Projeto concluído' })).toHaveTextContent('incorporado ao projeto');
   });
 
+  it('(boards-estados, item 5) o card separa o aprovado que aguarda disparo do em execução e diz onde aprovar e disparar', async () => {
+    responder();
+    const item = (numero: number, situacao: string, onda = 1) => ({ numero, titulo: `Item ${numero}`, onda, situacao });
+    servidor.use(http.get(`${API}/api/remoto/maquinas/:id/retrato`, () => {
+      const r = retrato();
+      return HttpResponse.json({ ...r, retrato: { ...r.retrato, projetos: [
+        { slug: 'aprovado', nome: 'Aprovado sem disparo', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'planejado'), item(2, 'planejado', 2)] },
+        { slug: 'disparado', nome: 'Disparado sem item iniciado', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'planejado')] },
+        { slug: 'andando', nome: 'Em execução', ondaAtual: 1, situacao: 'aprovado', itens: [item(1, 'integrado'), item(2, 'rodando', 2)] },
+        { slug: 'aguardando', nome: 'Aguardando aprovação', ondaAtual: 0, situacao: 'aguardando', itens: [item(1, 'planejado')] },
+        { slug: 'pausado', nome: 'Pausado', ondaAtual: 2, situacao: 'pausado', itens: [item(1, 'integrado'), item(2, 'planejado', 2)] },
+      ] , fluxos: [{ id: 'f9', nome: 'Item 1 · começo', etapa: 'Implementação', situacao: 'rodando', projeto: 'disparado', item: 1 }] } });
+    }));
+    renderizar('/board', tokenDoDev());
+    const board = within(screen.getByRole('complementary', { name: 'Board' }));
+    expect(await board.findByRole('link', { name: 'Abrir Aprovado sem disparo' })).toHaveTextContent('aprovado · aguardando disparo');
+    expect(board.getByRole('link', { name: 'Abrir Disparado sem item iniciado' })).toHaveTextContent('em execução · onda 1 de 1 · 0 rodando');
+    expect(board.getByRole('link', { name: 'Abrir Em execução' })).toHaveTextContent('em execução · onda 1 de 2 · 1 rodando');
+    expect(board.getByRole('link', { name: 'Abrir Aguardando aprovação' })).toHaveTextContent('aguardando aprovação');
+    expect(board.getByRole('link', { name: 'Abrir Pausado' })).toHaveTextContent('pausado · onda 2 de 2');
+    expect(board.getByText(/Aprovar o plano e disparar o projeto também viram pedido, na página do projeto/)).toBeInTheDocument();
+    expect(board.queryByText(/Aprovar e disparar continuam no dev\.kit/)).not.toBeInTheDocument();
+    // O Board não aprova nem dispara pelo card: a ação fica na página do projeto.
+    expect(board.queryByRole('button', { name: /Aprovar|Disparar/ })).not.toBeInTheDocument();
+  });
+
   it('a decisão já dispensada vem marcada da API e fica fora da contagem', async () => {
     responder();
     servidor.use(http.get(`${API}/api/remoto/maquinas/:id/decisoes`, ({ request }) => {

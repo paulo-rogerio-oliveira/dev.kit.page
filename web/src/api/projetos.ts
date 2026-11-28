@@ -6,7 +6,14 @@ export interface ResumoDoProjeto {
   id: number; slug: string; nome: string; nivel: string; time: string; situacao: string; versao: number;
   atualizadoEm: string; papel: string; totalDeItens: number; itensConcluidos: number;
   itensEmExecucao: number; itensComPergunta: number; itensFalhos: number; progresso: number; temPendencias: boolean;
+  /** (boards-estados, item 5) A marca de disparo do host; ausente na API antiga e nula no aprovado que aguarda o disparo. */
+  disparadoEm?: string | null;
 }
+
+/** (boards-estados) Os três estados de um conjunto do espelho no Azure Boards; vazio é o padrão pela categoria do tipo. */
+export interface EstadosDoWorkItem { inicial?: string | null; execucao?: string | null; finalizacao?: string | null }
+/** (boards-estados) Os estados configurados no dev.kit para o work item pai e para os itens. O site só os mostra. */
+export interface EstadosNoBoard { pai?: EstadosDoWorkItem | null; itens?: EstadosDoWorkItem | null }
 export interface EdicaoDoItem {
   versaoEsperada: number; titulo: string; descricao: string; fluxo: string; agente: string; modelo: string;
   dependencias: number[]; componentes: string[]; prioridade: number;
@@ -41,6 +48,12 @@ export interface Projeto {
   /** Projecao operacional; itens conserva o cadastro historico. */
   itensDoGrafo?: number[] | null; pendenciaDoGrafo?: string | null;
   skillDoPacote?: string | null; skillsDoPacote?: OpcaoDeSkillDoPacote[] | null;
+  /**
+   * (boards-estados, item 5) Campos opcionais do host, ausentes na API e no dev.kit antigos: o nível do work item pai
+   * (`epic`, `feature` ou `requisito`; vazio é feature, e o `featureId` é o id do pai em qualquer nível), os estados do
+   * espelho e a marca de disparo (nula no aprovado que aguarda o disparo).
+   */
+  nivelNoBoard?: string | null; estadosNoBoard?: EstadosNoBoard | null; disparadoEm?: string | null;
 }
 
 /** A tela recebe somente metadados; conteúdo, comando e argumentos ficam no host. */

@@ -125,6 +125,8 @@ public static partial class RegrasDosProjetos
                 || m.Agente.Length > ProjetosV1.TamanhoMaximoDoNome || m.Modelo is null
                 || m.Modelo.Length > ProjetosV1.TamanhoMaximoDoNome) ?? false))
             return "Base, fluxo ou modelos do projeto fora do contrato.";
+        if (ValidarEspelho(envio) is { Length: > 0 } espelho)
+            return espelho;
         if (envio.Paralelismo < 1 || envio.Paralelismo > ProjetosV1.ParalelismoMaximo)
             return $"O paralelismo vai de 1 a {ProjetosV1.ParalelismoMaximo}.";
         if (!ProjetosV1.Situacoes.Contains(envio.Situacao ?? ProjetosV1.Rascunho))
@@ -137,6 +139,27 @@ public static partial class RegrasDosProjetos
         if (envio.Situacao == ProjetosV1.Aprovado && (envio.Itens ?? []).Any(i => i.Design is { AlteraTela: true, Propostas.Count: 0 }))
             return "Proposta visual ausente: fixe projeto/tela/versão/hash antes de aprovar o plano.";
         return ValidarItens(envio.Itens ?? []);
+    }
+
+    /// <summary>
+    /// O erro do espelho no Azure Boards (boards-estados, item 5), ou vazio: o nível do pai é um dos
+    /// <see cref="ProjetosV1.NiveisNoBoard"/> (vazio é feature) e cada estado configurado é um nome curto, de uma linha.
+    /// Os nomes valem contra o board no host, que os confere ao gravar; aqui só o formato do contrato.
+    /// </summary>
+    public static string ValidarEspelho(EnvioDeProjetoV1 envio)
+    {
+        var nivel = envio.NivelNoBoard?.Trim() ?? string.Empty;
+        if (nivel.Length > 0 && !ProjetosV1.NiveisNoBoard.Contains(nivel, StringComparer.OrdinalIgnoreCase))
+            return $"O nível do projeto no Azure Boards é um de: {string.Join(", ", ProjetosV1.NiveisNoBoard)} (vazio é feature).";
+        foreach (var (conjunto, estados) in new[] { ("pai", envio.EstadosNoBoard?.Pai), ("itens", envio.EstadosNoBoard?.Itens) })
+        {
+            foreach (var estado in new[] { estados?.Inicial, estados?.Execucao, estados?.Finalizacao })
+            {
+                if (estado is not null && (estado.Length > ProjetosV1.TamanhoMaximoDoEstado || estado.Any(char.IsControl)))
+                    return $"Os estados do espelho ({conjunto}) são nomes de até {ProjetosV1.TamanhoMaximoDoEstado} caracteres, numa linha.";
+            }
+        }
+        return string.Empty;
     }
 
     /// <summary>O erro do plano, ou vazio: números únicos, dependências que existem, sem ciclo, situações conhecidas.</summary>

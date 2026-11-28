@@ -11,7 +11,7 @@ on:
     inputs:
       aplicar_sql:
         # Desligado por padrão: os scripts são idempotentes, mas mexem na base de produção (docs/publicacao-azure.md).
-        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push, CatalogoRemoto, ClienteDaMaquina, BoardRemoto, ArtefatosDosProjetos, ConversaDaTask, Matrix, CatalogoGit) antes do deploy'
+        description: 'Aplicar os scripts SQL do controle remoto (Remoto, Provisao, Conversa, Decisoes, Push, CatalogoRemoto, ClienteDaMaquina, BoardRemoto, ArtefatosDosProjetos, ConversaDaTask, Matrix, CatalogoGit, DisparoDoProjeto) antes do deploy'
         type: boolean
         default: false
 
@@ -184,6 +184,13 @@ jobs:
         with:
           connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
           path: api/scripts/sqlserver/CatalogoGit.sql
+
+      # A marca de disparo dos projetos (boards-estados, item 5): coluna opcional, compatível com a API anterior.
+      - name: DisparoDoProjeto.sql
+        uses: azure/sql-action@v2.3
+        with:
+          connection-string: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          path: api/scripts/sqlserver/DisparoDoProjeto.sql
 
   deploy:
     runs-on: ubuntu-latest

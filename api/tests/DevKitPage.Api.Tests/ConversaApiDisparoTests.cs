@@ -14,6 +14,9 @@ public sealed partial class ConversaApiTests
         ["repo-a"], "feature/disparo", false, "Garantir matriz", [], true, 1, "main", situacao, null,
         [new(1, "Implementar", "Pedido", "", [], [], [], 1, 0, "planejado")]);
 
+    /// <summary>(boards-estados, item 5) A situação em que cada ação remota vale: aprovar no aguardando, retomar no pausado.</summary>
+    private static string SituacaoDaAcao(string acao) => acao switch { "retomar" => "pausado", "aprovar" => "aguardando", _ => "aprovado" };
+
     private static DocumentoMatrix MapaDoDisparo() => new() { Aplicacao = "disparo", Id = "disparo",
         Mapa = new("App", ["repo-a"], [new("disparo", "Disparo")], [new("servico", "Serviço")], []) };
     private static DocumentoMatrix MatrizDoDisparo() => new() { Aplicacao = "disparo", Id = "disparo", Tipo = "matriz", Projeto = "disparo",
@@ -32,15 +35,19 @@ public sealed partial class ConversaApiTests
     [Theory]
     [InlineData("ausente", "disparar")]
     [InlineData("ausente", "retomar")]
+    [InlineData("ausente", "aprovar")]
     [InlineData("vazia", "disparar")]
+    [InlineData("vazia", "aprovar")]
     [InlineData("dono", "disparar")]
+    [InlineData("dono", "aprovar")]
     [InlineData("mapa", "disparar")]
     [InlineData("coordenada", "disparar")]
     [InlineData("novo-item", "disparar")]
+    [InlineData("novo-item", "aprovar")]
     public async Task Disparo_remoto_negativo_nao_grava_comando_nem_envia_fila(string caso, string acao)
     {
         var (_, dev) = await DevComFilaAsync();
-        var envio = ProjetoParaDisparo(acao == "retomar" ? "pausado" : "aprovado");
+        var envio = ProjetoParaDisparo(SituacaoDaAcao(acao));
         var projeto = (await (await dev.PutAsJsonAsync("/api/projetos", envio)).Content.ReadFromJsonAsync<ProjetoV1>())!;
         if (caso != "ausente")
         {
@@ -77,15 +84,23 @@ public sealed partial class ConversaApiTests
     [InlineData("disparar", null)]
     [InlineData("disparar", 1)]
     [InlineData("retomar", null)]
+    [InlineData("aprovar", null)]
     public async Task Disparo_remoto_definido_sem_resultados_enfileira_uma_vez(string acao, int? item)
     {
         var (_, dev) = await DevComFilaAsync();
-        (await dev.PutAsJsonAsync("/api/projetos", ProjetoParaDisparo(acao == "retomar" ? "pausado" : "aprovado"))).EnsureSuccessStatusCode();
+        (await dev.PutAsJsonAsync("/api/projetos", ProjetoParaDisparo(SituacaoDaAcao(acao)))).EnsureSuccessStatusCode();
         await DefinirDisparoAsync(dev);
         var pedido = PedidoDeDisparo(acao, item);
         Assert.Equal(HttpStatusCode.Accepted, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await dev.PostAsJsonAsync("/api/remoto/comandos", pedido)).StatusCode);
-        Assert.Single(_api.Fila.Enviadas);
+        // O pedido vai à máquina tipado, com a ação pedida: o host lê a mesma ação e repete os portões.
+        var mensagem = JsonSerializer.Deserialize<MensagemDaFilaV1>(Assert.Single(_api.Fila.Enviadas).Mensagem, Json)!;
+        Assert.Equal(ConversaV1.ComandoProjeto, mensagem.Tipo);
+        using (var texto = JsonDocument.Parse(mensagem.Texto))
+        {
+            Assert.Equal(acao, texto.RootElement.GetProperty("acao").GetString());
+            Assert.Equal("disparo", texto.RootElement.GetProperty("projeto").GetString());
+        }
         using var escopo = _api.Services.CreateScope();
         var db = escopo.ServiceProvider.GetRequiredService<DevKitPageDb>();
         Assert.Single(db.ComandosRemotos);

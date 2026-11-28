@@ -1,24 +1,37 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ErroDaApi, mensagemDaFalha } from '../api/cliente';
-import type { Projeto, ResumoDoProjeto } from '../api/projetos';
+import type { ItemDoProjeto, Projeto, ResumoDoProjeto } from '../api/projetos';
 import { Pagina } from '../componentes/Pagina';
 import { Topo } from '../componentes/Topo';
 import { AcessoAoProjeto } from '../componentes/AcessoAoProjeto';
 import { OndasDoProjeto } from '../componentes/OndasDoProjeto';
 import { AcoesDoProjeto } from '../componentes/AcoesDoProjeto';
+import { disparadoNoDetalhe, espelhoNoResumo, estadosDoConjunto, situacaoDoDetalhe, situacaoDoResumo, workItemsCriados,
+  type ConjuntoDoEspelho, type SituacaoExibida } from '../componentes/projetos/situacaoDoProjeto';
 import { useSessao } from '../sessao';
 import { formatar } from '../formatar';
 import './Projetos.css';
 
 const Propostas = lazy(() => import('../componentes/PropostasDoPlano').then(m => ({ default: m.PropostasDoPlano })));
 const Impactos = lazy(() => import('../componentes/matrix/Impactos').then(m => ({ default: m.ImpactosDoProjeto })));
+/** O filtro usa a situação do contrato: o aprovado reúne o que aguarda disparo e o que está em execução. */
 const estados: Record<string, string> = {
-  planejado: 'Planejado', rodando: 'Rodando', pergunta: 'Pergunta', integrado: 'Integrado', falhou: 'Falhou',
-  rascunho: 'Rascunho', aguardando: 'Aguardando aprovação', aprovado: 'Em andamento', pausado: 'Pausado',
+  rascunho: 'Rascunho', aguardando: 'Aguardando aprovação', aprovado: 'Aprovado', pausado: 'Pausado',
   fechando: 'Fechando', concluido: 'Concluído',
 };
 const curto = (url: string) => url.replace(/\.git$/, '').split(/[/:]/).filter(Boolean).slice(-2).join('/');
+
+/** (boards-estados, item 5) A situação do projeto como etiqueta: o aprovado separa o aguardando disparo do em execução. */
+const Situacao = ({ situacao }: { situacao: SituacaoExibida }) => <span className={`projeto-chip ${situacao.chave}`}>{situacao.rotulo}</span>;
+
+/** Um conjunto de estados do espelho, só leitura: o configurado em destaque; tudo no padrão, indicado como tal. */
+function EstadosDoConjunto({ conjunto, projeto }: { conjunto: ConjuntoDoEspelho; projeto: Projeto }) {
+  const doConjunto = estadosDoConjunto(conjunto, projeto.estadosNoBoard);
+  return <span className="projeto-estados-conjunto"><strong>{conjunto === 'pai' ? 'Pai' : 'Itens'}</strong>{' '}
+    {doConjunto.map((e, i) => <span key={i}>{i > 0 && ' → '}{e.configurado ? <><strong>{e.nome}</strong><span className="somente-leitor"> (configurado)</span></> : e.nome}</span>)}
+    {doConjunto.every(e => !e.configurado) && <small> (padrão)</small>}</span>;
+}
 
 export function Projetos() {
   const { sessao, sair } = useSessao();
@@ -30,6 +43,8 @@ export function Projetos() {
   const [detalhe, setDetalhe] = useState<Projeto | null>(null);
   const [erroDoDetalhe, setErroDoDetalhe] = useState('');
   const [revisao, setRevisao] = useState(0);
+  // (boards-estados, item 5) O topo das ações: Aprovar/Disparar e o pedido à máquina ficam antes dos filtros, como na proposta.
+  const [topoDasAcoes, setTopoDasAcoes] = useState<HTMLDivElement | null>(null);
   const cache = useRef(new Map<string, Projeto>());
   const nivel = consulta.get('nivel') ?? '';
   const situacao = consulta.get('situacao') ?? '';
@@ -82,14 +97,18 @@ export function Projetos() {
     const q = new URLSearchParams(consulta); q.set('projeto', String(r.id)); q.delete('slug');
     return <div key={r.id} className={`cartao projeto-resumo${id === r.id ? ' escolhido' : ''}`}>
       <button type="button" className="projeto-selecionar" aria-pressed={id === r.id} onClick={() => filtrar('projeto', String(r.id))}>
-        <strong>{r.nome}</strong><span>{estados[r.situacao] ?? r.situacao}</span>
+        <strong>{r.nome}</strong><span>{situacaoDoResumo(r).rotulo}</span>
         <span>{r.itensConcluidos} de {r.totalDeItens} itens integrados</span>
       </button><Link to={`/projetos?${q}`} aria-label={`Abrir projeto ${r.nome}`}>Abrir projeto →</Link>
     </div>;
   })}</aside>;
   return <div className={`pagina projetos-pagina${consulta.has('projeto') || slug ? ' com-projeto-aberto' : ''}`}>
     <Topo secao="projetos" />
-    <Pagina rotulo="Orquestrador › Projetos" titulo={escolhido?.nome ?? 'Projetos'} subtitulo={p?.branch ?? 'Projetos sincronizados do dev.kit'}>
+    <Pagina rotulo="Orquestrador › Projetos" titulo={escolhido?.nome ?? 'Projetos'} subtitulo={escolhido
+      ? <span className="projeto-subtitulo"><Situacao situacao={p ? situacaoDoDetalhe(p) : situacaoDoResumo(escolhido)} />
+        <span className="projeto-subtitulo-branch">{p?.branch ?? 'Projetos sincronizados do dev.kit'}</span></span>
+      : 'Projetos sincronizados do dev.kit'}>
+      <div ref={setTopoDasAcoes} className="projeto-topo-das-acoes" />
       <div className="projetos-filtros">
         <select aria-label="Projeto ativo" value={escolhido?.id ?? ''} onChange={e => filtrar('projeto', e.target.value)}>
           {!escolhido && <option value="">Escolher projeto</option>}
@@ -117,13 +136,37 @@ export function Projetos() {
       {!carregando && !erro && !escolhido && <p>Nenhum projeto sincronizado com esses filtros.</p>}
       {escolhido && erroDoDetalhe && <div role="alert" className="erro">{erroDoDetalhe} <button onClick={atualizar}>Reler projeto</button></div>}
       {escolhido && !p && !erroDoDetalhe && <p role="status">Carregando detalhe do projeto…</p>}
-      {p && escolhido && <Detalhe key={`${token}/${p.id}`} projeto={p} resumo={escolhido} lista={lista} salvo={salvo} tratar={tratar} />}
+      {p && escolhido && <Detalhe key={`${token}/${p.id}`} projeto={p} resumo={escolhido} lista={lista} salvo={salvo} tratar={tratar} topoDasAcoes={topoDasAcoes} />}
     </Pagina>
   </div>;
 }
 
-function Detalhe({ projeto: p, resumo, lista, salvo, tratar }: {
+/** (boards-estados, item 5) O aprovado que aguarda o disparo: o que a aprovação criou no board e o que o disparo abre. */
+function AvisoDoAprovado({ projeto: p, itens }: { projeto: Projeto; itens: ItemDoProjeto[] }) {
+  const criados = workItemsCriados(p, itens);
+  const espelho = espelhoNoResumo(p);
+  const primeira = itens.length ? Math.min(...itens.map(i => i.onda)) : 1;
+  const iniciais = [...new Set([...(p.board === 'criar' && p.featureId > 0 ? [estadosDoConjunto('pai', p.estadosNoBoard)[0].nome] : []),
+    estadosDoConjunto('itens', p.estadosNoBoard)[0].nome])];
+  return <div className="projeto-aviso-aprovado" role="status">
+    <strong>Plano aprovado · {!espelho ? 'sem espelho no Azure Boards.'
+      : criados > 0 ? <>{criados} {criados === 1 ? 'work item criado' : 'work items criados'}<span className="projeto-largo"> no board</span> como {iniciais.join(' e ')}.</>
+        : 'work items ainda não criados no board.'}</strong>{' '}
+    Disparar abre a onda {primeira}<span className="projeto-largo">{p.autonomia ? '; com autonomia, o Orquestrador segue as próximas' : '; sem autonomia, cada onda seguinte espera o próprio disparo'}</span>.
+  </div>;
+}
+
+/** (boards-estados, item 5) O espelho no resumo do projeto, só leitura: o pai (tipo e id) e a escolha do projeto. */
+function EspelhoDoResumo({ projeto: p }: { projeto: Projeto }) {
+  const espelho = espelhoNoResumo(p);
+  if (!espelho) return <div><strong>{p.board === 'nao' ? 'Sem Azure Boards' : 'Azure Boards não configurado'}</strong><small>escolha do projeto</small></div>;
+  return <div><strong>{espelho.tipoDoPai}{espelho.id > 0 && ` #${espelho.id}`}<span className="projeto-largo"> · Azure Boards</span></strong>
+    <small><span className="projeto-largo">escolha do projeto · {espelho.detalhe}</span><span className="projeto-estreito">Azure Boards</span></small></div>;
+}
+
+function Detalhe({ projeto: p, resumo, lista, salvo, tratar, topoDasAcoes }: {
   projeto: Projeto; resumo: ResumoDoProjeto; lista: ReactNode; salvo: (p: Projeto) => void; tratar: (e: unknown) => string;
+  topoDasAcoes: HTMLElement | null;
 }) {
   const { sessao } = useSessao();
   const [consulta, setConsulta] = useSearchParams();
@@ -133,16 +176,23 @@ function Detalhe({ projeto: p, resumo, lista, salvo, tratar }: {
   const itens = p.itensDoGrafo == null ? p.itens : p.itens.filter(i => p.itensDoGrafo!.includes(i.numero));
   const ondas = [...new Set(itens.map(i => i.onda))];
   const atual = Math.min(...itens.filter(i => i.situacao !== 'integrado').map(i => i.onda));
+  const comEspelho = !!espelhoNoResumo(p);
   return <article className="projeto-detalhe" aria-label="Detalhe do projeto">
     <h2 className="somente-leitor" tabIndex={-1} data-foco-navegacao={consulta.has('projeto') || consulta.has('slug') ? 'projeto' : undefined}>{p.nome}</h2>
-    <AcoesDoProjeto projeto={p} tratar={tratar} />
+    <AcoesDoProjeto projeto={p} itens={itens} tratar={tratar} destino={topoDasAcoes} />
     <nav className="projeto-abas" aria-label="Visões do projeto">{(['plano', 'ondas', 'impactos', 'propostas', 'entregas', 'historico'] as const).map(v => <button key={v} aria-pressed={(emRevisao ? 'historico' : visao) === v}
       onClick={() => { const q = new URLSearchParams(consulta); q.set('visao', v); setConsulta(q); }}>{({ plano: 'Plano', ondas: 'Ondas', impactos: 'Impactos', propostas: 'Propostas visuais', entregas: 'Entregas', historico: 'Histórico' })[v]}</button>)}</nav>
+    {p.situacao === 'aprovado' && !disparadoNoDetalhe(p) && <AvisoDoAprovado projeto={p} itens={itens} />}
     <div className="projeto-metricas cartao">
-      <div><strong>{resumo.itensConcluidos} de {resumo.totalDeItens}</strong><small>itens integrados</small></div>
-      <div><strong>{ondas.length} ondas</strong><small>até {p.paralelismo} itens em paralelo</small></div>
-      <div><strong>{p.agente && p.modelo ? `${p.agente} · ${p.modelo}` : 'Sem modelo selecionado'}</strong><small>{p.agente && p.modelo ? 'escolha do projeto' : 'escolha pendente'}</small></div>
-      <div><strong>{p.board === 'nao' ? 'Sem Azure Boards' : p.board || 'Azure Boards não configurado'}</strong><small>escolha do projeto</small></div>
+      <div className="projeto-metricas-numeros">
+        <div><strong>{resumo.itensConcluidos} de {resumo.totalDeItens}</strong><small>itens integrados</small></div>
+        <div><strong>{ondas.length} ondas</strong><small>até {p.paralelismo} <span className="projeto-largo">itens </span>em paralelo</small></div>
+        <div><strong>{p.agente && p.modelo ? `${p.agente} · ${p.modelo}` : 'Sem modelo selecionado'}</strong><small>{p.agente && p.modelo ? <>modelos<span className="projeto-largo"> do projeto</span></> : 'escolha pendente'}</small></div>
+        <EspelhoDoResumo projeto={p} />
+      </div>
+      {comEspelho && <p className="projeto-estados-no-board" title="Configurados no dev.kit e no devcli. Vazio é o padrão pela categoria do tipo: o inicial do tipo, o primeiro em andamento e, na finalização, Completed nos itens e Resolved no pai.">
+        <span className="projeto-estados-rotulo">Estados no board (<span className="projeto-largo">configurados no dev.kit, </span>só leitura)<span className="projeto-largo">:</span></span>
+        <EstadosDoConjunto conjunto="itens" projeto={p} /><EstadosDoConjunto conjunto="pai" projeto={p} /></p>}
     </div>
     {p.pendenciaDoGrafo && <p role="alert" className="erro">{p.pendenciaDoGrafo}</p>}
     <Suspense fallback={<p role="status">Carregando aba…</p>}>

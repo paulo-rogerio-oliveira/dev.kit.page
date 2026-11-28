@@ -34,6 +34,7 @@ BEGIN
         [AtualizadoPorId] int NOT NULL,
         [CriadoEmUtc] datetime2 NOT NULL,
         [AtualizadoEmUtc] datetime2 NOT NULL,
+        [DisparadoEmUtc] datetime2 NULL,
         CONSTRAINT [PK_ProjetosCompartilhados] PRIMARY KEY ([Id]),
         CONSTRAINT [FK_ProjetosCompartilhados_Empresas_EmpresaId] FOREIGN KEY ([EmpresaId]) REFERENCES [dbo].[Empresas] ([Id]) ON DELETE CASCADE,
         CONSTRAINT [FK_ProjetosCompartilhados_Usuarios_AutorId] FOREIGN KEY ([AutorId]) REFERENCES [dbo].[Usuarios] ([Id])

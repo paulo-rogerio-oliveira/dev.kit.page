@@ -61,6 +61,12 @@ public sealed class ProjetoCompartilhado : IProjetoComAcessos
     public DateTime CriadoEmUtc { get; set; }
     public DateTime AtualizadoEmUtc { get; set; }
 
+    /// <summary>
+    /// A marca de disparo do host (boards-estados, D8): nula no aprovado que aguarda o disparo. É coluna, e não só o
+    /// <see cref="Documento"/>, para a lista de resumos separar o aguardando disparo do em execução sem ler o documento.
+    /// </summary>
+    public DateTime? DisparadoEmUtc { get; set; }
+
     public List<ItemDeProjetoCompartilhado> Itens { get; set; } = [];
 }
 

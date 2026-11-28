@@ -189,11 +189,19 @@ it('falha de envio preserva ID do pedido para tentar de novo sem duplicar', asyn
   expect(screen.queryByRole('button', { name: 'Enviar pedido' })).not.toBeInTheDocument();
 });
 
-it('leitor não recebe editor e item sem modelo mantém disparo bloqueado', async () => {
+it('leitor não recebe editor nem a ação de disparo (boards-estados: o leitor não vê ação)', async () => {
   servidor.use(http.get(`${API}/api/projetos/5`, () => HttpResponse.json({ ...p, papel: 'leitor' })));
   renderizar('/projetos?slug=fixes&visao=ondas', tokenDoDev());
-  expect(await screen.findByRole('button', { name: 'Disparar projeto' })).toBeDisabled();
+  expect(await screen.findByRole('button', { name: 'Gerar pacote' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Disparar projeto' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Editar item 1' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '+ Item' })).not.toBeInTheDocument();
-  expect(screen.getByText(/Há itens sem agente\/modelo selecionado/)).toBeInTheDocument();
+  expect(screen.queryByText(/Há itens sem agente\/modelo selecionado/)).not.toBeInTheDocument();
+});
+
+it('editor com item sem modelo mantém disparo bloqueado com o motivo', async () => {
+  servidor.use(http.get(`${API}/api/projetos/5/prontidao-disparo`, () => HttpResponse.json({ pendencia: null })));
+  renderizar('/projetos?slug=fixes&visao=ondas', tokenDoDev());
+  expect(await screen.findByText(/Há itens sem agente\/modelo selecionado/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Disparar projeto' })).toBeDisabled();
 });

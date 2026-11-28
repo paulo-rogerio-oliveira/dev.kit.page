@@ -27,6 +27,9 @@ public static class EscolhasDosProjetos
         Modelo = envio.Modelo ?? anterior?.Modelo,
         Modelos = envio.Modelos ?? anterior?.Modelos,
         PoliticaDeFinalizacao = envio.PoliticaDeFinalizacao ?? anterior?.PoliticaDeFinalizacao,
+        NivelNoBoard = envio.NivelNoBoard ?? anterior?.NivelNoBoard,
+        EstadosNoBoard = envio.EstadosNoBoard ?? anterior?.EstadosNoBoard,
+        DisparadoEm = envio.DisparadoEm ?? anterior?.DisparadoEm,
         Itens = envio.Itens.Select(i => Preservar(i, anterior?.Itens.FirstOrDefault(a => a.Numero == i.Numero))).ToArray(),
     };
 

@@ -188,8 +188,9 @@ export const api = {
     chamar<import('./projetos').ResumoDoProjeto[]>('/api/projetos/resumos', { token, signal }),
   editarItemDoProjeto: (token: string, id: number, numero: number, edicao: import('./projetos').EdicaoDoItem, signal?: AbortSignal) =>
     chamar<Projeto>(`/api/projetos/${id}/itens/${numero}`, { token, signal, metodo: 'PUT', corpo: edicao }),
-  prontidaoDoProjeto: (token: string, id: number, signal?: AbortSignal) =>
-    chamar<{ pendencia: string | null }>(`/api/projetos/${id}/prontidao-disparo`, { token, signal }),
+  /** (boards-estados, item 5) A pendência da ação que o site vai pedir: a mesma conferência da fila, para aprovar ou disparar. */
+  prontidaoDoProjeto: (token: string, id: number, acao: 'aprovar' | 'disparar', signal?: AbortSignal) =>
+    chamar<{ pendencia: string | null }>(`/api/projetos/${id}/prontidao-disparo?acao=${acao}`, { token, signal }),
   /** (controle-v4, item 2) Os últimos artefatos de cada projeto visível: o card do Board mostra os links. */
   artefatosRecentes: (token: string, signal?: AbortSignal) => chamar<ArtefatosDoProjeto[]>('/api/projetos/artefatos', { token, signal }),
   artefatosDoProjeto: (token: string, id: number, signal?: AbortSignal) =>

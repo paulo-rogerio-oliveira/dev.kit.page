@@ -1522,6 +1522,9 @@ namespace DevKitPage.Infrastructure.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("DisparadoEmUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Documento")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

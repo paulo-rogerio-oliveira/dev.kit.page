@@ -42,10 +42,10 @@ public sealed partial class ConversaApiTests : IDisposable
     /// Um dev com a fila PRONTA, pelo caminho de verdade: o admin libera (e a liberação pede a fila, remote-control-v3 item 5) e
     /// o motor do worker a conclui — e a máquina já mandou o heartbeat.
     /// </summary>
-    private async Task<(HttpClient Admin, HttpClient Dev)> DevComFilaAsync(string login = "ana", HttpClient? admin = null)
+    private async Task<(HttpClient Admin, HttpClient Dev)> DevComFilaAsync(string login = "ana", HttpClient? admin = null, int? empresa = null)
     {
         admin ??= await _api.AdminAsync();
-        var (dev, _) = await _api.UsuarioAsync(admin, login, Papeis.Dev);
+        var (dev, _) = await _api.UsuarioAsync(admin, login, Papeis.Dev, empresa);
         var id = (await admin.GetFromJsonAsync<UsuarioResumo[]>("/api/usuarios"))!.Single(u => u.Login == login).Id;
         var liberacao = await admin.PutAsJsonAsync($"/api/usuarios/{id}/recursos/{ProvisaoV1.RecursoProvisao}", new LiberacaoDeRecursoV1(true));
         liberacao.EnsureSuccessStatusCode();

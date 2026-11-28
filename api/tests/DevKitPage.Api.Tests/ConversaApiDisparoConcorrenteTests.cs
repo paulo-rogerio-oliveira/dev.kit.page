@@ -20,13 +20,15 @@ public sealed partial class ConversaApiTests
     [InlineData("disparar", 1, true)]
     [InlineData("retomar", null, false)]
     [InlineData("retomar", null, true)]
+    [InlineData("aprovar", null, false)]
+    [InlineData("aprovar", null, true)]
     public async Task Disparo_remoto_revisao_apos_insert_nao_deixa_pendente_e_permite_reenvio(string acao, int? item, bool comHistorico)
     {
         var revisao = new MatrizRevisadaAposInsert();
         using var cenario = new ConversaApiTests(new ApiDeTeste(configurarServicos: s =>
             s.AddDbContext<DevKitPageDb>((_, opcoes) => opcoes.AddInterceptors(revisao))));
         var (_, dev) = await cenario.DevComFilaAsync();
-        (await dev.PutAsJsonAsync("/api/projetos", ProjetoParaDisparo(acao == "retomar" ? "pausado" : "aprovado"))).EnsureSuccessStatusCode();
+        (await dev.PutAsJsonAsync("/api/projetos", ProjetoParaDisparo(SituacaoDaAcao(acao)))).EnsureSuccessStatusCode();
         await DefinirDisparoAsync(dev);
         if (comHistorico)
             Assert.Equal(HttpStatusCode.Accepted, (await dev.PostAsJsonAsync("/api/remoto/comandos", Mensagem("anterior"))).StatusCode);

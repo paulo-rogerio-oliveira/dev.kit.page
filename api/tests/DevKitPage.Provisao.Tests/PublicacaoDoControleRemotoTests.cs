@@ -276,7 +276,7 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         secao = secao[..secao.IndexOf("\n### ", 5, StringComparison.Ordinal)];
         var noDoc = Regex.Matches(secao, @"^\d+\. `(\S+\.sql)`", RegexOptions.Multiline).Select(m => m.Groups[1].Value).ToArray();
 
-        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql", "ArtefatosDosProjetos.sql", "ConversaDaTask.sql", "Matrix.sql", "CatalogoGit.sql"], noWorkflow);
+        Assert.Equal(["Remoto.sql", "Provisao.sql", "Conversa.sql", "Decisoes.sql", "Push.sql", "CatalogoRemoto.sql", "ClienteDaMaquina.sql", "BoardRemoto.sql", "ArtefatosDosProjetos.sql", "ConversaDaTask.sql", "Matrix.sql", "CatalogoGit.sql", "DisparoDoProjeto.sql"], noWorkflow);
         Assert.Equal(noWorkflow, noDoc);
         Assert.All(noWorkflow, nome => ScriptsDoRepositorio.Arquivo($"api/scripts/sqlserver/{nome}"));
         // O disparo manual diz quais scripts roda: todos, pelo nome.
@@ -329,6 +329,7 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
     [InlineData("ArtefatosDosProjetos", null)]
     [InlineData("RevisoesMatrix", null)]
     [InlineData("RecibosDoCatalogoGit", null)]
+    [InlineData("ProjetosCompartilhados", "DisparadoEmUtc")]
     [InlineData("ComandosRemotos", "Contexto")]
     [InlineData("FalasRemotas", "Anexos")]
     [InlineData("RespostasDasDecisoes", "Dispositivo")]
@@ -362,13 +363,31 @@ public sealed class PublicacaoDoControleRemotoTests : IDisposable
         Assert.Matches(@"aplicar_sql:[\s\S]*?type: boolean\s+default: false", entrada);
         var sql = Job(workflow, "sql");
         Assert.Contains("github.event_name == 'workflow_dispatch' && inputs.aplicar_sql", sql);
-        Assert.Equal(new[] { "Matrix.sql", "CatalogoGit.sql" }, ScriptsDoJobSql(workflow)[^2..]);
+        Assert.Equal(new[] { "Matrix.sql", "CatalogoGit.sql" }, ScriptsDoJobSql(workflow)[^3..^1]);
         Assert.Contains("needs.sql.result != 'failure'", Job(workflow, "deploy"));
         Assert.DoesNotContain("continue-on-error", sql);
         var script = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo("api/scripts/sqlserver/Matrix.sql"));
         Assert.DoesNotMatch(@"(?i)\b(DROP|TRUNCATE|DELETE|UPDATE)\b", script);
         Assert.Contains("CREATE UNIQUE INDEX IX_RevisoesMatrix_Espaco_Aplicacao_Tipo_DocumentoId_Versao", script);
         Assert.Equal(2, Regex.Matches(script, "IF NOT EXISTS").Count);
+    }
+
+    /// <summary>
+    /// A marca de disparo (boards-estados, item 5) vai no job sql optativo, depois dos anteriores, e o script é aditivo:
+    /// confere a tabela do Us693.sql, só acrescenta a coluna nula quando falta e não apaga, não muda nem inventa marca.
+    /// </summary>
+    [Fact]
+    public async Task Disparo_do_projeto_vai_no_sql_optativo_e_so_acrescenta_a_coluna_nula()
+    {
+        var workflow = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo(".github/workflows/main_devkit.yml"));
+        Assert.Equal("DisparoDoProjeto.sql", ScriptsDoJobSql(workflow)[^1]);
+        Assert.DoesNotContain("continue-on-error", Job(workflow, "sql"));
+        var script = await File.ReadAllTextAsync(ScriptsDoRepositorio.Arquivo("api/scripts/sqlserver/DisparoDoProjeto.sql"));
+        var comandos = string.Join('\n', script.Split('\n').Where(l => !l.TrimStart().StartsWith("--", StringComparison.Ordinal)));
+        Assert.DoesNotMatch(@"(?i)\b(DROP|TRUNCATE|DELETE|UPDATE|INSERT)\b", comandos);
+        Assert.Contains("THROW 50001", comandos, StringComparison.Ordinal);
+        Assert.Contains("IF COL_LENGTH(N'dbo.ProjetosCompartilhados', N'DisparadoEmUtc') IS NULL", comandos, StringComparison.Ordinal);
+        Assert.Contains("ADD [DisparadoEmUtc] datetime2 NULL;", comandos, StringComparison.Ordinal);
     }
 
     /// <summary>Os scripts da pasta que nem o job <c>sql</c> aplica nem são <see cref="AnterioresAoControleRemoto"/>, em ordem.</summary>

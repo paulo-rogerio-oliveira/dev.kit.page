@@ -606,6 +606,18 @@ branch próprio (`branch.projeto`) ou na semana convertida — sai da máquina d
   (`RetencaoDias`, `MaximoPorProjeto`) roda a cada registro e apaga o zip que sai. A visibilidade é a mesma consulta do
   projeto (`ConsultaDosProjetos.Visiveis`). Tabela pela migration `ArtefatosDosProjetos` e pelo script
   `api/scripts/sqlserver/ArtefatosDosProjetos.sql` (o passo 9 do job `sql`).
+- **Espelho no Azure Boards e marca de disparo (boards-estados, item 5):** o `EnvioDeProjetoV1` e o `ProjetoV1` ganham três
+  campos opcionais vindos do host — `nivelNoBoard` (`epic`, `feature` ou `requisito`; vazio é feature), `estadosNoBoard`
+  (`pai` e `itens`, cada um com `inicial`, `execucao` e `finalizacao`; vazio é o padrão pela categoria do tipo) e
+  `disparadoEm` (a marca de disparo, data ISO ou nula). O cliente antigo que não os envia não apaga o gravado
+  (`ProjetosDaEmpresa.GravarAsync`); o `featureId` segue como o id do work item pai em qualquer nível. O nível e os
+  estados ficam no documento; a marca também é a coluna `DisparadoEmUtc` (migration `DisparoDoProjeto` e
+  `api/scripts/sqlserver/DisparoDoProjeto.sql`, o passo 13 do job `sql`), que o `ResumoDoProjetoV1` devolve sem ler o
+  documento. O pedido remoto do projeto (`DisparoDeProjetoRemoto`) aceita `aprovar` (sem item, só no aguardando
+  aprovação), `disparar` (só no aprovado; a onda que espera) e `retomar` (só no pausado), com o papel de editor ou dono e
+  a conferência da matriz (`ProntidaoDoDisparoRemoto`); `GET /api/projetos/{id}/prontidao-disparo?acao=` devolve a
+  pendência da ação que o site vai pedir (sem `acao`, a de disparar, como antes). O site não edita o espelho: o resumo do
+  projeto o mostra só para leitura.
 
 ### O admin útil: painel de utilidade, licença, empresa e editor de artefato (US #687)
 

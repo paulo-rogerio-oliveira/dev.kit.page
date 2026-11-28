@@ -18,11 +18,18 @@ public static class EndpointsDosProjetos
         grupo.MapGet("/{id:long}", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => ComEscopo(quem, async e => await projetos.ObterAsync(e, id, ct) is { } p
                 ? Results.Ok(p) : Results.Problem("Projeto não encontrado.", statusCode: 404)));
-        grupo.MapGet("/{id:long}/prontidao-disparo", (long id, ClaimsPrincipal quem, IProjetosCompartilhados projetos,
+        // (boards-estados, item 5) A ação do pedido que o site vai mandar: aprovar, disparar (o padrão, como antes) ou retomar.
+        grupo.MapGet("/{id:long}/prontidao-disparo", (long id, string? acao, ClaimsPrincipal quem, IProjetosCompartilhados projetos,
             IConsultaDeProjetos consulta, CancellationToken ct)
-            => ComEscopo(quem, async e => await projetos.ObterAsync(e, id, ct) is { } p
-                ? Results.Ok(new { pendencia = await consulta.PendenciaDoDisparoAsync(e, p.Slug, ct) })
-                : Results.Problem("Projeto não encontrado.", statusCode: 404)));
+            => ComEscopo(quem, async e =>
+            {
+                var pedida = string.IsNullOrEmpty(acao) ? DisparoDeProjetoRemoto.Disparar : acao;
+                if (!DisparoDeProjetoRemoto.Acoes.Contains(pedida))
+                    return Results.Problem($"A ação é uma de: {string.Join(", ", DisparoDeProjetoRemoto.Acoes)}.", statusCode: 400);
+                return await projetos.ObterAsync(e, id, ct) is { } p
+                    ? Results.Ok(new { acao = pedida, pendencia = await consulta.PendenciaDoDisparoAsync(e, p.Slug, pedida, ct) })
+                    : Results.Problem("Projeto não encontrado.", statusCode: 404);
+            }));
         grupo.MapPut("", (EnvioDeProjetoV1 envio, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
             => Gravar(quem, projetos, null, envio, ct));
         grupo.MapPut("/{id:long}", (long id, EnvioDeProjetoV1 envio, ClaimsPrincipal quem, IProjetosCompartilhados projetos, CancellationToken ct)
@@ -45,7 +52,8 @@ public static class EndpointsDosProjetos
                     atual.SemanaConvertida, atual.Definicao, atual.Anexos, atual.Autonomia, atual.Paralelismo, atual.DestinoDaPr,
                     atual.Situacao, edicao.VersaoEsperada, atual.Itens, atual.FeatureId, atual.EpicId, atual.Iteracao, atual.Board,
                     atual.BranchesDasTasks, DateTimeOffset.UtcNow, atual.BaseDoBranch, atual.FluxoPadrao, atual.Agente, atual.Modelo,
-                    atual.Modelos, atual.PoliticaDeFinalizacao, nome, atual.SkillsDoPacote) { EdicaoPeloBoard = true };
+                    atual.Modelos, atual.PoliticaDeFinalizacao, nome, atual.SkillsDoPacote,
+                    atual.NivelNoBoard, atual.EstadosNoBoard, atual.DisparadoEm) { EdicaoPeloBoard = true };
                 return await Gravar(quem, projetos, id, envio, ct);
             }));
         grupo.MapPut("/{id:long}/itens/{numero:int}", (long id, int numero, EdicaoRemotaDoItemV1 edicao,

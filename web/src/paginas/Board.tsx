@@ -59,6 +59,22 @@ function PendenciaSemDados({ pendencia: p, dispensada, dispensar }: { pendencia:
 /** O projeto que já saiu do andamento: concluído ou em fechamento (todos os itens integrados, ajuste 8). */
 function projetoTerminando(situacao: string) { return situacao === 'concluido' || situacao === 'fechando'; }
 
+/**
+ * (boards-estados, item 5) A situação no card do projeto. O aprovado se divide em aguardando disparo e em execução: o
+ * retrato não traz a marca de disparo, então vale a mesma regra do site para o dev.kit sem ela — um item que saiu do
+ * planejado ou uma execução do projeto no retrato.
+ */
+function situacaoNoCard(p: { situacao: string; ondaAtual: number }, itens: { situacao: string }[], ondas: number, emExecucao: boolean) {
+  const rodando = itens.filter(i => i.situacao === 'rodando').length;
+  if (p.situacao === 'concluido') return 'incorporado ao projeto';
+  if (p.situacao === 'fechando') return 'em fechamento · todos os itens integrados';
+  if (p.situacao === 'rascunho') return 'rascunho';
+  if (p.situacao === 'aguardando') return 'aguardando aprovação';
+  if (p.situacao === 'pausado') return `pausado · onda ${p.ondaAtual} de ${ondas}`;
+  if (p.situacao === 'aprovado' && !emExecucao && itens.every(i => i.situacao === 'planejado')) return 'aprovado · aguardando disparo';
+  return `${p.situacao === 'aprovado' ? 'em execução · ' : ''}onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`;
+}
+
 /** As pendências do retrato que o dev fechou no site (correções do board remoto): a decisão marcada ou a dispensa local. */
 function dispensadasDe(pendencias: PendenciaRemota[], decisoes: DecisaoPendente[], locais: Map<string, boolean>) {
   return new Set(pendencias.filter(p => locais.get(p.id) ?? decisoes.find(d => d.pendencia.id === p.id)?.dispensada).map(p => p.id));
@@ -108,14 +124,13 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     {(todosOsProjetos ? projetos : projetos.slice(0, primeirasEntradas)).map(p => {
       const itens = p.itens ?? [];
       const integrados = itens.filter(i => i.situacao === 'integrado').length;
-      const rodando = itens.filter(i => i.situacao === 'rodando').length;
       const ondas = Math.max(p.ondaAtual, ...itens.map(i => i.onda));
       // (controle-v4, item 2) O card abre o projeto e, embaixo, gera artefato e mostra os últimos links.
       return <div className="br-card br-proj-card" key={p.slug}>
         <Link className="br-proj br-abrir" to={comRetorno(`/projetos?slug=${encodeURIComponent(p.slug)}`, origem)} aria-label={`Abrir ${p.nome}`}>
           <b>{p.nome}<span>{integrados} de {itens.length}</span></b>
           <div className="br-bar" role="progressbar" aria-label={`Progresso de ${p.nome}`} aria-valuenow={integrados} aria-valuemin={0} aria-valuemax={itens.length || 1}><i style={{ width: `${itens.length ? integrados / itens.length * 100 : 0}%` }} /></div>
-          <small>{p.situacao === 'concluido' ? 'incorporado ao projeto' : p.situacao === 'fechando' ? 'em fechamento · todos os itens integrados' : `onda ${p.ondaAtual} de ${ondas} · ${rodando} rodando`}</small>
+          <small>{situacaoNoCard(p, itens, ondas, recebidas.some(f => f.projeto === p.slug))}</small>
         </Link>
         <PacoteDoBoard nome={p.nome} slug={p.slug} criacao={criacao}
           previsaoRemota={p.previsaoDoPacote} skillNoRetrato={p.skillDoPacote}
@@ -149,7 +164,7 @@ function ConteudoDoBoard({ foto, agora, periodo, decisoes, destacada, desabilita
     {ampliada && <ImagemAmpliada {...ampliada} fechar={() => setAmpliada(null)} />}
     <VerMais total={designs.length} todos={todosOsDesigns} alternar={() => setTodosOsDesigns(t => !t)} />
     {!designs.length && <p className="br-note">Nenhum projeto de design no catálogo da máquina.</p>}
-    <p className="br-note">Criar pelo site vira um pedido na fila: o dev.kit executa como o devcli e devolve o resultado aqui. Aprovar e disparar continuam no dev.kit.</p>
+    <p className="br-note">Criar pelo site vira um pedido na fila: o dev.kit executa como o devcli e devolve o resultado aqui. Aprovar o plano e disparar o projeto também viram pedido, na página do projeto: o dev.kit repete os portões antes de executar.</p>
     <h2>Executando · {execucoes.length}<span className="br-periodo"> {periodosDoDia.find(p => p.valor === periodo)!.rotulo.toLowerCase()}</span></h2>
     {projetosEmExecucao.length > 0 && <label className="br-projeto-execucoes">Projetos em execução
       <select value={projetoAtivo} onChange={e => { setProjetoDasExecucoes(e.target.value); setTodasAsExecucoes(false); }}>

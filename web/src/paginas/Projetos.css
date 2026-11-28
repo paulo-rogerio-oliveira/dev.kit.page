@@ -16,7 +16,7 @@
 .projeto-detalhe { min-width: 0; display: flex; flex-direction: column; }
 .projeto-detalhe > * { order: 4; }
 .projeto-detalhe > .projeto-abas { order: 1; }
-.projeto-detalhe > .projeto-bloqueio { order: 2; }
+.projeto-detalhe > .projeto-bloqueio, .projeto-detalhe > .projeto-aviso-aprovado { order: 2; }
 .projeto-detalhe > .projeto-metricas { order: 3; }
 .projeto-detalhe h2 { margin-top: 0; }
 .somente-leitor { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -27,9 +27,30 @@
 .projeto-abas button[aria-pressed=true] { border-bottom-color: var(--primaria); font-weight: 700; }
 .projeto-bloqueio { border: 1px solid var(--borda); border-left: 3px solid var(--erro); border-radius: 8px; padding: 16px 20px; background: var(--marca-tinta); margin-bottom: 18px; font-size: .85rem; }
 .projeto-bloqueio p { margin: 6px 0 0; }
-.projeto-metricas { display: flex; gap: 42px; flex-wrap: wrap; margin-bottom: 18px; }
-.projeto-metricas strong, .projeto-metricas small { display: block; }
-.projeto-metricas small { margin-top: 4px; font-size: .75rem; color: var(--texto-2); }
+.projeto-metricas { display: flex; flex-direction: column; margin-bottom: 18px; }
+/* O estilo.css entra depois no bundle: o cartão do resumo zera o padding com mais especificidade, e cada faixa tem o seu. */
+.projeto-metricas.cartao { padding: 0; }
+.projetos-filtros select { padding-right: 36px; }
+.projeto-metricas-numeros { display: flex; gap: 42px; flex-wrap: wrap; padding: 28px; }
+.projeto-metricas-numeros strong, .projeto-metricas-numeros small { display: block; }
+.projeto-metricas-numeros small { margin-top: 4px; font-size: .75rem; color: var(--texto-2); }
+/* (boards-estados, item 5) A situação, o aviso do aprovado, os estados do espelho e o topo das ações. */
+.projeto-subtitulo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.projeto-chip { display: inline-block; border-radius: 999px; padding: 3px 10px; font-size: .75rem; line-height: 1.4; color: var(--texto-2); background: var(--neutro-tinta); }
+.projeto-chip.aguardando { color: var(--alerta); background: var(--alerta-tinta); }
+.projeto-chip.aguardando-disparo { color: var(--info); background: var(--info-tinta); }
+.projeto-chip.em-execucao { color: var(--sucesso); background: var(--sucesso-tinta); }
+.projeto-aviso-aprovado { border: 1px solid var(--borda); border-left: 3px solid var(--info); border-radius: 8px; padding: 14px 20px; background: var(--info-tinta); color: var(--texto); margin-bottom: 18px; font-size: .85rem; }
+.projeto-metricas .projeto-estados-no-board { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: 0; padding: 14px 28px 18px; border-top: 1px solid var(--borda); color: var(--texto); font-size: .8rem; line-height: 1.5; }
+.projeto-estados-rotulo, .projeto-estados-conjunto small { color: var(--texto-2); }
+.projeto-estados-conjunto strong { font-weight: 600; }
+.projeto-topo-das-acoes { display: contents; }
+.projetos-pagina .projeto-acao-remota { margin-bottom: 0; padding: 16px 20px; border-radius: 10px; gap: 10px 14px; font-size: .85rem; }
+.projeto-acao-remota label { flex-direction: row; align-items: center; gap: 8px; font-size: .8rem; font-weight: 400; }
+.projeto-acao-remota select { min-width: 220px; min-height: 36px; padding: 6px 40px 6px 12px; font-size: .8rem; }
+.projeto-acao-remota .projetos-nota { flex-basis: 100%; margin: 0; }
+.projeto-acoes .projeto-acao-principal[aria-expanded=true] { border-color: var(--primaria); }
+.projeto-estreito { display: none; }
 .projeto-plano { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .projeto-plano h3, .projetos-lista h3 { margin: 0 0 14px; }
 .projeto-definicao { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -82,8 +103,19 @@
   .projetos-pagina .cabecalho-textos { max-width: 100%; }
 }
 @media (max-width: 700px) {
-  .projeto-metricas { gap: 18px; }
-  .projeto-metricas > div { flex: 1 1 42%; }
+  .projeto-metricas-numeros { gap: 18px; padding: 20px; }
+  .projeto-metricas-numeros > div { flex: 1 1 42%; }
+  /* (boards-estados, item 5) No celular: a situação embaixo do branch, as ações em coluna, os avisos e o resumo antes das abas. */
+  .projeto-subtitulo { flex-direction: column-reverse; align-items: flex-start; gap: 10px; }
+  .projeto-acoes { flex-direction: column; align-items: stretch; margin-bottom: 0; }
+  .projeto-acoes .botao { width: 100%; }
+  .projeto-detalhe > .projeto-bloqueio { order: 0; }
+  .projeto-detalhe > .projeto-aviso-aprovado { order: 1; }
+  .projeto-detalhe > .projeto-metricas { order: 2; }
+  .projeto-detalhe > .projeto-abas { order: 3; }
+  .projeto-metricas .projeto-estados-no-board { flex-direction: column; gap: 2px; padding: 14px 20px 18px; }
+  .projeto-largo { display: none; }
+  .projeto-estreito { display: inline; }
   .projeto-editor { padding: 20px 18px; }
   .projeto-editor-pares { grid-template-columns: 1fr; gap: 0; }
   .projeto-editor-pares.dependencias { grid-template-columns: 1fr 1fr; gap: 12px; }
