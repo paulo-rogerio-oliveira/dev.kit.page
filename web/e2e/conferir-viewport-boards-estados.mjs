@@ -38,7 +38,10 @@ try {
   const pasta = resolve(clone, '../entrega/viewport-web');
   await mkdir(pasta, { recursive: true });
   const arquivo = resolve(pasta, `boards-estados-${estado}-${largura}-${tema}-${sha.slice(0, 7)}.png`);
-  if (secao) await secao.screenshot({ path: arquivo });
+  // A seção da landing sai da página inteira, recortada na caixa dela: assim o cabeçalho fixo fica no topo do documento e
+  // não cobre o começo da seção, como cobriria na captura do elemento rolado para o topo da janela.
+  if (secao) await pagina.screenshot({ path: arquivo, fullPage: true, clip: await secao.evaluate(e => {
+    const r = e.getBoundingClientRect(); return { x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height }; }) });
   else await pagina.screenshot({ path: arquivo });
   process.stdout.write(JSON.stringify({ sha, estado, largura, altura, tema, medidas, arquivo,
     origem: estado === 'landing' ? 'site real; seção do Board web da landing; viewport Playwright' : 'site real; dados isolados; viewport Playwright; complementar ao devcli design' }) + '\n');
